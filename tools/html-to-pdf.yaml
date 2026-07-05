@@ -1,0 +1,26 @@
+enabled: true
+id: html-to-pdf
+name: "HTML to PDF Converter"
+slug: /convert/html-to-pdf
+category: document-tools
+type: server-side
+input_format: HTML
+output_format: PDF
+accept_extensions: [.html, .htm]
+output_extension: .pdf
+max_file_size: 25MB
+bulk_support: false
+ui_type: standard
+tagline: "Convert HTML pages to PDF"
+tagline_long: "Convert HTML files to PDF format — files are encrypted in transit, processed securely, and deleted immediately."
+api_endpoint: /api/v1/convert/html-to-pdf
+meta:
+  title: "Convert HTML to PDF — Free, Secure, Instant"
+  description: "Convert HTML files to PDF online. Your file is encrypted, converted, and deleted immediately — we never store your documents."
+  keywords: ["html to pdf", "convert html to pdf", "html to pdf free", "webpage to pdf", "html to pdf converter"]
+content:
+  what_is: "content/html-to-pdf/what-is.md"
+  comparison: "content/html-to-pdf/comparison.md"
+  when_to_use: "content/html-to-pdf/when-to-use.md"
+  faq: "content/html-to-pdf/faq.md"
+related_tools: [docx-to-pdf, xlsx-to-pdf, pptx-to-pdf, pdf-compress]

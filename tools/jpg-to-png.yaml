@@ -1,0 +1,28 @@
+enabled: true
+id: jpg-to-png
+name: JPG to PNG Converter
+slug: /convert/jpg-to-png
+category: image-conversion
+type: client-side
+input_format: JPG
+output_format: PNG
+accept_extensions: [.jpg, .jpeg]
+output_extension: .png
+js_module: converters/jpg-to-png.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+reverse_tool: png-to-jpg
+tagline: "Get lossless quality and transparency support"
+tagline_long: "Switch to PNG for lossless quality and transparency support — ideal for logos, graphics, and images you plan to edit further."
+meta:
+  title: "Convert JPG to PNG — Free, Private, No Upload"
+  description: "Convert JPG images to PNG instantly in your browser. No upload, no server — your files stay private."
+  keywords: ["jpg to png", "jpeg to png", "convert jpg to png", "jpg converter", "image converter"]
+content:
+  what_is: "content/jpg-to-png/what-is.md"
+  comparison: "content/jpg-to-png/comparison.md"
+  when_to_use: "content/jpg-to-png/when-to-use.md"
+  faq: "content/jpg-to-png/faq.md"
+related_tools: [jpg-to-webp, webp-to-png, svg-to-png, heic-to-jpg]

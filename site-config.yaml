@@ -1,0 +1,53 @@
+site:
+  name: FileCast
+  tagline: "Free File Conversion — Your Files Stay Yours"
+  base_url: https://filecast.io
+  description: "Convert files instantly in your browser. Free, fast, and private — your files never leave your device."
+
+adsense:
+  enabled: false
+  publisher_id: ""
+  slots:
+    leaderboard: ""
+    in_content: ""
+    footer: ""
+
+ga4:
+  enabled: false
+  measurement_id: ""
+
+sentry:
+  enabled: false
+  dsn: ""
+
+api:
+  base_url: https://api.filecast.io
+
+categories:
+  - id: document-tools
+    name: Document Conversion
+    nav_label: Docs
+    slug: document-tools
+    description: "Convert documents to PDF, merge, split, compress, and transform PDF files. Most tools run in your browser."
+    search_placeholder: "Filter tools... (e.g. DOCX, PDF, merge, compress)"
+
+  - id: image-conversion
+    name: Image Conversion
+    nav_label: Images
+    slug: image-conversion
+    description: "Convert between image formats instantly in your browser. Your files never leave your device."
+    search_placeholder: "Filter tools... (e.g. PNG, WebP, TIFF)"
+
+  - id: data-conversion
+    name: Text Conversion
+    nav_label: Text
+    slug: data-conversion
+    description: "Convert between data formats like JSON, XML, YAML, CSV, and Markdown. All processing happens in your browser."
+    search_placeholder: "Filter tools... (e.g. JSON, XML, YAML)"
+
+  - id: audio-video
+    name: Audio & Video
+    nav_label: Media
+    slug: audio-video
+    description: "Extract audio, convert formats, and process media files."
+    search_placeholder: "Filter tools... (e.g. MP4, MP3, WAV)"

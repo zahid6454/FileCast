@@ -1,0 +1,46 @@
+enabled: true
+homepage_order: 3
+id: image-resize
+name: Image Resizer
+slug: /convert/image-resize
+category: image-conversion
+subcategory: image-operations
+type: client-side
+input_format: Image
+output_format: Image
+accept_extensions: [.jpg, .jpeg, .png, .webp]
+output_extension: .jpg
+js_module: converters/image-resize.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: width
+    label: "Width"
+    type: number
+    min: 1
+    max: 10000
+    default: ""
+    placeholder: "auto"
+    suffix: "px"
+  - id: height
+    label: "Height"
+    type: number
+    min: 1
+    max: 10000
+    default: ""
+    placeholder: "auto"
+    suffix: "px"
+tagline: "Resize images to exact dimensions"
+tagline_long: "Resize JPG, PNG, or WebP images to specific dimensions — set width, height, or both to scale proportionally."
+meta:
+  title: "Resize Images — Free, Private, No Upload"
+  description: "Resize images to exact dimensions instantly in your browser. No upload, no server — your files stay private."
+  keywords: ["resize image", "image resizer", "change image size", "resize photo", "scale image", "resize image online"]
+content:
+  what_is: "content/image-resize/what-is.md"
+  comparison: "content/image-resize/comparison.md"
+  when_to_use: "content/image-resize/when-to-use.md"
+  faq: "content/image-resize/faq.md"
+related_tools: [image-compress, bulk-image-compress, png-to-jpg, webp-to-png]

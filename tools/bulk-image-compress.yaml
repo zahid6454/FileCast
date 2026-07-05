@@ -1,0 +1,38 @@
+enabled: true
+id: bulk-image-compress
+name: Bulk Image Compressor
+slug: /convert/bulk-image-compress
+category: image-conversion
+subcategory: image-operations
+type: client-side
+input_format: Image
+output_format: Image
+accept_extensions: [.jpg, .jpeg, .png, .webp]
+output_extension: .jpg
+js_module: converters/bulk-image-compress.js
+js_libs: [browser-image-compression.min.js]
+max_file_size: 10MB
+max_files: 10
+bulk_support: true
+ui_type: multi-file
+convert_label: "Compress All"
+options:
+  - id: quality
+    label: "Quality"
+    type: range
+    min: 10
+    max: 100
+    default: 75
+    suffix: "%"
+tagline: "Compress multiple images at once"
+tagline_long: "Compress up to 10 images at once — reduce file sizes in bulk, all processed in your browser."
+meta:
+  title: "Bulk Compress Images — Free, Private, No Upload"
+  description: "Compress multiple images at once in your browser. No upload, no server — your files stay private."
+  keywords: ["bulk compress images", "batch image compression", "compress multiple images", "bulk image compressor", "batch compress"]
+content:
+  what_is: "content/bulk-image-compress/what-is.md"
+  comparison: "content/bulk-image-compress/comparison.md"
+  when_to_use: "content/bulk-image-compress/when-to-use.md"
+  faq: "content/bulk-image-compress/faq.md"
+related_tools: [image-compress, image-resize, png-to-jpg, jpg-to-webp]

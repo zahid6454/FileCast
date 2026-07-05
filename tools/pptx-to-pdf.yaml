@@ -1,0 +1,26 @@
+enabled: true
+id: pptx-to-pdf
+name: "PPTX to PDF Converter"
+slug: /convert/pptx-to-pdf
+category: document-tools
+type: server-side
+input_format: PPTX
+output_format: PDF
+accept_extensions: [.pptx]
+output_extension: .pdf
+max_file_size: 25MB
+bulk_support: false
+ui_type: standard
+tagline: "Convert PowerPoint presentations to PDF"
+tagline_long: "Convert PowerPoint presentations to PDF format — files are encrypted in transit, processed securely, and deleted immediately."
+api_endpoint: /api/v1/convert/pptx-to-pdf
+meta:
+  title: "Convert PPTX to PDF — Free, Secure, Instant"
+  description: "Convert PowerPoint presentations to PDF online. Your file is encrypted, converted, and deleted immediately — we never store your documents."
+  keywords: ["pptx to pdf", "powerpoint to pdf", "convert pptx to pdf", "pptx to pdf free", "powerpoint to pdf converter"]
+content:
+  what_is: "content/pptx-to-pdf/what-is.md"
+  comparison: "content/pptx-to-pdf/comparison.md"
+  when_to_use: "content/pptx-to-pdf/when-to-use.md"
+  faq: "content/pptx-to-pdf/faq.md"
+related_tools: [docx-to-pdf, xlsx-to-pdf, html-to-pdf, pdf-compress]

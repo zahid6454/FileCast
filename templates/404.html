@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Page Not Found — {{ site.name }}{% endblock %}
+{% block meta_description %}The page you're looking for doesn't exist. Try searching for a conversion tool.{% endblock %}
+
+{% block content %}
+<div class="container">
+
+  <div class="not-found">
+    <div class="not-found__code">404</div>
+    <h1 class="not-found__title">Page Not Found</h1>
+    <p class="not-found__text">The page you're looking for doesn't exist or has been moved.</p>
+    <input
+      type="search"
+      class="hero__search"
+      id="tool-search"
+      placeholder="Search conversion tools... (e.g. HEIC, PDF, JSON)"
+      autocomplete="off"
+      style="margin-bottom: var(--space-8);"
+    >
+  </div>
+
+  {% if tools %}
+  <section class="section">
+    <h2 class="section__title">Popular Tools</h2>
+    <div class="section__divider"></div>
+    <div class="card-grid">
+      {% for tool in tools[:8] %}
+      <a class="card{% if tool.type == 'server-side' %} card--server{% endif %}"
+         href="{{ tool.slug }}/"
+         data-name="{{ tool.name|lower }}"
+         data-category="">
+        {{ tool.input_format }} → {{ tool.output_format }}
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+</div>
+{% endblock %}

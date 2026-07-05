@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}About — {{ site.name }}{% endblock %}
+{% block meta_description %}What this free file conversion service is, how it works, and why it exists.{% endblock %}
+{% block canonical %}{{ site.base_url }}/about/{% endblock %}
+{% block og_title %}About — {{ site.name }}{% endblock %}
+{% block og_description %}What this free file conversion service is, how it works, and why it exists.{% endblock %}
+{% block og_url %}{{ site.base_url }}/about/{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <h1 class="hero__title"><span class="text-brand-blue">Free Conversion.</span> <span class="text-brand-green">No Strings.</span></h1>
+  <p class="hero__subtitle">A file conversion tool that respects your privacy</p>
+</section>
+
+<div class="container page">
+
+  <nav class="breadcrumb"><a href="/">Home</a> <span>&rsaquo;</span> About</nav>
+
+  <div class="privacy-section">
+    <h2>What this is</h2>
+    <p>
+      This service converts files between formats &mdash; images, PDFs, documents, and data files. It's free to use, with no sign-up, no paywalls, and no usage limits.
+    </p>
+    <p>
+      Most conversion tools online either charge money, require an account, or quietly upload your files to a server. This service was built as an alternative: a tool that does what it says, respects your files, and doesn't ask for anything in return.
+    </p>
+  </div>
+
+  <section class="section">
+    <h2 class="section__title"><span class="text-brand-blue">How</span> <span class="text-brand-green">It Works</span></h2>
+    <div class="section__divider"></div>
+  </section>
+
+  <div class="card-grid card-grid--lg" style="margin-bottom: var(--space-8);">
+    <div class="card card--lg">
+      <div><span class="badge">Client-Side</span></div>
+      <div class="card__desc" style="margin-top: var(--space-3);">
+        The majority of tools run entirely in your browser. Your file never leaves your device &mdash; it's converted on your own computer, not on a server. These tools work offline once the page has loaded.
+      </div>
+    </div>
+    <div class="card card--lg">
+      <div><span class="badge badge--server">Server-Side</span></div>
+      <div class="card__desc" style="margin-top: var(--space-3);">
+        A few conversions &mdash; like Word to PDF &mdash; need software that can't run in a browser. Your file is sent over an encrypted connection, converted, and sent back. The file is deleted from the server immediately. Nothing is stored, logged, or retained.
+      </div>
+    </div>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Why it's free</h2>
+    <p>
+      This service is supported by advertising. Ads are displayed on the page but are completely separate from the conversion tools &mdash; ad scripts cannot access your files. If you use an ad blocker, everything still works normally.
+    </p>
+    <p>
+      There is no premium tier, no feature gating, and no plan to introduce one. The goal is to keep this service free and useful for as long as possible.
+    </p>
+  </div>
+
+  <section class="section">
+    <h2 class="section__title"><span class="text-brand-blue">Built</span> <span class="text-brand-green">With</span></h2>
+    <div class="section__divider"></div>
+  </section>
+
+  <div class="card-grid" style="margin-bottom: var(--space-8);">
+    <a class="card card--lg" href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noopener">
+      <strong>pdf.js</strong>
+      <div class="card__desc">Mozilla's PDF rendering library for PDF-to-image conversion</div>
+    </a>
+    <a class="card card--lg" href="https://pdf-lib.js.org/" target="_blank" rel="noopener">
+      <strong>pdf-lib</strong>
+      <div class="card__desc">PDF creation and manipulation &mdash; merge, split, rotate, image-to-PDF</div>
+    </a>
+    <a class="card card--lg" href="https://gotenberg.dev/" target="_blank" rel="noopener">
+      <strong>Gotenberg</strong>
+      <div class="card__desc">Document conversion API powered by LibreOffice and Chromium</div>
+    </a>
+    <a class="card card--lg" href="https://www.ghostscript.com/" target="_blank" rel="noopener">
+      <strong>Ghostscript</strong>
+      <div class="card__desc">PDF compression and optimization</div>
+    </a>
+    <a class="card card--lg" href="https://github.com/alexcorvi/heic2any" target="_blank" rel="noopener">
+      <strong>heic2any</strong>
+      <div class="card__desc">HEIC/HEIF image decoding for browser-based conversion</div>
+    </a>
+    <a class="card card--lg" href="https://github.com/Donaldcwl/browser-image-compression" target="_blank" rel="noopener">
+      <strong>browser-image-compression</strong>
+      <div class="card__desc">Client-side image compression</div>
+    </a>
+  </div>
+
+  <div class="privacy-section">
+    <p>
+      The static site is generated with Python, Jinja2, and Markdown. No frontend framework is used &mdash; pages are plain HTML, CSS, and vanilla JavaScript.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Questions or feedback</h2>
+    <p>
+      If something isn't working, or you have a suggestion, visit the <a href="/contact/">contact page</a>.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

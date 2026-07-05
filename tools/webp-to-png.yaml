@@ -1,0 +1,28 @@
+enabled: true
+id: webp-to-png
+name: WebP to PNG Converter
+slug: /convert/webp-to-png
+category: image-conversion
+type: client-side
+input_format: WebP
+output_format: PNG
+accept_extensions: [.webp]
+output_extension: .png
+js_module: converters/webp-to-png.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+reverse_tool: png-to-webp
+tagline: "Preserve full quality and transparency from web images"
+tagline_long: "Convert WebP images to PNG to keep every detail and transparent area intact — great for editing, archiving, and design work."
+meta:
+  title: "Convert WebP to PNG — Free, Private, No Upload"
+  description: "Convert WebP images to PNG instantly in your browser. No upload, no server — your files stay private."
+  keywords: ["webp to png", "convert webp to png", "webp converter", "webp to png free", "image converter"]
+content:
+  what_is: "content/webp-to-png/what-is.md"
+  comparison: "content/webp-to-png/comparison.md"
+  when_to_use: "content/webp-to-png/when-to-use.md"
+  faq: "content/webp-to-png/faq.md"
+related_tools: [webp-to-jpg, png-to-jpg, jpg-to-png, svg-to-png]

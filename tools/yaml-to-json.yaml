@@ -1,0 +1,30 @@
+enabled: true
+homepage_order: 3
+id: yaml-to-json
+name: YAML to JSON Converter
+slug: /convert/yaml-to-json
+category: data-conversion
+type: client-side
+input_format: YAML
+output_format: JSON
+accept_extensions: [.yaml, .yml]
+output_extension: .json
+js_module: converters/yaml-to-json.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+reverse_tool: json-to-yaml
+input_placeholder: "Paste your YAML here...\n\nExample:\nname: Alice\nsettings:\n  theme: dark"
+tagline: "Convert YAML config files to JSON format"
+tagline_long: "Convert YAML to JSON instantly in your browser — perfect for APIs, tooling, and data processing."
+meta:
+  title: "Convert YAML to JSON — Free, Private, No Upload"
+  description: "Convert YAML to JSON format instantly in your browser. No upload, no server — your data stays private."
+  keywords: ["yaml to json", "convert yaml to json", "yaml json converter", "yaml to json online", "yaml converter"]
+content:
+  what_is: "content/yaml-to-json/what-is.md"
+  comparison: "content/yaml-to-json/comparison.md"
+  when_to_use: "content/yaml-to-json/when-to-use.md"
+  faq: "content/yaml-to-json/faq.md"
+related_tools: [json-to-yaml, csv-to-json, xml-to-json, json-to-csv]

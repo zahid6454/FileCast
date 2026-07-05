@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Your Files Stay Yours — {{ site.name }}{% endblock %}
+{% block meta_description %}How FileCast keeps your files private. We never see, store, or share your files.{% endblock %}
+{% block canonical %}{{ site.base_url }}/privacy/{% endblock %}
+{% block og_title %}Your Files Stay Yours — {{ site.name }}{% endblock %}
+{% block og_description %}How FileCast keeps your files private.{% endblock %}
+{% block og_url %}{{ site.base_url }}/privacy/{% endblock %}
+
+{% block content %}
+<div class="container page">
+
+  <h1 class="page__title"><span class="text-brand-blue">Your Files</span> <span class="text-brand-green">Stay Yours</span></h1>
+  <p class="page__desc">Everything we do is built around one idea: your files belong to you, not us.</p>
+
+  <div class="privacy-section">
+    <h2>We never see your files</h2>
+    <p>
+      Most tools on <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span> work right inside your browser. Your file never leaves your device &mdash; it's converted on your computer, not on our servers.
+    </p>
+    <p>
+      Nothing is uploaded. Nothing is sent over the internet. When you close the tab, it's like the conversion never happened.
+    </p>
+    <p>
+      Look for the <span class="badge badge--inline">Your Files Stay Yours</span> badge &mdash; it means the tool works entirely on your device.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Some tools need a quick handoff</h2>
+    <p>
+      A few conversions (like Word to PDF) need more power than a browser can provide. For these tools, your file takes a short round trip:
+    </p>
+    <ul>
+      <li>Your file is sent securely to our server</li>
+      <li>We convert it and send it back to you</li>
+      <li>Your file is <strong>deleted instantly</strong> &mdash; we don't keep a copy</li>
+    </ul>
+    <p>
+      We never look at, save, or share what you send. The entire process takes seconds, and nothing is left behind.
+    </p>
+    <p>
+      Look for the <span class="badge badge--inline">Files encrypted, processed, deleted immediately</span> badge &mdash; it means the tool uses a secure server round trip.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>What we promise</h2>
+    <ul>
+      <li>We <strong>never store</strong> your files</li>
+      <li>We <strong>never look at</strong> what you convert</li>
+      <li>We <strong>never ask</strong> you to create an account</li>
+      <li>We <strong>never sell</strong> your information</li>
+      <li>We <strong>never block features</strong> behind a paywall</li>
+    </ul>
+  </div>
+
+  <div class="privacy-section">
+    <h2>How we keep <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span> free</h2>
+    <p>
+      <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span> is free because we show (or will show) ads. We also use basic analytics to understand which tools people find useful, so we can make them better. None of this is connected to your files in any way.
+    </p>
+    <p>
+      If you use an ad blocker, everything still works exactly the same. We'll never restrict features because of it.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Questions?</h2>
+    <p>
+      If anything about how we handle your files is unclear, reach out. We'd rather explain too much than leave you guessing.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+enabled: true
+id: pdf-to-docx
+name: "PDF to Word Converter"
+slug: /convert/pdf-to-docx
+category: document-tools
+type: server-side
+input_format: PDF
+output_format: DOCX
+accept_extensions: [.pdf]
+output_extension: .docx
+max_file_size: 25MB
+bulk_support: false
+ui_type: standard
+api_endpoint: /api/v1/convert/pdf-to-docx
+tagline: "Convert PDF files to editable Word documents"
+tagline_long: "Convert PDF files to editable Word documents — files are encrypted in transit, processed securely, and deleted immediately."
+meta:
+  title: "Convert PDF to Word (DOCX) — Free, Secure, Instant"
+  description: "Convert PDF files to editable Word documents online. Your file is encrypted, converted, and deleted immediately — we never store your documents."
+  keywords: ["pdf to word", "pdf to docx", "convert pdf to word", "pdf to word free", "pdf to docx converter"]
+content:
+  what_is: "content/pdf-to-docx/what-is.md"
+  comparison: "content/pdf-to-docx/comparison.md"
+  when_to_use: "content/pdf-to-docx/when-to-use.md"
+  faq: "content/pdf-to-docx/faq.md"
+related_tools: [docx-to-pdf, pdf-to-png, pdf-to-jpg, pdf-compress]

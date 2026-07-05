@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ category.name }} — {{ site.name }}{% endblock %}
+{% block meta_description %}{{ category.description }}{% endblock %}
+{% block canonical %}{{ site.base_url }}/{{ category.slug }}/{% endblock %}
+{% block og_title %}{{ category.name }} — {{ site.name }}{% endblock %}
+{% block og_description %}{{ category.description }}{% endblock %}
+{% block og_url %}{{ site.base_url }}/{{ category.slug }}/{% endblock %}
+
+{% block content %}
+<div class="container page">
+
+  <nav class="breadcrumb">
+    <a href="/">Home</a><span>&gt;</span>
+    {{ category.name }}
+  </nav>
+
+  <h1 class="page__title">{{ category.name }}</h1>
+  <p class="page__desc">{{ category.description }}</p>
+
+  <input
+    type="search"
+    class="category__search"
+    id="tool-search"
+    placeholder="{{ category.search_placeholder or 'Filter tools...' }}"
+    autocomplete="off"
+  >
+
+  {% set main_tools = category.tools|selectattr('subcategory', 'undefined')|list %}
+  {% set sub_tools = category.tools|rejectattr('subcategory', 'undefined')|list %}
+
+  <div class="card-grid card-grid--lg">
+    {% for tool in main_tools %}
+    <a class="card card--lg{% if tool.type == 'server-side' %} card--server{% endif %}"
+       href="{{ tool.slug }}/"
+       data-name="{{ tool.name|lower }}"
+       data-category="{{ category.name|lower }}">
+      <strong>{% if tool.input_format == tool.output_format %}{{ tool.name }}{% else %}{{ tool.input_format }} → {{ tool.output_format }}{% endif %}</strong>
+      {% if tool.tagline %}
+      <div class="card__desc">{{ tool.tagline }}</div>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+
+  {% if sub_tools %}
+  <div class="section__divider" style="margin-top: var(--space-8); margin-bottom: var(--space-8);"></div>
+  <div class="card-grid card-grid--lg">
+    {% for tool in sub_tools %}
+    <a class="card card--lg{% if tool.type == 'server-side' %} card--server{% endif %}"
+       href="{{ tool.slug }}/"
+       data-name="{{ tool.name|lower }}"
+       data-category="{{ category.name|lower }}">
+      <strong>{% if tool.input_format == tool.output_format %}{{ tool.name }}{% else %}{{ tool.input_format }} → {{ tool.output_format }}{% endif %}</strong>
+      {% if tool.tagline %}
+      <div class="card__desc">{{ tool.tagline }}</div>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <p class="category__no-results hidden" id="no-results">No matching tools found.</p>
+
+</div>
+{% endblock %}

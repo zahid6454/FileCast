@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tool.meta.title }}{% endblock %}
+{% block meta_description %}{{ tool.meta.description }}{% endblock %}
+{% block canonical %}{{ site.base_url }}{{ tool.slug }}/{% endblock %}
+{% block og_title %}{{ tool.meta.title }}{% endblock %}
+{% block og_description %}{{ tool.meta.description }}{% endblock %}
+{% block og_url %}{{ site.base_url }}{{ tool.slug }}/{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "{{ tool.name }}",
+  "description": "{{ tool.meta.description }}",
+  "step": [
+    {
+      "@type": "HowToStep",
+      "position": 1,
+      "name": "Add your files",
+      "text": "Drag and drop your files onto the upload zone, or click to browse. You can add up to {{ tool.max_files or 10 }} files."
+    },
+    {
+      "@type": "HowToStep",
+      "position": 2,
+      "name": "Process files",
+      "text": "Click the button to process all files. {% if tool.type == 'client-side' %}Everything happens in your browser — no files are uploaded.{% endif %}"
+    },
+    {
+      "@type": "HowToStep",
+      "position": 3,
+      "name": "Download results",
+      "text": "Download each converted file individually."
+    }
+  ]
+}
+</script>
+{% if tool.faq_structured_data %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": {{ tool.faq_structured_data|tojson }}
+}
+</script>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container page">
+
+  {# Breadcrumb #}
+  <nav class="breadcrumb">
+    <a href="/">Home</a><span>&gt;</span>
+    {% if category %}
+    <a href="/{{ category.slug }}/">{{ category.name }}</a><span>&gt;</span>
+    {% endif %}
+    {{ tool.name }}
+  </nav>
+
+  {# Title + Tagline #}
+  <h1 class="page__title page__title--tight">{{ tool.name }}</h1>
+  {% if tool.tagline_long or tool.tagline %}
+  <p class="page__tagline">{{ tool.tagline_long or tool.tagline }}</p>
+  {% endif %}
+
+  {# Ad slot: leaderboard #}
+  <div class="ad-slot" id="ad-leaderboard"></div>
+
+  {# Privacy Badge #}
+  <div class="tool-badge">
+    {% if tool.type == 'client-side' %}
+    <a href="/privacy/" class="badge">Your Files Stay Yours</a>
+    {% else %}
+    <a href="/privacy/" class="badge">Files encrypted, processed, deleted immediately</a>
+    {% endif %}
+  </div>
+
+  {# Tool Options (for tools that need settings like quality slider) #}
+  {% if tool.get('options') %}
+  <div class="tool-options" id="tool-options">
+    {% for opt in tool.options %}
+    <div class="tool-options__row">
+      <label class="tool-options__label" for="opt-{{ opt.id }}">{{ opt.label }}</label>
+      {% if opt.type == 'range' %}
+      <input class="tool-options__slider" type="range" id="opt-{{ opt.id }}"
+             min="{{ opt.min }}" max="{{ opt.max }}" value="{{ opt.default }}"
+             oninput="document.getElementById('val-{{ opt.id }}').textContent=this.value+'{{ opt.suffix or '' }}'">
+      <span class="tool-options__value" id="val-{{ opt.id }}">{{ opt.default }}{{ opt.suffix or '' }}</span>
+      {% elif opt.type == 'number' %}
+      <input class="tool-options__input" type="number" id="opt-{{ opt.id }}"
+             min="{{ opt.min }}" max="{{ opt.max }}" value="{{ opt.default }}" placeholder="{{ opt.placeholder or '' }}">
+      <span class="tool-options__value">{{ opt.suffix or '' }}</span>
+      {% elif opt.type == 'select' %}
+      <select class="tool-options__input" id="opt-{{ opt.id }}">
+        {% for choice in opt.choices %}
+        <option value="{{ choice.value }}"{% if choice.value == opt.default %} selected{% endif %}>{{ choice.label }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Upload Zone (multi-file) #}
+  <div class="upload-zone" id="upload-zone">
+    <div class="upload-zone__text">Drop your files here or click to browse</div>
+    <div class="upload-zone__hint">
+      Accepts: {{ tool.accept_extensions|join(', ') }} &mdash; Max: {{ tool.max_file_size }} per file, {{ tool.max_files or 10 }} files
+    </div>
+    <input type="file" id="file-input" accept="{{ tool.accept_extensions|join(',') }}" multiple hidden>
+  </div>
+
+  {# File List #}
+  <div class="file-list hidden" id="file-list"></div>
+  <div class="file-list__count hidden" id="file-list-count"></div>
+
+  {# Convert Button #}
+  <div class="convert-action">
+    <button class="btn btn--primary btn--lg" id="convert-btn" disabled>
+      {{ tool.get('convert_label', 'Convert ' + tool.output_format) }}
+    </button>
+  </div>
+
+  {# Progress Bar #}
+  <div class="progress hidden" id="progress">
+    <div class="progress__fill" id="progress-fill" style="width: 0%;"></div>
+  </div>
+
+  {# Multi Result #}
+  <div class="multi-result hidden" id="multi-result">
+    <div class="multi-result__title">Processing Complete</div>
+    <div class="multi-result__summary" id="result-summary"></div>
+    <div class="multi-result__actions" id="result-actions"></div>
+  </div>
+
+  {# Error Message #}
+  <div class="error-msg hidden" id="error-msg"></div>
+
+  {# Ad slot: in-content #}
+  <div class="ad-slot" id="ad-in-content"></div>
+
+  {# Content Blocks #}
+  {% if tool.content_html.get('what_is') %}
+  <div class="content-block">
+    {{ tool.content_html.what_is|safe }}
+  </div>
+  {% endif %}
+
+  {% if tool.content_html.get('comparison') %}
+  <div class="content-block">
+    {{ tool.content_html.comparison|safe }}
+  </div>
+  {% endif %}
+
+  {% if tool.content_html.get('when_to_use') %}
+  <div class="content-block">
+    {{ tool.content_html.when_to_use|safe }}
+  </div>
+  {% endif %}
+
+  {% if tool.content_html.get('faq') %}
+  <div class="content-block">
+    {{ tool.content_html.faq|safe }}
+  </div>
+  {% endif %}
+
+  {# Related Tools #}
+  {% if tool.related_tools_resolved %}
+  <div class="related-tools">
+    <h2 class="related-tools__title">Related Tools</h2>
+    <div class="card-grid">
+      {% for related in tool.related_tools_resolved %}
+      <a class="card{% if related.type == 'server-side' %} card--server{% endif %}"
+         href="{{ related.slug }}/"
+         data-source="{{ tool.id }}"
+         data-target="{{ related.id }}">
+        {% if related.input_format == related.output_format %}{{ related.name }}{% else %}{{ related.input_format }} → {{ related.output_format }}{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# Feedback Widget #}
+  <div class="feedback" id="feedback">
+    <span>Was this tool helpful?</span>
+    <button class="btn btn--primary" onclick="submitFeedback('yes')">Yes</button>
+    <button class="btn btn--primary" onclick="submitFeedback('no')">No</button>
+  </div>
+
+</div>
+
+{# Tool config injected for shared-multi.js #}
+<script>
+window.TOOL_CONFIG = {
+  id: {{ tool.id|tojson }},
+  name: {{ tool.name|tojson }},
+  type: {{ tool.type|tojson }},
+  ui_type: {{ tool.ui_type|tojson }},
+  input_format: {{ tool.input_format|tojson }},
+  output_format: {{ tool.output_format|tojson }},
+  accept_extensions: {{ tool.accept_extensions|tojson }},
+  output_extension: {{ tool.output_extension|tojson }},
+  max_file_size: {{ tool.max_file_size|tojson }},
+  max_file_size_bytes: {{ tool.max_file_size_bytes|tojson }},
+  max_files: {{ tool.get('max_files', 10)|tojson }},
+  category: {{ tool.category|tojson }}
+};
+</script>
+{% endblock %}
+
+{% block scripts %}
+{# Shared multi-file handler #}
+{% set multi_js = assets.get('js/shared-multi.js') %}
+{% if multi_js %}
+<script src="/{{ multi_js.path }}" integrity="{{ multi_js.sri }}" crossorigin="anonymous" defer></script>
+{% endif %}
+
+{# Tool-specific JS libraries #}
+{% if tool.js_libs is defined and tool.js_libs %}
+{% for lib in tool.js_libs %}
+{% set lib_asset = assets.get('lib/' + lib) %}
+{% if lib_asset %}
+<script src="/{{ lib_asset.path }}" integrity="{{ lib_asset.sri }}" crossorigin="anonymous" defer></script>
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{# Tool converter JS #}
+{% if tool.js_module is defined and tool.js_module %}
+{% set tool_js = assets.get('js/' + tool.js_module) %}
+{% if tool_js %}
+<script src="/{{ tool_js.path }}" integrity="{{ tool_js.sri }}" crossorigin="anonymous" defer></script>
+{% endif %}
+{% endif %}
+{% endblock %}

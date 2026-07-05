@@ -1,0 +1,27 @@
+enabled: true
+id: svg-to-png
+name: SVG to PNG Converter
+slug: /convert/svg-to-png
+category: image-conversion
+type: client-side
+input_format: SVG
+output_format: PNG
+accept_extensions: [.svg]
+output_extension: .png
+js_module: converters/svg-to-png.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+tagline: "Turn vector logos and icons into shareable images"
+tagline_long: "Convert scalable vector graphics into PNG images you can use in presentations, social media, documents, and print."
+meta:
+  title: "Convert SVG to PNG — Free, Private, No Upload"
+  description: "Convert SVG vector images to PNG instantly in your browser. No upload, no server — your files stay private."
+  keywords: ["svg to png", "convert svg to png", "svg converter", "vector to raster", "svg to image"]
+content:
+  what_is: "content/svg-to-png/what-is.md"
+  comparison: "content/svg-to-png/comparison.md"
+  when_to_use: "content/svg-to-png/when-to-use.md"
+  faq: "content/svg-to-png/faq.md"
+related_tools: [png-to-jpg, jpg-to-png, webp-to-png, heic-to-jpg]

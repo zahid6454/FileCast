@@ -1,0 +1,41 @@
+enabled: true
+id: pdf-compress
+name: "PDF Compressor"
+slug: /convert/pdf-compress
+category: document-tools
+subcategory: pdf-operations
+type: server-side
+input_format: PDF
+output_format: PDF
+accept_extensions: [.pdf]
+output_extension: .pdf
+max_file_size: 25MB
+bulk_support: false
+ui_type: standard
+tagline: "Reduce PDF file size"
+tagline_long: "Compress PDF files to reduce their size — files are encrypted in transit, processed securely, and deleted immediately."
+api_endpoint: /api/v1/convert/pdf-compress
+options:
+  - id: quality
+    label: "Compression level"
+    type: select
+    default: ebook
+    choices:
+      - value: screen
+        label: "Maximum (72 dpi) — smallest file"
+      - value: ebook
+        label: "Balanced (150 dpi) — good for sharing"
+      - value: printer
+        label: "Moderate (300 dpi) — print quality"
+      - value: prepress
+        label: "Minimal (300 dpi) — highest quality"
+meta:
+  title: "Compress PDF — Free, Secure, Instant"
+  description: "Reduce PDF file size online. Choose your compression level — your file is processed securely and deleted immediately."
+  keywords: ["compress pdf", "pdf compressor", "reduce pdf size", "compress pdf free", "make pdf smaller"]
+content:
+  what_is: "content/pdf-compress/what-is.md"
+  comparison: "content/pdf-compress/comparison.md"
+  when_to_use: "content/pdf-compress/when-to-use.md"
+  faq: "content/pdf-compress/faq.md"
+related_tools: [pdf-merge, pdf-split, pdf-rotate, pdf-to-png]

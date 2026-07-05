@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ site.name }} — {{ site.tagline }}{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}{{ site.description }}{% endblock %}">
+  <link rel="canonical" href="{% block canonical %}{{ site.base_url }}/{% endblock %}">
+
+  {# Open Graph #}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ site.name }}">
+  <meta property="og:title" content="{% block og_title %}{{ site.name }} — {{ site.tagline }}{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}{{ site.description }}{% endblock %}">
+  <meta property="og:url" content="{% block og_url %}{{ site.base_url }}/{% endblock %}">
+
+  {# Favicon #}
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+  {# CSS (cache-busted) #}
+  {% set css_asset = assets.get('css/style.css') %}
+  {% if css_asset %}
+  <link rel="stylesheet" href="/{{ css_asset.path }}">
+  {% endif %}
+
+  {# Structured data #}
+  {% block structured_data %}{% endblock %}
+
+  {# GA4 (conditional) #}
+  {% if ga4.enabled and ga4.measurement_id %}
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga4.measurement_id }}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', '{{ ga4.measurement_id }}', { send_page_view: true });
+  </script>
+  {% endif %}
+
+  {# Sentry (conditional — both scripts non-deferred so init runs after SDK loads) #}
+  {% if sentry.enabled and sentry.dsn %}
+  <script src="https://browser.sentry-cdn.com/8.x/bundle.min.js" crossorigin="anonymous"></script>
+  <script>
+    Sentry.init({
+      dsn: "{{ sentry.dsn }}",
+      environment: "production",
+      sampleRate: 0.5,
+      beforeSend(event) {
+        if (event.extra) { delete event.extra.fileName; delete event.extra.filePath; }
+        return event;
+      }
+    });
+  </script>
+  {% endif %}
+</head>
+<body>
+
+  {# ===== Header ===== #}
+  <header class="header">
+    <a href="/" class="header__logo">
+      <svg width="140" height="28" viewBox="0 0 140 28" aria-label="{{ site.name }} logo">
+        <rect x="1" y="1" width="10" height="26" rx="3" fill="#60A5FA"/>
+        <polygon points="14,9 19,14 14,19" fill="#FFFFFF"/>
+        <rect x="22" y="1" width="10" height="26" rx="3" fill="#34D399"/>
+        <text x="37" y="20" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3">FileCast</text>
+      </svg>
+    </a>
+    <nav class="header__nav">
+      {% for cat_id, cat_data in nav_categories.items() %}
+      <a href="/{{ cat_data.slug }}/">{{ cat_data.nav_label or cat_data.name }}</a>
+      {% endfor %}
+    </nav>
+  </header>
+
+  {# ===== Main Content ===== #}
+  <main>{% block content %}{% endblock %}</main>
+
+  {# ===== Footer ===== #}
+  <footer class="footer">
+    <a href="/privacy/">Privacy</a> &middot;
+    <a href="/terms/">Terms</a> &middot;
+    <a href="/about/">About</a> &middot;
+    <a href="/contact/">Contact</a> &middot;
+    <a href="https://buymeacoffee.com/filecast" target="_blank" rel="noopener">Support</a> &middot;
+    &copy; 2026 <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span>. <span class="text-brand-blue">Your Files</span> <span class="text-brand-green">Stay Yours</span>
+  </footer>
+
+  {# ===== Scripts ===== #}
+  {% set shared_js = assets.get('js/shared.js') %}
+  {% if shared_js %}
+  <script src="/{{ shared_js.path }}" integrity="{{ shared_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
+  {% block scripts %}{% endblock %}
+
+</body>
+</html>

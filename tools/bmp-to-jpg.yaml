@@ -1,0 +1,27 @@
+enabled: true
+id: bmp-to-jpg
+name: BMP to JPG Converter
+slug: /convert/bmp-to-jpg
+category: image-conversion
+type: client-side
+input_format: BMP
+output_format: JPG
+accept_extensions: [.bmp]
+output_extension: .jpg
+js_module: converters/bmp-to-jpg.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+tagline: "Shrink oversized bitmap files by 90% or more"
+tagline_long: "Convert bulky BMP files into compact JPGs — a single image can drop from 30 MB to under 3 MB while still looking great."
+meta:
+  title: "Convert BMP to JPG — Free, Private, No Upload"
+  description: "Convert BMP images to JPG instantly in your browser. No upload, no server — your files stay private."
+  keywords: ["bmp to jpg", "convert bmp to jpg", "bmp converter", "bmp to jpeg", "bitmap converter"]
+content:
+  what_is: "content/bmp-to-jpg/what-is.md"
+  comparison: "content/bmp-to-jpg/comparison.md"
+  when_to_use: "content/bmp-to-jpg/when-to-use.md"
+  faq: "content/bmp-to-jpg/faq.md"
+related_tools: [png-to-jpg, heic-to-jpg, tiff-to-jpg, gif-to-jpg]

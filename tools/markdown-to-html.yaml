@@ -1,0 +1,28 @@
+enabled: true
+id: markdown-to-html
+name: Markdown to HTML Converter
+slug: /convert/markdown-to-html
+category: data-conversion
+type: client-side
+input_format: Markdown
+output_format: HTML
+accept_extensions: [.md, .markdown]
+output_extension: .html
+js_module: converters/markdown-to-html.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+input_placeholder: "Paste your Markdown here...\n\nExample:\n# Hello World\n\nThis is **bold** and this is *italic*.\n\n- Item one\n- Item two"
+tagline: "Render Markdown into clean HTML"
+tagline_long: "Convert Markdown text to HTML instantly in your browser — perfect for blog posts, documentation, and README files."
+meta:
+  title: "Convert Markdown to HTML — Free, Private, No Upload"
+  description: "Convert Markdown to HTML instantly in your browser. No upload, no server — your content stays private."
+  keywords: ["markdown to html", "convert markdown to html", "markdown converter", "md to html", "markdown renderer"]
+content:
+  what_is: "content/markdown-to-html/what-is.md"
+  comparison: "content/markdown-to-html/comparison.md"
+  when_to_use: "content/markdown-to-html/when-to-use.md"
+  faq: "content/markdown-to-html/faq.md"
+related_tools: [html-to-markdown, json-to-xml, xml-to-json, json-to-csv]

@@ -1,0 +1,28 @@
+enabled: true
+id: xml-to-json
+name: XML to JSON Converter
+slug: /convert/xml-to-json
+category: data-conversion
+type: client-side
+input_format: XML
+output_format: JSON
+accept_extensions: [.xml]
+output_extension: .json
+js_module: converters/xml-to-json.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+input_placeholder: "Paste your XML here...\n\nExample:\n<root>\n  <name>Alice</name>\n  <age>30</age>\n</root>"
+tagline: "Convert XML data to JSON format"
+tagline_long: "Convert XML documents to clean JSON instantly in your browser — handles attributes and nesting."
+meta:
+  title: "Convert XML to JSON — Free, Private, No Upload"
+  description: "Convert XML to JSON format instantly in your browser. No upload, no server — your data stays private."
+  keywords: ["xml to json", "convert xml to json", "xml converter", "xml to json online", "xml json converter"]
+content:
+  what_is: "content/xml-to-json/what-is.md"
+  comparison: "content/xml-to-json/comparison.md"
+  when_to_use: "content/xml-to-json/when-to-use.md"
+  faq: "content/xml-to-json/faq.md"
+related_tools: [json-to-xml, yaml-to-json, csv-to-json, json-to-csv]

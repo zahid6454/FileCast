@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Terms of Service — {{ site.name }}{% endblock %}
+{% block meta_description %}Terms of Service for using this free file conversion service.{% endblock %}
+{% block canonical %}{{ site.base_url }}/terms/{% endblock %}
+{% block og_title %}Terms of Service — {{ site.name }}{% endblock %}
+{% block og_description %}Terms of Service for using this free file conversion service.{% endblock %}
+{% block og_url %}{{ site.base_url }}/terms/{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <h1 class="hero__title"><span class="text-brand-blue">Terms</span> <span class="text-brand-green">of Service</span></h1>
+  <p class="hero__subtitle">Plain English, no legalese &mdash; last updated {{ build_date }}</p>
+</section>
+
+<div class="container page">
+
+  <nav class="breadcrumb"><a href="/">Home</a> <span>&rsaquo;</span> Terms of Service</nav>
+
+  <div class="privacy-section">
+    <h2>What this service is</h2>
+    <p>
+      This service provides free file conversion tools. Some tools run entirely in your browser. Others send your file to a server, convert it, and return the result &mdash; your file is deleted immediately after.
+    </p>
+    <p>
+      By using this service, you agree to these terms. If you don't agree, please don't use the service.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Acceptable use</h2>
+    <p>
+      You may use this service for lawful purposes only. You agree not to:
+    </p>
+    <ul>
+      <li>Upload files that contain malware, viruses, or malicious code</li>
+      <li>Upload files that you don't have the right to convert (copyrighted material you don't own or have permission to use)</li>
+      <li>Use this service to process illegal content of any kind</li>
+      <li>Attempt to overload, disrupt, or interfere with the service</li>
+      <li>Use automated scripts or bots to make bulk requests beyond normal use</li>
+    </ul>
+  </div>
+
+  <section class="section">
+    <h2 class="section__title"><span class="text-brand-blue">File Size</span> <span class="text-brand-green">& Rate Limits</span></h2>
+    <div class="section__divider"></div>
+  </section>
+
+  <div class="content-block" style="margin-bottom: var(--space-8);">
+    <table>
+      <thead>
+        <tr><th>Tool type</th><th>Max size</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Image tools</td><td>20 MB per file</td></tr>
+        <tr><td>PDF tools</td><td>50 MB per file</td></tr>
+        <tr><td>Text and data tools</td><td>5 MB per file</td></tr>
+        <tr><td>Server-side tools</td><td>25 MB per file</td></tr>
+        <tr><td>Bulk operations</td><td>10 MB per file, up to 10 files</td></tr>
+      </tbody>
+    </table>
+    <p>Server-side tools are rate-limited to prevent abuse. If you hit a rate limit, wait a few minutes and try again.</p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>No warranty</h2>
+    <p>
+      This service is provided "as is" without warranty of any kind, express or implied. We do not guarantee that:
+    </p>
+    <ul>
+      <li>The service will be available at all times</li>
+      <li>Conversions will be error-free or produce perfect results</li>
+      <li>The service will meet your specific requirements</li>
+    </ul>
+    <p>
+      Always keep a copy of your original files. Do not rely on this service as your only means of file conversion for critical work.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Limitation of liability</h2>
+    <p>
+      To the fullest extent permitted by law, this service and its operators are not liable for any direct, indirect, incidental, or consequential damages arising from your use of the service. This includes, but is not limited to, loss of data, loss of profits, or damage to your device.
+    </p>
+    <p>
+      You use this service at your own risk. If a conversion doesn't produce the result you expect, the extent of our obligation is to let you try again.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Changes to the service</h2>
+    <p>
+      We may modify, suspend, or discontinue any part of this service at any time without notice. We may add or remove tools, change file size limits, or adjust rate limits as needed.
+    </p>
+    <p>
+      These terms may also be updated from time to time. Continued use of the service after changes constitutes acceptance of the updated terms.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Governing law</h2>
+    <p>
+      These terms are governed by applicable law. Any disputes arising from the use of this service will be resolved under the jurisdiction applicable to the service operator.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Questions</h2>
+    <p>
+      If you have questions about these terms, <a href="/contact/">get in touch</a>.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

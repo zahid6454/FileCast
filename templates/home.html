@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site.name }} — {{ site.tagline }}{% endblock %}
+{% block meta_description %}{{ site.description }}{% endblock %}
+{% block canonical %}{{ site.base_url }}/{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "{{ site.name }}",
+  "url": "{{ site.base_url }}/",
+  "description": "{{ site.description }}"
+}
+</script>
+{% endblock %}
+
+{% block content %}
+
+{# ===== Hero ===== #}
+<section class="hero">
+  <h1 class="hero__title"><a href="/privacy/" class="hero__link"><span class="text-brand-blue">Your Files</span> <span class="text-brand-green">Stay Yours</span></a></h1>
+  <p class="hero__subtitle">Free file conversion — right in your browser</p>
+</section>
+
+{# ===== Category Sections ===== #}
+<div class="container">
+  {% for cat_id, cat_data in categories.items() %}
+  <section class="section" id="{{ cat_data.slug }}">
+    <h2 class="section__title">{% set words = cat_data.name.split() %}<span class="text-brand-blue">{{ words[0] }}</span> <span class="text-brand-green">{{ words[1:] | join(' ') }}</span></h2>
+    <div class="section__divider"></div>
+    <div class="card-grid">
+      {% set featured = cat_data.tools|selectattr('homepage_order', 'defined')|sort(attribute='homepage_order')|list %}
+      {% set homepage_tools = featured[:3] if featured else cat_data.tools[:3] %}
+      {% for tool in homepage_tools %}
+      <a class="card{% if tool.type == 'server-side' %} card--server{% endif %}"
+         href="{{ tool.slug }}/"
+         data-name="{{ tool.name|lower }}"
+         data-category="{{ cat_data.name|lower }}">
+        {% if tool.input_format == tool.output_format %}{{ tool.name }}{% else %}{{ tool.input_format }} → {{ tool.output_format }}{% endif %}
+      </a>
+      {% endfor %}
+      {% if cat_data.tools|length > 3 %}
+      <a class="card card--more" href="/{{ cat_data.slug }}/"><span class="text-brand-blue">Others</span> <span class="text-brand-green">+</span></a>
+      {% endif %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+
+
+{% endblock %}

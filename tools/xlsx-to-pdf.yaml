@@ -1,0 +1,26 @@
+enabled: true
+id: xlsx-to-pdf
+name: "XLSX to PDF Converter"
+slug: /convert/xlsx-to-pdf
+category: document-tools
+type: server-side
+input_format: XLSX
+output_format: PDF
+accept_extensions: [.xlsx]
+output_extension: .pdf
+max_file_size: 25MB
+bulk_support: false
+ui_type: standard
+tagline: "Convert Excel spreadsheets to PDF"
+tagline_long: "Convert Excel spreadsheets to PDF format — files are encrypted in transit, processed securely, and deleted immediately."
+api_endpoint: /api/v1/convert/xlsx-to-pdf
+meta:
+  title: "Convert XLSX to PDF — Free, Secure, Instant"
+  description: "Convert Excel spreadsheets to PDF online. Your file is encrypted, converted, and deleted immediately — we never store your documents."
+  keywords: ["xlsx to pdf", "excel to pdf", "convert xlsx to pdf", "xlsx to pdf free", "excel to pdf converter"]
+content:
+  what_is: "content/xlsx-to-pdf/what-is.md"
+  comparison: "content/xlsx-to-pdf/comparison.md"
+  when_to_use: "content/xlsx-to-pdf/when-to-use.md"
+  faq: "content/xlsx-to-pdf/faq.md"
+related_tools: [docx-to-pdf, pptx-to-pdf, html-to-pdf, pdf-compress]

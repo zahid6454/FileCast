@@ -1,0 +1,28 @@
+enabled: true
+id: json-to-csv
+name: JSON to CSV Converter
+slug: /convert/json-to-csv
+category: data-conversion
+type: client-side
+input_format: JSON
+output_format: CSV
+accept_extensions: [.json]
+output_extension: .csv
+js_module: converters/json-to-csv.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+input_placeholder: "Paste your JSON array here...\n\nExample:\n[\n  {\"name\": \"Alice\", \"age\": 30},\n  {\"name\": \"Bob\", \"age\": 25}\n]"
+tagline: "Turn JSON arrays into clean CSV spreadsheets"
+tagline_long: "Convert JSON arrays to CSV instantly in your browser — ready for Excel or Google Sheets."
+meta:
+  title: "Convert JSON to CSV — Free, Private, No Upload"
+  description: "Convert JSON arrays to CSV format instantly in your browser. No upload, no server — your data stays private."
+  keywords: ["json to csv", "convert json to csv", "json converter", "json to csv online", "json to spreadsheet"]
+content:
+  what_is: "content/json-to-csv/what-is.md"
+  comparison: "content/json-to-csv/comparison.md"
+  when_to_use: "content/json-to-csv/when-to-use.md"
+  faq: "content/json-to-csv/faq.md"
+related_tools: [csv-to-json, json-to-yaml, json-to-xml, xml-to-json]

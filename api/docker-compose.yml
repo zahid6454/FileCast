@@ -1,0 +1,32 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8090:8090"
+    environment:
+      - GOTENBERG_URL=http://gotenberg:3000
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    depends_on:
+      gotenberg:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    ports:
+      - "3000:3000"
+    security_opt:
+      - no-new-privileges
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+      - /home/gotenberg/.cache
+    mem_limit: 1g
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s

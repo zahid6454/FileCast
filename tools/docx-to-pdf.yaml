@@ -1,0 +1,27 @@
+enabled: true
+homepage_order: 1
+id: docx-to-pdf
+name: "DOCX to PDF Converter"
+slug: /convert/docx-to-pdf
+category: document-tools
+type: server-side
+input_format: DOCX
+output_format: PDF
+accept_extensions: [.docx]
+output_extension: .pdf
+max_file_size: 25MB
+bulk_support: false
+ui_type: standard
+tagline: "Convert Word documents to PDF"
+tagline_long: "Convert Word documents to PDF format — files are encrypted in transit, processed securely, and deleted immediately."
+api_endpoint: /api/v1/convert/docx-to-pdf
+meta:
+  title: "Convert DOCX to PDF — Free, Secure, Instant"
+  description: "Convert Word documents to PDF online. Your file is encrypted, converted, and deleted immediately — we never store your documents."
+  keywords: ["docx to pdf", "word to pdf", "convert docx to pdf", "docx to pdf free", "word to pdf converter"]
+content:
+  what_is: "content/docx-to-pdf/what-is.md"
+  comparison: "content/docx-to-pdf/comparison.md"
+  when_to_use: "content/docx-to-pdf/when-to-use.md"
+  faq: "content/docx-to-pdf/faq.md"
+related_tools: [xlsx-to-pdf, pptx-to-pdf, html-to-pdf, pdf-compress]

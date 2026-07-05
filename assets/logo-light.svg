@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="52" viewBox="0 0 260 52">
+  <rect x="4" y="4" width="16" height="44" rx="4" fill="#2563EB"/>
+  <polygon points="24,18 32,26 24,34" fill="#0F172A"/>
+  <rect x="36" y="4" width="16" height="44" rx="4" fill="#10B981"/>
+  <text x="62" y="36" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="30" font-weight="700" fill="#0F172A" letter-spacing="-0.5">FileCast</text>
+</svg>

@@ -1,0 +1,36 @@
+enabled: true
+id: image-compress
+name: Image Compressor
+slug: /convert/image-compress
+category: image-conversion
+subcategory: image-operations
+type: client-side
+input_format: Image
+output_format: Image
+accept_extensions: [.jpg, .jpeg, .png, .webp]
+output_extension: .jpg
+js_module: converters/image-compress.js
+js_libs: [browser-image-compression.min.js]
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: quality
+    label: "Quality"
+    type: range
+    min: 10
+    max: 100
+    default: 75
+    suffix: "%"
+tagline: "Shrink image file size without visible quality loss"
+tagline_long: "Compress JPG, PNG, or WebP images to reduce file size — adjust quality with the slider, all in your browser."
+meta:
+  title: "Compress Images — Free, Private, No Upload"
+  description: "Compress JPG, PNG, and WebP images instantly in your browser. Adjust quality, no upload, no server — your files stay private."
+  keywords: ["compress image", "image compressor", "reduce image size", "compress jpg", "compress png", "image compression"]
+content:
+  what_is: "content/image-compress/what-is.md"
+  comparison: "content/image-compress/comparison.md"
+  when_to_use: "content/image-compress/when-to-use.md"
+  faq: "content/image-compress/faq.md"
+related_tools: [bulk-image-compress, image-resize, png-to-jpg, jpg-to-webp]

@@ -1,0 +1,28 @@
+enabled: true
+id: jpg-to-webp
+name: JPG to WebP Converter
+slug: /convert/jpg-to-webp
+category: image-conversion
+type: client-side
+input_format: JPG
+output_format: WebP
+accept_extensions: [.jpg, .jpeg]
+output_extension: .webp
+js_module: converters/jpg-to-webp.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+reverse_tool: webp-to-jpg
+tagline: "Smaller files for faster websites"
+tagline_long: "Cut your image file sizes by 25–35% by switching to WebP — the modern format built for fast-loading web pages."
+meta:
+  title: "Convert JPG to WebP — Free, Private, No Upload"
+  description: "Convert JPG images to WebP instantly in your browser. No upload, no server — your files stay private."
+  keywords: ["jpg to webp", "jpeg to webp", "convert jpg to webp", "webp converter", "image optimizer"]
+content:
+  what_is: "content/jpg-to-webp/what-is.md"
+  comparison: "content/jpg-to-webp/comparison.md"
+  when_to_use: "content/jpg-to-webp/when-to-use.md"
+  faq: "content/jpg-to-webp/faq.md"
+related_tools: [png-to-jpg, heic-to-jpg, webp-to-png, svg-to-png]

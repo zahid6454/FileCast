@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Contact — {{ site.name }}{% endblock %}
+{% block meta_description %}Get in touch with questions, feedback, or bug reports.{% endblock %}
+{% block canonical %}{{ site.base_url }}/contact/{% endblock %}
+{% block og_title %}Contact — {{ site.name }}{% endblock %}
+{% block og_description %}Get in touch with questions, feedback, or bug reports.{% endblock %}
+{% block og_url %}{{ site.base_url }}/contact/{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <h1 class="hero__title"><span class="text-brand-blue">Get</span> <span class="text-brand-green">In Touch</span></h1>
+  <p class="hero__subtitle">Questions, feedback, or something not working right?</p>
+</section>
+
+<div class="container page">
+
+  <nav class="breadcrumb"><a href="/">Home</a> <span>&rsaquo;</span> Contact</nav>
+
+  <div class="card-grid card-grid--lg" style="margin-bottom: var(--space-8);">
+    <a class="card card--lg" href="mailto:support@filecast.io">
+      <strong>Email</strong>
+      <div class="card__desc">support@filecast.io &mdash; general questions, feedback, or support requests</div>
+    </a>
+    <a class="card card--lg" href="https://github.com/filecast/filecast.io/issues" target="_blank" rel="noopener">
+      <strong>GitHub Issues</strong>
+      <div class="card__desc">Report bugs, broken conversions, or unexpected behavior</div>
+    </a>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Reporting a problem</h2>
+    <p>
+      If you're reporting a problem with a specific tool, include the tool name and a description of what went wrong. Screenshots help, but never send the file you were converting &mdash; we don't need it and don't want it.
+    </p>
+    <p>
+      For bug reports, please include your browser name and version, the tool you were using, and a description of what happened versus what you expected.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Response time</h2>
+    <p>
+      This is a small project, not a large company. Expect a response within a few business days. Bug reports that affect many users are prioritized.
+    </p>
+  </div>
+
+</div>
+{% endblock %}
