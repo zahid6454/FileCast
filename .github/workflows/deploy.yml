@@ -1,0 +1,21 @@
+name: Deploy
+on:
+  workflow_dispatch: {}
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false   # queue instead of racing overlapping deploys
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt
+      - run: python build.py
+        env:
+          WORKER_API_URL: https://worker.filecast.io
+      - run: npx wrangler pages deploy dist/ --project-name=filecast
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

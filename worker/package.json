@@ -1,0 +1,23 @@
+{
+  "name": "filecast-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FileCast Cloudflare Worker API + D1 data layer (Phase 1)",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "migrate:local": "wrangler d1 migrations apply filecast-db --local",
+    "migrate:remote": "wrangler d1 migrations apply filecast-db --remote",
+    "seed:local": "python seed.py --local",
+    "seed:remote": "python seed.py --remote"
+  },
+  "dependencies": {
+    "itty-router": "^5.0.18"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

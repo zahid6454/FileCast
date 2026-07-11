@@ -1,0 +1,56 @@
+name = "filecast-worker"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+# Worker runs at worker.filecast.io (avoids collision with the FastAPI api.filecast.io).
+
+# --- D1 database binding ---------------------------------------------------
+# MANUAL STEP: run `wrangler d1 create filecast-db` and paste the returned
+# database_id below (replace REPLACE_WITH_D1_DATABASE_ID). See manual-work.md #1.
+[[d1_databases]]
+binding = "DB"
+database_name = "filecast-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# --- Daily purge cron ------------------------------------------------------
+# Invokes src/scheduled.js once a day at 03:00 UTC to delete user_conversions
+# and errors older than 30 days (fulfils the privacy retention promise).
+[triggers]
+crons = ["0 3 * * *"]
+
+# --- Non-secret configuration ---------------------------------------------
+# Secrets (JWT_SECRET, GOOGLE_CLIENT_SECRET, TURNSTILE_SECRET, GITHUB_PAT,
+# FINGERPRINT_SALT, BUILD_KEY) are set with `wrangler secret put` — see
+# manual-work.md #3. Never put secret values in this file.
+[vars]
+COOKIE_DOMAIN = ".filecast.io"
+SITE_ORIGIN = "https://filecast.io"
+OAUTH_REDIRECT_URI = "https://worker.filecast.io/api/auth/google/callback"
+GOOGLE_CLIENT_ID = "REPLACE_WITH_GOOGLE_CLIENT_ID"
+GITHUB_OWNER = "zahid6454"
+GITHUB_REPO = "FileCast"
+GITHUB_WORKFLOW = "deploy.yml"
+ALLOWED_ORIGINS = "https://filecast.io,https://www.filecast.io"
+
+# --- Staging environment ---------------------------------------------------
+# Deploy here first (Verification: "Deploy to a Workers staging environment
+# before production"). Uses the SAME D1 database unless you create a separate
+# one and paste its id below.
+[env.staging]
+name = "filecast-worker-staging"
+
+[env.staging.vars]
+COOKIE_DOMAIN = ".filecast.io"
+SITE_ORIGIN = "https://filecast.io"
+OAUTH_REDIRECT_URI = "https://worker-staging.filecast.io/api/auth/google/callback"
+GOOGLE_CLIENT_ID = "REPLACE_WITH_GOOGLE_CLIENT_ID"
+GITHUB_OWNER = "zahid6454"
+GITHUB_REPO = "FileCast"
+GITHUB_WORKFLOW = "deploy.yml"
+ALLOWED_ORIGINS = "https://filecast.io,https://www.filecast.io"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "filecast-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
