@@ -1,5 +1,5 @@
 ---
-name: pro-review
+name: pr-review
 description: >
   Professional engineering + SRE review of a code change, the way a staff
   engineer and an SRE would before approving it for production. Broader than
@@ -8,7 +8,7 @@ description: >
   confidence-scored findings and a ship / don't-ship verdict. Use when the user
   asks for a thorough, professional, senior/staff-level, production-readiness,
   SRE, or reliability review of the current branch, a diff, a PR, or specific
-  files. Triggers: "pro review", "production readiness", "SRE review",
+  files. Triggers: "pr review", "production readiness", "SRE review",
   "reliability review", "review like a staff engineer", "is this safe to ship".
 allowed-tools: Read, Grep, Glob, Bash, WebFetch, TodoWrite
 ---
