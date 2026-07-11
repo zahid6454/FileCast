@@ -11,7 +11,7 @@
 import { json, error, nowIso } from "./utils/http.js";
 import { optionalJWT, verifyTurnstile } from "./middleware.js";
 
-export async function recordConversion(request, env, ctx) {
+export async function recordConversion(request, env) {
   let body;
   try {
     body = await request.json();
@@ -52,34 +52,33 @@ export async function recordConversion(request, env, ctx) {
     .bind(tool_id, date, okInc, failInc)
     .run();
 
-  // (2) Per-user history row — only when signed in.
+  // (2) Per-user history row — only when signed in. Awaited so the returned
+  // saved_to_history flag is truthful (the client shows "Saved to your
+  // history ✓"), but wrapped so a history-insert failure never fails the
+  // aggregate counter write above — that's the "fire-and-forget" guarantee.
   await optionalJWT(request, env);
   let savedToHistory = false;
   if (request.user) {
-    const insertHistory = env.DB.prepare(
-      `INSERT INTO user_conversions
-        (user_id, tool_id, input_format, output_format, file_size_kb, duration_ms, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(
-      request.user.sub,
-      tool_id,
-      input_format,
-      output_format,
-      typeof body.file_size_kb === "number" ? Math.round(body.file_size_kb) : null,
-      typeof body.duration_ms === "number" ? Math.round(body.duration_ms) : null,
-      status,
-      nowIso(),
-    );
-    // Fire-and-forget: never let a history failure fail the counter write.
-    savedToHistory = true;
-    if (ctx && typeof ctx.waitUntil === "function") {
-      ctx.waitUntil(insertHistory.run().catch(() => {}));
-    } else {
-      try {
-        await insertHistory.run();
-      } catch {
-        savedToHistory = false;
-      }
+    try {
+      await env.DB.prepare(
+        `INSERT INTO user_conversions
+          (user_id, tool_id, input_format, output_format, file_size_kb, duration_ms, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          request.user.sub,
+          tool_id,
+          input_format,
+          output_format,
+          typeof body.file_size_kb === "number" ? Math.round(body.file_size_kb) : null,
+          typeof body.duration_ms === "number" ? Math.round(body.duration_ms) : null,
+          status,
+          nowIso(),
+        )
+        .run();
+      savedToHistory = true;
+    } catch {
+      savedToHistory = false;
     }
   }
 

@@ -44,7 +44,8 @@ export async function updateTool(request, env) {
   fields.push("updated_at = ?");
   values.push(nowIso());
 
-  // Upsert so a tool present in YAML but not yet seeded can still be edited.
+  // Update the overlay row. A tool must be seeded first (seed.py); editing an
+  // unseeded id returns 404 rather than silently creating a partial row.
   const res = await env.DB.prepare(
     `UPDATE tools SET ${fields.join(", ")} WHERE id = ?`,
   )
