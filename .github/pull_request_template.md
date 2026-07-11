@@ -7,6 +7,13 @@
 
 <!-- 1–3 sentences: what this PR does and why it matters. Plain language. -->
 
+## Type of change
+
+- [ ] Bug fix (fixes broken behavior)
+- [ ] New feature
+- [ ] Refactor / cleanup (no behavior change)
+- [ ] Docs / tooling / infra
+
 ## Changes
 
 <!-- Bullet list of the concrete changes, grouped by area if helpful. -->
@@ -17,13 +24,6 @@
 <!-- How you verified it. Commands run, what you observed, before/after.
      Say so plainly if something wasn't tested. -->
 -
-
-## Type of change
-
-- [ ] Bug fix (fixes broken behavior)
-- [ ] New feature
-- [ ] Refactor / cleanup (no behavior change)
-- [ ] Docs / tooling / infra
 
 ## Risk & rollout
 
