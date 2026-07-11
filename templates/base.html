@@ -26,31 +26,22 @@
   {# Structured data #}
   {% block structured_data %}{% endblock %}
 
-  {# GA4 (conditional) #}
+  {# Analytics / error tracking (conditional). Vendor SDKs load from their
+     allowlisted CDNs; initialization is handled by self-hosted analytics.js
+     (no inline script) so a strict `script-src 'self'` CSP is preserved.
+     analytics.js is non-deferred and placed after the SDK tags so Sentry.init
+     runs as soon as the SDK is available. #}
   {% if ga4.enabled and ga4.measurement_id %}
   <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga4.measurement_id }}"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', '{{ ga4.measurement_id }}', { send_page_view: true });
-  </script>
   {% endif %}
-
-  {# Sentry (conditional — both scripts non-deferred so init runs after SDK loads) #}
   {% if sentry.enabled and sentry.dsn %}
   <script src="https://browser.sentry-cdn.com/8.x/bundle.min.js" crossorigin="anonymous"></script>
-  <script>
-    Sentry.init({
-      dsn: "{{ sentry.dsn }}",
-      environment: "production",
-      sampleRate: 0.5,
-      beforeSend(event) {
-        if (event.extra) { delete event.extra.fileName; delete event.extra.filePath; }
-        return event;
-      }
-    });
-  </script>
+  {% endif %}
+  {% if (ga4.enabled and ga4.measurement_id) or (sentry.enabled and sentry.dsn) %}
+  {% set analytics_js = assets.get('js/analytics.js') %}
+  {% if analytics_js %}
+  <script src="/{{ analytics_js.path }}" integrity="{{ analytics_js.sri }}" crossorigin="anonymous"{% if ga4.enabled and ga4.measurement_id %} data-ga4-id="{{ ga4.measurement_id }}"{% endif %}{% if sentry.enabled and sentry.dsn %} data-sentry-dsn="{{ sentry.dsn }}"{% endif %}></script>
+  {% endif %}
   {% endif %}
 </head>
 <body>
@@ -86,6 +77,12 @@
   </footer>
 
   {# ===== Scripts ===== #}
+  {# Parses the #tool-config JSON data island into window.TOOL_CONFIG; must run
+     before shared.js so tool handlers see the config. No-op on non-tool pages. #}
+  {% set tool_config_js = assets.get('js/tool-config.js') %}
+  {% if tool_config_js %}
+  <script src="/{{ tool_config_js.path }}" integrity="{{ tool_config_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
   {% set shared_js = assets.get('js/shared.js') %}
   {% if shared_js %}
   <script src="/{{ shared_js.path }}" integrity="{{ shared_js.sri }}" crossorigin="anonymous" defer></script>

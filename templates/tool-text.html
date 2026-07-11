@@ -171,20 +171,21 @@
 
 </div>
 
-{# Tool config injected for shared-text.js #}
-<script>
-window.TOOL_CONFIG = {
-  id: {{ tool.id|tojson }},
-  name: {{ tool.name|tojson }},
-  type: {{ tool.type|tojson }},
-  ui_type: {{ tool.ui_type|tojson }},
-  input_format: {{ tool.input_format|tojson }},
-  output_format: {{ tool.output_format|tojson }},
-  output_extension: {{ tool.output_extension|tojson }},
-  max_file_size: {{ tool.max_file_size|tojson }},
-  max_file_size_bytes: {{ tool.max_file_size_bytes|tojson }},
-  category: {{ tool.category|tojson }}
-};
+{# Tool config as a non-executable JSON data island (CSP-safe under
+   script-src 'self'); parsed into window.TOOL_CONFIG by tool-config.js #}
+<script type="application/json" id="tool-config">
+{
+  "id": {{ tool.id|tojson }},
+  "name": {{ tool.name|tojson }},
+  "type": {{ tool.type|tojson }},
+  "ui_type": {{ tool.ui_type|tojson }},
+  "input_format": {{ tool.input_format|tojson }},
+  "output_format": {{ tool.output_format|tojson }},
+  "output_extension": {{ tool.output_extension|tojson }},
+  "max_file_size": {{ tool.max_file_size|tojson }},
+  "max_file_size_bytes": {{ tool.max_file_size_bytes|tojson }},
+  "category": {{ tool.category|tojson }}
+}
 </script>
 {% endblock %}
 
