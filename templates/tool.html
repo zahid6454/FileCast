@@ -206,23 +206,24 @@
 
 </div>
 
-{# Tool config injected for shared.js #}
-<script>
-window.TOOL_CONFIG = {
-  id: {{ tool.id|tojson }},
-  name: {{ tool.name|tojson }},
-  type: {{ tool.type|tojson }},
-  input_format: {{ tool.input_format|tojson }},
-  output_format: {{ tool.output_format|tojson }},
-  accept_extensions: {{ tool.accept_extensions|tojson }},
-  output_extension: {{ tool.output_extension|tojson }},
-  max_file_size: {{ tool.max_file_size|tojson }},
-  max_file_size_bytes: {{ tool.max_file_size_bytes|tojson }},
-  category: {{ tool.category|tojson }}{% if tool.js_libs is defined and 'pdf.min.js' in tool.js_libs %}{% set worker_asset = assets.get('lib/pdf.worker.min.js') %}{% if worker_asset %},
-  pdf_worker_src: "/{{ worker_asset.path }}"{% endif %}{% endif %}{% if tool.type == 'server-side' %},
-  api_base_url: {{ api.base_url|tojson }},
-  api_endpoint: {{ tool.api_endpoint|default('/api/v1/convert/' + tool.id)|tojson }}{% endif %}
-};
+{# Tool config as a non-executable JSON data island (CSP-safe under
+   script-src 'self'); parsed into window.TOOL_CONFIG by tool-config.js #}
+<script type="application/json" id="tool-config">
+{
+  "id": {{ tool.id|tojson }},
+  "name": {{ tool.name|tojson }},
+  "type": {{ tool.type|tojson }},
+  "input_format": {{ tool.input_format|tojson }},
+  "output_format": {{ tool.output_format|tojson }},
+  "accept_extensions": {{ tool.accept_extensions|tojson }},
+  "output_extension": {{ tool.output_extension|tojson }},
+  "max_file_size": {{ tool.max_file_size|tojson }},
+  "max_file_size_bytes": {{ tool.max_file_size_bytes|tojson }},
+  "category": {{ tool.category|tojson }}{% if tool.js_libs is defined and 'pdf.min.js' in tool.js_libs %}{% set worker_asset = assets.get('lib/pdf.worker.min.js') %}{% if worker_asset %},
+  "pdf_worker_src": {{ ("/" + worker_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.type == 'server-side' %},
+  "api_base_url": {{ api.base_url|tojson }},
+  "api_endpoint": {{ tool.api_endpoint|default('/api/v1/convert/' + tool.id)|tojson }}{% endif %}
+}
 </script>
 {% endblock %}
 

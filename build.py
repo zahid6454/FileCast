@@ -17,6 +17,7 @@ import http.server
 import os
 import re
 import shutil
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -25,6 +26,14 @@ import jinja2
 import markdown
 import rjsmin
 import yaml
+
+# Ensure console output is UTF-8 so non-ASCII characters (e.g. the "→" in
+# build logs) don't crash on Windows' default cp1252 stdout.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
 
 # ---------------------------------------------------------------------------
 # Paths

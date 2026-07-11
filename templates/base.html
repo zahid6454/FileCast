@@ -86,6 +86,12 @@
   </footer>
 
   {# ===== Scripts ===== #}
+  {# Parses the #tool-config JSON data island into window.TOOL_CONFIG; must run
+     before shared.js so tool handlers see the config. No-op on non-tool pages. #}
+  {% set tool_config_js = assets.get('js/tool-config.js') %}
+  {% if tool_config_js %}
+  <script src="/{{ tool_config_js.path }}" integrity="{{ tool_config_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
   {% set shared_js = assets.get('js/shared.js') %}
   {% if shared_js %}
   <script src="/{{ shared_js.path }}" integrity="{{ shared_js.sri }}" crossorigin="anonymous" defer></script>
