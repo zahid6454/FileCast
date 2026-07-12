@@ -1,0 +1,89 @@
+"""Integration — coverage for endpoints not exercised elsewhere:
+users admin list/detail, announcements update/delete, admin-deploy 501 stub,
+and preferences auth gate."""
+
+
+# --- users (admin) ---
+
+
+async def test_users_list_and_detail(admin_client):
+    me = (await admin_client.get("/api/v1/auth/me")).json()["user"]
+
+    listing = (await admin_client.get("/api/v1/users")).json()["users"]
+    assert any(u["email"] == "admin@dev.local" for u in listing)
+
+    detail = (await admin_client.get(f"/api/v1/users/{me['id']}")).json()
+    assert detail["user"]["id"] == me["id"]
+    assert "history" in detail
+
+
+async def test_users_admin_only(user_client):
+    assert (await user_client.get("/api/v1/users")).status_code == 403
+
+
+async def test_user_detail_unknown_404(admin_client):
+    assert (await admin_client.get("/api/v1/users/nope")).status_code == 404
+
+
+# --- announcements update / delete ---
+
+
+async def test_announcement_update_and_delete(admin_client, client):
+    created = (
+        await admin_client.post(
+            "/api/v1/announcements", json={"message": "Original", "active": False}
+        )
+    ).json()["announcement"]
+    aid = created["id"]
+
+    upd = (
+        await admin_client.put(
+            f"/api/v1/announcements/{aid}",
+            json={"message": "Edited", "active": True},
+        )
+    ).json()["announcement"]
+    assert upd["message"] == "Edited" and upd["active"] is True
+
+    # now it's the active one
+    assert (await client.get("/api/v1/announcements/active")).json()["announcement"][
+        "message"
+    ] == "Edited"
+
+    assert (
+        await admin_client.delete(f"/api/v1/announcements/{aid}")
+    ).status_code == 200
+    assert (await admin_client.get("/api/v1/announcements")).json()[
+        "announcements"
+    ] == []
+
+
+async def test_announcement_update_unknown_404(admin_client):
+    assert (
+        await admin_client.put("/api/v1/announcements/999", json={"message": "x"})
+    ).status_code == 404
+
+
+# --- admin deploy stub (Phase 7) ---
+
+
+async def test_admin_deploy_returns_501(admin_client):
+    assert (await admin_client.post("/api/v1/admin/deploy")).status_code == 501
+    assert (await admin_client.get("/api/v1/admin/deploy/abc")).status_code == 501
+
+
+async def test_admin_deploy_requires_admin(user_client):
+    # authz is checked before the 501 stub
+    assert (await user_client.post("/api/v1/admin/deploy")).status_code == 403
+
+
+# --- preferences auth gate ---
+
+
+async def test_preferences_requires_auth(client):
+    assert (
+        await client.put("/api/v1/preferences", json={"theme": "dark"})
+    ).status_code == 401
+
+
+async def test_history_requires_auth(client):
+    assert (await client.get("/api/v1/user/history")).status_code == 401
