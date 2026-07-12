@@ -54,7 +54,7 @@ def validate_html_content(data: bytes) -> bool:
 def validate_upload(content: bytes, filename: str, tool_id: str) -> None:
     if len(content) > MAX_FILE_SIZE:
         raise ValidationError(
-            f"File exceeds the 25MB limit for this conversion type.",
+            "File exceeds the 25MB limit for this conversion type.",
             "too_large",
         )
 

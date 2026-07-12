@@ -6,8 +6,11 @@ services:
     environment:
       - GOTENBERG_URL=http://gotenberg:3000
       - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=postgresql+psycopg://filecast:${POSTGRES_PASSWORD:-filecast_dev}@postgres:5432/filecast
     depends_on:
       gotenberg:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     restart: unless-stopped
 
@@ -30,3 +33,23 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: filecast
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-filecast_dev}
+      POSTGRES_DB: filecast
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U filecast"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

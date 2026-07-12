@@ -3,15 +3,14 @@
 import time
 from collections import defaultdict
 
+from data.netutil import get_client_ip
 from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-
 from log import get_logger, new_request_id, request_id_var
+from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = get_logger("middleware")
 
-RATE_LIMIT = 20  # requests per window
 RATE_WINDOW = 3600  # 1 hour in seconds
 
 ALLOWED_ORIGINS = [
@@ -21,13 +20,27 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
 ]
 
+# Per-path request budgets per RATE_WINDOW (§10/§16-R3). The heavy server-side
+# /convert keeps the original 20/hr; the per-conversion tracking POST fires on
+# EVERY conversion, so it needs a far higher limit or history/counter breaks for
+# active users. Longest-prefix wins (most specific first).
+PATH_LIMITS: list[tuple[str, int]] = [
+    ("/api/v1/auth/dev-login", 20),
+    ("/api/v1/conversions", 120),
+    ("/api/v1/ratings", 30),
+    ("/api/v1/errors", 60),
+    ("/api/v1/convert", 20),
+]
+
 
 def add_cors(app):
     app.add_middleware(
         CORSMiddleware,
         allow_origins=ALLOWED_ORIGINS,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["*"],
+        allow_credentials=True,  # F5 — required for credentials:'include' + cookies
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        # A literal "*" is invalid alongside credentials; be explicit (§16-R2).
+        allow_headers=["Content-Type"],
         max_age=3600,
     )
 
@@ -35,18 +48,12 @@ def add_cors(app):
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Assign request ID, log request/response, add timing header."""
 
-    def _get_client_ip(self, request: Request) -> str:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
-
     async def dispatch(self, request: Request, call_next):
         rid = new_request_id()
         request_id_var.set(rid)
 
         start = time.time()
-        ip = self._get_client_ip(request)
+        ip = get_client_ip(request)
         method = request.method
         path = request.url.path
 
@@ -58,53 +65,73 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         logger.info(
             "%s %s %s %sms",
-            method, path, response.status_code, duration_ms,
-            extra={"data": {
-                "event": "request",
-                "method": method,
-                "path": path,
-                "status": response.status_code,
-                "duration_ms": duration_ms,
-                "ip": ip,
-            }},
+            method,
+            path,
+            response.status_code,
+            duration_ms,
+            extra={
+                "data": {
+                    "event": "request",
+                    "method": method,
+                    "path": path,
+                    "status": response.status_code,
+                    "duration_ms": duration_ms,
+                    "ip": ip,
+                }
+            },
         )
 
         return response
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Simple in-memory rate limiter by client IP."""
+    """Simple in-memory per-path rate limiter by client IP.
+
+    In-memory is fine on a single process (ledger P1 inversion — FastAPI is a
+    long-lived process with shared memory); Redis only if the API scales to
+    multiple instances (Phase 7).
+    """
 
     def __init__(self, app):
         super().__init__(app)
+        # key = f"{bucket}:{ip}" -> list[timestamp]
         self.requests = defaultdict(list)
 
-    def _get_client_ip(self, request: Request) -> str:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
+    @staticmethod
+    def _match_limit(path: str) -> tuple[str, int] | None:
+        for prefix, limit in PATH_LIMITS:
+            if path.startswith(prefix):
+                return prefix, limit
+        return None
 
-    def _clean_old(self, ip: str, now: float):
+    def _clean_old(self, key: str, now: float):
         cutoff = now - RATE_WINDOW
-        self.requests[ip] = [t for t in self.requests[ip] if t > cutoff]
+        self.requests[key] = [t for t in self.requests[key] if t > cutoff]
 
     async def dispatch(self, request: Request, call_next):
-        if not request.url.path.startswith("/api/v1/convert"):
+        matched = self._match_limit(request.url.path)
+        if matched is None:
             return await call_next(request)
+        bucket, limit = matched
 
-        ip = self._get_client_ip(request)
+        ip = get_client_ip(request)
+        key = f"{bucket}:{ip}"
         now = time.time()
-        self._clean_old(ip, now)
+        self._clean_old(key, now)
 
-        if len(self.requests[ip]) >= RATE_LIMIT:
+        if len(self.requests[key]) >= limit:
             logger.warning(
-                "Rate limited %s", ip,
-                extra={"data": {
-                    "event": "rate_limited",
-                    "ip": ip,
-                    "path": request.url.path,
-                }},
+                "Rate limited %s on %s",
+                ip,
+                bucket,
+                extra={
+                    "data": {
+                        "event": "rate_limited",
+                        "ip": ip,
+                        "path": request.url.path,
+                        "limit": limit,
+                    }
+                },
             )
             return Response(
                 content='{"error":"Rate limit exceeded. Try again later.","error_type":"rate_limited"}',
@@ -113,5 +140,5 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 headers={"Retry-After": str(RATE_WINDOW)},
             )
 
-        self.requests[ip].append(now)
+        self.requests[key].append(now)
         return await call_next(request)

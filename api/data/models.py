@@ -1,0 +1,226 @@
+"""SQLAlchemy 2.0 models — 9 domain tables (ledger §4) + a ``sessions`` table
+for DB-backed auth. Proper Postgres types throughout (``timestamptz``,
+``Boolean``, identity PKs, ``JSONB``).
+"""
+
+import uuid
+from datetime import date, datetime
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from data.db import Base
+
+
+def _uuid() -> str:
+    return uuid.uuid4().hex
+
+
+class Tool(Base):
+    """Operational overlay on a YAML tool + seed-managed display metadata.
+
+    ``category``/``name``/``input_format``/``output_format`` are a display cache
+    mirrored from YAML on every ``seed.py`` run (§6 Tool note, admin-panel C1);
+    YAML stays authoritative for page content. ``display_name`` /
+    ``maintenance_message`` / ``custom_max_file_size`` are admin-owned overlay.
+    """
+
+    __tablename__ = "tools"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    display_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    maintenance_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    custom_max_file_size: Mapped[str | None] = mapped_column(String, nullable=True)
+    # seed-managed display metadata (mirrored from YAML)
+    category: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    input_format: Mapped[str | None] = mapped_column(String, nullable=True)
+    output_format: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, onupdate=func.now()
+    )
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    role: Mapped[str] = mapped_column(String, nullable=False, default="user")
+    max_file_size: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class Session(Base):
+    """DB-backed session. PK is ``sha256(raw_token)`` — a DB dump can't be
+    replayed as live sessions (§6 Session note). The cookie carries the raw
+    ``secrets.token_urlsafe(32)``."""
+
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # sha256 hex
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    user_agent: Mapped[str | None] = mapped_column(String, nullable=True)
+    ip: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    __table_args__ = (
+        Index("ix_sessions_user_id", "user_id"),
+        Index("ix_sessions_expires_at", "expires_at"),
+    )
+
+
+class UserFavorite(Base):
+    __tablename__ = "user_favorites"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    tool_id: Mapped[str] = mapped_column(String, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class UserConversion(Base):
+    """Per-user conversion history. Purged after ``retention_days`` (§12)."""
+
+    __tablename__ = "user_conversions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    tool_id: Mapped[str] = mapped_column(String, nullable=False)
+    input_format: Mapped[str | None] = mapped_column(String, nullable=True)
+    output_format: Mapped[str | None] = mapped_column(String, nullable=True)
+    file_size_kb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (Index("ix_user_conversions_user_id", "user_id"),)
+
+
+class UserPreference(Base):
+    __tablename__ = "user_preferences"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    preferences: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+class Rating(Base):
+    """Anonymous yes/no vote with server-side dedup.
+
+    ``vote`` is a **String** storing the literal ``'yes'``/``'no'`` — NOT a
+    boolean (hard Phase 6 contract, §6/R9). Retained (never purged); anonymous.
+    """
+
+    __tablename__ = "ratings"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tool_id: Mapped[str] = mapped_column(String, nullable=False)
+    vote: Mapped[str] = mapped_column(String, nullable=False)  # 'yes' | 'no'
+    fingerprint: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("tool_id", "fingerprint", name="uq_ratings_tool_fingerprint"),
+        Index("ix_ratings_tool_id", "tool_id"),
+    )
+
+
+class Conversion(Base):
+    """Anonymous per-tool-per-day aggregate counter. Never purged (D5)."""
+
+    __tablename__ = "conversions"
+
+    tool_id: Mapped[str] = mapped_column(String, primary_key=True)
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        Index("ix_conversions_date", "date"),
+        Index("ix_conversions_tool_id", "tool_id"),
+    )
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    link: Mapped[str | None] = mapped_column(String, nullable=True)
+    type: Mapped[str] = mapped_column(String, nullable=False, default="info")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    starts_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    ends_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class Error(Base):
+    """Append-only client error log. Purged after ``retention_days`` (§12)."""
+
+    __tablename__ = "errors"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tool_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    error_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    browser: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_errors_created_at", "created_at"),
+        Index("ix_errors_tool_id", "tool_id"),
+    )

@@ -11,7 +11,6 @@ from collections import defaultdict
 import httpx
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import Response
-
 from log import get_logger, request_id_var
 from validation import ValidationError, validate_compress_quality, validate_upload
 
@@ -58,43 +57,55 @@ async def _gotenberg_request(endpoint: str, files: dict, tool_id: str) -> bytes:
     if resp.status_code != 200:
         error_body = resp.text[:500]
         logger.error(
-            "Gotenberg error: %s returned %s", endpoint, resp.status_code,
-            extra={"data": {
-                "event": "gotenberg_error",
-                "tool_id": tool_id,
-                "gotenberg_endpoint": endpoint,
-                "gotenberg_status": resp.status_code,
-                "gotenberg_body": error_body,
-                "gotenberg_ms": gotenberg_ms,
-            }},
+            "Gotenberg error: %s returned %s",
+            endpoint,
+            resp.status_code,
+            extra={
+                "data": {
+                    "event": "gotenberg_error",
+                    "tool_id": tool_id,
+                    "gotenberg_endpoint": endpoint,
+                    "gotenberg_status": resp.status_code,
+                    "gotenberg_body": error_body,
+                    "gotenberg_ms": gotenberg_ms,
+                }
+            },
         )
         raise RuntimeError(
             f"Gotenberg {endpoint} returned {resp.status_code}: {error_body}"
         )
 
     logger.info(
-        "Gotenberg OK: %s %sms", endpoint, gotenberg_ms,
-        extra={"data": {
-            "event": "gotenberg_call",
-            "tool_id": tool_id,
-            "gotenberg_endpoint": endpoint,
-            "gotenberg_status": 200,
-            "gotenberg_ms": gotenberg_ms,
-            "gotenberg_output_bytes": len(resp.content),
-        }},
+        "Gotenberg OK: %s %sms",
+        endpoint,
+        gotenberg_ms,
+        extra={
+            "data": {
+                "event": "gotenberg_call",
+                "tool_id": tool_id,
+                "gotenberg_endpoint": endpoint,
+                "gotenberg_status": 200,
+                "gotenberg_ms": gotenberg_ms,
+                "gotenberg_output_bytes": len(resp.content),
+            }
+        },
     )
     return resp.content
 
 
 async def _convert_libreoffice(
-    content: bytes, filename: str, extra_form: dict | None = None,
+    content: bytes,
+    filename: str,
+    extra_form: dict | None = None,
 ) -> bytes:
     files = {"files": (filename, content)}
     if extra_form:
         for k, v in extra_form.items():
             files[k] = (None, v)
     return await _gotenberg_request(
-        "/forms/libreoffice/convert", files, "libreoffice",
+        "/forms/libreoffice/convert",
+        files,
+        "libreoffice",
     )
 
 
@@ -134,14 +145,17 @@ def _compress_ghostscript_sync(content: bytes, quality: str) -> bytes:
         if result.returncode != 0:
             stderr = result.stderr.decode("utf-8", errors="replace")[:500]
             logger.error(
-                "Ghostscript failed: exit %s", result.returncode,
-                extra={"data": {
-                    "event": "ghostscript_error",
-                    "gs_returncode": result.returncode,
-                    "gs_stderr": stderr,
-                    "gs_quality": quality,
-                    "gs_ms": gs_ms,
-                }},
+                "Ghostscript failed: exit %s",
+                result.returncode,
+                extra={
+                    "data": {
+                        "event": "ghostscript_error",
+                        "gs_returncode": result.returncode,
+                        "gs_stderr": stderr,
+                        "gs_quality": quality,
+                        "gs_ms": gs_ms,
+                    }
+                },
             )
             raise RuntimeError(f"Ghostscript exit {result.returncode}: {stderr}")
 
@@ -149,14 +163,18 @@ def _compress_ghostscript_sync(content: bytes, quality: str) -> bytes:
             output = f.read()
 
         logger.info(
-            "Ghostscript OK: %s %sms", quality, gs_ms,
-            extra={"data": {
-                "event": "ghostscript_call",
-                "gs_quality": quality,
-                "gs_ms": gs_ms,
-                "gs_input_bytes": len(content),
-                "gs_output_bytes": len(output),
-            }},
+            "Ghostscript OK: %s %sms",
+            quality,
+            gs_ms,
+            extra={
+                "data": {
+                    "event": "ghostscript_call",
+                    "gs_quality": quality,
+                    "gs_ms": gs_ms,
+                    "gs_input_bytes": len(content),
+                    "gs_output_bytes": len(output),
+                }
+            },
         )
         return output
     finally:
@@ -193,23 +211,28 @@ def _convert_pdf2docx_sync(content: bytes) -> bytes:
             output = f.read()
 
         logger.info(
-            "pdf2docx OK: %sms", p2d_ms,
-            extra={"data": {
-                "event": "pdf2docx_call",
-                "p2d_ms": p2d_ms,
-                "p2d_input_bytes": len(content),
-                "p2d_output_bytes": len(output),
-            }},
+            "pdf2docx OK: %sms",
+            p2d_ms,
+            extra={
+                "data": {
+                    "event": "pdf2docx_call",
+                    "p2d_ms": p2d_ms,
+                    "p2d_input_bytes": len(content),
+                    "p2d_output_bytes": len(output),
+                }
+            },
         )
         return output
-    except Exception as e:
+    except Exception:
         logger.error(
             "pdf2docx failed",
             exc_info=True,
-            extra={"data": {
-                "event": "pdf2docx_error",
-                "p2d_input_bytes": len(content),
-            }},
+            extra={
+                "data": {
+                    "event": "pdf2docx_error",
+                    "p2d_input_bytes": len(content),
+                }
+            },
         )
         raise
     finally:
@@ -222,9 +245,7 @@ def _convert_pdf2docx_sync(content: bytes) -> bytes:
 
 async def _convert_pdf2docx(content: bytes, filename: str) -> bytes:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(
-        None, _convert_pdf2docx_sync, content
-    )
+    return await loop.run_in_executor(None, _convert_pdf2docx_sync, content)
 
 
 def _safe_filename(filename: str, ext: str = ".pdf") -> str:
@@ -234,7 +255,9 @@ def _safe_filename(filename: str, ext: str = ".pdf") -> str:
 
 
 async def _handle_conversion(
-    file: UploadFile, tool_id: str, convert_fn,
+    file: UploadFile,
+    tool_id: str,
+    convert_fn,
     output_ext: str = ".pdf",
     output_mime: str = "application/pdf",
 ) -> Response:
@@ -249,14 +272,17 @@ async def _handle_conversion(
         _record_metric(tool_id, True, duration_ms)
 
         logger.info(
-            "Conversion OK: %s", tool_id,
-            extra={"data": {
-                "event": "conversion_success",
-                "tool_id": tool_id,
-                "input_bytes": input_size,
-                "output_bytes": len(result),
-                "duration_ms": duration_ms,
-            }},
+            "Conversion OK: %s",
+            tool_id,
+            extra={
+                "data": {
+                    "event": "conversion_success",
+                    "tool_id": tool_id,
+                    "input_bytes": input_size,
+                    "output_bytes": len(result),
+                    "duration_ms": duration_ms,
+                }
+            },
         )
 
         output_filename = _safe_filename(file.filename or "file", output_ext)
@@ -272,27 +298,34 @@ async def _handle_conversion(
         duration_ms = round((time.time() - start) * 1000, 1)
         _record_metric(tool_id, False, duration_ms)
         logger.warning(
-            "Validation failed: %s — %s", tool_id, e.error_type,
-            extra={"data": {
-                "event": "validation_error",
-                "tool_id": tool_id,
-                "error_type": e.error_type,
-                "input_bytes": input_size,
-                "duration_ms": duration_ms,
-            }},
+            "Validation failed: %s — %s",
+            tool_id,
+            e.error_type,
+            extra={
+                "data": {
+                    "event": "validation_error",
+                    "tool_id": tool_id,
+                    "error_type": e.error_type,
+                    "input_bytes": input_size,
+                    "duration_ms": duration_ms,
+                }
+            },
         )
         return _error_response(e.message, e.error_type, 400)
     except subprocess.TimeoutExpired:
         duration_ms = round((time.time() - start) * 1000, 1)
         _record_metric(tool_id, False, duration_ms)
         logger.error(
-            "Conversion timeout: %s", tool_id,
-            extra={"data": {
-                "event": "conversion_timeout",
-                "tool_id": tool_id,
-                "input_bytes": input_size,
-                "duration_ms": duration_ms,
-            }},
+            "Conversion timeout: %s",
+            tool_id,
+            extra={
+                "data": {
+                    "event": "conversion_timeout",
+                    "tool_id": tool_id,
+                    "input_bytes": input_size,
+                    "duration_ms": duration_ms,
+                }
+            },
         )
         return _error_response(
             "Conversion timed out. Try a simpler or smaller file.",
@@ -303,14 +336,17 @@ async def _handle_conversion(
         duration_ms = round((time.time() - start) * 1000, 1)
         _record_metric(tool_id, False, duration_ms)
         logger.error(
-            "Conversion failed: %s", tool_id,
+            "Conversion failed: %s",
+            tool_id,
             exc_info=True,
-            extra={"data": {
-                "event": "conversion_error",
-                "tool_id": tool_id,
-                "input_bytes": input_size,
-                "duration_ms": duration_ms,
-            }},
+            extra={
+                "data": {
+                    "event": "conversion_error",
+                    "tool_id": tool_id,
+                    "input_bytes": input_size,
+                    "duration_ms": duration_ms,
+                }
+            },
         )
         return _error_response(
             "Conversion failed. The file may be corrupted or password-protected.",
@@ -328,9 +364,11 @@ async def docx_to_pdf(file: UploadFile = File(...)):
 async def xlsx_to_pdf(file: UploadFile = File(...)):
     async def _convert(content: bytes, filename: str) -> bytes:
         return await _convert_libreoffice(
-            content, filename,
+            content,
+            filename,
             extra_form={"landscape": "true", "singlePageSheets": "true"},
         )
+
     return await _handle_conversion(file, "xlsx-to-pdf", _convert)
 
 
@@ -360,7 +398,9 @@ async def pdf_compress(
 @router.post("/convert/pdf-to-docx")
 async def pdf_to_docx(file: UploadFile = File(...)):
     return await _handle_conversion(
-        file, "pdf-to-docx", _convert_pdf2docx,
+        file,
+        "pdf-to-docx",
+        _convert_pdf2docx,
         output_ext=".docx",
         output_mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
@@ -379,10 +419,12 @@ async def health():
     if not gotenberg_ok:
         logger.warning(
             "Health check: Gotenberg unreachable",
-            extra={"data": {
-                "event": "health_degraded",
-                "gotenberg": "down",
-            }},
+            extra={
+                "data": {
+                    "event": "health_degraded",
+                    "gotenberg": "down",
+                }
+            },
         )
     return {
         "status": status,
