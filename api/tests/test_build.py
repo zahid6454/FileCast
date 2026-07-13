@@ -220,6 +220,15 @@ def test_tool_data_excludes_disabled(tmp_path, monkeypatch):
     assert [r["id"] for r in data] == ["b"]
 
 
+def test_write_tool_data_slug_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    slugless = _tool(id="widget")
+    del slugless["slug"]  # a YAML tool may omit slug; must not KeyError the build
+    build.write_tool_data([slugless])
+    data = json.loads((tmp_path / "tool-data.json").read_text(encoding="utf-8"))
+    assert data[0]["slug"] == "/convert/widget"
+
+
 # --------------------------------------------------------------------------- #
 # CSP + robots/sitemap
 # --------------------------------------------------------------------------- #
@@ -309,6 +318,11 @@ def test_full_build_additive_outputs(built):
     # Existing converter page still carries a working TOOL_CONFIG island.
     page = (built / "convert" / "png-to-jpg" / "index.html").read_text(encoding="utf-8")
     assert 'id="tool-config"' in page
+
+    # head_extra must NOT leak noindex onto ordinary pages (only admin/account).
+    home = (built / "index.html").read_text(encoding="utf-8")
+    assert "noindex" not in home
+    assert "noindex" not in page
 
 
 def test_full_build_disable_propagates(tmp_path, monkeypatch):

@@ -193,7 +193,9 @@ def fetch_tool_overrides() -> dict:
     docker-internal ``postgres`` host) — a wrong/unset URL degrades gracefully.
     """
     try:
-        sys.path.insert(0, str(ROOT / "api"))  # Phase 1 shared package
+        api_path = str(ROOT / "api")  # Phase 1 shared package
+        if api_path not in sys.path:  # avoid unbounded growth across watch rebuilds
+            sys.path.insert(0, api_path)
         from data.db import sync_session
         from data.models import Tool
 
@@ -412,7 +414,9 @@ def write_tool_data(tools: list[dict]):
         {
             "id": t["id"],
             "name": t["name"],
-            "slug": t["slug"],
+            # Match build.py's slug convention elsewhere (render/sitemap) so a
+            # slug-less YAML tool never KeyErrors the build.
+            "slug": t.get("slug", f"/convert/{t['id']}"),
             "input_format": t.get("input_format"),
             "output_format": t.get("output_format"),
             "category": t.get("category"),
