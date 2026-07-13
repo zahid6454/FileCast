@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Your Account — {{ site.name }}{% endblock %}
+{% block meta_description %}Manage your FileCast account, favorites, conversion history, and preferences.{% endblock %}
+
+{# Account pages are never indexed (belt-and-braces alongside robots.txt Disallow).
+   Uses the head_extra block added to base.html in Phase 2. #}
+{% block head_extra %}
+<meta name="robots" content="noindex, nofollow">
+{% endblock %}
+
+{% block content %}
+<div class="container page">
+  <h1 class="page__title page__title--tight">Your Account</h1>
+
+  {# JS-populated authenticated content is Phase 5. Phase 2 ships a static shell
+     with a sign-in fallback; it inherits the site-wide API config island once
+     that lands in base.html (Phase 3, ledger F2) — no duplicate island here. #}
+  <div id="account-app">
+    <p>Sign in to view your account, favorites, conversion history, and
+       preferences. Every FileCast tool works without an account — signing in
+       simply adds convenience features.</p>
+  </div>
+</div>
+{% endblock %}

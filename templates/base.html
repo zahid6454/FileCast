@@ -26,6 +26,10 @@
   {# Structured data #}
   {% block structured_data %}{% endblock %}
 
+  {# Per-page head extras (e.g. a noindex robots meta on account/). Empty for
+     every existing page ⇒ no regression. #}
+  {% block head_extra %}{% endblock %}
+
   {# Analytics / error tracking (conditional). Vendor SDKs load from their
      allowlisted CDNs; initialization is handled by self-hosted analytics.js
      (no inline script) so a strict `script-src 'self'` CSP is preserved.
