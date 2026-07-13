@@ -49,6 +49,7 @@ ASSETS_DIR = ROOT / "assets"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def parse_file_size(size_str: str) -> int:
     """Convert human-readable size like '20MB' to bytes."""
     size_str = size_str.strip().upper()
@@ -57,7 +58,7 @@ def parse_file_size(size_str: str) -> int:
         raise ValueError(f"Cannot parse file size: {size_str!r}")
     value = float(match.group(1))
     unit = match.group(2)
-    multipliers = {"KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}
+    multipliers = {"KB": 1024, "MB": 1024**2, "GB": 1024**3}
     return int(value * multipliers[unit])
 
 
@@ -76,9 +77,9 @@ def format_bytes_filter(value: int) -> str:
     """Jinja2 filter: 1048576 → '1.0 MB'."""
     if value < 1024:
         return f"{value} B"
-    elif value < 1024 ** 2:
+    elif value < 1024**2:
         return f"{value / 1024:.1f} KB"
-    elif value < 1024 ** 3:
+    elif value < 1024**3:
         return f"{value / 1024 ** 2:.1f} MB"
     else:
         return f"{value / 1024 ** 3:.1f} GB"
@@ -109,15 +110,17 @@ def parse_faq_pairs(md_path: Path) -> list[dict]:
     for line in text.splitlines():
         if line.startswith("### "):
             if current_q and current_a_lines:
-                answer = " ".join(l.strip() for l in current_a_lines if l.strip())
-                pairs.append({
-                    "@type": "Question",
-                    "name": current_q,
-                    "acceptedAnswer": {
-                        "@type": "Answer",
-                        "text": answer,
-                    },
-                })
+                answer = " ".join(ln.strip() for ln in current_a_lines if ln.strip())
+                pairs.append(
+                    {
+                        "@type": "Question",
+                        "name": current_q,
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": answer,
+                        },
+                    }
+                )
             current_q = line[4:].strip()
             current_a_lines = []
         elif line.startswith("## "):
@@ -126,15 +129,17 @@ def parse_faq_pairs(md_path: Path) -> list[dict]:
             current_a_lines.append(line)
 
     if current_q and current_a_lines:
-        answer = " ".join(l.strip() for l in current_a_lines if l.strip())
-        pairs.append({
-            "@type": "Question",
-            "name": current_q,
-            "acceptedAnswer": {
-                "@type": "Answer",
-                "text": answer,
-            },
-        })
+        answer = " ".join(ln.strip() for ln in current_a_lines if ln.strip())
+        pairs.append(
+            {
+                "@type": "Question",
+                "name": current_q,
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": answer,
+                },
+            }
+        )
 
     return pairs
 
@@ -142,6 +147,7 @@ def parse_faq_pairs(md_path: Path) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Step 1: Clean dist/
 # ---------------------------------------------------------------------------
+
 
 def clean_dist():
     if DIST.exists():
@@ -158,6 +164,7 @@ def clean_dist():
 # Step 2: Load site config
 # ---------------------------------------------------------------------------
 
+
 def load_site_config() -> dict:
     config_path = ROOT / "site-config.yaml"
     with open(config_path, encoding="utf-8") as f:
@@ -167,6 +174,7 @@ def load_site_config() -> dict:
 # ---------------------------------------------------------------------------
 # Step 3-4: Discover and parse tool configs
 # ---------------------------------------------------------------------------
+
 
 def load_tools() -> list[dict]:
     tools = []
@@ -193,6 +201,7 @@ def load_tools() -> list[dict]:
 # Step 5: Group tools by category
 # ---------------------------------------------------------------------------
 
+
 def group_tools_by_category(tools: list[dict], categories: list[dict]) -> dict:
     """Return {category_id: {**category_data, 'tools': [...]}} only for non-empty categories."""
     by_cat = {}
@@ -206,6 +215,7 @@ def group_tools_by_category(tools: list[dict], categories: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 # Step 6: Load content markdown for each tool
 # ---------------------------------------------------------------------------
+
 
 def load_tool_content(tools: list[dict]):
     """Mutate each tool dict: add 'content_html' with rendered HTML blocks
@@ -229,6 +239,7 @@ def load_tool_content(tools: list[dict]):
 # Step 7: Resolve related tools
 # ---------------------------------------------------------------------------
 
+
 def resolve_related_tools(tools: list[dict]):
     """Filter out related_tools IDs that don't exist in the tool set.
 
@@ -236,24 +247,37 @@ def resolve_related_tools(tools: list[dict]):
     circular references when templates serialize tool data to JSON.
     """
     tool_map = {t["id"]: t for t in tools}
-    RELATED_FIELDS = ("id", "name", "slug", "meta", "category", "type",
-                      "input_format", "output_format")
+    RELATED_FIELDS = (
+        "id",
+        "name",
+        "slug",
+        "meta",
+        "category",
+        "type",
+        "input_format",
+        "output_format",
+    )
     for tool in tools:
         raw = tool.get("related_tools", []) or []
         resolved = []
         for tid in raw:
             if tid in tool_map:
-                resolved.append({k: tool_map[tid][k] for k in RELATED_FIELDS
-                                 if k in tool_map[tid]})
+                resolved.append(
+                    {k: tool_map[tid][k] for k in RELATED_FIELDS if k in tool_map[tid]}
+                )
         tool["related_tools_resolved"] = resolved
 
         reverse_id = tool.get("reverse_tool")
         if reverse_id and reverse_id in tool_map:
             rt = tool_map[reverse_id]
-            tool["reverse_tool_resolved"] = {k: rt[k] for k in RELATED_FIELDS if k in rt}
+            tool["reverse_tool_resolved"] = {
+                k: rt[k] for k in RELATED_FIELDS if k in rt
+            }
             target_reverse = tool_map[reverse_id].get("reverse_tool")
             if target_reverse != tool["id"]:
-                print(f"  [warn] {tool['id']}: reverse_tool '{reverse_id}' does not point back (has '{target_reverse}')")
+                print(
+                    f"  [warn] {tool['id']}: reverse_tool '{reverse_id}' does not point back (has '{target_reverse}')"
+                )
         elif reverse_id:
             print(f"  [warn] {tool['id']}: reverse_tool '{reverse_id}' not found")
             tool["reverse_tool_resolved"] = None
@@ -264,6 +288,7 @@ def resolve_related_tools(tools: list[dict]):
 # ---------------------------------------------------------------------------
 # Steps 8-12: Process and copy static assets
 # ---------------------------------------------------------------------------
+
 
 def process_assets() -> dict:
     """Copy, minify, hash, and SRI all static assets.
@@ -290,7 +315,10 @@ def process_assets() -> dict:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_bytes(content_bytes)
             rel_key = f"css/{css_file.name}"
-            asset_map[rel_key] = {"path": f"css/{hashed_name}", "sri": sri_hash(content_bytes)}
+            asset_map[rel_key] = {
+                "path": f"css/{hashed_name}",
+                "sri": sri_hash(content_bytes),
+            }
 
     # --- JS (our code) ---
     js_src = STATIC_DIR / "js"
@@ -307,7 +335,10 @@ def process_assets() -> dict:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_bytes(content_bytes)
             rel_key = f"js/{rel.as_posix()}"
-            asset_map[rel_key] = {"path": out_rel.as_posix(), "sri": sri_hash(content_bytes)}
+            asset_map[rel_key] = {
+                "path": out_rel.as_posix(),
+                "sri": sri_hash(content_bytes),
+            }
 
     # --- Third-party JS libs (already minified, just hash + SRI) ---
     lib_src = STATIC_DIR / "lib"
@@ -322,7 +353,10 @@ def process_assets() -> dict:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_bytes(content_bytes)
             rel_key = f"lib/{rel.as_posix()}"
-            asset_map[rel_key] = {"path": out_rel.as_posix(), "sri": sri_hash(content_bytes)}
+            asset_map[rel_key] = {
+                "path": out_rel.as_posix(),
+                "sri": sri_hash(content_bytes),
+            }
 
     # --- Images/SVGs ---
     img_src = STATIC_DIR / "images"
@@ -350,7 +384,10 @@ def process_assets() -> dict:
 # Step 13: Set up Jinja2 environment
 # ---------------------------------------------------------------------------
 
-def create_jinja_env(site_config: dict, asset_map: dict, categories_with_tools: dict) -> jinja2.Environment:
+
+def create_jinja_env(
+    site_config: dict, asset_map: dict, categories_with_tools: dict
+) -> jinja2.Environment:
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
         autoescape=True,
@@ -376,7 +413,10 @@ def create_jinja_env(site_config: dict, asset_map: dict, categories_with_tools: 
 # Step 14: Render pages
 # ---------------------------------------------------------------------------
 
-def render_page(env: jinja2.Environment, template_name: str, out_path: Path, **ctx) -> bool:
+
+def render_page(
+    env: jinja2.Environment, template_name: str, out_path: Path, **ctx
+) -> bool:
     """Render a template to a file inside dist/. Returns False if template missing."""
     try:
         tmpl = env.get_template(template_name)
@@ -389,10 +429,17 @@ def render_page(env: jinja2.Environment, template_name: str, out_path: Path, **c
     return True
 
 
-def render_all_pages(env: jinja2.Environment, tools: list[dict], categories_with_tools: dict):
+def render_all_pages(
+    env: jinja2.Environment, tools: list[dict], categories_with_tools: dict
+):
     # Homepage
-    if render_page(env, "home.html", DIST / "index.html",
-                   categories=categories_with_tools, tools=tools):
+    if render_page(
+        env,
+        "home.html",
+        DIST / "index.html",
+        categories=categories_with_tools,
+        tools=tools,
+    ):
         print("  [ok] index.html")
 
     # Tool pages
@@ -412,7 +459,7 @@ def render_all_pages(env: jinja2.Environment, tools: list[dict], categories_with
             print(f"  [ok] {slug}/index.html")
 
     # Category pages
-    for cat_id, cat_data in categories_with_tools.items():
+    for _cat_id, cat_data in categories_with_tools.items():
         slug = cat_data["slug"]
         out_path = DIST / slug / "index.html"
         if render_page(env, "category.html", out_path, category=cat_data):
@@ -443,8 +490,11 @@ def render_all_pages(env: jinja2.Environment, tools: list[dict], categories_with
 # Step 15: Generate sitemap.xml
 # ---------------------------------------------------------------------------
 
+
 def generate_sitemap(site_config: dict, tools: list[dict], categories_with_tools: dict):
-    base = site_config.get("site", {}).get("base_url", "https://filecast.io").rstrip("/")
+    base = (
+        site_config.get("site", {}).get("base_url", "https://filecast.io").rstrip("/")
+    )
     today = date.today().isoformat()
     urls = []
 
@@ -484,8 +534,11 @@ def generate_sitemap(site_config: dict, tools: list[dict], categories_with_tools
 # Step 16: Generate robots.txt
 # ---------------------------------------------------------------------------
 
+
 def generate_robots(site_config: dict):
-    base = site_config.get("site", {}).get("base_url", "https://filecast.io").rstrip("/")
+    base = (
+        site_config.get("site", {}).get("base_url", "https://filecast.io").rstrip("/")
+    )
     content = f"User-agent: *\nAllow: /\n\nSitemap: {base}/sitemap.xml\n"
     (DIST / "robots.txt").write_text(content, encoding="utf-8")
     print("  [ok] robots.txt")
@@ -494,6 +547,7 @@ def generate_robots(site_config: dict):
 # ---------------------------------------------------------------------------
 # Step 17: Generate _headers (Cloudflare Pages)
 # ---------------------------------------------------------------------------
+
 
 def generate_headers(site_config: dict):
     api_url = "https://api.filecast.io"
@@ -506,7 +560,9 @@ def generate_headers(site_config: dict):
     frame_src = "'none'"
 
     if adsense_enabled:
-        script_src += " https://pagead2.googlesyndication.com https://www.googletagmanager.com"
+        script_src += (
+            " https://pagead2.googlesyndication.com https://www.googletagmanager.com"
+        )
         frame_src = "https://googleads.g.doubleclick.net"
     if ga4_enabled:
         if "googletagmanager" not in script_src:
@@ -553,6 +609,7 @@ def generate_headers(site_config: dict):
 # Step 18: Local preview server
 # ---------------------------------------------------------------------------
 
+
 class CORSHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -579,11 +636,11 @@ def serve(port: int = 8000):
 # ---------------------------------------------------------------------------
 
 LIVE_RELOAD_SNIPPET = (
-    b'<script>(function(){'
+    b"<script>(function(){"
     b"var es=new EventSource('/__reload');"
-    b'es.onmessage=function(){location.reload();};'
-    b'es.onerror=function(){setTimeout(function(){location.reload();},1000);};'
-    b'})()</script>'
+    b"es.onmessage=function(){location.reload();};"
+    b"es.onerror=function(){setTimeout(function(){location.reload();},1000);};"
+    b"})()</script>"
 )
 
 
@@ -718,6 +775,7 @@ def watch(port: int = 8000):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def build():
     print("FileCast build starting...\n")
 
@@ -774,9 +832,17 @@ def build():
 
 def main():
     parser = argparse.ArgumentParser(description="FileCast static site generator")
-    parser.add_argument("--serve", action="store_true", help="Start local preview server after build")
-    parser.add_argument("--watch", action="store_true", help="Watch for changes, auto-rebuild + live reload")
-    parser.add_argument("--port", type=int, default=8000, help="Port for preview server (default: 8000)")
+    parser.add_argument(
+        "--serve", action="store_true", help="Start local preview server after build"
+    )
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Watch for changes, auto-rebuild + live reload",
+    )
+    parser.add_argument(
+        "--port", type=int, default=8000, help="Port for preview server (default: 8000)"
+    )
     args = parser.parse_args()
 
     if args.watch:

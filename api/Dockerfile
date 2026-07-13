@@ -13,4 +13,6 @@ COPY . .
 
 EXPOSE 8090
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8090", "--workers", "4"]
+# Migrate then serve — in the api service COMMAND (not a shared ENTRYPOINT) so
+# only this service applies migrations and nothing races it (§7/§16-R5).
+CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8090 --workers 4"]
