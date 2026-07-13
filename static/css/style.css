@@ -993,6 +993,11 @@ img { max-width: 100%; display: block; }
 
 /* --- Mobile nav drawer + hamburger visibility --- */
 @media (max-width: 767px) {
+  /* The drawer sits off-canvas to the right (transform: translateX(100%)) when
+     closed. Clip horizontal overflow at the root so that off-screen panel can
+     never produce a horizontal scrollbar in any browser. `clip` (not `hidden`)
+     does NOT create a scroll container, so the sticky .header keeps working. */
+  html { overflow-x: clip; }
   .header__nav {
     position: fixed;
     top: var(--header-height);
@@ -1010,9 +1015,13 @@ img { max-width: 100%; display: block; }
     z-index: 200;
     box-shadow: var(--shadow-lg);
     transform: translateX(100%);
-    transition: transform var(--transition-base);
+    /* Closed: hidden from the tab order + a11y tree (not just off-screen), so
+       keyboard users can't tab into the collapsed drawer. Visibility steps to
+       hidden at the end of the slide-out, so the animation still plays. */
+    visibility: hidden;
+    transition: transform var(--transition-base), visibility var(--transition-base);
   }
-  .header__nav--open { transform: translateX(0); }
+  .header__nav--open { transform: translateX(0); visibility: visible; }
   .nav-dropdown__toggle { width: 100%; justify-content: space-between; }
   .nav-dropdown__menu { position: static; box-shadow: none; padding-left: var(--space-3); }
 }
