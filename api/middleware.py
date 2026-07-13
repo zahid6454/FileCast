@@ -29,6 +29,10 @@ PATH_LIMITS: list[tuple[str, int]] = [
     ("/api/v1/conversions", 120),
     ("/api/v1/ratings", 30),
     ("/api/v1/errors", 60),
+    # Public, unauthenticated, DB-touching read (/announcements/active).
+    ("/api/v1/announcements", 120),
+    # Authenticated write; also size/key-guarded in the router.
+    ("/api/v1/preferences", 60),
     ("/api/v1/convert", 20),
 ]
 
@@ -85,17 +89,27 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Simple in-memory per-path rate limiter by client IP.
+    """In-memory per-path rate limiter keyed by client IP.
 
-    In-memory is fine on a single process (ledger P1 inversion — FastAPI is a
-    long-lived process with shared memory); Redis only if the API scales to
-    multiple instances (Phase 7).
+    KNOWN LIMITATION (per-worker): the API runs ``uvicorn --workers 4``, so each
+    worker process holds its OWN ``requests`` dict and requests are load-balanced
+    across workers. Limits are therefore enforced **per worker** — a configured
+    20/hr is effectively up to ~4×20/hr across the instance, and counts are not
+    shared. This is acceptable for Phase 1 (defense-in-depth, not a hard quota);
+    Phase 7 moves enforcement to a shared store (Redis) to make limits exact and
+    cross-worker.
+
+    Memory is bounded: buckets for IPs that go idle are evicted by a periodic
+    sweep (``_sweep``) once per ``RATE_WINDOW`` — without it, distinct client IPs
+    (e.g. behind Cloudflare or under IP-rotating abuse) would accumulate keys
+    forever and leak.
     """
 
     def __init__(self, app):
         super().__init__(app)
         # key = f"{bucket}:{ip}" -> list[timestamp]
         self.requests = defaultdict(list)
+        self._last_sweep = time.time()
 
     @staticmethod
     def _match_limit(path: str) -> tuple[str, int] | None:
@@ -108,6 +122,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         cutoff = now - RATE_WINDOW
         self.requests[key] = [t for t in self.requests[key] if t > cutoff]
 
+    def _sweep(self, now: float):
+        """Drop stale/empty buckets so idle IPs don't accumulate unboundedly."""
+        cutoff = now - RATE_WINDOW
+        for key in list(self.requests.keys()):
+            fresh = [t for t in self.requests[key] if t > cutoff]
+            if fresh:
+                self.requests[key] = fresh
+            else:
+                del self.requests[key]
+        self._last_sweep = now
+
     async def dispatch(self, request: Request, call_next):
         matched = self._match_limit(request.url.path)
         if matched is None:
@@ -117,6 +142,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ip = get_client_ip(request)
         key = f"{bucket}:{ip}"
         now = time.time()
+        if now - self._last_sweep > RATE_WINDOW:
+            self._sweep(now)
         self._clean_old(key, now)
 
         if len(self.requests[key]) >= limit:

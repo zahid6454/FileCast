@@ -238,3 +238,32 @@ def test_json_formatter_emits_structured_line():
     assert out["msg"] == "hello"
     assert out["level"] == "info"
     assert out["service"] == "filecast-api"
+
+
+# ---------------------------------------------------------------------------
+# RateLimitMiddleware — path matching + bucket eviction (memory bound)
+# ---------------------------------------------------------------------------
+
+
+def test_rate_limit_path_matching():
+    from middleware import RateLimitMiddleware
+
+    match = RateLimitMiddleware._match_limit
+    assert match("/api/v1/announcements/active")[0] == "/api/v1/announcements"
+    assert match("/api/v1/preferences")[0] == "/api/v1/preferences"
+    assert match("/api/v1/convert/docx-to-pdf")[0] == "/api/v1/convert"
+    assert match("/api/v1/tools") is None  # not rate limited
+
+
+def test_rate_limiter_sweep_evicts_idle_buckets():
+    import time
+
+    from middleware import RATE_WINDOW, RateLimitMiddleware
+
+    mw = RateLimitMiddleware(None)
+    now = time.time()
+    mw.requests["errors:1.1.1.1"] = [now - RATE_WINDOW - 10]  # stale (idle IP)
+    mw.requests["errors:2.2.2.2"] = [now]  # fresh
+    mw._sweep(now)
+    assert "errors:1.1.1.1" not in mw.requests  # evicted → no unbounded growth
+    assert "errors:2.2.2.2" in mw.requests  # active bucket retained

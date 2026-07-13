@@ -31,6 +31,16 @@ async def test_preferences_put_merges(admin_client):
     assert r.json()["preferences"] == {"theme": "dark", "jpeg_quality": 80}
 
 
+async def test_preferences_rejects_unknown_keys(admin_client):
+    r = await admin_client.put("/api/v1/preferences", json={"evil": "x"})
+    assert r.status_code == 400
+
+
+async def test_preferences_rejects_oversized_payload(admin_client):
+    r = await admin_client.put("/api/v1/preferences", json={"display_name": "x" * 5000})
+    assert r.status_code == 413
+
+
 # --- announcements ---
 
 
