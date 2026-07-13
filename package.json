@@ -1,0 +1,16 @@
+{
+  "name": "filecast",
+  "version": "0.0.0",
+  "private": true,
+  "description": "FileCast — front-end JS unit + E2E tests (Phase 3).",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.4"
+  }
+}

@@ -48,7 +48,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container page">
+<div class="container container--narrow page">
 
   {# Breadcrumb #}
   <nav class="breadcrumb">
@@ -86,7 +86,7 @@
       {% if opt.type == 'range' %}
       <input class="tool-options__slider" type="range" id="opt-{{ opt.id }}"
              min="{{ opt.min }}" max="{{ opt.max }}" value="{{ opt.default }}"
-             oninput="document.getElementById('val-{{ opt.id }}').textContent=this.value+'{{ opt.suffix or '' }}'">
+             data-value-target="val-{{ opt.id }}" data-suffix="{{ opt.suffix or '' }}">
       <span class="tool-options__value" id="val-{{ opt.id }}">{{ opt.default }}{{ opt.suffix or '' }}</span>
       {% elif opt.type == 'number' %}
       <input class="tool-options__input" type="number" id="opt-{{ opt.id }}"
@@ -104,9 +104,13 @@
   </div>
   {% endif %}
 
-  {# Upload Zone #}
+  {# Upload Zone. The CTA is a styled span, NOT a nested <button> — shared.js
+     already makes the whole zone click-to-browse, so a real button would open
+     the picker twice (R7). #}
   <div class="upload-zone" id="upload-zone">
-    <div class="upload-zone__text">Drop your file here or click to browse</div>
+    <svg class="upload-zone__icon" aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg>
+    <span class="upload-zone__cta">Choose File</span>
+    <div class="upload-zone__text">or drop your file here</div>
     <div class="upload-zone__hint">
       Accepts: {{ tool.accept_extensions|join(', ') }} &mdash; Max: {{ tool.max_file_size }}
     </div>

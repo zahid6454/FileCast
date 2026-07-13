@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import tool_card %}
 
 {% block title %}Page Not Found — {{ site.name }}{% endblock %}
 {% block meta_description %}The page you're looking for doesn't exist. Try searching for a conversion tool.{% endblock %}
@@ -10,14 +11,22 @@
     <div class="not-found__code">404</div>
     <h1 class="not-found__title">Page Not Found</h1>
     <p class="not-found__text">The page you're looking for doesn't exist or has been moved.</p>
-    <input
-      type="search"
-      class="hero__search"
-      id="tool-search"
-      placeholder="Search conversion tools... (e.g. HEIC, PDF, JSON)"
-      autocomplete="off"
-      style="margin-bottom: var(--space-8);"
-    >
+    {# Full-catalog client search (same mechanism as the hero, driven by nav.js). #}
+    <div class="hero-search">
+      <input
+        type="search"
+        class="hero__search"
+        id="hero-search"
+        role="combobox"
+        aria-expanded="false"
+        aria-controls="hero-search-results"
+        aria-autocomplete="list"
+        aria-label="Search conversion tools"
+        placeholder="Search conversion tools... (e.g. HEIC, PDF, JSON)"
+        autocomplete="off"
+      >
+      <ul class="hero-search__results hidden" id="hero-search-results" role="listbox" aria-label="Tool search results"></ul>
+    </div>
   </div>
 
   {% if tools %}
@@ -26,12 +35,7 @@
     <div class="section__divider"></div>
     <div class="card-grid">
       {% for tool in tools[:8] %}
-      <a class="card{% if tool.type == 'server-side' %} card--server{% endif %}"
-         href="{{ tool.slug }}/"
-         data-name="{{ tool.name|lower }}"
-         data-category="">
-        {{ tool.input_format }} → {{ tool.output_format }}
-      </a>
+      {{ tool_card(tool) }}
       {% endfor %}
     </div>
   </section>
