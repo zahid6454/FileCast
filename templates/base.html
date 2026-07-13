@@ -23,8 +23,10 @@
   <link rel="stylesheet" href="/{{ css_asset.path }}">
   {% endif %}
 
-  {# Structured data #}
-  {% block structured_data %}{% endblock %}
+  {# Structured data, plus a per-page <head> hook (e.g. account/'s noindex meta).
+     head_extra is appended to the same line so a page that doesn't override it
+     emits ZERO extra bytes — every existing page stays byte-identical (§7.1). #}
+  {% block structured_data %}{% endblock %}{% block head_extra %}{% endblock %}
 
   {# Analytics / error tracking (conditional). Vendor SDKs load from their
      allowlisted CDNs; initialization is handled by self-hosted analytics.js

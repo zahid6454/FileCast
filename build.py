@@ -14,6 +14,7 @@ import argparse
 import base64
 import hashlib
 import http.server
+import json
 import os
 import re
 import shutil
@@ -176,6 +177,116 @@ def load_site_config() -> dict:
 # ---------------------------------------------------------------------------
 
 
+def fetch_tool_overrides() -> dict:
+    """Read the admin tool-state overlay from Postgres via the Phase 1 sync engine.
+
+    Returns ``{tool_id: {enabled, display_name, sort_order, maintenance_message,
+    custom_max_file_size}}``, or ``{}`` on ANY failure (shared package not
+    importable, ``DATABASE_URL`` unset/unreachable, DB down, empty table) so the
+    build degrades to pure-YAML output. A tool absent from the result keeps its
+    YAML defaults (ledger P10) — the build never fails closed on DB state.
+
+    Reads the DB directly (no HTTP, no build key) via the same seam as
+    ``seed.py``: the shared ``data`` package under ``api/`` (ledger §11 #3, F7).
+    ``DATABASE_URL`` comes from the environment/``.env`` (Phase 1 ``Settings``);
+    on the host it must point at ``localhost:5432`` (the container uses the
+    docker-internal ``postgres`` host) — a wrong/unset URL degrades gracefully.
+    """
+    try:
+        api_path = str(ROOT / "api")  # Phase 1 shared package
+        if api_path not in sys.path:  # avoid unbounded growth across watch rebuilds
+            sys.path.insert(0, api_path)
+        from data.db import sync_session
+        from data.models import Tool
+
+        result = {}
+        with sync_session() as session:
+            for t in session.query(Tool).all():
+                result[t.id] = {
+                    "enabled": t.enabled,
+                    "display_name": t.display_name,
+                    "sort_order": t.sort_order,
+                    "maintenance_message": t.maintenance_message,
+                    "custom_max_file_size": t.custom_max_file_size,
+                }
+        if result:
+            print(f"  [db] tool overlay applied ({len(result)} row(s))")
+        return result  # populated only on full success
+    except Exception as e:  # noqa: BLE001 — intentional catch-all (ledger P10/R4)
+        print(
+            f"  [db] tool overlay unavailable ({type(e).__name__}); "
+            f"building from YAML only"
+        )
+        return {}  # all-or-nothing: never a half overlay
+
+
+def apply_tool_overrides(tools: list[dict], overrides: dict) -> list[dict]:
+    """Merge the DB overlay onto each YAML-enabled tool; drop admin-disabled tools.
+
+    - ``enabled is False`` in the DB row ⇒ **exclude** the tool (the operational
+      toggle over YAML-enabled tools; the DB never resurrects a YAML-disabled tool
+      — those were never loaded by ``load_tools()``).
+    - ``display_name`` (non-empty) → ``tool["name"]``.
+    - ``custom_max_file_size`` (non-empty) → ``tool["max_file_size"]`` **and**
+      recomputes ``tool["max_file_size_bytes"]`` (the bytes value is what the
+      client enforces via ``TOOL_CONFIG``; a stale one would be a silent bug — R3).
+    - ``sort_order`` (not None) → ``tool["sort_order"]``.
+    - ``maintenance_message`` (non-empty) → ``tool["maintenance_message"]``.
+    - A tool **absent** from ``overrides`` is left exactly as YAML produced it (P10).
+
+    Kept separate from ``load_tools()`` so the no-DB path stays pure-YAML.
+    """
+    if not overrides:
+        return tools
+    result = []
+    for tool in tools:
+        ov = overrides.get(tool["id"])
+        if ov is None:
+            result.append(tool)  # unseeded → YAML defaults (P10)
+            continue
+        if ov.get("enabled") is False:
+            print(f"  [db] {tool['id']} disabled by admin overlay")
+            continue
+        display_name = ov.get("display_name")
+        if display_name:
+            tool["name"] = display_name
+        custom_size = ov.get("custom_max_file_size")
+        if custom_size:
+            try:
+                tool["max_file_size_bytes"] = parse_file_size(custom_size)
+                tool["max_file_size"] = custom_size
+            except ValueError:
+                # Malformed admin value must not fail the build (P10): keep YAML.
+                print(
+                    f"  [db] {tool['id']}: ignoring invalid "
+                    f"custom_max_file_size {custom_size!r}"
+                )
+        sort_order = ov.get("sort_order")
+        if sort_order is not None:
+            tool["sort_order"] = sort_order
+        maintenance = ov.get("maintenance_message")
+        if maintenance:
+            tool["maintenance_message"] = maintenance
+        result.append(tool)
+    return result
+
+
+def sort_tools(tools: list[dict]) -> list[dict]:
+    """Stable global sort of the flat tools list by the DB ``sort_order`` (P9/D1).
+
+    Applied **upstream** of ``group_tools_by_category()`` so home/404/category
+    pages and ``tool-data.json`` all inherit the admin order. Tools without a
+    ``sort_order`` (unseeded, or the whole no-DB path) sort to the end and keep
+    their current (filename) order — a stable sort makes the no-DB output
+    byte-identical to today's.
+    """
+    inf = float("inf")
+    return sorted(
+        tools,
+        key=lambda t: t["sort_order"] if t.get("sort_order") is not None else inf,
+    )
+
+
 def load_tools() -> list[dict]:
     tools = []
     if not TOOLS_DIR.exists():
@@ -283,6 +394,38 @@ def resolve_related_tools(tools: list[dict]):
             tool["reverse_tool_resolved"] = None
         else:
             tool["reverse_tool_resolved"] = None
+
+
+# ---------------------------------------------------------------------------
+# Emit dist/tool-data.json for the homepage/404 client search (ledger P8)
+# ---------------------------------------------------------------------------
+
+
+def write_tool_data(tools: list[dict]):
+    """Write ``dist/tool-data.json`` for the homepage/404 client search.
+
+    Written **straight to DIST**, never through ``process_assets()`` (which runs
+    JS through ``rjsmin`` and would corrupt the JSON — ledger P8). Ordered by the
+    already-applied ``sort_order`` so search suggestions surface prioritized
+    tools first; admin-disabled tools are already excluded upstream by
+    ``apply_tool_overrides()``. The consumer (``nav.js``) lands in Phase 3.
+    """
+    records = [
+        {
+            "id": t["id"],
+            "name": t["name"],
+            # Match build.py's slug convention elsewhere (render/sitemap) so a
+            # slug-less YAML tool never KeyErrors the build.
+            "slug": t.get("slug", f"/convert/{t['id']}"),
+            "input_format": t.get("input_format"),
+            "output_format": t.get("output_format"),
+            "category": t.get("category"),
+            "tagline": t.get("tagline", ""),
+        }
+        for t in tools
+    ]
+    (DIST / "tool-data.json").write_text(json.dumps(records), encoding="utf-8")
+    print("  [ok] tool-data.json")
 
 
 # ---------------------------------------------------------------------------
@@ -485,6 +628,15 @@ def render_all_pages(
     if render_page(env, "404.html", DIST / "404.html", tools=tools):
         print("  [ok] 404.html")
 
+    # Admin panel shell (SPA logic is Phase 4). Standalone template; reads only
+    # Jinja globals (api/assets/site), so no extra context (StrictUndefined-safe).
+    if render_page(env, "admin.html", DIST / "admin" / "index.html"):
+        print("  [ok] admin/index.html")
+
+    # Account page shell (JS-populated content is Phase 5). Extends base.html.
+    if render_page(env, "account.html", DIST / "account" / "index.html"):
+        print("  [ok] account/index.html")
+
 
 # ---------------------------------------------------------------------------
 # Step 15: Generate sitemap.xml
@@ -539,7 +691,16 @@ def generate_robots(site_config: dict):
     base = (
         site_config.get("site", {}).get("base_url", "https://filecast.io").rstrip("/")
     )
-    content = f"User-agent: *\nAllow: /\n\nSitemap: {base}/sitemap.xml\n"
+    # Exclude the admin panel and account pages from crawling (Phase 2). The
+    # sitemap already omits them (it only enumerates home/tools/categories/static
+    # pages) — do NOT add them there.
+    content = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin/\n"
+        "Disallow: /account/\n"
+        f"\nSitemap: {base}/sitemap.xml\n"
+    )
     (DIST / "robots.txt").write_text(content, encoding="utf-8")
     print("  [ok] robots.txt")
 
@@ -555,8 +716,17 @@ def generate_headers(site_config: dict):
     ga4_enabled = site_config.get("ga4", {}).get("enabled", False)
     sentry_enabled = site_config.get("sentry", {}).get("enabled", False)
 
+    # script-src is NEVER touched here (ledger P6/P7) — no inline script is added.
     script_src = "'self'"
-    connect_src = f"'self' {api_url}"
+    # connect-src already allows the API origin (data API shares it, F15). Add the
+    # Google OAuth token/authorize hosts for Phase 5. img-src gains Google avatars
+    # (Phase 5); style-src/font-src gain Google Fonts for the Inter face (Phase 3).
+    connect_src = (
+        f"'self' {api_url} https://accounts.google.com https://oauth2.googleapis.com"
+    )
+    style_src = "'self' 'unsafe-inline' https://fonts.googleapis.com"
+    font_src = "'self' https://fonts.gstatic.com"
+    img_src = "'self' data: blob: https://lh3.googleusercontent.com"
     frame_src = "'none'"
 
     if adsense_enabled:
@@ -575,8 +745,9 @@ def generate_headers(site_config: dict):
     csp = (
         f"default-src 'self'; "
         f"script-src {script_src}; "
-        f"style-src 'self' 'unsafe-inline'; "
-        f"img-src 'self' data: blob:; "
+        f"style-src {style_src}; "
+        f"font-src {font_src}; "
+        f"img-src {img_src}; "
         f"connect-src {connect_src}; "
         f"frame-src {frame_src}"
     )
@@ -787,9 +958,13 @@ def build():
     print("[2/10] Loading site-config.yaml")
     site_config = load_site_config()
 
-    # 3-4. Load tools
+    # 3-4. Load tools, then overlay DB state (graceful fallback to YAML) and
+    # apply the global sort_order upstream of all rendering (P9/D1). Disabled
+    # tools are dropped BEFORE resolve_related_tools() so no dangling links remain.
     print("[3/10] Discovering tools")
     tools = load_tools()
+    tools = apply_tool_overrides(tools, fetch_tool_overrides())  # may DROP disabled
+    tools = sort_tools(tools)
     print(f"       Found {len(tools)} tool(s)")
 
     # 5. Group by category
@@ -812,6 +987,10 @@ def build():
     asset_map = process_assets()
     for key, info in asset_map.items():
         print(f"       {key} → {info['path']}")
+
+    # Emit tool-data.json straight to dist/ (never through process_assets/rjsmin,
+    # P8); ordered by sort_order, disabled tools already excluded.
+    write_tool_data(tools)
 
     # 13. Jinja2 environment
     print("[8/10] Setting up Jinja2")

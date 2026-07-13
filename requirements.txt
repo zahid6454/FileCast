@@ -1,5 +1,14 @@
+# Static-site generator (build.py) dependencies.
 jinja2
 pyyaml
 markdown
 csscompressor
 rjsmin
+
+# Phase 2: build.py overlays the tool-state from Postgres via the shared api/data
+# package (sync engine), the same deps seed.py needs. These are effectively
+# optional to build.py — absent them the ImportError degrades to YAML-only (P10) —
+# but installing them here activates the overlay on host builds (Phase 2 §6.2).
+sqlalchemy[asyncio]==2.0.*
+psycopg[binary]==3.*
+pydantic-settings==2.*

@@ -57,8 +57,11 @@ jobs:
           cache-dependency-path: |
             api/requirements.txt
             api/requirements-dev.txt
+            requirements.txt
       - name: Install dependencies
-        run: pip install -r api/requirements.txt -r api/requirements-dev.txt
+        # Root requirements.txt adds the SSG deps (jinja2/markdown/…) so the
+        # Phase 2 build tests can drive build.py end-to-end.
+        run: pip install -r requirements.txt -r api/requirements.txt -r api/requirements-dev.txt
       - name: Migration integrity (applies cleanly + matches models)
         working-directory: api
         run: |
