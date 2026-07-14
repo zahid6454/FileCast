@@ -130,6 +130,20 @@ test.describe('tools', () => {
     await expect(page.locator('.admin-banner--info')).toBeVisible();
   });
 
+  test('reorder to a category boundary keeps focus on a move button (not <body>)', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#tools');
+
+    const imgA = page.locator('.admin-tool[data-tool-id="img-a"]');
+    // 3 image tools → two ▼ presses land img-a at the bottom of its category.
+    await imgA.locator('.admin-tool__down').click();
+    await imgA.locator('.admin-tool__down').click();
+    // Its ▼ is now disabled; focus must fall back to the still-enabled ▲, not <body>.
+    await expect(imgA.locator('.admin-tool__down')).toBeDisabled();
+    await expect(imgA.locator('.admin-tool__up')).toBeFocused();
+  });
+
   test('slide-out edits a display name → PUT /tools/{id}', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
@@ -143,6 +157,26 @@ test.describe('tools', () => {
 
     await expect.poll(() => state.tools.find((t) => t.id === 'img-a').display_name).toBe('Renamed Tool');
     await expect(page.locator('.admin-banner--info')).toBeVisible();
+  });
+
+  test('slide-out is a real modal: aria-modal, inert background, Escape closes, focus restored', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#tools');
+
+    const opener = page.locator('.admin-tool__name').first();
+    await opener.click();
+    const panel = page.locator('.admin-slideout');
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAttribute('aria-modal', 'true');
+    // Background is inert while the dialog is open (Tab can't reach it).
+    await expect(page.locator('#admin-app')).toHaveJSProperty('inert', true);
+
+    // Escape closes it, background is interactive again, and focus returns to the opener.
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(page.locator('#admin-app')).toHaveJSProperty('inert', false);
+    await expect(opener).toBeFocused();
   });
 });
 

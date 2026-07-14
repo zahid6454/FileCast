@@ -132,8 +132,18 @@
     if (typeof url !== 'string') return '#';
     var trimmed = url.trim();
     if (trimmed === '') return '#';
-    // Root-relative is safe (same-origin path, no scheme).
-    if (trimmed.charAt(0) === '/' && trimmed.charAt(1) !== '/') return trimmed;
+    // Root-relative candidate. Don't trust the two-char prefix alone: browsers
+    // fold backslashes to slashes, so `/\evil.com` (prefix looks root-relative)
+    // resolves to `//evil.com` — offsite. Validate it actually stays same-origin.
+    if (trimmed.charAt(0) === '/' && trimmed.charAt(1) !== '/') {
+      try {
+        var rel = new URL(trimmed, window.location.href);
+        if (rel.origin === window.location.origin) return trimmed;
+      } catch (e) {
+        /* fall through to inert */
+      }
+      return '#';
+    }
     // Anything with a scheme must be http/https. Parse against the current
     // origin so protocol-relative (`//evil`) resolves to a real protocol.
     try {

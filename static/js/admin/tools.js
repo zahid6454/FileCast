@@ -151,8 +151,15 @@
       section.insertBefore(sibling, row);
     }
     refreshMoveButtons(section);
-    var moved = dir < 0 ? row.querySelector('.admin-tool__up') : row.querySelector('.admin-tool__down');
-    if (moved) moved.focus();
+    // Keep focus on the row we just moved. The button we pressed may now be
+    // disabled (row landed at a category boundary) — a disabled button can't
+    // hold focus and it would fall to <body>, so fall back to the opposite,
+    // still-enabled move button.
+    var up = row.querySelector('.admin-tool__up');
+    var down = row.querySelector('.admin-tool__down');
+    var target = dir < 0 ? up : down;
+    if (target && target.disabled) target = dir < 0 ? down : up;
+    if (target && !target.disabled) target.focus();
     persistOrder();
   }
 
@@ -241,8 +248,12 @@
 
   // --- slide-out edit -----------------------------------------------------
 
+  var slideoutOpener = null; // element to restore focus to on close
+  var slideoutKeydown = null; // Escape handler, bound while open
+
   function openSlideout(tool) {
     closeSlideout();
+    slideoutOpener = document.activeElement; // the tool-name button that opened us
     var overlay = h('div', { class: 'admin-overlay' });
     overlay.addEventListener('click', closeSlideout);
 
@@ -266,7 +277,7 @@
       });
     });
 
-    var panel = h('aside', { class: 'admin-slideout', role: 'dialog', 'aria-label': 'Edit ' + label(tool) }, [
+    var panel = h('aside', { class: 'admin-slideout', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Edit ' + label(tool) }, [
       h('div', { class: 'admin-slideout__head' }, [
         h('h2', { class: 'admin-slideout__title' }, label(tool)),
         closeBtn,
@@ -283,6 +294,20 @@
 
     document.body.appendChild(overlay);
     document.body.appendChild(panel);
+
+    // Real-modal semantics for keyboard/AT users: make the background inert so
+    // Tab can't reach the tab nav / tool rows behind the overlay, and wire
+    // Escape-to-close. The slide-out + overlay live on <body>, outside #admin-app.
+    var appRoot = document.getElementById('admin-app');
+    if (appRoot) appRoot.inert = true;
+    slideoutKeydown = function (e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeSlideout();
+      }
+    };
+    document.addEventListener('keydown', slideoutKeydown);
+
     // next frame → slide in
     requestAnimationFrame(function () {
       overlay.classList.add('is-open');
@@ -302,6 +327,17 @@
     document.querySelectorAll('.admin-slideout, .admin-overlay').forEach(function (el) {
       el.remove();
     });
+    if (slideoutKeydown) {
+      document.removeEventListener('keydown', slideoutKeydown);
+      slideoutKeydown = null;
+    }
+    var appRoot = document.getElementById('admin-app');
+    if (appRoot) appRoot.inert = false;
+    // Restore focus to the control that opened the dialog (if it still exists).
+    if (slideoutOpener && document.contains(slideoutOpener)) {
+      slideoutOpener.focus();
+    }
+    slideoutOpener = null;
   }
 
   function saveSlideout(tool, values) {

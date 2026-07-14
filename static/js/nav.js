@@ -286,7 +286,17 @@
   function isSafeLink(href) {
     if (!href || typeof href !== 'string') return false;
     if (/^https?:\/\//i.test(href)) return true;
-    return href.charAt(0) === '/' && href.charAt(1) !== '/'; // not protocol-relative //host
+    // Root-relative same-origin only. Validate against the real origin rather
+    // than trusting the two-char prefix — browsers fold `\` -> `/`, so a
+    // `/\evil.com` (prefix looks root-relative) resolves offsite (//evil.com).
+    if (href.charAt(0) === '/' && href.charAt(1) !== '/') {
+      try {
+        return new URL(href, window.location.href).origin === window.location.origin;
+      } catch (e) {
+        return false;
+      }
+    }
+    return false;
   }
 
   function initAnnouncement() {

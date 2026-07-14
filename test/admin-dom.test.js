@@ -82,5 +82,15 @@ describe('admin/dom.js — safe DOM (P23 firewall)', () => {
       expect(safeHref('https://example.com/x')).toBe('https://example.com/x');
       expect(safeHref('http://example.com/')).toBe('http://example.com/');
     });
+
+    it('neutralizes a backslash-disguised offsite path (browsers fold \\ -> /)', () => {
+      const dom = loadDom();
+      const { safeHref } = dom.window.ADMIN.dom;
+      // Prefix looks root-relative, but resolves to //evil.com (offsite).
+      expect(safeHref('/\\evil.com')).toBe('#');
+      expect(safeHref('/\\\\evil.com')).toBe('#');
+      // A genuine same-origin path still passes.
+      expect(safeHref('/convert/x/')).toBe('/convert/x/');
+    });
   });
 });
