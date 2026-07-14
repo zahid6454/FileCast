@@ -110,6 +110,7 @@ def seed_tools(only_new: bool) -> None:
                         name=data.get("name"),
                         input_format=data.get("input_format"),
                         output_format=data.get("output_format"),
+                        homepage_order=data.get("homepage_order"),
                         updated_at=now,
                     )
                 )
@@ -124,6 +125,7 @@ def seed_tools(only_new: bool) -> None:
                 row.name = data.get("name")
                 row.input_format = data.get("input_format")
                 row.output_format = data.get("output_format")
+                row.homepage_order = data.get("homepage_order")
                 row.updated_at = now
                 updated += 1
 

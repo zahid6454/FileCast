@@ -740,6 +740,46 @@
   color: var(--color-text-muted);
   font-weight: var(--weight-normal);
 }
+.admin-tool__home {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-success-light);
+  color: var(--color-success-hover);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.admin-tool__home svg {
+  flex-shrink: 0;
+}
+
+/* Labeled divider marking the homepage cutoff within a category. */
+.admin-tool-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) 0;
+  color: var(--color-success-hover);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.admin-tool-divider::before,
+.admin-tool-divider::after {
+  content: '';
+  flex: 1;
+  height: 0;
+  border-top: 1px dashed var(--color-success);
+  opacity: 0.7;
+}
+.admin-tool-divider__label {
+  flex-shrink: 0;
+}
 .admin-tool__spacer {
   flex: 1;
 }

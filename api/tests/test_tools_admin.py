@@ -13,7 +13,14 @@ async def test_tools_authz(client, user_client, admin_client, seeded_tools):
 async def test_tools_returns_display_metadata(admin_client, seeded_tools):
     tools = (await admin_client.get("/api/v1/tools")).json()["tools"]
     first = tools[0]
-    for field in ("category", "name", "input_format", "output_format", "sort_order"):
+    for field in (
+        "category",
+        "name",
+        "input_format",
+        "output_format",
+        "sort_order",
+        "homepage_order",
+    ):
         assert field in first
     assert first["id"] == "jpg-to-png"  # sort_order 1
 

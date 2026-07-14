@@ -33,5 +33,6 @@ def tool_dict(tool: Tool) -> dict:
         "name": tool.name,
         "input_format": tool.input_format,
         "output_format": tool.output_format,
+        "homepage_order": tool.homepage_order,
         "updated_at": tool.updated_at.isoformat() if tool.updated_at else None,
     }

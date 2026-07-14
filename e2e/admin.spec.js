@@ -150,6 +150,17 @@ test.describe('tools', () => {
     await expect(imgA.locator('.admin-tool__up')).toBeFocused();
   });
 
+  test('marks the homepage cutoff with a labeled divider', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#tools');
+    // Image has 2 enabled tools then a disabled one → a divider after the two.
+    await expect(
+      page.locator('.admin-toollist[data-category="image"] .admin-tool-divider')
+    ).toHaveCount(1);
+    await expect(page.getByText('Shown on the homepage').first()).toBeVisible();
+  });
+
   test('slide-out edits a display name → PUT /tools/{id}', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);

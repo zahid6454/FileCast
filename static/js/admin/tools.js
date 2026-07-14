@@ -20,6 +20,61 @@
     return tool.display_name || tool.name || tool.id;
   }
 
+  var HOMEPAGE_CAP = 4; // tools shown per category on the homepage (home.html)
+
+  // Replicate the homepage's per-category selection (home.html): featured tools
+  // (homepage_order asc) first, then the rest in display order, ENABLED only,
+  // capped at HOMEPAGE_CAP. Returns which tool ids land on the homepage plus, per
+  // category, the length of the contiguous top block (so a divider can sit right
+  // after it in the common case; disabled non-homepage tools don't break it).
+  function computeHomepage(grouped) {
+    var setById = {};
+    var cutoffByCat = {};
+    grouped.order.forEach(function (cat) {
+      var group = grouped.groups[cat]; // display (sort_order) order
+      var enabled = group.filter(function (t) {
+        return t.enabled;
+      });
+      var featured = enabled
+        .filter(function (t) {
+          return t.homepage_order != null;
+        })
+        .slice()
+        .sort(function (a, b) {
+          return a.homepage_order - b.homepage_order;
+        });
+      var rest = enabled.filter(function (t) {
+        return t.homepage_order == null;
+      });
+      var pick = featured.concat(rest).slice(0, HOMEPAGE_CAP);
+      pick.forEach(function (t) {
+        setById[t.id] = true;
+      });
+      // Walk the display order: count homepage tools, skip disabled non-homepage
+      // rows (they sit above the line, clearly marked), stop at the first ENABLED
+      // non-homepage tool.
+      var seen = 0;
+      var cutoff = 0;
+      for (var i = 0; i < group.length && seen < pick.length; i++) {
+        var t = group[i];
+        if (setById[t.id]) {
+          seen++;
+          cutoff = i + 1;
+        } else if (t.enabled) {
+          break;
+        }
+      }
+      cutoffByCat[cat] = cutoff;
+    });
+    return { setById: setById, cutoffByCat: cutoffByCat };
+  }
+
+  function homepageDivider() {
+    return h('li', { class: 'admin-tool-divider', 'aria-hidden': 'true' }, [
+      h('span', { class: 'admin-tool-divider__label' }, 'Shown on the homepage ↑'),
+    ]);
+  }
+
   // Group a sort_order-ordered list into { category: [tools] }, preserving
   // first-appearance category order as the canonical walk (R6).
   function groupByCategory(tools) {
@@ -48,7 +103,9 @@
       h('strong', 'Toggle'),
       ' shows or hides a tool across the whole site. ',
       h('strong', 'Drag ≡ or use ▲ ▼'),
-      ' to set the order within a category — that order drives the site navigation, the category pages, and the tools featured on the homepage (top of each category). Disabled tools keep their slot. Changes publish on the next rebuild.',
+      ' to set the order within a category. Tools above the ',
+      h('strong', '“Shown on the homepage”'),
+      ' line appear on the homepage (up to four per category); the rest live on the category page. Disabled tools keep their slot. Changes publish on the next rebuild.',
     ]);
     return h('div', { class: 'admin-callout' }, [
       icon ? h('span', { class: 'admin-callout__icon' }, [icon]) : null,
@@ -92,7 +149,7 @@
 
   // --- rows ---------------------------------------------------------------
 
-  function buildRow(tool) {
+  function buildRow(tool, straggler) {
     var row = h('li', {
       class: 'admin-tool',
       draggable: 'true',
@@ -145,10 +202,21 @@
       toggleTool(tool, toggle, nameBtn);
     });
 
+    // A homepage tool that isn't in the contiguous top block (e.g. curated via
+    // homepage_order, or a top tool was disabled) gets an explicit badge so the
+    // divider line never misrepresents it.
+    var homeBadge = straggler
+      ? h('span', { class: 'admin-tool__home', title: 'Shown on the homepage' }, [
+          ADMIN.icon ? ADMIN.icon('home', 12) : null,
+          h('span', 'Homepage'),
+        ])
+      : null;
+
     dom.append(row, [
       handle,
       h('span', { class: 'admin-tool__moves' }, [up, down]),
       nameBtn,
+      homeBadge,
       h('span', { class: 'admin-tool__spacer' }),
       toggle,
     ]);
@@ -157,8 +225,18 @@
     return row;
   }
 
+  // The nearest tool row in a direction, skipping non-tool siblings (the
+  // homepage divider), so reordering ignores the divider entirely.
+  function adjacentTool(row, dir) {
+    var el = dir < 0 ? row.previousElementSibling : row.nextElementSibling;
+    while (el && !el.classList.contains('admin-tool')) {
+      el = dir < 0 ? el.previousElementSibling : el.nextElementSibling;
+    }
+    return el;
+  }
+
   function moveRow(row, dir) {
-    var sibling = dir < 0 ? row.previousElementSibling : row.nextElementSibling;
+    var sibling = adjacentTool(row, dir);
     if (!sibling) return;
     var section = row.closest('.admin-toollist');
     if (dir < 0) {
@@ -403,12 +481,20 @@
         }
 
         var grouped = groupByCategory(tools);
+        var hp = computeHomepage(grouped);
         var wrap = h('div', { class: 'admin-tools' });
         wrap.appendChild(buildCallout());
         grouped.order.forEach(function (cat) {
           var list = h('ul', { class: 'admin-toollist', dataset: { category: cat } });
-          grouped.groups[cat].forEach(function (tool) {
-            list.appendChild(buildRow(tool));
+          var group = grouped.groups[cat];
+          var cutoff = hp.cutoffByCat[cat] || 0;
+          group.forEach(function (tool, i) {
+            var straggler = !!hp.setById[tool.id] && i >= cutoff;
+            list.appendChild(buildRow(tool, straggler));
+            // Labeled divider right after the contiguous homepage block.
+            if (cutoff > 0 && i === cutoff - 1 && cutoff < group.length) {
+              list.appendChild(homepageDivider());
+            }
           });
           wrap.appendChild(
             h('section', { class: 'admin-toolgroup' }, [
