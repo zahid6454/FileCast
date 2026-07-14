@@ -29,6 +29,7 @@
 
   /* Warning */
   --color-warning: #F59E0B;
+  --color-warning-hover: #B45309; /* dark amber — readable as text on -light */
   --color-warning-light: #FEF3C7;
 
   /* Text */
@@ -142,6 +143,7 @@
     --color-error-light: #450A0A;
 
     --color-warning: #FBBF24;
+    --color-warning-hover: #FBBF24; /* light amber reads on the dark -light bg */
     --color-warning-light: #451A03;
 
     --color-text: #F1F5F9;
@@ -180,6 +182,7 @@
   --color-error-light: #450A0A;
 
   --color-warning: #FBBF24;
+  --color-warning-hover: #FBBF24; /* light amber reads on the dark -light bg */
   --color-warning-light: #451A03;
 
   --color-text: #F1F5F9;
@@ -915,7 +918,7 @@ img { max-width: 100%; display: block; }
   line-height: 1.4;
 }
 .format-badge--image { background: var(--color-primary-light); color: var(--color-primary); }
-.format-badge--document { background: var(--color-error-light); color: var(--color-error); }
+.format-badge--document { background: var(--color-warning-light); color: var(--color-warning-hover); }
 .format-badge--data { background: var(--color-success-light); color: var(--color-success); }
 .format-badge--neutral { background: var(--color-bg-sunken); color: var(--color-text-muted); }
 
