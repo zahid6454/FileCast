@@ -56,7 +56,7 @@
     {% if category %}
     <a href="/{{ category.slug }}/">{{ category.name }}</a><span>&gt;</span>
     {% endif %}
-    {{ tool.name }}
+    <span class="breadcrumb__current">{{ tool.name }}</span>
   </nav>
 
   {# Title + Tagline #}
@@ -76,6 +76,10 @@
     <a href="/privacy/" class="badge">Files encrypted, processed, deleted immediately</a>
     {% endif %}
   </div>
+
+  {# Converter panel — groups the interactive controls onto one raised surface
+     so the primary action reads as a defined card, not bare page. #}
+  <div class="tool-panel">
 
   {# Tool Options (for tools with settings like rotation, quality, dimensions) #}
   {% if tool.get('options') %}
@@ -155,6 +159,8 @@
 
   {# Error Message (hidden until error) #}
   <div class="error-msg hidden" id="error-msg"></div>
+
+  </div>{# /tool-panel #}
 
   {# Ad slot: in-content #}
   <div class="ad-slot" id="ad-in-content"></div>

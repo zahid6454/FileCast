@@ -33,6 +33,7 @@
 
   /* Text */
   --color-text: #0F172A;
+  --color-heading: #334155; /* softer than --color-text for card/heading titles */
   --color-text-secondary: #475569;
   --color-text-muted: #64748B;
   --color-text-light: #94A3B8;
@@ -145,6 +146,7 @@
     --color-warning-light: #451A03;
 
     --color-text: #F1F5F9;
+    --color-heading: #F1F5F9;
     --color-text-secondary: #CBD5E1;
     --color-text-muted: #94A3B8;
     --color-text-light: #64748B;
@@ -183,6 +185,7 @@
   --color-warning-light: #451A03;
 
   --color-text: #F1F5F9;
+  --color-heading: #F1F5F9;
   --color-text-secondary: #CBD5E1;
   --color-text-muted: #94A3B8;
   --color-text-light: #64748B;
@@ -298,12 +301,16 @@ img { max-width: 100%; display: block; }
   text-align: center;
   font-weight: var(--weight-bold);
   font-size: var(--text-sm);
-  color: var(--color-text);
+  color: var(--color-heading);
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--transition-base), transform var(--transition-base);
   cursor: pointer;
   text-decoration: none;
-  display: block;
+  /* Column layout so the Local/Cloud pill can be pushed to the card's bottom
+     edge (margin-top:auto) — keeps pills aligned across a row regardless of how
+     many lines the description above them takes. */
+  display: flex;
+  flex-direction: column;
 }
 .card:hover { transform: translateY(-2px); text-decoration: none; }
 
@@ -330,10 +337,12 @@ img { max-width: 100%; display: block; }
 .card--lg .card__desc { font-weight: var(--weight-normal); color: var(--color-text-muted); font-size: var(--text-xs); margin-top: var(--space-1); }
 
 /* --- Breadcrumb --- */
-.breadcrumb { font-size: var(--text-sm); color: var(--color-text-muted); padding: var(--space-4) 0 var(--space-4); }
+.breadcrumb { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--color-text-muted); padding: var(--space-4) 0 var(--space-4); }
 .breadcrumb a { color: var(--color-text-muted); }
 .breadcrumb a:hover { color: var(--color-text); text-decoration: none; }
 .breadcrumb span { margin: 0 var(--space-1); }
+/* The current page (last crumb) reads as the anchor of the trail. */
+.breadcrumb__current { font-weight: var(--weight-semibold); color: var(--color-heading); }
 
 /* --- Privacy Badge --- */
 .badge {
@@ -364,6 +373,17 @@ img { max-width: 100%; display: block; }
 .reverse-link:hover { color: var(--color-primary); text-decoration: none; }
 
 /* --- Upload Zone --- */
+/* Converter panel — a raised surface that anchors the primary action so the
+   tool's main area doesn't read as bare page. Wraps options → error message. */
+.tool-panel {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-6);
+  margin: var(--space-4) 0 var(--space-6);
+}
+
 .upload-zone {
   border: 2px dashed var(--color-text-light);
   border-radius: var(--radius-xl);
@@ -869,10 +889,10 @@ img { max-width: 100%; display: block; }
 .hero-search__option-meta { font-size: var(--text-xs); color: var(--color-text-muted); }
 
 /* --- How It Works --- */
-.how-it-works { padding: var(--space-12) 0; }
-.how-it-works__title { font-family: var(--font-heading); font-size: var(--text-2xl); font-weight: var(--weight-bold); text-align: center; margin-bottom: var(--space-8); }
+.how-it-works { padding: var(--space-8) 0; }
+.how-it-works__title { font-family: var(--font-heading); font-size: var(--text-2xl); font-weight: var(--weight-bold); text-align: center; margin-bottom: var(--space-6); }
 .how-it-works__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-6); }
-.how-it-works__step { text-align: center; padding: var(--space-4); }
+.how-it-works__step { text-align: center; padding: var(--space-3) var(--space-4); }
 .how-it-works__icon {
   width: 48px;
   height: 48px;
@@ -897,7 +917,7 @@ img { max-width: 100%; display: block; }
 
 /* --- Enhanced tool card inner structure (own classes; base .card stays
        content-agnostic so plain related-tools cards don't break, R12) --- */
-.card__name { display: block; font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--color-text); }
+.card__name { display: block; font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--color-heading); }
 .card__tagline { display: block; font-size: var(--text-xs); font-weight: var(--weight-normal); color: var(--color-text-muted); margin-top: var(--space-1); }
 
 /* --- Processing pill (Local/Cloud) — new classes, NOT .badge (P13) --- */
@@ -905,13 +925,20 @@ img { max-width: 100%; display: block; }
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  margin-top: var(--space-3);
+  /* Bottom-align across a row: auto top margin pushes the pill to the card
+     floor so a taller description on a neighbour doesn't shift it. align-self
+     keeps the pill hugging its content (centered here; left on .card--lg). */
+  margin-top: auto;
+  align-self: center;
   padding: 2px var(--space-2);
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   border: 1px solid transparent;
 }
+/* A little breathing room above the pill (auto margin removes the old gap). */
+.card__tagline, .card__desc { margin-bottom: var(--space-3); }
+.card--lg .badge--local, .card--lg .badge--cloud { align-self: flex-start; }
 .badge--local { background: var(--color-success-subtle); color: var(--color-success); border-color: var(--color-success); }
 .badge--cloud { background: var(--color-primary-subtle); color: var(--color-primary); border-color: var(--color-primary); }
 .badge__icon { width: 12px; height: 12px; }
@@ -929,7 +956,7 @@ img { max-width: 100%; display: block; }
 }
 
 /* --- Upload zone enhancements --- */
-.upload-zone__icon { width: 56px; height: 56px; color: var(--color-primary); margin: 0 auto var(--space-3); }
+.upload-zone__icon { display: block; width: 56px; height: 56px; color: var(--color-primary); margin: 0 auto var(--space-3); }
 .upload-zone__cta {
   display: inline-block;
   margin-bottom: var(--space-2);
