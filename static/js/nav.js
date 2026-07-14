@@ -216,8 +216,7 @@
           ? t.input_format + ' → ' + t.output_format
           : t.name;
         html +=
-          '<li class="hero-search__option" role="option" id="hero-search-opt-' + i +
-          '" data-slug="' + encodeURI(t.slug || '') + '">' +
+          '<li class="hero-search__option" role="option" id="hero-search-opt-' + i + '">' +
           '<span class="hero-search__option-name">' + escapeHtml(t.name) + '</span>' +
           '<span class="hero-search__option-meta">' + escapeHtml(label) + '</span></li>';
       });
@@ -280,6 +279,16 @@
   // -------------------------------------------------------------------------
   // 5. Announcement bar
   // -------------------------------------------------------------------------
+  // Only accept an absolute http(s) URL or a root-relative same-origin path.
+  // Blocks javascript:/data:/etc. (defense-in-depth: the announcement message
+  // is admin-controlled and `script-src 'self'` already neuters javascript:
+  // navigation, but the CSP is only enforced on the deploy preview).
+  function isSafeLink(href) {
+    if (!href || typeof href !== 'string') return false;
+    if (/^https?:\/\//i.test(href)) return true;
+    return href.charAt(0) === '/' && href.charAt(1) !== '/'; // not protocol-relative //host
+  }
+
   function initAnnouncement() {
     var bar = document.getElementById('announcement-bar');
     if (!bar) return;
@@ -306,7 +315,7 @@
 
         var link = document.getElementById('announcement-bar__link');
         if (link) {
-          if (a.link) {
+          if (isSafeLink(a.link)) {
             link.href = a.link;
             link.classList.remove('hidden');
           } else {

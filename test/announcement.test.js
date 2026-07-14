@@ -48,6 +48,30 @@ describe('nav.js announcement bar (§6.9, progressive enhancement)', () => {
     expect(link.getAttribute('href')).toBe('/convert/heic-to-jpg/');
   });
 
+  it('rejects an unsafe link scheme (javascript:) — bar still shows, link stays hidden', async () => {
+    const dom = createDom(BAR);
+    withApi(dom);
+    // eslint-disable-next-line no-script-url
+    mockActive(dom, { id: 9, message: 'Click me', link: 'javascript:alert(1)', type: 'info' });
+    await boot(dom, 'nav.js');
+
+    const bar = dom.window.document.getElementById('announcement-bar');
+    const link = dom.window.document.getElementById('announcement-bar__link');
+    expect(bar.classList.contains('hidden')).toBe(false); // message still shown
+    expect(link.classList.contains('hidden')).toBe(true); // but the unsafe link is not exposed
+    expect(link.getAttribute('href')).toBeNull();
+  });
+
+  it('accepts an absolute https link', async () => {
+    const dom = createDom(BAR);
+    withApi(dom);
+    mockActive(dom, { id: 10, message: 'Read the post', link: 'https://blog.example.com/x', type: 'info' });
+    await boot(dom, 'nav.js');
+    const link = dom.window.document.getElementById('announcement-bar__link');
+    expect(link.classList.contains('hidden')).toBe(false);
+    expect(link.getAttribute('href')).toBe('https://blog.example.com/x');
+  });
+
   it('stays hidden when there is no active row', async () => {
     const dom = createDom(BAR);
     withApi(dom);
