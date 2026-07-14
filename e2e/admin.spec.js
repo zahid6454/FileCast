@@ -45,6 +45,22 @@ test.describe('auth gate (D6)', () => {
     await expect(page.locator('.admin-topbar__brand')).toBeVisible();
     await expect(page.locator('.admin-tabs__link')).toHaveCount(4);
   });
+
+  test('mid-session 401/403 drops back to the sign-in gate (R8)', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#tools');
+    await expect(page.locator('.admin-tabs__link')).toHaveCount(4);
+
+    // Session expires mid-session: /me now 401 and any mutation 403.
+    state.me = { status: 401 };
+    state.failAuth = true;
+
+    await page.locator('.admin-toollist .admin-switch').first().click();
+    // The 403 routes through the gate → sign-in, tabs gone. No stuck panel.
+    await expect(page.locator('.admin-gate__title')).toHaveText('FileCast Admin');
+    await expect(page.locator('.admin-tabs')).toHaveCount(0);
+  });
 });
 
 test.describe('dashboard', () => {
@@ -159,6 +175,29 @@ test.describe('announcements', () => {
     await expect(page.locator('.admin-annc')).toHaveCount(1);
   });
 
+  test('saves schedule datetimes as explicit UTC ISO strings (R18)', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#announcements');
+
+    await page.getByRole('button', { name: '+ New announcement' }).click();
+    await page.locator('.admin-form .admin-input').first().fill('Scheduled');
+    // datetime-local takes naive local "YYYY-MM-DDTHH:mm".
+    await page.locator('input[type="datetime-local"]').first().fill('2026-08-01T09:30');
+    await page.getByRole('button', { name: 'Create' }).click();
+
+    await expect.poll(() => state.lastAnnouncementBody && state.lastAnnouncementBody.starts_at).toBeTruthy();
+    const startsAt = state.lastAnnouncementBody.starts_at;
+    // Sent as an explicit UTC instant (trailing Z), not the naive local string.
+    expect(startsAt).toMatch(/Z$/);
+    expect(new Date(startsAt).toISOString()).toBe(startsAt);
+    // And it round-trips back to the same local wall-clock the operator typed.
+    const d = new Date(startsAt);
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getHours()).toBe(9);
+    expect(d.getMinutes()).toBe(30);
+  });
+
   test('P23: a javascript: link is rendered inert in the preview', async ({ page }) => {
     const state = makeState({
       announcements: [
@@ -189,6 +228,33 @@ test.describe('users', () => {
     // No promotion control of any kind.
     expect(await page.getByRole('button', { name: /make admin|promote|change role/i }).count()).toBe(0);
   });
+});
+
+test('fresh/empty DB renders placeholders with no throw (§8.5)', async ({ page }) => {
+  const problems = collectProblems(page);
+  const state = makeState({
+    dashboard: { total_conversions: 0, total_failures: 0, total_users: 2, total_ratings: 0, yes_ratings: 0, top_tools: [] },
+    series: [],
+    errors: [],
+    ratings: [],
+    announcements: [],
+  });
+  await installApi(page, state);
+
+  await page.goto('/admin/#dashboard');
+  await expect(page.locator('.admin-stat')).toHaveCount(4); // zeros, not blank
+  await expect(page.getByText('No data yet').first()).toBeVisible(); // chart placeholders
+  await expect(page.getByText('No ratings yet')).toBeVisible();
+  await expect(page.getByText('No errors')).toBeVisible();
+
+  await page.goto('/admin/#announcements');
+  await expect(page.getByText('No announcements yet')).toBeVisible();
+
+  // Tools is never empty (seeded), and the switch/rows still render.
+  await page.goto('/admin/#tools');
+  await expect(page.locator('.admin-tool').first()).toBeVisible();
+
+  expect(problems, problems.join('\n')).toEqual([]);
 });
 
 test('the whole admin session produces no JS exceptions or console errors', async ({ page }) => {

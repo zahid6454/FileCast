@@ -66,6 +66,12 @@ export async function installApi(page, state) {
     const json = (obj, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(obj) });
 
+    // Simulate a mid-session expiry/demotion: every mutation is refused with 403
+    // (and the test flips state.me to 401 so the gate re-check lands on sign-in).
+    if (state.failAuth && method !== 'GET') {
+      return json({ detail: 'Admin access required' }, 403);
+    }
+
     // --- auth ---
     if (path.endsWith('/auth/me') && method === 'GET') {
       return route.fulfill({
@@ -114,6 +120,7 @@ export async function installApi(page, state) {
       return json({ announcements: state.announcements.slice().reverse() });
     }
     if (path.endsWith('/announcements') && method === 'POST') {
+      state.lastAnnouncementBody = body();
       const a = Object.assign({ id: ++state._annId, created_at: new Date().toISOString() }, body());
       if (a.active) state.announcements.forEach((x) => (x.active = false));
       state.announcements.push(a);

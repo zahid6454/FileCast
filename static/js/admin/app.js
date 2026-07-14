@@ -34,6 +34,7 @@
   var toastHost = null;
   var bannerShown = false;
   var routerBound = false;
+  var booting = false; // guards against re-entrant gate re-checks
 
   // --- shared catalog (§4.4) ---------------------------------------------
 
@@ -164,10 +165,17 @@
   };
 
   function boot() {
+    // Coalesce concurrent gate re-checks: a demoted admin's dashboard fires
+    // several calls that can each 401 and call onAuthError → boot(). Without a
+    // guard that would be a burst of /me requests and duplicate renders. The
+    // flag clears once a terminal screen has rendered.
+    if (booting) return;
+    booting = true;
     bannerShown = false;
     api
       .get('/api/v1/auth/me')
       .then(function (data) {
+        booting = false;
         var user = data && data.user;
         if (user && user.role === 'admin') {
           renderPanel(user);
@@ -177,6 +185,7 @@
       })
       .catch(function () {
         // AuthError (401/403) or unreachable → sign-in.
+        booting = false;
         renderSignIn();
       });
   }
@@ -278,18 +287,19 @@
       routerBound = true;
     }
 
-    // Load the shared catalog once, then route (dashboard labels need it).
+    // Load the shared catalog once, then route (dashboard labels need it). On an
+    // auth error we hand off to the gate and MUST NOT also route — otherwise a
+    // tab would render into the panel we're about to tear down and re-fire the
+    // same 401s. So route() lives in the success and non-auth-error paths only.
     api
       .get('/api/v1/tools')
       .then(function (data) {
         ADMIN.catalog.rebuild((data && data.tools) || []);
+        route();
       })
       .catch(function (err) {
         if (err && err.isAuthError) return ADMIN.onAuthError(err);
-        // Labels degrade to raw ids; tabs still render.
-      })
-      .then(function () {
-        route();
+        route(); // labels degrade to raw ids; tabs still render
       });
   }
 
