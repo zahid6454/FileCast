@@ -180,7 +180,7 @@
         if (user && user.role === 'admin') {
           renderPanel(user);
         } else {
-          renderNoAccess();
+          renderNoAccess(user);
         }
       })
       .catch(function () {
@@ -191,6 +191,15 @@
   }
 
   // --- screens ------------------------------------------------------------
+
+  function signOut() {
+    // Clear the session, then reload back to the sign-in screen. Always reload
+    // (even on a failed logout) so the gate re-reads /me and shows the truth.
+    api.post('/api/v1/auth/logout', {}).then(reload, reload);
+    function reload() {
+      window.location.reload();
+    }
+  }
 
   function renderSignIn() {
     tabHost = null; // no panel mounted → a stray hashchange must be a no-op
@@ -236,15 +245,20 @@
     );
   }
 
-  function renderNoAccess() {
+  function renderNoAccess(user) {
     tabHost = null;
     dom.clear(mount);
+    var signout = h('button', { type: 'button', class: 'admin-btn admin-btn--primary' }, 'Sign out');
+    signout.addEventListener('click', signOut);
+    var who = user && user.email ? "You're signed in as " + user.email + ', which' : 'This account';
     mount.appendChild(
       h('div', { class: 'admin-gate' }, [
         h('div', { class: 'admin-gate__card' }, [
           h('h1', { class: 'admin-gate__title' }, 'No access'),
-          h('p', "You don't have access to the admin panel."),
-          h('a', { class: 'admin-btn admin-btn--primary', href: '/' }, 'Back to FileCast'),
+          h('p', who + " doesn't have access to the admin panel."),
+          h('p', { class: 'admin-signin__note' }, 'Sign out to switch to an admin account.'),
+          signout,
+          h('a', { class: 'admin-btn admin-btn--ghost', href: '/' }, 'Back to FileCast'),
         ]),
       ])
     );
@@ -259,11 +273,7 @@
     });
 
     var signout = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, 'Sign out');
-    signout.addEventListener('click', function () {
-      api.post('/api/v1/auth/logout', {}).then(function () {
-        window.location.reload();
-      });
-    });
+    signout.addEventListener('click', signOut);
 
     tabHost = h('main', { class: 'admin-main', id: 'admin-tab' });
 

@@ -80,7 +80,10 @@ export async function installApi(page, state) {
         body: JSON.stringify(state.me.status === 200 ? state.me.body : { detail: 'auth' }),
       });
     }
-    if (path.endsWith('/auth/logout')) return json({ ok: true });
+    if (path.endsWith('/auth/logout')) {
+      state.me = { status: 401 }; // session cleared → /me now 401 on the reload
+      return json({ ok: true });
+    }
 
     // --- tools ---
     if (path.endsWith('/tools') && method === 'GET') {

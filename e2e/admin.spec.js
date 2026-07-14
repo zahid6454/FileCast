@@ -30,12 +30,18 @@ test.describe('auth gate (D6)', () => {
     await expect(page.locator('.admin-tabs')).toHaveCount(0);
   });
 
-  test('non-admin → no-access screen, no tabs', async ({ page }) => {
+  test('non-admin → no-access screen, no tabs, with a sign-out escape (not a dead-end)', async ({ page }) => {
     const state = makeState({ me: { status: 200, body: { user: { id: 'u2', email: 'user@dev.local', role: 'user' } } } });
     await installApi(page, state);
     await page.goto('/admin/');
     await expect(page.locator('.admin-gate__title')).toHaveText('No access');
     await expect(page.locator('.admin-tabs')).toHaveCount(0);
+
+    // A signed-in non-admin must be able to sign out and reach the sign-in
+    // screen (to switch to an admin account) — no dead-end.
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page.locator('.admin-gate__title')).toHaveText('FileCast Admin');
+    await expect(page.getByText('Dev login as admin')).toBeVisible();
   });
 
   test('admin → full panel with all four tabs', async ({ page }) => {
