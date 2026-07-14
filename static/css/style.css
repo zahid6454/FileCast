@@ -759,6 +759,9 @@ img { max-width: 100%; display: block; }
    .header__nav a:hover, so a light background here would be unreadable — the
    gradient gives the white text a high-contrast, on-brand surface instead.) */
 .nav-dropdown__all:hover, .nav-dropdown__item:hover {
+  /* Fallback: full brand gradient for browsers without color-mix() support
+     (else the declaration is dropped and white text lands on the bare menu). */
+  background: linear-gradient(to right, var(--brand-blue), var(--brand-green));
   background: linear-gradient(to right,
     color-mix(in srgb, var(--brand-blue) 75%, transparent),
     color-mix(in srgb, var(--brand-green) 75%, transparent));
@@ -947,8 +950,9 @@ img { max-width: 100%; display: block; }
   font-weight: var(--weight-semibold);
   border: 1px solid transparent;
 }
-/* A little breathing room above the pill (auto margin removes the old gap). */
-.card__tagline, .card__desc { margin-bottom: var(--space-3); }
+/* A minimum gap above the pill (auto margin handles the rest). Scoped to
+   :not(:last-child) so pill-less cards (about/contact) don't get trailing space. */
+.card__tagline:not(:last-child), .card__desc:not(:last-child) { margin-bottom: var(--space-3); }
 .card--lg .badge--local, .card--lg .badge--cloud { align-self: flex-start; }
 .badge--local { background: var(--color-success-subtle); color: var(--color-success); border-color: var(--color-success); }
 .badge--cloud { background: var(--color-primary-subtle); color: var(--color-primary); border-color: var(--color-primary); }
