@@ -156,7 +156,7 @@ test.describe('tools', () => {
     // guessing from the slug.
     const state = makeState({
       tools: [
-        { id: 'csv-to-json', enabled: true, sort_order: 1, category: 'data-conversion', name: 'CSV to JSON', display_name: null, maintenance_message: null, custom_max_file_size: null, input_format: 'CSV', output_format: 'JSON', homepage_order: 1 },
+        { id: 'csv-to-json', enabled: true, sort_order: 1, category: 'data-conversion', name: 'CSV to JSON', display_name: null, maintenance_message: null, custom_max_file_size: null, input_format: 'CSV', output_format: 'JSON' },
       ],
     });
     await installApi(page, state);
@@ -173,6 +173,25 @@ test.describe('tools', () => {
       page.locator('.admin-toollist[data-category="image"] .admin-tool-divider')
     ).toHaveCount(1);
     await expect(page.getByText('Shown on the homepage').first()).toBeVisible();
+  });
+
+  test('divider recomputes live when a toggle changes homepage membership (no reload)', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#tools');
+
+    const divider = page.locator('.admin-toollist[data-category="image"] .admin-tool-divider');
+    // 2 enabled + 1 disabled → a divider sits after the two.
+    await expect(divider).toHaveCount(1);
+
+    // Enable the disabled tool → 3 enabled ≤ cap, nothing below the line, so the
+    // divider must vanish immediately (recomputed from the DOM, not a re-fetch).
+    await page.locator('.admin-tool[data-tool-id="img-c"] .admin-switch').click();
+    await expect(divider).toHaveCount(0);
+
+    // Disable it again → the line returns live.
+    await page.locator('.admin-tool[data-tool-id="img-c"] .admin-switch').click();
+    await expect(divider).toHaveCount(1);
   });
 
   test('slide-out edits a display name → PUT /tools/{id}', async ({ page }) => {

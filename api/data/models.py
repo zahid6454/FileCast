@@ -51,10 +51,6 @@ class Tool(Base):
     name: Mapped[str | None] = mapped_column(String, nullable=True)
     input_format: Mapped[str | None] = mapped_column(String, nullable=True)
     output_format: Mapped[str | None] = mapped_column(String, nullable=True)
-    # Homepage curation order (from YAML): lower = featured earlier in the
-    # category's homepage row. Null = not specially featured. Lets the admin
-    # panel show which tools land on the homepage.
-    homepage_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, onupdate=func.now()
     )

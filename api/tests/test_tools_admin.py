@@ -19,7 +19,6 @@ async def test_tools_returns_display_metadata(admin_client, seeded_tools):
         "input_format",
         "output_format",
         "sort_order",
-        "homepage_order",
     ):
         assert field in first
     assert first["id"] == "jpg-to-png"  # sort_order 1

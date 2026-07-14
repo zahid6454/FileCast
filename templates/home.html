@@ -79,11 +79,11 @@
     <h2 class="section__title">{% set words = cat_data.name.split() %}<span class="text-brand-blue">{{ words[0] }}</span> <span class="text-brand-green">{{ words[1:] | join(' ') }}</span></h2>
     <div class="section__divider"></div>
     <div class="card-grid">
-      {# Fill a row of up to 4 deterministically (R14): homepage_order-featured
-         first, then pad with the rest. #}
-      {% set featured = cat_data.tools|selectattr('homepage_order', 'defined')|sort(attribute='homepage_order')|list %}
-      {% set rest = cat_data.tools|rejectattr('homepage_order', 'defined')|list %}
-      {% set homepage_tools = (featured + rest)[:4] %}
+      {# Show the first four tools of the category in the admin-controlled order
+         (build.py has already applied the global sort_order; disabled tools are
+         dropped upstream). The admin panel's "Shown on the homepage" divider
+         mirrors this exact rule, so reordering there moves tools here (R14). #}
+      {% set homepage_tools = cat_data.tools[:4] %}
       {% for tool in homepage_tools %}
       {{ tool_card(tool, cat_id) }}
       {% endfor %}

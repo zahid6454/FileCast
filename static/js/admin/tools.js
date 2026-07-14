@@ -22,51 +22,34 @@
 
   var HOMEPAGE_CAP = 4; // tools shown per category on the homepage (home.html)
 
-  // Replicate the homepage's per-category selection (home.html): featured tools
-  // (homepage_order asc) first, then the rest in display order, ENABLED only,
-  // capped at HOMEPAGE_CAP. Returns which tool ids land on the homepage plus, per
-  // category, the length of the contiguous top block (so a divider can sit right
-  // after it in the common case; disabled non-homepage tools don't break it).
-  function computeHomepage(grouped) {
-    var setById = {};
-    var cutoffByCat = {};
-    grouped.order.forEach(function (cat) {
-      var group = grouped.groups[cat]; // display (sort_order) order
-      var enabled = group.filter(function (t) {
-        return t.enabled;
-      });
-      var featured = enabled
-        .filter(function (t) {
-          return t.homepage_order != null;
-        })
-        .slice()
-        .sort(function (a, b) {
-          return a.homepage_order - b.homepage_order;
-        });
-      var rest = enabled.filter(function (t) {
-        return t.homepage_order == null;
-      });
-      var pick = featured.concat(rest).slice(0, HOMEPAGE_CAP);
-      pick.forEach(function (t) {
-        setById[t.id] = true;
-      });
-      // Walk the display order: count homepage tools, skip disabled non-homepage
-      // rows (they sit above the line, clearly marked), stop at the first ENABLED
-      // non-homepage tool.
-      var seen = 0;
-      var cutoff = 0;
-      for (var i = 0; i < group.length && seen < pick.length; i++) {
-        var t = group[i];
-        if (setById[t.id]) {
-          seen++;
-          cutoff = i + 1;
-        } else if (t.enabled) {
-          break;
-        }
+  function isEnabled(row) {
+    var sw = row.querySelector('.admin-switch');
+    return !!sw && sw.getAttribute('aria-checked') === 'true';
+  }
+
+  // Place the "Shown on the homepage" divider from the CURRENT DOM order, so it
+  // stays correct live after every reorder/toggle (not just at load). Mirrors
+  // home.html exactly: the first HOMEPAGE_CAP ENABLED tools of a category, in
+  // sort_order, land on the homepage; the divider sits right after the last of
+  // them. Disabled tools keep their slot but don't count toward the cap, so one
+  // between homepage tools stays above the line while trailing ones fall below.
+  function refreshDivider(section) {
+    var rows = Array.prototype.slice.call(section.querySelectorAll('.admin-tool'));
+    var seen = 0;
+    var cutoff = 0; // number of rows that sit above the divider
+    for (var i = 0; i < rows.length && seen < HOMEPAGE_CAP; i++) {
+      if (isEnabled(rows[i])) {
+        seen++;
+        cutoff = i + 1;
       }
-      cutoffByCat[cat] = cutoff;
-    });
-    return { setById: setById, cutoffByCat: cutoffByCat };
+    }
+    var existing = section.querySelector('.admin-tool-divider');
+    if (existing) existing.remove();
+    // Only draw it when a tool actually sits below the line.
+    if (cutoff > 0 && cutoff < rows.length) {
+      var anchor = rows[cutoff - 1];
+      anchor.parentNode.insertBefore(homepageDivider(), anchor.nextSibling);
+    }
   }
 
   function homepageDivider() {
@@ -153,7 +136,7 @@
 
   // --- rows ---------------------------------------------------------------
 
-  function buildRow(tool, straggler) {
+  function buildRow(tool) {
     var row = h('li', {
       class: 'admin-tool',
       draggable: 'true',
@@ -206,21 +189,10 @@
       toggleTool(tool, toggle, nameBtn);
     });
 
-    // A homepage tool that isn't in the contiguous top block (e.g. curated via
-    // homepage_order, or a top tool was disabled) gets an explicit badge so the
-    // divider line never misrepresents it.
-    var homeBadge = straggler
-      ? h('span', { class: 'admin-tool__home', title: 'Shown on the homepage' }, [
-          ADMIN.icon ? ADMIN.icon('home', 12) : null,
-          h('span', 'Homepage'),
-        ])
-      : null;
-
     dom.append(row, [
       handle,
       h('span', { class: 'admin-tool__moves' }, [up, down]),
       nameBtn,
-      homeBadge,
       h('span', { class: 'admin-tool__spacer' }),
       toggle,
     ]);
@@ -249,6 +221,7 @@
       section.insertBefore(sibling, row);
     }
     refreshMoveButtons(section);
+    refreshDivider(section);
     // Keep focus on the row we just moved. The button we pressed may now be
     // disabled (row landed at a category boundary) — a disabled button can't
     // hold focus and it would fall to <body>, so fall back to the opposite,
@@ -313,6 +286,7 @@
       section.insertBefore(dragEl, after ? row.nextElementSibling : row);
       clearDropTargets();
       refreshMoveButtons(section);
+      refreshDivider(section);
       persistOrder();
     });
   }
@@ -332,9 +306,11 @@
 
   function toggleTool(tool, toggle, nameBtn) {
     var next = toggle.getAttribute('aria-checked') !== 'true';
+    var section = toggle.closest('.admin-toollist');
     // optimistic
     toggle.setAttribute('aria-checked', next ? 'true' : 'false');
     setDisabledBadge(nameBtn, !next);
+    if (section) refreshDivider(section); // membership changed → move the line
     api
       .put('/api/v1/tools/' + encodeURIComponent(tool.id), { enabled: next })
       .then(function (res) {
@@ -347,6 +323,7 @@
         // revert
         toggle.setAttribute('aria-checked', next ? 'false' : 'true');
         setDisabledBadge(nameBtn, next);
+        if (section) refreshDivider(section);
         ADMIN.toast('Could not update — reverted', 'error');
       });
   }
@@ -501,20 +478,12 @@
         }
 
         var grouped = groupByCategory(tools);
-        var hp = computeHomepage(grouped);
         var wrap = h('div', { class: 'admin-tools' });
         wrap.appendChild(buildCallout());
         grouped.order.forEach(function (cat) {
           var list = h('ul', { class: 'admin-toollist', dataset: { category: cat } });
-          var group = grouped.groups[cat];
-          var cutoff = hp.cutoffByCat[cat] || 0;
-          group.forEach(function (tool, i) {
-            var straggler = !!hp.setById[tool.id] && i >= cutoff;
-            list.appendChild(buildRow(tool, straggler));
-            // Labeled divider right after the contiguous homepage block.
-            if (cutoff > 0 && i === cutoff - 1 && cutoff < group.length) {
-              list.appendChild(homepageDivider());
-            }
+          grouped.groups[cat].forEach(function (tool) {
+            list.appendChild(buildRow(tool));
           });
           wrap.appendChild(
             h('section', { class: 'admin-toolgroup' }, [
@@ -523,6 +492,7 @@
             ])
           );
           refreshMoveButtons(list);
+          refreshDivider(list); // draw the homepage line from the rendered order
         });
         container.appendChild(wrap);
       })
