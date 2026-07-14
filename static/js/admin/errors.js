@@ -135,7 +135,13 @@
         dom.clear(container);
 
         if (ERRORS.length === 0) {
-          container.appendChild(h('div', { class: 'admin-empty' }, 'No errors 🎉'));
+          container.appendChild(
+            ADMIN.emptyState({
+              icon: 'check',
+              title: 'No errors',
+              text: 'Nothing has gone wrong recently. Client-side errors reported by the site will show up here.',
+            })
+          );
           return;
         }
 

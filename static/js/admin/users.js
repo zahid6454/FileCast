@@ -100,7 +100,7 @@
         var history = data.history || [];
         var favorites = u.favorites || [];
 
-        var back = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, '← Back to users');
+        var back = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, '← Back to Users');
         back.addEventListener('click', function () {
           render(CONTAINER);
         });
@@ -212,7 +212,13 @@
         container.appendChild(h('div', { class: 'admin-toolbar' }, [search]));
 
         if (USERS.length === 0) {
-          container.appendChild(h('div', { class: 'admin-empty' }, 'No users yet.'));
+          container.appendChild(
+            ADMIN.emptyState({
+              icon: 'users',
+              title: 'No users yet',
+              text: 'Signed-in users will appear here once Google sign-in is live.',
+            })
+          );
           return;
         }
 

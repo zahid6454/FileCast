@@ -38,17 +38,22 @@
     announcements: [['path', { d: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9' }], ['path', { d: 'M13.73 21a2 2 0 0 1-3.46 0' }]],
     users: [['path', { d: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' }], ['circle', { cx: 9, cy: 7, r: 4 }], ['path', { d: 'M23 21v-2a4 4 0 0 0-3-3.87' }], ['path', { d: 'M16 3.13a4 4 0 0 1 0 7.75' }]],
     errors: [['path', { d: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z' }], ['line', { x1: 12, y1: 9, x2: 12, y2: 13 }], ['line', { x1: 12, y1: 17, x2: 12.01, y2: 17 }]],
+    // empty-state icons
+    megaphone: [['path', { d: 'M3 11l18-5v12L3 14v-3z' }], ['path', { d: 'M11.6 16.8a3 3 0 1 1-5.8-1.6' }]],
+    check: [['path', { d: 'M22 11.08V12a10 10 0 1 1-5.93-9.14' }], ['polyline', { points: '22 4 12 14.01 9 11.01' }]],
+    inbox: [['polyline', { points: '22 12 16 12 14 15 10 15 8 12 2 12' }], ['path', { d: 'M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z' }]],
   };
 
-  function tabIcon(name) {
+  // Build an inline SVG icon from ICONS (stroke=currentColor). P23-safe.
+  function svgIcon(name, size, cls) {
     var kids = (ICONS[name] || []).map(function (s) {
       return dom.svg(s[0], s[1]);
     });
     return dom.svg('svg', {
-      class: 'admin-tabs__icon',
+      class: cls || 'admin-icon',
       viewBox: '0 0 24 24',
-      width: '16',
-      height: '16',
+      width: String(size || 24),
+      height: String(size || 24),
       fill: 'none',
       stroke: 'currentColor',
       'stroke-width': '2',
@@ -57,6 +62,27 @@
       'aria-hidden': 'true',
     }, kids);
   }
+  ADMIN.icon = svgIcon;
+
+  function tabIcon(name) {
+    return svgIcon(name, 16, 'admin-tabs__icon');
+  }
+
+  // Shared, professional empty state: icon medallion + title + text + optional CTA.
+  ADMIN.emptyState = function (opts) {
+    opts = opts || {};
+    var kids = [
+      h('div', { class: 'admin-emptystate__icon' }, [svgIcon(opts.icon || 'inbox', 28)]),
+      h('h3', { class: 'admin-emptystate__title' }, opts.title || 'Nothing here yet'),
+    ];
+    if (opts.text) kids.push(h('p', { class: 'admin-emptystate__text' }, opts.text));
+    if (opts.actionLabel && opts.onAction) {
+      var btn = h('button', { type: 'button', class: 'admin-btn admin-btn--primary' }, opts.actionLabel);
+      btn.addEventListener('click', opts.onAction);
+      kids.push(btn);
+    }
+    return h('div', { class: 'admin-emptystate' }, kids);
+  };
 
   var mount = null; // #admin-app
   var tabHost = null; // <main> where tabs render

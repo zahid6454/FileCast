@@ -258,7 +258,17 @@
         }
 
         if (items.length === 0) {
-          container.appendChild(h('div', { class: 'admin-empty' }, 'No announcements yet — create one.'));
+          container.appendChild(
+            ADMIN.emptyState({
+              icon: 'megaphone',
+              title: 'No announcements yet',
+              text: 'Create an announcement to show a banner across the site. It publishes live — no rebuild needed.',
+              actionLabel: 'Create announcement',
+              onAction: function () {
+                showForm(null);
+              },
+            })
+          );
           return;
         }
         var list = h('ul', { class: 'admin-anncs' });
