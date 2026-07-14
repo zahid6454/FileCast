@@ -65,8 +65,14 @@
   <p class="page__tagline">{{ tool.tagline_long or tool.tagline }}</p>
   {% endif %}
 
+  {# Converter panel — the whole tool area on one raised surface: leaderboard ad,
+     the privacy trust badge, and the interactive controls, all in one card. #}
+  <div class="tool-panel">
+
+  {% if adsense.enabled %}
   {# Ad slot: leaderboard #}
   <div class="ad-slot" id="ad-leaderboard"></div>
+  {% endif %}
 
   {# Privacy Badge #}
   <div class="tool-badge">
@@ -76,10 +82,6 @@
     <a href="/privacy/" class="badge">Files encrypted, processed, deleted immediately</a>
     {% endif %}
   </div>
-
-  {# Converter panel — groups the interactive controls onto one raised surface
-     so the primary action reads as a defined card, not bare page. #}
-  <div class="tool-panel">
 
   {# Tool Options (for tools with settings like rotation, quality, dimensions) #}
   {% if tool.get('options') %}
@@ -162,8 +164,10 @@
 
   </div>{# /tool-panel #}
 
+  {% if adsense.enabled %}
   {# Ad slot: in-content #}
   <div class="ad-slot" id="ad-in-content"></div>
+  {% endif %}
 
   {# Content Blocks #}
   {% if tool.content_html.get('what_is') %}
