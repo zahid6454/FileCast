@@ -143,6 +143,31 @@
   opacity: 1;
 }
 
+/* Hamburger toggle — hidden on desktop; revealed in the narrow media query
+   below, where the tab nav becomes an off-canvas drawer. */
+.admin-hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  margin-left: var(--space-1);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.admin-hamburger:hover {
+  background: var(--color-bg-sunken);
+  color: var(--color-text);
+}
+.admin-hamburger__icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
 /* ---- buttons ----------------------------------------------------------- */
 
 /* Buttons share the site's visual language: gradient primary with a brand-glow
@@ -1245,13 +1270,54 @@
 
 /* ---- responsive -------------------------------------------------------- */
 
-@media (max-width: 640px) {
-  .admin-topbar {
-    flex-wrap: wrap;
-    height: auto;
-    padding: var(--space-3);
-    gap: var(--space-3);
+/* Below the comfortable single-row width the five tabs no longer fit beside the
+   brand + actions, so — like the main site header — they collapse into a
+   hamburger that opens an off-canvas drawer. */
+@media (max-width: 960px) {
+  /* The closed drawer sits off-canvas to the right; clip horizontal overflow at
+     the root so it can never produce a horizontal scrollbar. `clip` (not
+     `hidden`) doesn't create a scroll container, so the sticky topbar keeps
+     working. */
+  html {
+    overflow-x: clip;
   }
+  .admin-hamburger {
+    display: inline-flex;
+  }
+  .admin-tabs {
+    position: fixed;
+    top: var(--header-height);
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: min(80%, 300px);
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+    padding: var(--space-4);
+    background: var(--color-bg-raised);
+    border-left: 1px solid var(--color-border);
+    box-shadow: var(--shadow-lg);
+    overflow-y: auto;
+    z-index: 30;
+    transform: translateX(100%);
+    /* Closed: also removed from the tab order / a11y tree (not just off-screen),
+       so keyboard users can't tab into a hidden drawer. Visibility steps at the
+       end of the slide so the animation still plays. */
+    visibility: hidden;
+    transition: transform var(--transition-base), visibility var(--transition-base);
+  }
+  .admin-tabs--open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+  .admin-tabs__link {
+    padding: var(--space-3);
+    font-size: var(--text-base);
+  }
+}
+
+@media (max-width: 640px) {
   .admin-annc {
     flex-direction: column;
     align-items: stretch;
@@ -1259,5 +1325,12 @@
   .admin-table {
     display: block;
     overflow-x: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  /* The email is non-essential chrome; reclaim its width for brand + sign-out. */
+  .admin-topbar__user {
+    display: none;
   }
 }

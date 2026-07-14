@@ -44,6 +44,9 @@
     inbox: [['polyline', { points: '22 12 16 12 14 15 10 15 8 12 2 12' }], ['path', { d: 'M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z' }]],
     info: [['circle', { cx: 12, cy: 12, r: 10 }], ['line', { x1: 12, y1: 16, x2: 12, y2: 12 }], ['line', { x1: 12, y1: 8, x2: 12.01, y2: 8 }]],
     home: [['path', { d: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }], ['polyline', { points: '9 22 9 12 15 12 15 22' }]],
+    // hamburger toggle icons (open = three bars, close = ✕)
+    menu: [['line', { x1: 3, y1: 6, x2: 21, y2: 6 }], ['line', { x1: 3, y1: 12, x2: 21, y2: 12 }], ['line', { x1: 3, y1: 18, x2: 21, y2: 18 }]],
+    close: [['line', { x1: 18, y1: 6, x2: 6, y2: 18 }], ['line', { x1: 6, y1: 6, x2: 18, y2: 18 }]],
   };
 
   // Build an inline SVG icon from ICONS (stroke=currentColor). P23-safe.
@@ -91,7 +94,22 @@
   var toastHost = null;
   var bannerShown = false;
   var routerBound = false;
+  var drawerBound = false; // Esc/outside-click listeners bound once (module-wide)
   var booting = false; // guards against re-entrant gate re-checks
+
+  // Open/close the mobile tab drawer. Operates on the CURRENT topbar elements by
+  // id so it stays correct across panel re-renders. On desktop the drawer class
+  // is inert (the nav is laid out inline), so toggling it there is harmless.
+  function setDrawer(open) {
+    var navEl = document.getElementById('admin-nav');
+    var ham = document.getElementById('admin-hamburger');
+    if (!navEl || !ham) return;
+    navEl.classList.toggle('admin-tabs--open', open);
+    ham.setAttribute('aria-expanded', open ? 'true' : 'false');
+    ham.setAttribute('aria-label', open ? 'Close menu' : 'Menu');
+    dom.clear(ham);
+    ham.appendChild(svgIcon(open ? 'close' : 'menu', 24, 'admin-hamburger__icon'));
+  }
 
   // --- shared catalog (§4.4) ---------------------------------------------
 
@@ -339,7 +357,7 @@
   function renderPanel(user) {
     dom.clear(mount);
 
-    var nav = h('nav', { class: 'admin-tabs', 'aria-label': 'Admin sections' });
+    var nav = h('nav', { class: 'admin-tabs', id: 'admin-nav', 'aria-label': 'Admin sections' });
     TABS.forEach(function (t) {
       nav.appendChild(
         h('a', { class: 'admin-tabs__link', href: '#' + t.id, dataset: { tab: t.id } }, [
@@ -347,6 +365,21 @@
           h('span', { class: 'admin-tabs__label' }, t.label),
         ])
       );
+    });
+
+    // Hamburger: collapses the tab nav into a drawer on narrow screens (matches
+    // the main site's header). Hidden on desktop via CSS.
+    var hamburger = h('button', {
+      type: 'button',
+      class: 'admin-hamburger',
+      id: 'admin-hamburger',
+      'aria-controls': 'admin-nav',
+      'aria-expanded': 'false',
+      'aria-label': 'Menu',
+    }, [svgIcon('menu', 24, 'admin-hamburger__icon')]);
+    hamburger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setDrawer(hamburger.getAttribute('aria-expanded') !== 'true');
     });
 
     var signout = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, 'Sign out');
@@ -363,6 +396,7 @@
             h('span', { class: 'admin-topbar__user' }, user.email || ''),
             signout,
           ]),
+          hamburger,
         ]),
         h('div', { class: 'admin-banner-slot', id: 'admin-banner-slot' }),
         tabHost,
@@ -372,6 +406,23 @@
     if (!routerBound) {
       window.addEventListener('hashchange', route);
       routerBound = true;
+    }
+
+    // Close the drawer on Escape or an outside click. Bound once; the handlers
+    // re-resolve the current elements by id, so they survive panel re-renders.
+    if (!drawerBound) {
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') setDrawer(false);
+      });
+      document.addEventListener('click', function (e) {
+        var ham = document.getElementById('admin-hamburger');
+        if (!ham || ham.getAttribute('aria-expanded') !== 'true') return;
+        var navEl = document.getElementById('admin-nav');
+        if (navEl && !navEl.contains(e.target) && !ham.contains(e.target)) {
+          setDrawer(false);
+        }
+      });
+      drawerBound = true;
     }
 
     // Load the shared catalog once, then route (dashboard labels need it). On an
@@ -412,6 +463,7 @@
     if (tab && typeof tab.render === 'function') {
       tab.render(tabHost);
     }
+    setDrawer(false); // a tab was chosen → collapse the mobile drawer
   }
 
   // --- start --------------------------------------------------------------

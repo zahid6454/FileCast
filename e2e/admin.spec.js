@@ -69,6 +69,49 @@ test.describe('auth gate (D6)', () => {
   });
 });
 
+test.describe('responsive nav (hamburger drawer)', () => {
+  test('desktop shows tabs inline with no hamburger', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await installApi(page, makeState());
+    await page.goto('/admin/#tools');
+    await expect(page.locator('#admin-nav')).toBeVisible();
+    await expect(page.locator('#admin-hamburger')).toBeHidden();
+  });
+
+  test('narrow: tabs collapse into a drawer that opens, navigates, and closes', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 720 });
+    await installApi(page, makeState());
+    await page.goto('/admin/#tools');
+
+    const ham = page.locator('#admin-hamburger');
+    const nav = page.locator('#admin-nav');
+    // Collapsed by default: hamburger shown, drawer hidden from the a11y tree.
+    await expect(ham).toBeVisible();
+    await expect(ham).toHaveAttribute('aria-expanded', 'false');
+    await expect(nav).toBeHidden();
+
+    // Open → drawer visible; no horizontal overflow from the off-canvas panel.
+    await ham.click();
+    await expect(ham).toHaveAttribute('aria-expanded', 'true');
+    await expect(nav).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+
+    // Choosing a tab navigates AND collapses the drawer.
+    await nav.locator('.admin-tabs__link[data-tab="users"]').click();
+    await expect(page).toHaveURL(/#users$/);
+    await expect(nav).toBeHidden();
+
+    // Re-open, then Escape closes it.
+    await ham.click();
+    await expect(nav).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(nav).toBeHidden();
+  });
+});
+
 test.describe('dashboard', () => {
   test('renders stat cards, an SVG chart, and the ratings summary from ONE /ratings call', async ({ page }) => {
     const state = makeState();
