@@ -30,6 +30,25 @@
     return isNaN(d.getTime()) ? iso : d.toLocaleDateString();
   }
 
+  function initials(u) {
+    var s = (u.name || u.email || '?').trim();
+    var parts = s.split(/[\s@._-]+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return s.slice(0, 2).toUpperCase();
+  }
+
+  function avatar(u, big) {
+    return h(
+      'span',
+      { class: 'admin-avatar' + (u.role === 'admin' ? ' admin-avatar--admin' : '') + (big ? ' admin-avatar--lg' : '') },
+      initials(u)
+    );
+  }
+
+  function rolePill(role) {
+    return h('span', { class: 'admin-badge admin-badge--' + (role === 'admin' ? 'admin' : 'user') }, role);
+  }
+
   // --- list ---------------------------------------------------------------
 
   function renderList(filter) {
@@ -45,16 +64,21 @@
       );
     });
     if (shown.length === 0) {
-      tbody.appendChild(h('tr', h('td', { colspan: '5', class: 'admin-empty' }, 'No matching users.')));
+      tbody.appendChild(h('tr', h('td', { colspan: '4', class: 'admin-empty' }, 'No matching users.')));
       return;
     }
     shown.forEach(function (u) {
       var row = h('tr', { class: 'admin-users__row' }, [
-        h('td', u.email || '—'),
-        h('td', u.name || '—'),
-        h('td', h('span', { class: 'admin-badge admin-badge--role' }, u.role)),
-        h('td', fmtDate(u.created_at)),
-        h('td', fmtDate(u.last_login_at)),
+        h('td', h('div', { class: 'admin-usercell' }, [
+          avatar(u),
+          h('div', { class: 'admin-usercell__meta' }, [
+            h('span', { class: 'admin-usercell__name' }, u.name || '—'),
+            h('span', { class: 'admin-usercell__email' }, u.email || '—'),
+          ]),
+        ])),
+        h('td', rolePill(u.role)),
+        h('td', { class: 'admin-users__date' }, fmtDate(u.created_at)),
+        h('td', { class: 'admin-users__date' }, fmtDate(u.last_login_at)),
       ]);
       row.addEventListener('click', function () {
         openDetail(u.id);
@@ -84,12 +108,18 @@
         CONTAINER.appendChild(h('div', { class: 'admin-toolbar' }, [back]));
         CONTAINER.appendChild(
           h('section', { class: 'admin-card' }, [
-            h('h2', { class: 'admin-card__title' }, u.name || u.email || 'User'),
+            h('div', { class: 'admin-userhead' }, [
+              avatar(u, true),
+              h('div', [
+                h('h2', { class: 'admin-userhead__name' }, u.name || u.email || 'User'),
+                h('div', { class: 'admin-userhead__email' }, u.email || ''),
+              ]),
+              h('div', { class: 'admin-userhead__role' }, rolePill(u.role)),
+            ]),
             h('dl', { class: 'admin-deflist' }, [
-              dt('Email', u.email || '—'),
               dt('Role', h('span', [
-                h('span', { class: 'admin-badge admin-badge--role' }, u.role),
-                h('span', { class: 'admin-deflist__note' }, ' — role is managed by an operator'),
+                rolePill(u.role),
+                h('span', { class: 'admin-deflist__note' }, ' — managed by an operator'),
               ])),
               dt('Joined', fmtDate(u.created_at)),
               dt('Last login', fmtDate(u.last_login_at)),
@@ -187,10 +217,10 @@
         }
 
         var table = h('table', { class: 'admin-table admin-users' }, [
-          h('thead', h('tr', [h('th', 'Email'), h('th', 'Name'), h('th', 'Role'), h('th', 'Joined'), h('th', 'Last login')])),
+          h('thead', h('tr', [h('th', 'User'), h('th', 'Role'), h('th', 'Joined'), h('th', 'Last login')])),
           h('tbody'),
         ]);
-        container.appendChild(table);
+        container.appendChild(h('div', { class: 'admin-tablecard' }, [table]));
         renderList('');
       })
       .catch(function (err) {

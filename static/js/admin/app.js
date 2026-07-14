@@ -30,6 +30,34 @@
   ];
   var VALID = { dashboard: 1, tools: 1, announcements: 1, users: 1, errors: 1 };
 
+  // Inline SVG tab icons (Feather-style, stroke=currentColor so they follow the
+  // link colour). Built via dom.svg() — no external assets, P23-safe.
+  var ICONS = {
+    dashboard: [['rect', { x: 3, y: 3, width: 8, height: 8, rx: 1 }], ['rect', { x: 13, y: 3, width: 8, height: 8, rx: 1 }], ['rect', { x: 13, y: 13, width: 8, height: 8, rx: 1 }], ['rect', { x: 3, y: 13, width: 8, height: 8, rx: 1 }]],
+    tools: [['line', { x1: 4, y1: 21, x2: 4, y2: 14 }], ['line', { x1: 4, y1: 10, x2: 4, y2: 3 }], ['line', { x1: 12, y1: 21, x2: 12, y2: 12 }], ['line', { x1: 12, y1: 8, x2: 12, y2: 3 }], ['line', { x1: 20, y1: 21, x2: 20, y2: 16 }], ['line', { x1: 20, y1: 12, x2: 20, y2: 3 }], ['line', { x1: 1, y1: 14, x2: 7, y2: 14 }], ['line', { x1: 9, y1: 8, x2: 15, y2: 8 }], ['line', { x1: 17, y1: 16, x2: 23, y2: 16 }]],
+    announcements: [['path', { d: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9' }], ['path', { d: 'M13.73 21a2 2 0 0 1-3.46 0' }]],
+    users: [['path', { d: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' }], ['circle', { cx: 9, cy: 7, r: 4 }], ['path', { d: 'M23 21v-2a4 4 0 0 0-3-3.87' }], ['path', { d: 'M16 3.13a4 4 0 0 1 0 7.75' }]],
+    errors: [['path', { d: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z' }], ['line', { x1: 12, y1: 9, x2: 12, y2: 13 }], ['line', { x1: 12, y1: 17, x2: 12.01, y2: 17 }]],
+  };
+
+  function tabIcon(name) {
+    var kids = (ICONS[name] || []).map(function (s) {
+      return dom.svg(s[0], s[1]);
+    });
+    return dom.svg('svg', {
+      class: 'admin-tabs__icon',
+      viewBox: '0 0 24 24',
+      width: '16',
+      height: '16',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      'aria-hidden': 'true',
+    }, kids);
+  }
+
   var mount = null; // #admin-app
   var tabHost = null; // <main> where tabs render
   var toastHost = null;
@@ -279,7 +307,12 @@
 
     var nav = h('nav', { class: 'admin-tabs', 'aria-label': 'Admin sections' });
     TABS.forEach(function (t) {
-      nav.appendChild(h('a', { class: 'admin-tabs__link', href: '#' + t.id, dataset: { tab: t.id } }, t.label));
+      nav.appendChild(
+        h('a', { class: 'admin-tabs__link', href: '#' + t.id, dataset: { tab: t.id } }, [
+          tabIcon(t.id),
+          h('span', { class: 'admin-tabs__label' }, t.label),
+        ])
+      );
     });
 
     var signout = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, 'Sign out');
