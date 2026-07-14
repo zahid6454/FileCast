@@ -269,6 +269,10 @@
     row.addEventListener('dragstart', function (e) {
       dragEl = row;
       row.classList.add('admin-tool--dragging');
+      // Highlight the category you can drop within — reordering is
+      // category-constrained (a tool's category comes from its config, not here).
+      var group = row.closest('.admin-toolgroup');
+      if (group) group.classList.add('admin-toolgroup--dropzone');
       if (e.dataTransfer) {
         e.dataTransfer.effectAllowed = 'move';
         // Some browsers require data to be set for the drag to initiate.
@@ -282,19 +286,27 @@
     });
     row.addEventListener('dragover', function (e) {
       if (!dragEl || dragEl === row) return;
-      if (dragEl.dataset.category !== row.dataset.category) return; // same category only
+      // preventDefault everywhere so the drop fires and we can respond (either a
+      // same-category reorder or a clear cross-category "not allowed" hint).
       e.preventDefault();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      var same = dragEl.dataset.category === row.dataset.category;
+      if (e.dataTransfer) e.dataTransfer.dropEffect = same ? 'move' : 'none';
       clearDropTargets();
-      row.classList.add('admin-tool--dragover');
+      row.classList.add(same ? 'admin-tool--dragover' : 'admin-tool--nodrop');
     });
     row.addEventListener('dragleave', function () {
       row.classList.remove('admin-tool--dragover');
+      row.classList.remove('admin-tool--nodrop');
     });
     row.addEventListener('drop', function (e) {
       if (!dragEl || dragEl === row) return;
-      if (dragEl.dataset.category !== row.dataset.category) return;
       e.preventDefault();
+      if (dragEl.dataset.category !== row.dataset.category) {
+        // Cross-category drops aren't possible — say so instead of doing nothing.
+        clearDropTargets();
+        ADMIN.toast('Tools can only be reordered within their own category', 'info');
+        return;
+      }
       var section = row.closest('.admin-toollist');
       var rect = row.getBoundingClientRect();
       var after = e.clientY > rect.top + rect.height / 2;
@@ -307,8 +319,12 @@
 
   function clearDropTargets() {
     if (!CONTAINER) return;
-    CONTAINER.querySelectorAll('.admin-tool--dragover').forEach(function (el) {
+    CONTAINER.querySelectorAll('.admin-tool--dragover, .admin-tool--nodrop').forEach(function (el) {
       el.classList.remove('admin-tool--dragover');
+      el.classList.remove('admin-tool--nodrop');
+    });
+    CONTAINER.querySelectorAll('.admin-toolgroup--dropzone').forEach(function (el) {
+      el.classList.remove('admin-toolgroup--dropzone');
     });
   }
 

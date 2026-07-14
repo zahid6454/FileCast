@@ -325,15 +325,22 @@
   pointer-events: none;
 }
 .admin-toast {
-  padding: var(--space-3) var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
   border-radius: var(--radius-md);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
   color: var(--color-text-inverse);
-  background: var(--color-bg-dark);
+  background: var(--color-primary);
   box-shadow: var(--shadow-lg);
   opacity: 0;
   transform: translateY(8px);
   transition: opacity var(--transition-base), transform var(--transition-base);
+}
+.admin-toast__icon {
+  flex-shrink: 0;
 }
 .admin-toast.is-visible {
   opacity: 1;
@@ -344,6 +351,9 @@
 }
 .admin-toast--error {
   background: var(--color-error);
+}
+.admin-toast--info {
+  background: var(--color-primary);
 }
 
 /* ---- cards / states ---------------------------------------------------- */
@@ -704,6 +714,17 @@
 .admin-tool--dragover {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px var(--color-primary-light);
+}
+.admin-tool--nodrop {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 2px var(--color-error-light);
+  cursor: not-allowed;
+}
+/* While dragging, outline the one category you can drop within. */
+.admin-toolgroup--dropzone {
+  outline: 2px dashed var(--color-primary-light);
+  outline-offset: 6px;
+  border-radius: var(--radius-md);
 }
 .admin-tool__handle {
   cursor: grab;

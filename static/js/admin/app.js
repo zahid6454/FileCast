@@ -128,9 +128,15 @@
     return toastHost;
   }
 
+  var TOAST_ICON = { success: 'check', error: 'errors', info: 'info' };
+
   ADMIN.toast = function (message, type) {
+    type = type || 'info';
     var host = ensureToastHost();
-    var toast = h('div', { class: 'admin-toast admin-toast--' + (type || 'info'), role: 'status' }, message);
+    var toast = h('div', { class: 'admin-toast admin-toast--' + type, role: 'status' }, [
+      svgIcon(TOAST_ICON[type] || 'info', 18, 'admin-toast__icon'),
+      h('span', { class: 'admin-toast__msg' }, message),
+    ]);
     host.appendChild(toast);
     requestAnimationFrame(function () {
       toast.classList.add('is-visible');
