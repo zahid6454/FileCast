@@ -164,6 +164,24 @@
 
   </div>{# /tool-panel #}
 
+  {# Related Tools — surfaced right after the converter (the primary action),
+     before the long-form content below. #}
+  {% if tool.related_tools_resolved %}
+  <div class="related-tools">
+    <h2 class="related-tools__title">Related Tools</h2>
+    <div class="card-grid">
+      {% for related in tool.related_tools_resolved %}
+      <a class="card{% if related.type == 'server-side' %} card--server{% endif %}"
+         href="{{ related.slug }}/"
+         data-source="{{ tool.id }}"
+         data-target="{{ related.id }}">
+        {% if related.input_format == related.output_format %}{{ related.name }}{% else %}{{ related.input_format }} → {{ related.output_format }}{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   {% if adsense.enabled %}
   {# Ad slot: in-content #}
   <div class="ad-slot" id="ad-in-content"></div>
@@ -191,23 +209,6 @@
   {% if tool.content_html.get('faq') %}
   <div class="content-block">
     {{ tool.content_html.faq|safe }}
-  </div>
-  {% endif %}
-
-  {# Related Tools #}
-  {% if tool.related_tools_resolved %}
-  <div class="related-tools">
-    <h2 class="related-tools__title">Related Tools</h2>
-    <div class="card-grid">
-      {% for related in tool.related_tools_resolved %}
-      <a class="card{% if related.type == 'server-side' %} card--server{% endif %}"
-         href="{{ related.slug }}/"
-         data-source="{{ tool.id }}"
-         data-target="{{ related.id }}">
-        {% if related.input_format == related.output_format %}{{ related.name }}{% else %}{{ related.input_format }} → {{ related.output_format }}{% endif %}
-      </a>
-      {% endfor %}
-    </div>
   </div>
   {% endif %}
 

@@ -759,7 +759,9 @@ img { max-width: 100%; display: block; }
    .header__nav a:hover, so a light background here would be unreadable — the
    gradient gives the white text a high-contrast, on-brand surface instead.) */
 .nav-dropdown__all:hover, .nav-dropdown__item:hover {
-  background: linear-gradient(to right, var(--brand-blue), var(--brand-green));
+  background: linear-gradient(to right,
+    color-mix(in srgb, var(--brand-blue) 50%, transparent),
+    color-mix(in srgb, var(--brand-green) 50%, transparent));
   color: var(--color-text-inverse);
   text-decoration: none;
 }
@@ -975,12 +977,17 @@ img { max-width: 100%; display: block; }
   padding: var(--space-3) var(--space-6);
   border-radius: var(--radius-lg);
   background: var(--color-bg-raised);
-  color: var(--color-primary);
-  border: 1px solid var(--color-primary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
   font-weight: var(--weight-bold);
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
-.upload-zone:hover .upload-zone__cta { background: var(--color-primary-subtle); }
+/* On zone hover, warm up toward the brand — but stay muted vs the primary CTA. */
+.upload-zone:hover .upload-zone__cta {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  border-color: var(--color-primary-light);
+}
 .upload-zone--active { transform: scale(1.01); }
 
 /* --- Multi-column footer (§6.8) --- */
