@@ -749,9 +749,12 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-md);
 }
 .nav-dropdown__all { font-weight: var(--weight-semibold); color: var(--color-text); }
+/* Brand-gradient hover with white text. (The header forces white text on
+   .header__nav a:hover, so a light background here would be unreadable — the
+   gradient gives the white text a high-contrast, on-brand surface instead.) */
 .nav-dropdown__all:hover, .nav-dropdown__item:hover {
-  background: var(--color-bg-sunken);
-  color: var(--color-primary);
+  background: linear-gradient(to right, var(--brand-blue), var(--brand-green));
+  color: var(--color-text-inverse);
   text-decoration: none;
 }
 
