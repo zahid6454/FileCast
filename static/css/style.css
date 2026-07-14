@@ -251,7 +251,7 @@ img { max-width: 100%; display: block; }
 }
 .header__logo { display: flex; align-items: center; gap: var(--space-3); text-decoration: none; }
 .header__nav { margin-left: auto; display: flex; gap: var(--space-5); }
-.header__nav a { color: var(--color-text-muted); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.header__nav a { color: var(--color-text-muted); font-size: var(--text-sm); font-weight: var(--weight-medium); transition: color var(--transition-base); }
 .header__nav a:hover { color: var(--color-text-inverse); text-decoration: none; }
 .tool-badge { text-align: center; margin-bottom: var(--space-3); }
 
@@ -383,6 +383,10 @@ img { max-width: 100%; display: block; }
   padding: var(--space-6);
   margin: var(--space-4) 0 var(--space-6);
 }
+/* Title + tagline sit at the top of the card, centered to match the converter
+   controls below them. */
+.tool-panel .page__title { text-align: center; }
+.tool-panel .page__tagline { text-align: center; margin-bottom: var(--space-5); }
 
 .upload-zone {
   border: 2px dashed var(--color-text-light);
@@ -735,6 +739,7 @@ img { max-width: 100%; display: block; }
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   padding: var(--space-2) 0;
+  transition: color var(--transition-base);
 }
 .nav-dropdown__toggle:hover { color: var(--color-text-inverse); }
 .nav-dropdown__caret { width: 14px; height: 14px; transition: transform var(--transition-fast); }
@@ -747,6 +752,7 @@ img { max-width: 100%; display: block; }
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
   border-radius: var(--radius-md);
+  transition: background var(--transition-base), color var(--transition-base);
 }
 .nav-dropdown__all { font-weight: var(--weight-semibold); color: var(--color-text); }
 /* Brand-gradient hover with white text. (The header forces white text on
@@ -960,15 +966,21 @@ img { max-width: 100%; display: block; }
 
 /* --- Upload zone enhancements --- */
 .upload-zone__icon { display: block; width: 56px; height: 56px; color: var(--color-primary); margin: 0 auto var(--space-3); }
+/* Secondary treatment: the primary action is "Convert" (gradient); "Choose File"
+   is the lead-in, so it reads as a bordered secondary button, not a second
+   gradient competing with Convert. */
 .upload-zone__cta {
   display: inline-block;
   margin-bottom: var(--space-2);
   padding: var(--space-3) var(--space-6);
   border-radius: var(--radius-lg);
-  background: linear-gradient(to right, var(--brand-blue), var(--brand-green));
-  color: var(--color-text-inverse);
+  background: var(--color-bg-raised);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
   font-weight: var(--weight-bold);
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
+.upload-zone:hover .upload-zone__cta { background: var(--color-primary-subtle); }
 .upload-zone--active { transform: scale(1.01); }
 
 /* --- Multi-column footer (§6.8) --- */

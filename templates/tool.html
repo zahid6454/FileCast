@@ -59,15 +59,15 @@
     <span class="breadcrumb__current">{{ tool.name }}</span>
   </nav>
 
+  {# Converter panel — the whole tool area on one raised surface: title/tagline,
+     leaderboard ad, the privacy trust badge, and the controls, all in one card. #}
+  <div class="tool-panel">
+
   {# Title + Tagline #}
   <h1 class="page__title page__title--tight">{{ tool.name }}</h1>
   {% if tool.tagline_long or tool.tagline %}
   <p class="page__tagline">{{ tool.tagline_long or tool.tagline }}</p>
   {% endif %}
-
-  {# Converter panel — the whole tool area on one raised surface: leaderboard ad,
-     the privacy trust badge, and the interactive controls, all in one card. #}
-  <div class="tool-panel">
 
   {% if adsense.enabled %}
   {# Ad slot: leaderboard #}
