@@ -1,10 +1,12 @@
 // Errors tab (#errors) — a dedicated, full-detail view of the client error log.
 //
-// The dashboard's "Recent errors" widget is a 50-row glance; this tab pulls a
-// larger window with client-side search across tool / type / message / browser.
-// Like the dashboard feed this is the P23 hot spot: error_type/error_message/
-// browser come from the PUBLIC, anonymous POST /errors, so every field is
-// rendered via textContent (h()), never markup.
+// Rendered as readable cards (not a cramped table): each card leads with the
+// tool, a coloured error-type badge and the time, shows the full message in a
+// legible mono block, and has a Details disclosure (browser / raw tool id /
+// error # / exact timestamp) plus a Copy-message button. Client-side search
+// spans every field. This is a P23 hot spot — error_type/error_message/browser
+// come from the PUBLIC, anonymous POST /errors — so every field reaches the DOM
+// via textContent (h()), never markup.
 (function () {
   'use strict';
   var ADMIN = (window.ADMIN = window.ADMIN || {});
@@ -30,38 +32,97 @@
     return isNaN(d.getTime()) ? iso : d.toLocaleString();
   }
 
-  function renderRows(filter) {
-    var tbody = CONTAINER.querySelector('.admin-errtable tbody');
+  function matches(e, q) {
+    if (!q) return true;
+    return (
+      (e.error_message || '').toLowerCase().indexOf(q) >= 0 ||
+      (e.error_type || '').toLowerCase().indexOf(q) >= 0 ||
+      (e.browser || '').toLowerCase().indexOf(q) >= 0 ||
+      (e.tool_id || '').toLowerCase().indexOf(q) >= 0 ||
+      labelFor(e.tool_id).toLowerCase().indexOf(q) >= 0
+    );
+  }
+
+  function detailRow(term, value) {
+    return h('div', { class: 'admin-errcard__drow' }, [
+      h('dt', term),
+      h('dd', value || '—'),
+    ]);
+  }
+
+  function card(e) {
+    // The message block (full, wrapping, legible). P23: textContent via h().
+    var msg = h('code', { class: 'admin-errcard__msg' }, e.error_message || '(no message)');
+
+    // Collapsible detail: metadata + a copy action.
+    var copyBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost admin-errcard__copy' }, 'Copy message');
+    copyBtn.addEventListener('click', function () {
+      try {
+        navigator.clipboard.writeText(e.error_message || '').then(
+          function () {
+            ADMIN.toast('Message copied', 'success');
+          },
+          function () {
+            ADMIN.toast('Copy failed', 'error');
+          }
+        );
+      } catch (err) {
+        ADMIN.toast('Copy not supported', 'error');
+      }
+    });
+
+    var detail = h('div', { class: 'admin-errcard__detail', hidden: true }, [
+      h('dl', { class: 'admin-errcard__dl' }, [
+        detailRow('Browser', e.browser),
+        detailRow('Tool id', e.tool_id),
+        detailRow('Error #', e.id != null ? String(e.id) : null),
+        detailRow('Timestamp', fmtDate(e.created_at)),
+      ]),
+      copyBtn,
+    ]);
+
+    var toggle = h('button', {
+      type: 'button',
+      class: 'admin-errcard__toggle',
+      'aria-expanded': 'false',
+    }, 'Details');
+    toggle.addEventListener('click', function () {
+      var open = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      detail.hidden = open;
+      toggle.textContent = open ? 'Details' : 'Hide details';
+    });
+
+    return h('li', { class: 'admin-errcard' }, [
+      h('div', { class: 'admin-errcard__head' }, [
+        e.error_type
+          ? h('span', { class: 'admin-badge admin-badge--error' }, e.error_type)
+          : h('span', { class: 'admin-badge admin-badge--role' }, 'error'),
+        h('span', { class: 'admin-errcard__tool' }, labelFor(e.tool_id)),
+        h('time', { class: 'admin-errcard__time' }, fmtDate(e.created_at)),
+      ]),
+      msg,
+      h('div', { class: 'admin-errcard__foot' }, [toggle]),
+      detail,
+    ]);
+  }
+
+  function renderCards(filter) {
+    var list = CONTAINER.querySelector('.admin-errlist');
     var countEl = CONTAINER.querySelector('.admin-errcount');
-    if (!tbody) return;
-    dom.clear(tbody);
+    if (!list) return;
+    dom.clear(list);
     var q = (filter || '').trim().toLowerCase();
     var shown = ERRORS.filter(function (e) {
-      if (!q) return true;
-      return (
-        (e.error_message || '').toLowerCase().indexOf(q) >= 0 ||
-        (e.error_type || '').toLowerCase().indexOf(q) >= 0 ||
-        (e.browser || '').toLowerCase().indexOf(q) >= 0 ||
-        (e.tool_id || '').toLowerCase().indexOf(q) >= 0 ||
-        labelFor(e.tool_id).toLowerCase().indexOf(q) >= 0
-      );
+      return matches(e, q);
     });
     if (countEl) countEl.textContent = shown.length + ' of ' + ERRORS.length;
     if (shown.length === 0) {
-      tbody.appendChild(h('tr', h('td', { colspan: '5', class: 'admin-empty' }, 'No matching errors.')));
+      list.appendChild(h('li', { class: 'admin-empty' }, 'No matching errors.'));
       return;
     }
     shown.forEach(function (e) {
-      tbody.appendChild(
-        h('tr', { class: 'admin-errrow' }, [
-          h('td', { class: 'admin-errrow__when' }, fmtDate(e.created_at)),
-          h('td', labelFor(e.tool_id)),
-          h('td', e.error_type ? h('span', { class: 'admin-badge admin-badge--error' }, e.error_type) : '—'),
-          // P23: message is attacker-controlled → textContent via h().
-          h('td', h('code', { class: 'admin-errrow__msg' }, e.error_message || '')),
-          h('td', { class: 'admin-errrow__browser' }, e.browser || '—'),
-        ])
-      );
+      list.appendChild(card(e));
     });
   }
 
@@ -88,7 +149,7 @@
           'aria-label': 'Search errors',
         });
         search.addEventListener('input', function () {
-          renderRows(search.value);
+          renderCards(search.value);
         });
         container.appendChild(
           h('div', { class: 'admin-toolbar' }, [
@@ -97,21 +158,8 @@
           ])
         );
 
-        container.appendChild(
-          h('div', { class: 'admin-tablewrap' }, [
-            h('table', { class: 'admin-table admin-errtable' }, [
-              h('thead', h('tr', [
-                h('th', 'When'),
-                h('th', 'Tool'),
-                h('th', 'Type'),
-                h('th', 'Message'),
-                h('th', 'Browser'),
-              ])),
-              h('tbody'),
-            ]),
-          ])
-        );
-        renderRows('');
+        container.appendChild(h('ul', { class: 'admin-errlist' }));
+        renderCards('');
       })
       .catch(function (err) {
         if (err && err.isAuthError) return ADMIN.onAuthError(err);

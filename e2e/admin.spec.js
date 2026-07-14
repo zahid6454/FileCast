@@ -288,22 +288,30 @@ test.describe('users', () => {
 });
 
 test.describe('errors tab', () => {
-  test('lists errors with detail, filters client-side, and renders messages inert (P23)', async ({ page }) => {
+  test('lists error cards, expands details, filters, and renders messages inert (P23)', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#errors');
 
-    await expect(page.locator('.admin-errtable tbody tr')).toHaveCount(2);
+    await expect(page.locator('.admin-errcard')).toHaveCount(2);
 
     // P23: the attacker-controlled message renders as literal text.
-    const msg = page.locator('.admin-errrow__msg').first();
+    const first = page.locator('.admin-errcard').first();
+    const msg = first.locator('.admin-errcard__msg');
     await expect(msg).toHaveText('<img src=x onerror="window.__xss=1">');
     expect(await msg.locator('img').count()).toBe(0);
     expect(await page.evaluate(() => window.__xss)).toBeUndefined();
 
+    // Details disclosure: hidden by default, reveals metadata (browser) on click.
+    const detail = first.locator('.admin-errcard__detail');
+    await expect(detail).toBeHidden();
+    await first.getByRole('button', { name: 'Details' }).click();
+    await expect(detail).toBeVisible();
+    await expect(detail.getByText('Firefox')).toBeVisible();
+
     // Client-side search narrows the list, then reports "no matching".
     await page.locator('.admin-errsearch').fill('timeout');
-    await expect(page.locator('.admin-errtable tbody tr')).toHaveCount(1);
+    await expect(page.locator('.admin-errcard')).toHaveCount(1);
     await page.locator('.admin-errsearch').fill('zzz-nothing');
     await expect(page.getByText('No matching errors')).toBeVisible();
   });

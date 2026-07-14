@@ -827,38 +827,94 @@
   color: var(--color-text-secondary);
 }
 
-/* ---- errors tab -------------------------------------------------------- */
+/* ---- errors tab (card layout) ------------------------------------------ */
 
 .admin-errsearch {
   max-width: 360px;
 }
-.admin-tablewrap {
-  overflow-x: auto;
+.admin-errlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
-.admin-errtable {
-  table-layout: fixed;
-  width: 100%;
+.admin-errcard {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-error);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
 }
-.admin-errrow__when {
-  white-space: nowrap;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
+.admin-errcard__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
-.admin-errrow__browser {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  white-space: nowrap;
-}
-.admin-errrow__msg {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+.admin-errcard__tool {
+  font-weight: var(--weight-semibold);
   color: var(--color-text);
+}
+.admin-errcard__time {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.admin-errcard__msg {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  background: var(--color-bg-sunken);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
   white-space: pre-wrap;
   word-break: break-word;
-  background: none;
 }
-.admin-errtable tbody tr {
-  border-left: 3px solid var(--color-error);
+.admin-errcard__foot {
+  margin-top: var(--space-3);
+}
+.admin-errcard__toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.admin-errcard__toggle:hover {
+  text-decoration: underline;
+}
+.admin-errcard__detail {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-light);
+}
+.admin-errcard__dl {
+  margin: 0 0 var(--space-3);
+}
+.admin-errcard__drow {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+.admin-errcard__drow dt {
+  width: 96px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.admin-errcard__drow dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  word-break: break-word;
 }
 
 /* ---- responsive -------------------------------------------------------- */
