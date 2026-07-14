@@ -43,11 +43,15 @@
   {"api_base_url": {{ api.base_url|tojson }}}
   </script>
 
-  {# SPA mount point (Phase 4 fills this via the modules below). #}
+  {# SPA mount point (Phase 4 fills this via the modules below). Until the JS
+     boots, show a styled full-screen loader (admin.css is linked in <head>, so
+     this is styled on first paint — no flash of raw text). #}
   <div id="admin-app">
     <noscript>The FileCast admin panel requires JavaScript.</noscript>
-    <p>Loading the admin panel… If nothing appears, you may need to sign in as an
-       administrator, or JavaScript may be disabled.</p>
+    <div class="admin-boot">
+      <div class="admin-boot__spinner" aria-hidden="true"></div>
+      <p class="admin-boot__text">Loading admin panel…</p>
+    </div>
   </div>
 
   {# Admin SPA modules — all `defer`, so they execute in document order after the

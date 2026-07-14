@@ -63,6 +63,41 @@
   padding: var(--space-6);
 }
 
+/* Boot loader shown until the SPA renders (styled on first paint — no raw text
+   flash, since admin.css is linked in <head>). */
+.admin-boot {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  background: var(--color-bg-page);
+  color: var(--color-text-muted);
+}
+.admin-boot__spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  animation: admin-spin 0.8s linear infinite;
+}
+.admin-boot__text {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+@keyframes admin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-boot__spinner {
+    animation-duration: 2.4s;
+  }
+}
+
 /* ---- tabs -------------------------------------------------------------- */
 
 .admin-tabs {
@@ -150,6 +185,17 @@
 .admin-btn--primary:hover {
   filter: brightness(1.08);
   box-shadow: var(--shadow-brand-hover);
+}
+
+/* Secondary: a calm, on-brand tinted button for common actions — less loud than
+   the gradient primary (reserve that for the main commit in a view). */
+.admin-btn--secondary {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+.admin-btn--secondary:hover {
+  background: var(--color-primary-light);
+  box-shadow: var(--shadow-sm);
 }
 
 .admin-btn--ghost {
@@ -598,10 +644,30 @@
 
 /* ---- tools tab --------------------------------------------------------- */
 
-.admin-tools__hint {
+/* Explainer callout (how the toggle + ordering map to the live site). */
+.admin-callout {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  background: var(--color-primary-subtle);
+  border: 1px solid var(--color-primary-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.admin-callout__icon {
+  color: var(--color-primary);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.admin-callout__body {
   font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  margin: 0 0 var(--space-4);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+}
+.admin-callout__body strong {
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
 }
 .admin-toolgroup {
   margin-bottom: var(--space-6);
@@ -893,6 +959,11 @@
 }
 .admin-tablecard .admin-table thead tr {
   background: var(--color-bg-sunken);
+}
+.admin-tablecard .admin-table thead th {
+  color: var(--color-text-secondary);
+  font-weight: var(--weight-bold);
+  border-bottom: 2px solid var(--color-border);
 }
 .admin-tablecard .admin-table th,
 .admin-tablecard .admin-table td {

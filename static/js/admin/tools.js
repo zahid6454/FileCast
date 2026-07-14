@@ -40,6 +40,22 @@
     return cat.charAt(0).toUpperCase() + cat.slice(1);
   }
 
+  // Explains how the toggle + ordering map to what visitors actually see, so the
+  // tab isn't ambiguous about its effect on the live site.
+  function buildCallout() {
+    var icon = ADMIN.icon ? ADMIN.icon('info', 20) : null;
+    var body = h('div', { class: 'admin-callout__body' }, [
+      h('strong', 'Toggle'),
+      ' shows or hides a tool across the whole site. ',
+      h('strong', 'Drag ≡ or use ▲ ▼'),
+      ' to set the order within a category — that order drives the site navigation, the category pages, and the tools featured on the homepage (top of each category). Disabled tools keep their slot. Changes publish on the next rebuild.',
+    ]);
+    return h('div', { class: 'admin-callout' }, [
+      icon ? h('span', { class: 'admin-callout__icon' }, [icon]) : null,
+      body,
+    ]);
+  }
+
   // Read the current DOM row order (top-to-bottom = global order) as an id array.
   function currentOrder() {
     var rows = CONTAINER.querySelectorAll('.admin-tool');
@@ -388,9 +404,7 @@
 
         var grouped = groupByCategory(tools);
         var wrap = h('div', { class: 'admin-tools' });
-        wrap.appendChild(
-          h('p', { class: 'admin-tools__hint' }, 'Drag ≡ or use ▲ ▼ to reorder within a category. Order publishes on the next rebuild.')
-        );
+        wrap.appendChild(buildCallout());
         grouped.order.forEach(function (cat) {
           var list = h('ul', { class: 'admin-toollist', dataset: { category: cat } });
           grouped.groups[cat].forEach(function (tool) {

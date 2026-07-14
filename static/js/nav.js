@@ -17,55 +17,59 @@
   'use strict';
 
   // -------------------------------------------------------------------------
-  // 1. Theme toggle (light → dark → system)
+  // 1. Theme toggle (simple light ↔ dark)
   // -------------------------------------------------------------------------
-  function readTheme() {
+  // A plain two-state toggle: the page starts on the resolved theme (an explicit
+  // stored choice, else the OS preference) and each click flips light ↔ dark —
+  // no intermediate "system" step, so there is never a wasted click.
+  function readStored() {
     try {
       var t = localStorage.getItem('fc_theme');
-      return t === 'light' || t === 'dark' ? t : 'system';
+      return t === 'light' || t === 'dark' ? t : null;
     } catch (e) {
-      return 'system';
+      return null;
     }
+  }
+
+  function systemPrefersDark() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // The theme currently in effect: an explicit choice wins, else the OS setting.
+  function effectiveTheme() {
+    return readStored() || (systemPrefersDark() ? 'dark' : 'light');
   }
 
   function applyTheme(state) {
     var root = document.documentElement;
     try {
-      if (state === 'light' || state === 'dark') {
-        localStorage.setItem('fc_theme', state);
-        root.dataset.theme = state;
-      } else {
-        localStorage.removeItem('fc_theme');
-        delete root.dataset.theme;
-      }
+      localStorage.setItem('fc_theme', state);
     } catch (e) {
       // Storage unavailable: still reflect the live choice on <html>.
-      if (state === 'light' || state === 'dark') {
-        root.dataset.theme = state;
-      } else {
-        delete root.dataset.theme;
-      }
     }
+    root.dataset.theme = state;
   }
 
   var THEME_LABELS = {
     light: 'Theme: light. Switch to dark.',
-    dark: 'Theme: dark. Switch to system.',
-    system: 'Theme: system. Switch to light.'
+    dark: 'Theme: dark. Switch to light.'
   };
-  var THEME_NEXT = { light: 'dark', dark: 'system', system: 'light' };
 
   function reflectThemeButton(btn, state) {
     btn.dataset.themeState = state; // CSS shows the matching sprite icon
-    btn.setAttribute('aria-label', THEME_LABELS[state] || THEME_LABELS.system);
+    btn.setAttribute('aria-label', THEME_LABELS[state] || THEME_LABELS.light);
   }
 
   function initThemeToggle() {
     var btn = document.getElementById('theme-toggle');
     if (!btn) return;
-    reflectThemeButton(btn, readTheme());
+    reflectThemeButton(btn, effectiveTheme());
     btn.addEventListener('click', function () {
-      var next = THEME_NEXT[readTheme()] || 'light';
+      var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
       applyTheme(next);
       reflectThemeButton(btn, next);
     });

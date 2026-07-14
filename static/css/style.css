@@ -975,7 +975,7 @@ img { max-width: 100%; display: block; }
   padding-bottom: var(--space-8);
 }
 .footer__logo { font-family: var(--font-heading); font-size: var(--text-xl); font-weight: var(--weight-bold); }
-.footer__tagline { font-size: var(--text-sm); margin-top: var(--space-2); max-width: 32ch; }
+.footer__tagline { font-size: var(--text-sm); margin-top: var(--space-2); max-width: 32ch; text-wrap: balance; }
 .footer__heading { font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--color-text-inverse); margin-bottom: var(--space-3); text-transform: uppercase; letter-spacing: 0.04em; }
 .footer__col a { display: block; color: #94A3B8; font-size: var(--text-sm); padding: var(--space-1) 0; }
 .footer__col a:hover { color: var(--color-primary); text-decoration: none; }
@@ -1038,6 +1038,16 @@ img { max-width: 100%; display: block; }
     box-shadow: var(--shadow-lg);
     padding: var(--space-1);
     z-index: 130;
+  }
+  /* Invisible bridge over the gap between the toggle and the menu so moving the
+     pointer down to the items doesn't cross a dead zone that closes the menu. */
+  .nav-dropdown__menu::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(-1 * var(--space-1));
+    height: var(--space-1);
   }
   .nav-dropdown:hover > .nav-dropdown__menu,
   .nav-dropdown:focus-within > .nav-dropdown__menu { display: block; }

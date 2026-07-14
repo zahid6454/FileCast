@@ -239,7 +239,7 @@
         var items = (data && data.announcements) || [];
         dom.clear(container);
 
-        var newBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--primary' }, '+ New announcement');
+        var newBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--secondary' }, '+ New announcement');
         newBtn.addEventListener('click', function () {
           showForm(null);
         });

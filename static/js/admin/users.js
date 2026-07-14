@@ -100,7 +100,7 @@
         var history = data.history || [];
         var favorites = u.favorites || [];
 
-        var back = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, '← Back to Users');
+        var back = h('button', { type: 'button', class: 'admin-btn admin-btn--secondary' }, '← Back to Users');
         back.addEventListener('click', function () {
           render(CONTAINER);
         });
