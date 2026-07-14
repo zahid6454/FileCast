@@ -385,7 +385,7 @@ img { max-width: 100%; display: block; }
 }
 /* Title + tagline sit at the top of the card, centered to match the converter
    controls below them. */
-.tool-panel .page__title { text-align: center; }
+.tool-panel .page__title { text-align: center; color: var(--color-heading); }
 .tool-panel .page__tagline { text-align: center; margin-bottom: var(--space-5); }
 
 .upload-zone {
@@ -488,7 +488,7 @@ img { max-width: 100%; display: block; }
 .content-block th { background: var(--color-bg-sunken); font-weight: var(--weight-semibold); }
 
 /* --- Related Tools --- */
-.related-tools { margin-top: var(--space-8); }
+.related-tools { margin: var(--space-8) 0; }
 .related-tools__title { font-size: var(--text-xl); font-weight: var(--weight-bold); margin-bottom: var(--space-4); }
 
 /* --- Feedback Widget --- */
@@ -760,8 +760,8 @@ img { max-width: 100%; display: block; }
    gradient gives the white text a high-contrast, on-brand surface instead.) */
 .nav-dropdown__all:hover, .nav-dropdown__item:hover {
   background: linear-gradient(to right,
-    color-mix(in srgb, var(--brand-blue) 50%, transparent),
-    color-mix(in srgb, var(--brand-green) 50%, transparent));
+    color-mix(in srgb, var(--brand-blue) 75%, transparent),
+    color-mix(in srgb, var(--brand-green) 75%, transparent));
   color: var(--color-text-inverse);
   text-decoration: none;
 }
