@@ -92,7 +92,11 @@
   }
 
   function catTitle(cat) {
-    return cat.charAt(0).toUpperCase() + cat.slice(1);
+    // Prefer the site's display name (e.g. data-conversion → "Text Conversion");
+    // fall back to a humanized slug for any category not in the map.
+    var names = (window.FILECAST && window.FILECAST.categories) || {};
+    if (names[cat]) return names[cat];
+    return cat.charAt(0).toUpperCase() + cat.slice(1).replace(/-/g, ' ');
   }
 
   // Explains how the toggle + ordering map to what visitors actually see, so the

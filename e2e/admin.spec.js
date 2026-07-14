@@ -150,6 +150,20 @@ test.describe('tools', () => {
     await expect(imgA.locator('.admin-tool__up')).toBeFocused();
   });
 
+  test('labels categories with the site display name (data-conversion → Text Conversion)', async ({ page }) => {
+    // The real admin page (from dist) bakes category id→name into its config
+    // island; the admin must label groups exactly as the site does, not by
+    // guessing from the slug.
+    const state = makeState({
+      tools: [
+        { id: 'csv-to-json', enabled: true, sort_order: 1, category: 'data-conversion', name: 'CSV to JSON', display_name: null, maintenance_message: null, custom_max_file_size: null, input_format: 'CSV', output_format: 'JSON', homepage_order: 1 },
+      ],
+    });
+    await installApi(page, state);
+    await page.goto('/admin/#tools');
+    await expect(page.locator('.admin-toolgroup__title')).toHaveText('Text Conversion');
+  });
+
   test('marks the homepage cutoff with a labeled divider', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);

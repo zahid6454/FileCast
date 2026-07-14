@@ -548,6 +548,12 @@ def create_jinja_env(
     env.globals["api"] = api_config
     env.globals["assets"] = asset_map
     env.globals["nav_categories"] = categories_with_tools
+    # id → display name, so the admin panel can label tool categories exactly as
+    # the site does (e.g. data-conversion → "Text Conversion"), not by guessing
+    # from the slug. Injected into the admin config island.
+    env.globals["category_names"] = {
+        cid: cdata.get("name") for cid, cdata in categories_with_tools.items()
+    }
     env.globals["build_date"] = date.today().isoformat()
     return env
 

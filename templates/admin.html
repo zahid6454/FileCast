@@ -40,7 +40,7 @@
      for the Phase 4 SPA; inert JSON, so shipping it early is free and CSP-clean.
      In local dev the value is http://localhost:8090 automatically (API_URL). #}
   <script type="application/json" id="filecast-config">
-  {"api_base_url": {{ api.base_url|tojson }}}
+  {"api_base_url": {{ api.base_url|tojson }}, "categories": {{ category_names|tojson }}}
   </script>
 
   {# SPA mount point (Phase 4 fills this via the modules below). Until the JS

@@ -15,6 +15,9 @@
   try {
     var parsed = JSON.parse(el.textContent);
     window.FILECAST.apiBase = parsed.api_base_url;
+    // Optional (admin island only): category id → display name, so the admin
+    // panel labels categories exactly as the site does. Absent elsewhere.
+    window.FILECAST.categories = parsed.categories || {};
   } catch (e) {
     console.error('FileCast: failed to parse site config', e);
   }
