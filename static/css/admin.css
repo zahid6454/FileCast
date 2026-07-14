@@ -381,6 +381,9 @@
   margin-bottom: var(--space-5);
   flex-wrap: wrap;
 }
+.admin-toolbar--right {
+  justify-content: flex-end;
+}
 
 /* ---- dashboard --------------------------------------------------------- */
 

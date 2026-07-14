@@ -243,7 +243,7 @@
         newBtn.addEventListener('click', function () {
           showForm(null);
         });
-        container.appendChild(h('div', { class: 'admin-toolbar' }, [newBtn]));
+        container.appendChild(h('div', { class: 'admin-toolbar admin-toolbar--right' }, [newBtn]));
 
         var active = items.filter(function (a) {
           return statusOf(a).key === 'active';
@@ -262,11 +262,7 @@
             ADMIN.emptyState({
               icon: 'megaphone',
               title: 'No announcements yet',
-              text: 'Create an announcement to show a banner across the site. It publishes live — no rebuild needed.',
-              actionLabel: 'Create announcement',
-              onAction: function () {
-                showForm(null);
-              },
+              text: 'Use “+ New announcement” to show a banner across the site. It publishes live — no rebuild needed.',
             })
           );
           return;
