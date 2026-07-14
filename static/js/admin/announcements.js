@@ -158,7 +158,7 @@
       : api.post('/api/v1/announcements', body);
     req
       .then(function () {
-        ADMIN.notifySaved();
+        ADMIN.notifySaved({ live: true });
         render(CONTAINER); // re-fetch → one-active rule reflected
       })
       .catch(function (err) {
@@ -171,7 +171,7 @@
     api
       .put('/api/v1/announcements/' + a.id, { active: next })
       .then(function () {
-        ADMIN.notifySaved();
+        ADMIN.notifySaved({ live: true });
         render(CONTAINER);
       })
       .catch(function (err) {
@@ -184,7 +184,7 @@
     api
       .del('/api/v1/announcements/' + a.id)
       .then(function () {
-        ADMIN.notifySaved();
+        ADMIN.notifySaved({ live: true });
         render(CONTAINER);
       })
       .catch(function (err) {

@@ -23,8 +23,8 @@
 
   // --- small building blocks ---------------------------------------------
 
-  function statCard(label, value, sub) {
-    return h('div', { class: 'admin-stat' }, [
+  function statCard(label, value, sub, accent) {
+    return h('div', { class: 'admin-stat' + (accent ? ' admin-stat--' + accent : '') }, [
       h('div', { class: 'admin-stat__value' }, value),
       h('div', { class: 'admin-stat__label' }, label),
       sub ? h('div', { class: 'admin-stat__sub' }, sub) : null,
@@ -160,6 +160,11 @@
         )
       );
     }
+    // Soft area fill under the line (line points, then down to the baseline at
+    // both ends) — adds colour without a gradient def or a charting library.
+    var baseY = (padT + innerH).toFixed(1);
+    var areaPoints = xAt(0).toFixed(1) + ',' + baseY + ' ' + points + ' ' + xAt(n - 1).toFixed(1) + ',' + baseY;
+    frame.appendChild(svg('polygon', { class: 'admin-chart__area', points: areaPoints }));
     frame.appendChild(svg('polyline', { class: 'admin-chart__line', points: points }));
     // point dots
     series.forEach(function (p, i) {
@@ -235,10 +240,10 @@
   function statsWidget(data) {
     var attempts = data.total_conversions + data.total_failures;
     return h('div', { class: 'admin-stats' }, [
-      statCard('Total conversions', String(data.total_conversions)),
-      statCard('Failures', String(data.total_failures), pct(data.total_failures, attempts) + ' of attempts'),
-      statCard('Users', String(data.total_users)),
-      statCard('Ratings', String(data.total_ratings), pct(data.yes_ratings, data.total_ratings) + ' helpful'),
+      statCard('Total conversions', String(data.total_conversions), null, 'primary'),
+      statCard('Failures', String(data.total_failures), pct(data.total_failures, attempts) + ' of attempts', 'error'),
+      statCard('Users', String(data.total_users), null, 'success'),
+      statCard('Ratings', String(data.total_ratings), pct(data.yes_ratings, data.total_ratings) + ' helpful', 'warning'),
     ]);
   }
 

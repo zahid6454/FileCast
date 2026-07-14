@@ -44,19 +44,19 @@ test.describe('auth gate (D6)', () => {
     await expect(page.getByText('Dev login as admin')).toBeVisible();
   });
 
-  test('admin → full panel with all four tabs', async ({ page }) => {
+  test('admin → full panel with all five tabs', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/');
     await expect(page.locator('.admin-topbar__brand')).toBeVisible();
-    await expect(page.locator('.admin-tabs__link')).toHaveCount(4);
+    await expect(page.locator('.admin-tabs__link')).toHaveCount(5);
   });
 
   test('mid-session 401/403 drops back to the sign-in gate (R8)', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#tools');
-    await expect(page.locator('.admin-tabs__link')).toHaveCount(4);
+    await expect(page.locator('.admin-tabs__link')).toHaveCount(5);
 
     // Session expires mid-session: /me now 401 and any mutation 403.
     state.me = { status: 401 };
@@ -238,6 +238,23 @@ test.describe('announcements', () => {
     expect(d.getMinutes()).toBe(30);
   });
 
+  test('announcement saves are live — no pending-rebuild banner (bug fix)', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#announcements');
+
+    await page.getByRole('button', { name: '+ New announcement' }).click();
+    await page.locator('.admin-form .admin-input').first().fill('Live one');
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(page.locator('.admin-annc')).toHaveCount(1);
+
+    // Announcements are fetched live by nav.js → no static rebuild needed, so no
+    // deploy is fired and the "pending rebuild" banner must NOT appear.
+    await page.waitForTimeout(900); // clear the 700ms deploy-debounce window
+    await expect(page.locator('.admin-banner--info')).toHaveCount(0);
+    expect(state.deployCalls).toBe(0);
+  });
+
   test('P23: a javascript: link is rendered inert in the preview', async ({ page }) => {
     const state = makeState({
       announcements: [
@@ -267,6 +284,35 @@ test.describe('users', () => {
     await expect(page.getByText('managed by an operator')).toBeVisible();
     // No promotion control of any kind.
     expect(await page.getByRole('button', { name: /make admin|promote|change role/i }).count()).toBe(0);
+  });
+});
+
+test.describe('errors tab', () => {
+  test('lists errors with detail, filters client-side, and renders messages inert (P23)', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#errors');
+
+    await expect(page.locator('.admin-errtable tbody tr')).toHaveCount(2);
+
+    // P23: the attacker-controlled message renders as literal text.
+    const msg = page.locator('.admin-errrow__msg').first();
+    await expect(msg).toHaveText('<img src=x onerror="window.__xss=1">');
+    expect(await msg.locator('img').count()).toBe(0);
+    expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+
+    // Client-side search narrows the list, then reports "no matching".
+    await page.locator('.admin-errsearch').fill('timeout');
+    await expect(page.locator('.admin-errtable tbody tr')).toHaveCount(1);
+    await page.locator('.admin-errsearch').fill('zzz-nothing');
+    await expect(page.getByText('No matching errors')).toBeVisible();
+  });
+
+  test('empty error log shows the friendly placeholder', async ({ page }) => {
+    const state = makeState({ errors: [] });
+    await installApi(page, state);
+    await page.goto('/admin/#errors');
+    await expect(page.getByText('No errors')).toBeVisible();
   });
 });
 
@@ -301,7 +347,7 @@ test('the whole admin session produces no JS exceptions or console errors', asyn
   const problems = collectProblems(page);
   const state = makeState();
   await installApi(page, state);
-  for (const hash of ['#dashboard', '#tools', '#announcements', '#users']) {
+  for (const hash of ['#dashboard', '#tools', '#announcements', '#users', '#errors']) {
     await page.goto('/admin/' + hash);
     await expect(page.locator('.admin-main')).toBeVisible();
   }

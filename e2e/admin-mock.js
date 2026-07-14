@@ -38,6 +38,7 @@ export function makeState(overrides = {}) {
     ],
     errors: overrides.errors || [
       { id: 1, tool_id: 'img-a', error_type: 'ConversionError', error_message: '<img src=x onerror="window.__xss=1">', browser: 'Firefox', created_at: '2026-07-13T10:00:00Z' },
+      { id: 2, tool_id: 'doc-a', error_type: 'TimeoutError', error_message: 'Gateway timed out', browser: 'Chrome', created_at: '2026-07-13T11:00:00Z' },
     ],
     ratings: overrides.ratings || [
       { tool_id: 'img-a', yes: 4, no: 1 },

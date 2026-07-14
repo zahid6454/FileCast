@@ -31,8 +31,17 @@
   font-family: var(--font-heading);
   font-weight: var(--weight-bold);
   font-size: var(--text-lg);
-  color: var(--color-text);
   white-space: nowrap;
+  /* Brand gradient (blue → green), matching the site brand tokens. */
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-green));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.admin-muted {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 .admin-topbar__actions {
@@ -323,6 +332,17 @@
   margin-top: var(--space-1);
 }
 
+/* Colour-accented stat cards: a top rule + a matching value colour. Tokens flip
+   in dark mode, so these stay legible without extra dark rules. */
+.admin-stat--primary { border-top: 3px solid var(--color-primary); }
+.admin-stat--error { border-top: 3px solid var(--color-error); }
+.admin-stat--success { border-top: 3px solid var(--color-success); }
+.admin-stat--warning { border-top: 3px solid var(--color-warning); }
+.admin-stat--primary .admin-stat__value { color: var(--color-primary); }
+.admin-stat--error .admin-stat__value { color: var(--color-error); }
+.admin-stat--success .admin-stat__value { color: var(--color-success); }
+.admin-stat--warning .admin-stat__value { color: var(--color-warning); }
+
 /* charts */
 .admin-chart {
   width: 100%;
@@ -343,6 +363,10 @@
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
+}
+.admin-chart__area {
+  fill: var(--color-primary);
+  opacity: 0.12;
 }
 .admin-chart__dot {
   fill: var(--color-primary);
@@ -477,6 +501,10 @@
   background: var(--color-bg-sunken);
   color: var(--color-text-secondary);
 }
+.admin-badge--error {
+  background: var(--color-error-light);
+  color: var(--color-error-hover);
+}
 
 /* ---- tools tab --------------------------------------------------------- */
 
@@ -492,8 +520,10 @@
   font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   margin: 0 0 var(--space-2);
+  padding-left: var(--space-2);
+  border-left: 3px solid var(--color-primary);
 }
 .admin-toollist {
   list-style: none;
@@ -795,6 +825,40 @@
   border-radius: var(--radius-full);
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
+}
+
+/* ---- errors tab -------------------------------------------------------- */
+
+.admin-errsearch {
+  max-width: 360px;
+}
+.admin-tablewrap {
+  overflow-x: auto;
+}
+.admin-errtable {
+  table-layout: fixed;
+  width: 100%;
+}
+.admin-errrow__when {
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+.admin-errrow__browser {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.admin-errrow__msg {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: none;
+}
+.admin-errtable tbody tr {
+  border-left: 3px solid var(--color-error);
 }
 
 /* ---- responsive -------------------------------------------------------- */

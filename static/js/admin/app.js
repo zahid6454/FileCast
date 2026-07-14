@@ -26,8 +26,9 @@
     { id: 'tools', label: 'Tools' },
     { id: 'announcements', label: 'Announcements' },
     { id: 'users', label: 'Users' },
+    { id: 'errors', label: 'Errors' },
   ];
-  var VALID = { dashboard: 1, tools: 1, announcements: 1, users: 1 };
+  var VALID = { dashboard: 1, tools: 1, announcements: 1, users: 1, errors: 1 };
 
   var mount = null; // #admin-app
   var tabHost = null; // <main> where tabs render
@@ -90,7 +91,16 @@
 
   var deployTimer = null;
 
-  ADMIN.notifySaved = function () {
+  // opts.live: the change is served live from the API (the announcement bar is
+  // fetched at runtime by nav.js), so it needs NO static rebuild — don't fire
+  // the deploy flow and don't show the "pending rebuild" banner. Tool changes
+  // (enable/disable, reorder, overlay edits) DO bake into static pages, so they
+  // keep the deploy → 501 → banner path.
+  ADMIN.notifySaved = function (opts) {
+    if (opts && opts.live) {
+      ADMIN.toast('Saved — live now', 'success');
+      return;
+    }
     ADMIN.toast('Saved', 'success');
     // Debounce/coalesce a burst of edits into one deploy call.
     if (deployTimer) clearTimeout(deployTimer);
