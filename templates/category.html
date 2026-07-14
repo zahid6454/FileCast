@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import format_badge, processing_pill %}
 
 {% block title %}{{ category.name }} — {{ site.name }}{% endblock %}
 {% block meta_description %}{{ category.description }}{% endblock %}
@@ -35,10 +36,14 @@
        href="{{ tool.slug }}/"
        data-name="{{ tool.name|lower }}"
        data-category="{{ category.name|lower }}">
+      <span class="card__badges">
+        {% if tool.input_format == tool.output_format %}{{ format_badge(tool.output_format, category.id) }}{% else %}{{ format_badge(tool.input_format, category.id) }}<svg class="card__arrow" aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg>{{ format_badge(tool.output_format, category.id) }}{% endif %}
+      </span>
       <strong>{% if tool.input_format == tool.output_format %}{{ tool.name }}{% else %}{{ tool.input_format }} → {{ tool.output_format }}{% endif %}</strong>
       {% if tool.tagline %}
       <div class="card__desc">{{ tool.tagline }}</div>
       {% endif %}
+      {{ processing_pill(tool) }}
     </a>
     {% endfor %}
   </div>
@@ -51,10 +56,14 @@
        href="{{ tool.slug }}/"
        data-name="{{ tool.name|lower }}"
        data-category="{{ category.name|lower }}">
+      <span class="card__badges">
+        {% if tool.input_format == tool.output_format %}{{ format_badge(tool.output_format, category.id) }}{% else %}{{ format_badge(tool.input_format, category.id) }}<svg class="card__arrow" aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg>{{ format_badge(tool.output_format, category.id) }}{% endif %}
+      </span>
       <strong>{% if tool.input_format == tool.output_format %}{{ tool.name }}{% else %}{{ tool.input_format }} → {{ tool.output_format }}{% endif %}</strong>
       {% if tool.tagline %}
       <div class="card__desc">{{ tool.tagline }}</div>
       {% endif %}
+      {{ processing_pill(tool) }}
     </a>
     {% endfor %}
   </div>

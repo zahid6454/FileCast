@@ -17,6 +17,24 @@
   {# Favicon #}
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
+  {# Anti-FOUC theme init (P20). Render-blocking (NOT deferred) and placed BEFORE
+     the stylesheet so `data-theme` is set on <html> before styles first apply —
+     no flash of the wrong theme. External same-origin file → passes a strict
+     `script-src 'self'` CSP (an inline snippet would be blocked). Lives in the
+     FIXED part of <head>, NOT in head_extra (which pages override without
+     super()) — R13. #}
+  {% set theme_init_js = assets.get('js/theme-init.js') %}
+  {% if theme_init_js %}
+  <script src="/{{ theme_init_js.path }}" integrity="{{ theme_init_js.sri }}" crossorigin="anonymous"></script>
+  {% endif %}
+
+  {# Inter (headings only, weights 600/700/800, display=swap). Site-wide-mandatory
+     → fixed part of <head>, NOT head_extra (R13). CSP style-src/font-src for
+     Google Fonts already shipped in Phase 2. #}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=swap">
+
   {# CSS (cache-busted) #}
   {% set css_asset = assets.get('css/style.css') %}
   {% if css_asset %}
@@ -48,6 +66,20 @@
 </head>
 <body>
 
+  {# Inline SVG icon sprite (§6.10) — included ONCE, referenced via <use>. #}
+  {% include "_sprite.html" %}
+
+  {# ===== Announcement bar (§6.9) — markup shell only; nav.js fetches/populates/
+     dismisses it, and leaves it hidden on any failure (progressive enhancement).
+     Sits above the header. #}
+  <div class="announcement-bar hidden" id="announcement-bar" role="region" aria-label="Site announcement">
+    <span class="announcement-bar__message" id="announcement-bar__message"></span>
+    <a class="announcement-bar__link hidden" id="announcement-bar__link" rel="noopener">Learn more</a>
+    <button class="announcement-bar__dismiss" id="announcement-bar__dismiss" type="button" aria-label="Dismiss announcement">
+      <svg class="announcement-bar__dismiss-icon" aria-hidden="true" focusable="false"><use href="#icon-close"></use></svg>
+    </button>
+  </div>
+
   {# ===== Header ===== #}
   <header class="header">
     <a href="/" class="header__logo">
@@ -58,27 +90,97 @@
         <text x="37" y="20" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3">FileCast</text>
       </svg>
     </a>
-    <nav class="header__nav">
+
+    {# Category dropdowns — contents server-rendered from nav_categories (each
+       carries its `tools` list), so NO per-page JSON fetch (P21/R4). nav.js only
+       toggles visibility + aria-expanded. Doubles as the mobile drawer. #}
+    <nav class="header__nav" id="nav-drawer">
       {% for cat_id, cat_data in nav_categories.items() %}
-      <a href="/{{ cat_data.slug }}/">{{ cat_data.nav_label or cat_data.name }}</a>
+      <div class="nav-dropdown">
+        <button class="nav-dropdown__toggle" type="button" aria-expanded="false" aria-haspopup="true">
+          {{ cat_data.nav_label or cat_data.name }}
+          <svg class="nav-dropdown__caret" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="nav-dropdown__menu">
+          <a class="nav-dropdown__all" href="/{{ cat_data.slug }}/">All {{ cat_data.name }}</a>
+          {% for tool in cat_data.tools %}
+          <a class="nav-dropdown__item" href="{{ tool.slug }}/">{{ tool.name }}</a>
+          {% endfor %}
+        </div>
+      </div>
       {% endfor %}
     </nav>
+
+    <div class="header__actions">
+      {# Theme toggle (§6.1) — theme-init.js already applied the stored choice;
+         nav.js owns the button (cycle light → dark → system). Stable id: Phase 5
+         auth.js binds a second listener to persist the theme when signed in. #}
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme" data-theme-state="system">
+        <svg class="theme-toggle__icon theme-toggle__icon--light" aria-hidden="true" focusable="false"><use href="#icon-sun"></use></svg>
+        <svg class="theme-toggle__icon theme-toggle__icon--dark" aria-hidden="true" focusable="false"><use href="#icon-moon"></use></svg>
+        <svg class="theme-toggle__icon theme-toggle__icon--system" aria-hidden="true" focusable="false"><use href="#icon-auto"></use></svg>
+      </button>
+
+      {# User-menu placeholder — populated by Phase 5 auth.js; ships empty. #}
+      <div class="user-menu" id="user-menu"></div>
+
+      {# Hamburger (mobile only, <768px) — toggles the nav drawer. #}
+      <button class="hamburger" id="hamburger" type="button" aria-controls="nav-drawer" aria-expanded="false" aria-label="Menu">
+        <svg class="hamburger__icon" aria-hidden="true" focusable="false"><use href="#icon-hamburger"></use></svg>
+      </button>
+    </div>
   </header>
 
   {# ===== Main Content ===== #}
   <main>{% block content %}{% endblock %}</main>
 
-  {# ===== Footer ===== #}
+  {# ===== Footer (§6.8) — multi-column + bottom bar, dark background. #}
   <footer class="footer">
-    <a href="/privacy/">Privacy</a> &middot;
-    <a href="/terms/">Terms</a> &middot;
-    <a href="/about/">About</a> &middot;
-    <a href="/contact/">Contact</a> &middot;
-    <a href="https://buymeacoffee.com/filecast" target="_blank" rel="noopener">Support</a> &middot;
-    &copy; 2026 <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span>. <span class="text-brand-blue">Your Files</span> <span class="text-brand-green">Stay Yours</span>
+    <div class="footer__inner container">
+      <div class="footer__brand">
+        <span class="footer__logo"><span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span></span>
+        <p class="footer__tagline">Free, private file conversion — no sign-up needed.</p>
+      </div>
+      <div class="footer__col">
+        <h2 class="footer__heading">Tools</h2>
+        {% for cat_id, cat_data in nav_categories.items() %}
+        <a href="/{{ cat_data.slug }}/">{{ cat_data.name }}</a>
+        {% endfor %}
+      </div>
+      <div class="footer__col">
+        <h2 class="footer__heading">Resources</h2>
+        <a href="/about/">About</a>
+        <a href="/contact/">Contact</a>
+        <a href="https://buymeacoffee.com/filecast" target="_blank" rel="noopener">Support</a>
+      </div>
+      <div class="footer__col">
+        <h2 class="footer__heading">FileCast</h2>
+        <a href="/privacy/">Privacy</a>
+        <a href="/terms/">Terms</a>
+      </div>
+    </div>
+    <div class="footer__bar">
+      <span>&copy; 2026 <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span>. <span class="text-brand-blue">Your Files</span> <span class="text-brand-green">Stay Yours</span></span>
+    </div>
   </footer>
 
   {# ===== Scripts ===== #}
+  {# Site-wide API base config as an inert JSON data island (CSP-safe under
+     script-src 'self'); parsed into window.FILECAST by filecast-config.js. #}
+  <script type="application/json" id="filecast-config">
+  {"api_base_url": {{ api.base_url|tojson }}}
+  </script>
+
+  {# filecast-config.js runs before nav.js so nav.js sees window.FILECAST. #}
+  {% set filecast_config_js = assets.get('js/filecast-config.js') %}
+  {% if filecast_config_js %}
+  <script src="/{{ filecast_config_js.path }}" integrity="{{ filecast_config_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
+  {% set nav_js = assets.get('js/nav.js') %}
+  {% if nav_js %}
+  <script src="/{{ nav_js.path }}" integrity="{{ nav_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
+
   {# Parses the #tool-config JSON data island into window.TOOL_CONFIG; must run
      before shared.js so tool handlers see the config. No-op on non-tool pages. #}
   {% set tool_config_js = assets.get('js/tool-config.js') %}

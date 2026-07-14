@@ -16,6 +16,10 @@ eggs/
 .eggs/
 lib/
 lib64/
+# ...but the vendored front-end JS libs live at static/lib/ and MUST be tracked
+# (the Python `lib/` pattern above would otherwise silently exclude them, so a
+# clean checkout/deploy would ship without pdf/heic/tiff libraries).
+!static/lib/
 parts/
 sdist/
 var/
@@ -222,3 +226,9 @@ __marimo__/
 
 # Claude Code personal settings
 .claude/settings.local.json
+
+# Front-end test tooling (Phase 3: Vitest + Playwright)
+node_modules/
+/test-results/
+/playwright-report/
+/playwright/.cache/

@@ -373,6 +373,28 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Tool option sliders (F4): bind the range read-out without an inline handler.
+  // Runs on BOTH tool.html (standard) and tool-multi.html (ui_type: multi), so
+  // it must be called among the UNCONDITIONAL inits, before the standard-only
+  // early returns below. Replaces the old inline `oninput` that a strict
+  // `script-src 'self'` CSP would block. No-op where no slider exists.
+  // ---------------------------------------------------------------------------
+  function initToolOptions() {
+    var sliders = document.querySelectorAll('.tool-options__slider');
+    if (!sliders.length) return;
+    sliders.forEach(function (slider) {
+      var targetId = slider.getAttribute('data-value-target');
+      if (!targetId) return;
+      var target = document.getElementById(targetId);
+      if (!target) return;
+      var suffix = slider.getAttribute('data-suffix') || '';
+      slider.addEventListener('input', function () {
+        target.textContent = slider.value + suffix;
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Related tool click tracking
   // ---------------------------------------------------------------------------
   function initRelatedToolTracking() {
@@ -393,6 +415,10 @@
   function init() {
     // Homepage search (runs on homepage)
     initSearch();
+
+    // Tool option sliders (F4 fix) — must run before the standard-only guard
+    // so multi-file tool sliders (a non-standard ui_type) still bind.
+    initToolOptions();
 
     // Related tool click tracking (runs on tool pages)
     initRelatedToolTracking();
