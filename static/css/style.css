@@ -29,7 +29,6 @@
 
   /* Warning */
   --color-warning: #F59E0B;
-  --color-warning-hover: #B45309; /* dark amber — readable as text on -light */
   --color-warning-light: #FEF3C7;
 
   /* Text */
@@ -143,7 +142,6 @@
     --color-error-light: #450A0A;
 
     --color-warning: #FBBF24;
-    --color-warning-hover: #FBBF24; /* light amber reads on the dark -light bg */
     --color-warning-light: #451A03;
 
     --color-text: #F1F5F9;
@@ -182,7 +180,6 @@
   --color-error-light: #450A0A;
 
   --color-warning: #FBBF24;
-  --color-warning-hover: #FBBF24; /* light amber reads on the dark -light bg */
   --color-warning-light: #451A03;
 
   --color-text: #F1F5F9;
@@ -900,27 +897,8 @@ img { max-width: 100%; display: block; }
 
 /* --- Enhanced tool card inner structure (own classes; base .card stays
        content-agnostic so plain related-tools cards don't break, R12) --- */
-.card__badges { display: flex; align-items: center; justify-content: center; gap: var(--space-2); margin-bottom: var(--space-2); }
-/* Category .card--lg cards are left-aligned, so their badge row + pill follow suit. */
-.card--lg .card__badges { justify-content: flex-start; }
-.card__arrow { width: 16px; height: 16px; color: var(--color-text-light); flex-shrink: 0; }
 .card__name { display: block; font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--color-text); }
 .card__tagline { display: block; font-size: var(--text-xs); font-weight: var(--weight-normal); color: var(--color-text-muted); margin-top: var(--space-1); }
-
-/* --- Format badge (color-coded by category id) --- */
-.format-badge {
-  display: inline-block;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-bold);
-  letter-spacing: 0.02em;
-  line-height: 1.4;
-}
-.format-badge--image { background: var(--color-primary-light); color: var(--color-primary); }
-.format-badge--document { background: var(--color-warning-light); color: var(--color-warning-hover); }
-.format-badge--data { background: var(--color-success-light); color: var(--color-success); }
-.format-badge--neutral { background: var(--color-bg-sunken); color: var(--color-text-muted); }
 
 /* --- Processing pill (Local/Cloud) — new classes, NOT .badge (P13) --- */
 .badge--local, .badge--cloud {
