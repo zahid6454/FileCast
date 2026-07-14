@@ -293,25 +293,26 @@ test.describe('errors tab', () => {
     await installApi(page, state);
     await page.goto('/admin/#errors');
 
-    await expect(page.locator('.admin-errcard')).toHaveCount(2);
+    await expect(page.locator('.admin-errrow')).toHaveCount(2);
 
-    // P23: the attacker-controlled message renders as literal text.
-    const first = page.locator('.admin-errcard').first();
-    const msg = first.locator('.admin-errcard__msg');
+    // P23: the attacker-controlled message renders as literal text once expanded.
+    const first = page.locator('.admin-errrow').first();
+    const detail = first.locator('.admin-errrow__detail');
+    await expect(detail).toBeHidden();
+
+    // The whole summary line is the toggle; expanding reveals the full message
+    // + metadata (browser).
+    await first.locator('.admin-errrow__summary').click();
+    await expect(detail).toBeVisible();
+    const msg = first.locator('.admin-errrow__msg');
     await expect(msg).toHaveText('<img src=x onerror="window.__xss=1">');
     expect(await msg.locator('img').count()).toBe(0);
     expect(await page.evaluate(() => window.__xss)).toBeUndefined();
-
-    // Details disclosure: hidden by default, reveals metadata (browser) on click.
-    const detail = first.locator('.admin-errcard__detail');
-    await expect(detail).toBeHidden();
-    await first.getByRole('button', { name: 'Details' }).click();
-    await expect(detail).toBeVisible();
     await expect(detail.getByText('Firefox')).toBeVisible();
 
     // Client-side search narrows the list, then reports "no matching".
     await page.locator('.admin-errsearch').fill('timeout');
-    await expect(page.locator('.admin-errcard')).toHaveCount(1);
+    await expect(page.locator('.admin-errrow')).toHaveCount(1);
     await page.locator('.admin-errsearch').fill('zzz-nothing');
     await expect(page.getByText('No matching errors')).toBeVisible();
   });

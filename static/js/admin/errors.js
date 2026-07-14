@@ -44,18 +44,15 @@
   }
 
   function detailRow(term, value) {
-    return h('div', { class: 'admin-errcard__drow' }, [
+    return h('div', { class: 'admin-errrow__drow' }, [
       h('dt', term),
       h('dd', value || '—'),
     ]);
   }
 
-  function card(e) {
-    // The message block (full, wrapping, legible). P23: textContent via h().
-    var msg = h('code', { class: 'admin-errcard__msg' }, e.error_message || '(no message)');
-
-    // Collapsible detail: metadata + a copy action.
-    var copyBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost admin-errcard__copy' }, 'Copy message');
+  // A compact one-line row (card background) that expands inline to full detail.
+  function row(e) {
+    var copyBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost admin-errrow__copy' }, 'Copy message');
     copyBtn.addEventListener('click', function () {
       try {
         navigator.clipboard.writeText(e.error_message || '').then(
@@ -71,8 +68,10 @@
       }
     });
 
-    var detail = h('div', { class: 'admin-errcard__detail', hidden: true }, [
-      h('dl', { class: 'admin-errcard__dl' }, [
+    var detail = h('div', { class: 'admin-errrow__detail', hidden: true }, [
+      // Full message (P23: textContent via h()).
+      h('code', { class: 'admin-errrow__msg' }, e.error_message || '(no message)'),
+      h('dl', { class: 'admin-errrow__dl' }, [
         detailRow('Browser', e.browser),
         detailRow('Tool id', e.tool_id),
         detailRow('Error #', e.id != null ? String(e.id) : null),
@@ -81,30 +80,28 @@
       copyBtn,
     ]);
 
-    var toggle = h('button', {
+    // The whole summary line is the toggle (real <button> → keyboard-operable).
+    var summary = h('button', {
       type: 'button',
-      class: 'admin-errcard__toggle',
+      class: 'admin-errrow__summary',
       'aria-expanded': 'false',
-    }, 'Details');
-    toggle.addEventListener('click', function () {
-      var open = toggle.getAttribute('aria-expanded') === 'true';
-      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+    }, [
+      e.error_type
+        ? h('span', { class: 'admin-badge admin-badge--error' }, e.error_type)
+        : h('span', { class: 'admin-badge admin-badge--role' }, 'error'),
+      h('span', { class: 'admin-errrow__tool' }, labelFor(e.tool_id)),
+      // One-line snippet; CSS truncates with an ellipsis.
+      h('span', { class: 'admin-errrow__snippet' }, e.error_message || '(no message)'),
+      h('time', { class: 'admin-errrow__time' }, fmtDate(e.created_at)),
+      h('span', { class: 'admin-errrow__chev', 'aria-hidden': 'true' }, '▸'),
+    ]);
+    summary.addEventListener('click', function () {
+      var open = summary.getAttribute('aria-expanded') === 'true';
+      summary.setAttribute('aria-expanded', open ? 'false' : 'true');
       detail.hidden = open;
-      toggle.textContent = open ? 'Details' : 'Hide details';
     });
 
-    return h('li', { class: 'admin-errcard' }, [
-      h('div', { class: 'admin-errcard__head' }, [
-        e.error_type
-          ? h('span', { class: 'admin-badge admin-badge--error' }, e.error_type)
-          : h('span', { class: 'admin-badge admin-badge--role' }, 'error'),
-        h('span', { class: 'admin-errcard__tool' }, labelFor(e.tool_id)),
-        h('time', { class: 'admin-errcard__time' }, fmtDate(e.created_at)),
-      ]),
-      msg,
-      h('div', { class: 'admin-errcard__foot' }, [toggle]),
-      detail,
-    ]);
+    return h('li', { class: 'admin-errrow' }, [summary, detail]);
   }
 
   function renderCards(filter) {
@@ -122,7 +119,7 @@
       return;
     }
     shown.forEach(function (e) {
-      list.appendChild(card(e));
+      list.appendChild(row(e));
     });
   }
 

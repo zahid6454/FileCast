@@ -827,7 +827,7 @@
   color: var(--color-text-secondary);
 }
 
-/* ---- errors tab (card layout) ------------------------------------------ */
+/* ---- errors tab (compact expandable rows) ------------------------------ */
 
 .admin-errsearch {
   max-width: 360px;
@@ -838,32 +838,68 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
-.admin-errcard {
+.admin-errrow {
   background: var(--color-bg-raised);
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-error);
   border-radius: var(--radius-md);
-  padding: var(--space-4);
+  overflow: hidden;
 }
-.admin-errcard__head {
+/* The whole summary line is a button — reset it, lay it out as one row. */
+.admin-errrow__summary {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
-}
-.admin-errcard__tool {
-  font-weight: var(--weight-semibold);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   color: var(--color-text);
 }
-.admin-errcard__time {
-  margin-left: auto;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
+.admin-errrow__summary:hover {
+  background: var(--color-bg-sunken);
+}
+.admin-errrow__summary:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
+.admin-errrow__tool {
+  font-weight: var(--weight-semibold);
   white-space: nowrap;
 }
-.admin-errcard__msg {
+.admin-errrow__snippet {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-errrow__time {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.admin-errrow__chev {
+  color: var(--color-text-light);
+  transition: transform var(--transition-fast);
+  flex-shrink: 0;
+}
+.admin-errrow__summary[aria-expanded='true'] .admin-errrow__chev {
+  transform: rotate(90deg);
+}
+.admin-errrow__detail {
+  padding: 0 var(--space-4) var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+}
+.admin-errrow__msg {
   display: block;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
@@ -872,45 +908,25 @@
   background: var(--color-bg-sunken);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
+  margin: var(--space-3) 0;
   white-space: pre-wrap;
   word-break: break-word;
 }
-.admin-errcard__foot {
-  margin-top: var(--space-3);
-}
-.admin-errcard__toggle {
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--color-primary);
-  cursor: pointer;
-}
-.admin-errcard__toggle:hover {
-  text-decoration: underline;
-}
-.admin-errcard__detail {
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border-light);
-}
-.admin-errcard__dl {
+.admin-errrow__dl {
   margin: 0 0 var(--space-3);
 }
-.admin-errcard__drow {
+.admin-errrow__drow {
   display: flex;
   gap: var(--space-3);
   padding: var(--space-1) 0;
 }
-.admin-errcard__drow dt {
+.admin-errrow__drow dt {
   width: 96px;
   flex-shrink: 0;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
-.admin-errcard__drow dd {
+.admin-errrow__drow dd {
   margin: 0;
   color: var(--color-text);
   font-size: var(--text-sm);
