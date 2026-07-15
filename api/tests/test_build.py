@@ -106,6 +106,16 @@ def test_fetch_tool_overrides_graceful_when_db_down(monkeypatch):
     assert build.fetch_tool_overrides() == {}
 
 
+def test_sync_engine_has_bounded_connect_timeout():
+    # A finite connect timeout is what makes the graceful path *fast* instead of
+    # a hang: an unreachable DB errors within seconds, so build.py falls back to
+    # YAML rather than blocking indefinitely.
+    import data.db as ddb
+
+    assert isinstance(ddb.CONNECT_TIMEOUT_SECONDS, int)
+    assert 0 < ddb.CONNECT_TIMEOUT_SECONDS <= 30
+
+
 # --------------------------------------------------------------------------- #
 # apply_tool_overrides — overlay semantics
 # --------------------------------------------------------------------------- #
