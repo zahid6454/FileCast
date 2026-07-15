@@ -315,7 +315,7 @@
   // ---------------------------------------------------------------------------
   // Feedback widget
   // ---------------------------------------------------------------------------
-  window.submitFeedback = function (response) {
+  function submitFeedback(response) {
     var config = window.TOOL_CONFIG;
     if (config) {
       trackEvent('feedback_submitted', {
@@ -326,9 +326,21 @@
 
     var el = document.getElementById('feedback');
     if (el) {
-      el.innerHTML = '<span>Thanks for your feedback!</span>';
+      el.textContent = 'Thanks for your feedback!';
     }
-  };
+  }
+
+  // Wire the Yes/No buttons via delegation — no inline on* handlers, so the site
+  // CSP can stay 'script-src self' (no unsafe-inline).
+  function initFeedback() {
+    var el = document.getElementById('feedback');
+    if (!el) return;
+    el.querySelectorAll('[data-feedback]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        submitFeedback(btn.dataset.feedback);
+      });
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // Category page search
@@ -422,6 +434,9 @@
 
     // Related tool click tracking (runs on tool pages)
     initRelatedToolTracking();
+
+    // Feedback Yes/No buttons (all tool page types, before the standard-only guard)
+    initFeedback();
 
     // Tool page initialization
     if (!window.TOOL_CONFIG) return;

@@ -25,9 +25,15 @@ def _tool(id, category, homepage_order=None):
     return d
 
 
-def test_seed_global_order_category_walk_and_homepage_first():
+def test_seed_global_order_category_walk_and_homepage_first(monkeypatch):
     import seed
 
+    # Pin the walk order so this tests the algorithm, not site-config.yaml.
+    monkeypatch.setattr(
+        seed,
+        "CATEGORY_ORDER",
+        ["image-conversion", "document-tools", "data-conversion"],
+    )
     tools = [
         _tool("zeta-img", "image-conversion"),
         _tool("alpha-img", "image-conversion"),
@@ -49,12 +55,32 @@ def test_seed_global_order_category_walk_and_homepage_first():
     ]
 
 
-def test_seed_unknown_category_sorts_last():
+def test_seed_unknown_category_sorts_last(monkeypatch):
     import seed
 
+    monkeypatch.setattr(
+        seed,
+        "CATEGORY_ORDER",
+        ["image-conversion", "document-tools", "data-conversion"],
+    )
     tools = [_tool("mystery", "audio-video"), _tool("img", "image-conversion")]
     ordered = [t["id"] for t in seed.compute_global_order(tools)]
     assert ordered == ["img", "mystery"]
+
+
+def test_category_order_follows_site_config():
+    """The admin category grouping must match the homepage section order, so the
+    walk order is sourced from site-config.yaml (not a hardcoded list)."""
+    import yaml
+
+    import seed
+
+    with open(seed.SITE_CONFIG, encoding="utf-8") as f:
+        expected = [c["id"] for c in (yaml.safe_load(f) or {}).get("categories", [])]
+    order = seed._load_category_order()
+    assert order == expected
+    # Regression guard for the reported mismatch: document before image.
+    assert order.index("document-tools") < order.index("image-conversion")
 
 
 # ---------------------------------------------------------------------------

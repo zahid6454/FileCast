@@ -33,15 +33,35 @@ from data.db import sync_session  # noqa: E402
 from data.models import Tool, User  # noqa: E402
 
 TOOLS_DIR = ROOT / "tools"
+SITE_CONFIG = ROOT / "site-config.yaml"
 
-# Category walk order for the global sort_order (ledger D1 / Phase 1 §14.3):
-# image(1–14) → document(15–26) → data(27–34). Unknown categories sort last.
-CATEGORY_ORDER = [
+# Fallback category walk order for the global sort_order (ledger D1 / Phase 1
+# §14.3), used only if site-config.yaml can't be read. Unknown categories last.
+CATEGORY_ORDER_FALLBACK = [
     "image-conversion",
     "document-tools",
     "data-conversion",
     "audio-video",
 ]
+
+
+def _load_category_order() -> list[str]:
+    """Category walk order for the global ``sort_order`` — sourced from the SAME
+    ``site-config.yaml`` list the homepage renders from, so the admin panel's
+    category grouping matches the homepage's section order exactly (they used to
+    drift: a hardcoded list here put image before document while the homepage put
+    document first). Falls back to the static list if the config is unreadable.
+    """
+    try:
+        with open(SITE_CONFIG, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        order = [c["id"] for c in cfg.get("categories", []) if "id" in c]
+        return order or CATEGORY_ORDER_FALLBACK
+    except (OSError, yaml.YAMLError):
+        return CATEGORY_ORDER_FALLBACK
+
+
+CATEGORY_ORDER = _load_category_order()
 
 # Mirror of data.security.DEV_USERS (kept inline so seed.py has no FastAPI
 # import dependency when run from the host). Emails MUST match dev-login.

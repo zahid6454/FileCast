@@ -115,10 +115,11 @@
       {# Theme toggle (§6.1) — theme-init.js already applied the stored choice;
          nav.js owns the button (cycle light → dark → system). Stable id: Phase 5
          auth.js binds a second listener to persist the theme when signed in. #}
-      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme" data-theme-state="system">
+      {# Simple light ↔ dark toggle. Defaults to the light (sun) icon pre-JS;
+         nav.js immediately reflects the resolved theme. #}
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme" data-theme-state="light">
         <svg class="theme-toggle__icon theme-toggle__icon--light" aria-hidden="true" focusable="false"><use href="#icon-sun"></use></svg>
         <svg class="theme-toggle__icon theme-toggle__icon--dark" aria-hidden="true" focusable="false"><use href="#icon-moon"></use></svg>
-        <svg class="theme-toggle__icon theme-toggle__icon--system" aria-hidden="true" focusable="false"><use href="#icon-auto"></use></svg>
       </button>
 
       {# User-menu placeholder — populated by Phase 5 auth.js; ships empty. #}
@@ -139,7 +140,9 @@
     <div class="footer__inner container">
       <div class="footer__brand">
         <span class="footer__logo"><span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span></span>
-        <p class="footer__tagline">Free, private file conversion — no sign-up needed.</p>
+        {# Non-breaking space before the em-dash keeps "conversion —" together so
+           the dash never leads a wrapped line. #}
+        <p class="footer__tagline">Free, private file conversion&nbsp;— no sign-up needed.</p>
       </div>
       <div class="footer__col">
         <h2 class="footer__heading">Tools</h2>

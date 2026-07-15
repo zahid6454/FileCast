@@ -11,6 +11,15 @@
   {# Favicon #}
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
+  {# Anti-FOUC theme init (P20/R3). Render-blocking (NOT deferred) and placed
+     BEFORE the stylesheets so `data-theme` is set on <html> before styles first
+     apply — no flash of the wrong theme. admin.html is standalone (does NOT
+     extend base.html), so it must load its OWN copy of this same SRI'd asset. #}
+  {% set theme_init_js = assets.get('js/theme-init.js') %}
+  {% if theme_init_js %}
+  <script src="/{{ theme_init_js.path }}" integrity="{{ theme_init_js.sri }}" crossorigin="anonymous"></script>
+  {% endif %}
+
   {# Base stylesheet (cache-busted) so the shell isn't raw HTML. #}
   {% set css_asset = assets.get('css/style.css') %}
   {% if css_asset %}
@@ -31,15 +40,40 @@
      for the Phase 4 SPA; inert JSON, so shipping it early is free and CSP-clean.
      In local dev the value is http://localhost:8090 automatically (API_URL). #}
   <script type="application/json" id="filecast-config">
-  {"api_base_url": {{ api.base_url|tojson }}}
+  {"api_base_url": {{ api.base_url|tojson }}, "categories": {{ category_names|tojson }}}
   </script>
 
-  {# SPA mount point (drag-drop tabs / dashboard are Phase 4). #}
+  {# SPA mount point (Phase 4 fills this via the modules below). Until the JS
+     boots, show a styled full-screen loader (admin.css is linked in <head>, so
+     this is styled on first paint — no flash of raw text). #}
   <div id="admin-app">
     <noscript>The FileCast admin panel requires JavaScript.</noscript>
-    <p>Loading the admin panel… If nothing appears, you may need to sign in as an
-       administrator, or JavaScript may be disabled.</p>
+    <div class="admin-boot">
+      <div class="admin-boot__spinner" aria-hidden="true"></div>
+      <p class="admin-boot__text">Loading admin panel…</p>
+    </div>
   </div>
+
+  {# Admin SPA modules — all `defer`, so they execute in document order after the
+     parse (§4.1). Load order is load-bearing:
+       1. filecast-config.js → window.FILECAST.apiBase (standalone page loads its
+          own copy — it doesn't inherit base.html's; R2).
+       2. dom.js  → ADMIN.dom  (safe-DOM firewall, no deps).
+       3. api.js  → ADMIN.api  (needs window.FILECAST).
+       4. the four tab modules → ADMIN.tabs.<name>.
+       5. app.js  → boots the panel (last; every render fn is defined by now).
+     Each is an external SRI'd module (NO inline <script>, NO on* handlers — P7). #}
+  {% set filecast_config_js = assets.get('js/filecast-config.js') %}
+  {% if filecast_config_js %}
+  <script src="/{{ filecast_config_js.path }}" integrity="{{ filecast_config_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
+
+  {% for mod in ['js/admin/dom.js', 'js/admin/api.js', 'js/admin/dashboard.js', 'js/admin/tools.js', 'js/admin/announcements.js', 'js/admin/users.js', 'js/admin/errors.js', 'js/admin/app.js'] %}
+  {% set asset = assets.get(mod) %}
+  {% if asset %}
+  <script src="/{{ asset.path }}" integrity="{{ asset.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
+  {% endfor %}
 
 </body>
 </html>

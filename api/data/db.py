@@ -46,6 +46,14 @@ def _sync_url(url: str) -> str:
     return url.replace("+asyncpg", "+psycopg")
 
 
+# Bound the *connect* phase (seconds) so an unreachable DB fails fast instead of
+# blocking indefinitely. This is what lets DB-optional callers actually degrade:
+# build.py's overlay fetch swallows the error and builds from YAML (P10), and
+# seed/Alembic run against a healthy DB where the connect is immediate anyway.
+# Only the initial connect is bounded — query execution is unaffected.
+CONNECT_TIMEOUT_SECONDS = 5
+
+
 # --- Async engine (the app) ---
 async_engine = create_async_engine(settings.database_url, pool_pre_ping=True)
 async_session_factory = async_sessionmaker(
@@ -61,7 +69,11 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 # --- Sync engine (scripts + Alembic) ---
-sync_engine = create_engine(_sync_url(settings.database_url), pool_pre_ping=True)
+sync_engine = create_engine(
+    _sync_url(settings.database_url),
+    pool_pre_ping=True,
+    connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
+)
 sync_session_factory = sessionmaker(sync_engine, expire_on_commit=False)
 
 

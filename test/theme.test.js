@@ -23,8 +23,8 @@ describe('theme-init.js (anti-FOUC, render-blocking)', () => {
   });
 });
 
-describe('nav.js theme toggle (light → dark → system, P20 both selectors)', () => {
-  const TOGGLE = '<button id="theme-toggle" data-theme-state="system"></button>';
+describe('nav.js theme toggle (simple light ↔ dark, no wasted click)', () => {
+  const TOGGLE = '<button id="theme-toggle"></button>';
 
   async function bootToggle() {
     const dom = createDom(TOGGLE);
@@ -32,36 +32,35 @@ describe('nav.js theme toggle (light → dark → system, P20 both selectors)', 
     return dom;
   }
 
-  it('cycles the stored key and the live [data-theme] selector, and reflects the button state', async () => {
+  it('flips light ↔ dark on every click, storing an explicit choice each time', async () => {
     const dom = await bootToggle();
     const btn = dom.window.document.getElementById('theme-toggle');
     const html = dom.window.document.documentElement;
 
-    // Fresh: no stored choice → system (media query governs; data-theme unset)
+    // Fresh: no stored choice → resolves to the OS preference. jsdom has no
+    // matchMedia, so systemPrefersDark() is false → effective 'light'.
     expect(dom.window.localStorage.getItem('fc_theme')).toBeNull();
-    expect(btn.dataset.themeState).toBe('system');
-
-    btn.click(); // system → light (explicit choice wins over the media query)
-    expect(dom.window.localStorage.getItem('fc_theme')).toBe('light');
-    expect(html.dataset.theme).toBe('light');
     expect(btn.dataset.themeState).toBe('light');
 
-    btn.click(); // light → dark
+    btn.click(); // light → dark (first click flips visibly — no wasted step)
     expect(dom.window.localStorage.getItem('fc_theme')).toBe('dark');
     expect(html.dataset.theme).toBe('dark');
     expect(btn.dataset.themeState).toBe('dark');
 
-    btn.click(); // dark → system (clear the key; unset data-theme)
-    expect(dom.window.localStorage.getItem('fc_theme')).toBeNull();
-    expect(html.dataset.theme).toBeUndefined();
-    expect(btn.dataset.themeState).toBe('system');
+    btn.click(); // dark → light
+    expect(dom.window.localStorage.getItem('fc_theme')).toBe('light');
+    expect(html.dataset.theme).toBe('light');
+    expect(btn.dataset.themeState).toBe('light');
   });
 
-  it('picks up an already-stored choice on load (no conflict between selectors)', async () => {
+  it('picks up an already-stored choice on load', async () => {
     const dom = createDom(TOGGLE);
     dom.window.localStorage.setItem('fc_theme', 'dark');
     await boot(dom, 'nav.js');
     const btn = dom.window.document.getElementById('theme-toggle');
     expect(btn.dataset.themeState).toBe('dark');
+    // First click flips straight to light.
+    btn.click();
+    expect(dom.window.localStorage.getItem('fc_theme')).toBe('light');
   });
 });
