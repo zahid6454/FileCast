@@ -54,5 +54,5 @@ async def my_history(
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in rows
-        ]
+        ],
     }

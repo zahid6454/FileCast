@@ -48,6 +48,13 @@ def _safe_next(raw: str | None) -> str:
     return "/"
 
 
+def _email_verified(userinfo: dict) -> bool:
+    """Google returns ``email_verified`` (bool, occasionally the string 'true').
+    Never trust an unverified email — it could be one the account doesn't own."""
+    v = userinfo.get("email_verified")
+    return v is True or (isinstance(v, str) and v.lower() == "true")
+
+
 def _oauth_client(state: str | None = None) -> AsyncOAuth2Client:
     return AsyncOAuth2Client(
         client_id=settings.google_client_id,
@@ -211,7 +218,9 @@ async def google_callback(
         return failed
 
     email = userinfo.get("email")
-    if not email:
+    # Require a verified email (Google best practice): an unverified address could
+    # be one the signer doesn't actually control → account takeover / squatting.
+    if not email or not _email_verified(userinfo):
         failed = RedirectResponse(
             settings.site_origin + "/?signin=failed", status_code=302
         )
