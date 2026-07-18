@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createDom, evalScript } from './helpers.js';
 
 // The P23 firewall: dom.js must render every server/user string as inert text,
@@ -66,7 +66,7 @@ describe('admin/dom.js — safe DOM (P23 firewall)', () => {
       ['  javascript:alert(1)  ', '#'],
       ['data:text/html,<script>', '#'],
       ['vbscript:msgbox', '#'],
-      ['', '#'],
+      ['', '#']
     ];
     cases.forEach(([input, expected]) => {
       it(`neutralizes ${JSON.stringify(input)} → ${expected}`, () => {

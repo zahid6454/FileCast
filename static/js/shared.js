@@ -29,6 +29,37 @@
     }
   }
 
+  // Fire-and-forget conversion tracking (Phase 5 §5.4). Runs AFTER the download
+  // is in hand, POSTs with the session cookie so the server can dual-write the
+  // user's history, and — on a successful reply only — dispatches
+  // `filecast:conversion` so auth.js can show "Saved ✓"/the banner from the
+  // truthful `saved_to_history`. `notify=false` (failure path) POSTs for the
+  // admin failure-rate but dispatches nothing. Any API outage is silent.
+  function postConversion(payload, notify) {
+    var apiBase = window.FILECAST && window.FILECAST.apiBase;
+    if (!apiBase) return;
+    fetch(apiBase.replace(/\/$/, '') + '/api/v1/conversions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) {
+        return r.ok ? r.json() : null;
+      })
+      .then(function (d) {
+        if (!notify) return;
+        document.dispatchEvent(
+          new CustomEvent('filecast:conversion', {
+            detail: { saved: !!(d && d.saved_to_history) }
+          })
+        );
+      })
+      .catch(function () {
+        /* silent — progressive enhancement */
+      });
+  }
+
   function getExtension(filename) {
     var parts = filename.split('.');
     return parts.length > 1 ? '.' + parts.pop().toLowerCase() : '';
@@ -45,15 +76,20 @@
   // ---------------------------------------------------------------------------
   function validateFile(file) {
     var config = window.TOOL_CONFIG;
-    if (!config) return { valid: false, error: 'Tool configuration not found.', error_type: 'missing_config' };
+    if (!config)
+      return { valid: false, error: 'Tool configuration not found.', error_type: 'missing_config' };
 
     var ext = getExtension(file.name);
     if (!config.accept_extensions.includes(ext)) {
       return {
         valid: false,
         error_type: 'wrong_format',
-        error: 'This tool accepts ' + config.accept_extensions.join(', ') +
-               ' files. You selected a ' + (ext || 'unknown') + ' file.'
+        error:
+          'This tool accepts ' +
+          config.accept_extensions.join(', ') +
+          ' files. You selected a ' +
+          (ext || 'unknown') +
+          ' file.'
       };
     }
 
@@ -120,8 +156,13 @@
     var preview = els.filePreview;
     if (file.type && file.type.startsWith('image/') && !file.type.match(/heic|heif/i)) {
       var url = URL.createObjectURL(file);
-      preview.onload = function () { URL.revokeObjectURL(url); };
-      preview.onerror = function () { URL.revokeObjectURL(url); preview.classList.add('hidden'); };
+      preview.onload = function () {
+        URL.revokeObjectURL(url);
+      };
+      preview.onerror = function () {
+        URL.revokeObjectURL(url);
+        preview.classList.add('hidden');
+      };
       preview.src = url;
       preview.classList.remove('hidden');
     } else {
@@ -201,12 +242,13 @@
     }
 
     Promise.resolve()
-      .then(function () { return window.convertFile(currentFile); })
+      .then(function () {
+        return window.convertFile(currentFile);
+      })
       .then(function (blob) {
         var durationMs = Date.now() - startTime;
-        var savingsPct = currentFile.size > 0
-          ? Math.round((1 - blob.size / currentFile.size) * 100)
-          : 0;
+        var savingsPct =
+          currentFile.size > 0 ? Math.round((1 - blob.size / currentFile.size) * 100) : 0;
         showResult(currentFile, blob, durationMs);
         trackEvent('conversion_completed', {
           tool_id: config.id,
@@ -217,6 +259,17 @@
           output_size_bytes: blob.size,
           savings_percent: savingsPct
         });
+        postConversion(
+          {
+            tool_id: config.id,
+            input_format: config.input_format,
+            output_format: config.output_format,
+            file_size_kb: Math.round(currentFile.size / 1024),
+            duration_ms: durationMs,
+            status: 'success'
+          },
+          true
+        );
       })
       .catch(function (err) {
         var msg = err && err.message ? err.message : 'Conversion failed. Please try again.';
@@ -225,6 +278,15 @@
           tool_id: config.id,
           error_type: 'conversion_error'
         });
+        postConversion(
+          {
+            tool_id: config.id,
+            input_format: config.input_format,
+            output_format: config.output_format,
+            status: 'failed'
+          },
+          false
+        );
       });
   }
 
@@ -240,9 +302,7 @@
 
     var originalSize = originalFile.size;
     var convertedSize = blob.size;
-    var savings = originalSize > 0
-      ? Math.round((1 - convertedSize / originalSize) * 100)
-      : 0;
+    var savings = originalSize > 0 ? Math.round((1 - convertedSize / originalSize) * 100) : 0;
 
     var info = 'Original: ' + formatBytes(originalSize);
     info += '  &rarr;  Converted: ' + formatBytes(convertedSize);
@@ -270,7 +330,9 @@
     a.click();
     document.body.removeChild(a);
 
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
 
     trackEvent('file_downloaded', {
       tool_id: window.TOOL_CONFIG.id,
@@ -356,7 +418,9 @@
       var query = searchInput.value.toLowerCase().trim();
 
       if (!query) {
-        cards.forEach(function (card) { card.classList.remove('hidden'); });
+        cards.forEach(function (card) {
+          card.classList.remove('hidden');
+        });
         if (noResults) noResults.classList.add('hidden');
         return;
       }

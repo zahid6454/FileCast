@@ -1,7 +1,7 @@
-window.convertFile = function(file) {
-  return new Promise(function(resolve, reject) {
+window.convertFile = function (file) {
+  return new Promise(function (resolve, reject) {
     var reader = new FileReader();
-    reader.onload = function() {
+    reader.onload = function () {
       try {
         var buffer = reader.result;
         var ifds = UTIF.decode(buffer);
@@ -27,18 +27,22 @@ window.convertFile = function(file) {
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(tempCanvas, 0, 0);
-        canvas.toBlob(function(blob) {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Failed to convert image'));
-          }
-        }, 'image/jpeg', 0.92);
+        canvas.toBlob(
+          function (blob) {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to convert image'));
+            }
+          },
+          'image/jpeg',
+          0.92
+        );
       } catch (e) {
         reject(new Error('Failed to decode TIFF file: ' + e.message));
       }
     };
-    reader.onerror = function() {
+    reader.onerror = function () {
       reject(new Error('Failed to read file'));
     };
     reader.readAsArrayBuffer(file);

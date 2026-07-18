@@ -17,8 +17,31 @@ async def test_users_list_and_detail(admin_client):
     assert "history" in detail
 
 
+async def test_user_history_paginated(admin_client):
+    me = (await admin_client.get("/api/v1/auth/me")).json()["user"]
+    for _ in range(3):
+        await admin_client.post(
+            "/api/v1/conversions",
+            json={
+                "tool_id": "jpg-to-png",
+                "input_format": "JPG",
+                "output_format": "PNG",
+                "status": "success",
+            },
+        )
+    p1 = (
+        await admin_client.get(f"/api/v1/users/{me['id']}/history?limit=2&offset=0")
+    ).json()
+    assert len(p1["history"]) == 2 and p1["has_more"] is True
+    p2 = (
+        await admin_client.get(f"/api/v1/users/{me['id']}/history?limit=2&offset=2")
+    ).json()
+    assert len(p2["history"]) == 1 and p2["has_more"] is False
+
+
 async def test_users_admin_only(user_client):
     assert (await user_client.get("/api/v1/users")).status_code == 403
+    assert (await user_client.get("/api/v1/users/whatever/history")).status_code == 403
 
 
 async def test_user_detail_unknown_404(admin_client):

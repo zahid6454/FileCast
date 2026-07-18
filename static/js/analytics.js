@@ -19,7 +19,9 @@
   // to the async gtag.js library does not matter).
   if (gaId) {
     window.dataLayer = window.dataLayer || [];
-    window.gtag = function () { window.dataLayer.push(arguments); };
+    window.gtag = function () {
+      window.dataLayer.push(arguments);
+    };
     window.gtag('js', new Date());
     window.gtag('config', gaId, { send_page_view: true });
   }
@@ -32,7 +34,10 @@
       environment: 'production',
       sampleRate: 0.5,
       beforeSend: function (event) {
-        if (event.extra) { delete event.extra.fileName; delete event.extra.filePath; }
+        if (event.extra) {
+          delete event.extra.fileName;
+          delete event.extra.filePath;
+        }
         return event;
       }
     });

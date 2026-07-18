@@ -1,4 +1,4 @@
-window.convertFile = function(file) {
+window.convertFile = function (file) {
   var quality = 75;
   var slider = document.getElementById('opt-quality');
   if (slider) {
@@ -15,7 +15,7 @@ window.convertFile = function(file) {
     fileType: file.type === 'image/png' ? 'image/png' : 'image/jpeg'
   };
 
-  return imageCompression(file, options).then(function(compressedFile) {
+  return imageCompression(file, options).then(function (compressedFile) {
     return new Blob([compressedFile], { type: compressedFile.type });
   });
 };

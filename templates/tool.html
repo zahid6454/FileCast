@@ -64,7 +64,13 @@
   <div class="tool-panel">
 
   {# Title + Tagline #}
-  <h1 class="page__title page__title--tight">{{ tool.name }}</h1>
+  <div class="tool-title-row">
+    <h1 class="page__title page__title--tight">{{ tool.name }}</h1>
+    {# Favorites heart — hidden until auth.js reveals it for a signed-in user (§10). #}
+    <button class="tool-fav" id="tool-fav" type="button" hidden aria-pressed="false" aria-label="Save to favorites">
+      <svg class="tool-fav__icon" aria-hidden="true" focusable="false"><use href="#icon-heart"></use></svg>
+    </button>
+  </div>
   {% if tool.tagline_long or tool.tagline %}
   <p class="page__tagline">{{ tool.tagline_long or tool.tagline }}</p>
   {% endif %}
@@ -161,6 +167,10 @@
 
   {# Error Message (hidden until error) #}
   <div class="error-msg hidden" id="error-msg"></div>
+
+  {# Post-conversion sign-in touchpoint / "Saved ✓" — populated by auth.js on the
+     filecast:conversion event (§10); ships empty + hidden. #}
+  <div class="signin-slot" id="signin-slot" hidden></div>
 
   </div>{# /tool-panel #}
 

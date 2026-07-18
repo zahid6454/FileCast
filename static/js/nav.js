@@ -4,79 +4,20 @@
 // everything here is bound in JS to stay CSP-clean under `script-src 'self'`.
 //
 // Responsibilities (each guarded so it no-ops where its DOM is absent):
-//   1. Theme-toggle button — cycle light → dark → system (theme-init.js already
-//      applied the stored choice before first paint; this owns the button only).
-//   2. Hamburger drawer (<768px) — open/close the nav, aria-expanded, Esc/outside.
-//   3. Category dropdowns — toggle visibility + aria-expanded (contents are
+//   1. Hamburger drawer (<768px) — open/close the nav, aria-expanded, Esc/outside.
+//   2. Category dropdowns — toggle visibility + aria-expanded (contents are
 //      server-rendered from nav_categories, so NO per-page JSON fetch here).
-//   4. Hero/404 search — ONLY if #hero-search exists: fetch tool-data.json once
+//   3. Hero/404 search — ONLY if #hero-search exists: fetch tool-data.json once
 //      and drive a fully keyboard-navigable combobox (P21 fetch-gating + P22 a11y).
-//   5. Announcement bar — fetch the active announcement; show/dismiss, or stay
+//   4. Announcement bar — fetch the active announcement; show/dismiss, or stay
 //      hidden on any failure (silent progressive enhancement).
+// (Theme control lives in theme-init.js + auth.js — dark mode is a signed-in
+//  privilege toggled from the user menu, so there is no header theme button.)
 (function () {
   'use strict';
 
   // -------------------------------------------------------------------------
-  // 1. Theme toggle (simple light ↔ dark)
-  // -------------------------------------------------------------------------
-  // A plain two-state toggle: the page starts on the resolved theme (an explicit
-  // stored choice, else the OS preference) and each click flips light ↔ dark —
-  // no intermediate "system" step, so there is never a wasted click.
-  function readStored() {
-    try {
-      var t = localStorage.getItem('fc_theme');
-      return t === 'light' || t === 'dark' ? t : null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function systemPrefersDark() {
-    try {
-      return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // The theme currently in effect: an explicit choice wins, else the OS setting.
-  function effectiveTheme() {
-    return readStored() || (systemPrefersDark() ? 'dark' : 'light');
-  }
-
-  function applyTheme(state) {
-    var root = document.documentElement;
-    try {
-      localStorage.setItem('fc_theme', state);
-    } catch (e) {
-      // Storage unavailable: still reflect the live choice on <html>.
-    }
-    root.dataset.theme = state;
-  }
-
-  var THEME_LABELS = {
-    light: 'Theme: light. Switch to dark.',
-    dark: 'Theme: dark. Switch to light.'
-  };
-
-  function reflectThemeButton(btn, state) {
-    btn.dataset.themeState = state; // CSS shows the matching sprite icon
-    btn.setAttribute('aria-label', THEME_LABELS[state] || THEME_LABELS.light);
-  }
-
-  function initThemeToggle() {
-    var btn = document.getElementById('theme-toggle');
-    if (!btn) return;
-    reflectThemeButton(btn, effectiveTheme());
-    btn.addEventListener('click', function () {
-      var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
-      applyTheme(next);
-      reflectThemeButton(btn, next);
-    });
-  }
-
-  // -------------------------------------------------------------------------
-  // 2. Hamburger drawer
+  // 1. Hamburger drawer
   // -------------------------------------------------------------------------
   function initHamburger() {
     var btn = document.getElementById('hamburger');
@@ -104,7 +45,7 @@
   }
 
   // -------------------------------------------------------------------------
-  // 3. Category dropdowns (contents server-rendered — toggle only)
+  // 2. Category dropdowns (contents server-rendered — toggle only)
   // -------------------------------------------------------------------------
   function initDropdowns() {
     var toggles = document.querySelectorAll('.nav-dropdown__toggle');
@@ -141,7 +82,7 @@
   }
 
   // -------------------------------------------------------------------------
-  // 4. Hero / 404 search (fetch ONLY when #hero-search exists — P21)
+  // 3. Hero / 404 search (fetch ONLY when #hero-search exists — P21)
   // -------------------------------------------------------------------------
   function initHeroSearch() {
     var input = document.getElementById('hero-search');
@@ -195,13 +136,17 @@
 
     function setActive(i) {
       var opts = results.querySelectorAll('.hero-search__option');
-      opts.forEach(function (o) { o.classList.remove('hero-search__option--active'); });
+      opts.forEach(function (o) {
+        o.classList.remove('hero-search__option--active');
+      });
       activeIndex = i; // update state first — never let a UI side-effect below strand it
       if (i >= 0 && i < opts.length) {
         opts[i].classList.add('hero-search__option--active');
         input.setAttribute('aria-activedescendant', opts[i].id);
         if (typeof opts[i].scrollIntoView === 'function') {
-          try { opts[i].scrollIntoView({ block: 'nearest' }); } catch (e) {}
+          try {
+            opts[i].scrollIntoView({ block: 'nearest' });
+          } catch (e) {}
         }
       } else {
         input.removeAttribute('aria-activedescendant');
@@ -216,13 +161,20 @@
       }
       var html = '';
       matches.forEach(function (t, i) {
-        var label = t.input_format && t.output_format && t.input_format !== t.output_format
-          ? t.input_format + ' → ' + t.output_format
-          : t.name;
+        var label =
+          t.input_format && t.output_format && t.input_format !== t.output_format
+            ? t.input_format + ' → ' + t.output_format
+            : t.name;
         html +=
-          '<li class="hero-search__option" role="option" id="hero-search-opt-' + i + '">' +
-          '<span class="hero-search__option-name">' + escapeHtml(t.name) + '</span>' +
-          '<span class="hero-search__option-meta">' + escapeHtml(label) + '</span></li>';
+          '<li class="hero-search__option" role="option" id="hero-search-opt-' +
+          i +
+          '">' +
+          '<span class="hero-search__option-name">' +
+          escapeHtml(t.name) +
+          '</span>' +
+          '<span class="hero-search__option-meta">' +
+          escapeHtml(label) +
+          '</span></li>';
       });
       results.innerHTML = html;
       results.classList.remove('hidden');
@@ -281,7 +233,7 @@
   }
 
   // -------------------------------------------------------------------------
-  // 5. Announcement bar
+  // 4. Announcement bar
   // -------------------------------------------------------------------------
   // Only accept an absolute http(s) URL or a root-relative same-origin path.
   // Blocks javascript:/data:/etc. (defense-in-depth: the announcement message
@@ -360,7 +312,6 @@
   // Init
   // -------------------------------------------------------------------------
   function init() {
-    initThemeToggle();
     initHamburger();
     initDropdowns();
     initHeroSearch();

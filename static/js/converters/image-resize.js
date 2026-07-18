@@ -1,4 +1,4 @@
-window.convertFile = function(file) {
+window.convertFile = function (file) {
   var widthInput = document.getElementById('opt-width');
   var heightInput = document.getElementById('opt-height');
   var targetWidth = widthInput ? parseInt(widthInput.value, 10) : 0;
@@ -8,9 +8,9 @@ window.convertFile = function(file) {
     return Promise.reject(new Error('Please enter a width, height, or both.'));
   }
 
-  return new Promise(function(resolve, reject) {
+  return new Promise(function (resolve, reject) {
     var img = new Image();
-    img.onload = function() {
+    img.onload = function () {
       var origW = img.naturalWidth;
       var origH = img.naturalHeight;
       var newW = targetWidth;
@@ -44,22 +44,26 @@ window.convertFile = function(file) {
 
       ctx.drawImage(img, 0, 0, newW, newH);
 
-      canvas.toBlob(function(blob) {
-        URL.revokeObjectURL(img.src);
-        if (blob) {
-          var config = window.TOOL_CONFIG;
-          if (config) {
-            if (isPng) config.output_extension = '.png';
-            else if (isWebp) config.output_extension = '.webp';
-            else config.output_extension = '.jpg';
+      canvas.toBlob(
+        function (blob) {
+          URL.revokeObjectURL(img.src);
+          if (blob) {
+            var config = window.TOOL_CONFIG;
+            if (config) {
+              if (isPng) config.output_extension = '.png';
+              else if (isWebp) config.output_extension = '.webp';
+              else config.output_extension = '.jpg';
+            }
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to resize image.'));
           }
-          resolve(blob);
-        } else {
-          reject(new Error('Failed to resize image.'));
-        }
-      }, mimeType, 0.92);
+        },
+        mimeType,
+        0.92
+      );
     };
-    img.onerror = function() {
+    img.onerror = function () {
       URL.revokeObjectURL(img.src);
       reject(new Error('Failed to load image.'));
     };

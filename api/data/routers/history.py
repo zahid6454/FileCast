@@ -18,23 +18,30 @@ router = APIRouter(prefix="/api/v1/user", tags=["history"])
 @router.get("/history")
 async def my_history(
     limit: int = 100,
+    offset: int = 0,
     user=Depends(require_user),
     db: AsyncSession = Depends(get_session),
 ):
     limit = max(1, min(limit, 500))
-    rows = (
+    offset = max(0, offset)
+    # Fetch one extra row to know whether a next page exists, without a COUNT(*).
+    rows = list(
         (
             await db.execute(
                 select(UserConversion)
                 .where(UserConversion.user_id == user.id)
                 .order_by(UserConversion.created_at.desc())
-                .limit(limit)
+                .offset(offset)
+                .limit(limit + 1)
             )
         )
         .scalars()
         .all()
     )
+    has_more = len(rows) > limit
+    rows = rows[:limit]
     return {
+        "has_more": has_more,
         "history": [
             {
                 "id": r.id,
@@ -47,5 +54,5 @@ async def my_history(
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in rows
-        ]
+        ],
     }

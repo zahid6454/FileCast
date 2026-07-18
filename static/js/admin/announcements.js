@@ -80,16 +80,37 @@
       }
       children.push(link);
     }
-    return h('div', { class: 'announcement-bar announcement-bar--' + type + ' admin-preview' }, children);
+    return h(
+      'div',
+      { class: 'announcement-bar announcement-bar--' + type + ' admin-preview' },
+      children
+    );
   }
 
   // --- form ---------------------------------------------------------------
 
   function buildForm(existing) {
-    var a = existing || { message: '', link: '', type: 'info', active: false, starts_at: null, ends_at: null };
+    var a = existing || {
+      message: '',
+      link: '',
+      type: 'info',
+      active: false,
+      starts_at: null,
+      ends_at: null
+    };
 
-    var message = h('input', { type: 'text', class: 'admin-input', value: a.message || '', placeholder: 'Announcement text' });
-    var link = h('input', { type: 'text', class: 'admin-input', value: a.link || '', placeholder: '/tools or https://…' });
+    var message = h('input', {
+      type: 'text',
+      class: 'admin-input',
+      value: a.message || '',
+      placeholder: 'Announcement text'
+    });
+    var link = h('input', {
+      type: 'text',
+      class: 'admin-input',
+      value: a.link || '',
+      placeholder: '/tools or https://…'
+    });
     var type = h('select', { class: 'admin-input' });
     TYPES.forEach(function (t) {
       var opt = h('option', { value: t }, t);
@@ -98,8 +119,16 @@
     });
     var active = h('input', { type: 'checkbox' });
     if (a.active) active.checked = true;
-    var starts = h('input', { type: 'datetime-local', class: 'admin-input', value: isoToLocalInput(a.starts_at) });
-    var ends = h('input', { type: 'datetime-local', class: 'admin-input', value: isoToLocalInput(a.ends_at) });
+    var starts = h('input', {
+      type: 'datetime-local',
+      class: 'admin-input',
+      value: isoToLocalInput(a.starts_at)
+    });
+    var ends = h('input', {
+      type: 'datetime-local',
+      class: 'admin-input',
+      value: isoToLocalInput(a.ends_at)
+    });
 
     var preview = h('div', { class: 'admin-form__preview' }, barPreview(a));
     function updatePreview() {
@@ -112,7 +141,11 @@
     link.addEventListener('input', updatePreview);
     type.addEventListener('change', updatePreview);
 
-    var save = h('button', { type: 'button', class: 'admin-btn admin-btn--primary' }, existing ? 'Save' : 'Create');
+    var save = h(
+      'button',
+      { type: 'button', class: 'admin-btn admin-btn--primary' },
+      existing ? 'Save' : 'Create'
+    );
     save.addEventListener('click', function () {
       submit(existing, {
         message: message.value.trim(),
@@ -120,7 +153,7 @@
         type: type.value,
         active: active.checked,
         starts_at: localInputToIso(starts.value),
-        ends_at: localInputToIso(ends.value),
+        ends_at: localInputToIso(ends.value)
       });
     });
     var cancel = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, 'Cancel');
@@ -135,16 +168,19 @@
       field('Type', type),
       field('Starts (local time)', starts),
       field('Ends (local time)', ends),
-      h('label', { class: 'admin-check' }, [active, h('span', 'Active (only one announcement can be active)')]),
+      h('label', { class: 'admin-check' }, [
+        active,
+        h('span', 'Active (only one announcement can be active)')
+      ]),
       field('Preview', preview),
-      h('div', { class: 'admin-form__actions' }, [save, cancel]),
+      h('div', { class: 'admin-form__actions' }, [save, cancel])
     ]);
   }
 
   function field(labelText, control) {
     return h('label', { class: 'admin-field' }, [
       h('span', { class: 'admin-field__label' }, labelText),
-      control,
+      control
     ]);
   }
 
@@ -201,25 +237,47 @@
     edit.addEventListener('click', function () {
       showForm(a);
     });
-    var toggle = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, a.active ? 'Deactivate' : 'Activate');
+    var toggle = h(
+      'button',
+      { type: 'button', class: 'admin-btn admin-btn--ghost' },
+      a.active ? 'Deactivate' : 'Activate'
+    );
     toggle.addEventListener('click', function () {
       setActive(a, !a.active);
     });
+    // Two-step inline confirm: first click arms the button, a second click
+    // within the window deletes. Auto-reverts so a stray click can't linger armed.
     var del = h('button', { type: 'button', class: 'admin-btn admin-btn--danger' }, 'Delete');
+    var armTimer = null;
+    function disarm() {
+      if (armTimer) {
+        clearTimeout(armTimer);
+        armTimer = null;
+      }
+      del.classList.remove('is-armed');
+      del.textContent = 'Delete';
+    }
     del.addEventListener('click', function () {
-      remove(a);
+      if (armTimer) {
+        disarm();
+        remove(a);
+        return;
+      }
+      del.classList.add('is-armed');
+      del.textContent = 'Confirm delete';
+      armTimer = setTimeout(disarm, 4000);
     });
 
     return h('li', { class: 'admin-annc' }, [
       h('div', { class: 'admin-annc__main' }, [
         h('div', { class: 'admin-annc__row' }, [
           h('span', { class: 'admin-badge admin-badge--' + status.key }, status.text),
-          h('span', { class: 'admin-annc__type' }, a.type),
+          h('span', { class: 'admin-annc__type' }, a.type)
         ]),
         h('div', { class: 'admin-annc__msg' }, a.message || ''),
-        h('div', { class: 'admin-annc__window' }, formatWindow(a)),
+        h('div', { class: 'admin-annc__window' }, formatWindow(a))
       ]),
-      h('div', { class: 'admin-annc__actions' }, [toggle, edit, del]),
+      h('div', { class: 'admin-annc__actions' }, [toggle, edit, del])
     ]);
   }
 
@@ -239,7 +297,10 @@
         var items = (data && data.announcements) || [];
         dom.clear(container);
 
-        var newBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--secondary' }, '+ New announcement');
+        var newBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, [
+          ADMIN.icon('plus', 16, 'admin-btn__icon'),
+          h('span', {}, 'New announcement')
+        ]);
         newBtn.addEventListener('click', function () {
           showForm(null);
         });
@@ -252,7 +313,7 @@
           container.appendChild(
             h('section', { class: 'admin-card' }, [
               h('h2', { class: 'admin-card__title' }, 'Live now'),
-              barPreview(active),
+              barPreview(active)
             ])
           );
         }
@@ -262,7 +323,7 @@
             ADMIN.emptyState({
               icon: 'megaphone',
               title: 'No announcements yet',
-              text: 'Use “+ New announcement” to show a banner across the site. It publishes live — no rebuild needed.',
+              text: 'Use “+ New announcement” to show a banner across the site. It publishes live — no rebuild needed.'
             })
           );
           return;

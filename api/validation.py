@@ -51,10 +51,16 @@ def validate_html_content(data: bytes) -> bool:
     return text[0:1] == b"<" or text.lower().startswith(b"<!doctype")
 
 
-def validate_upload(content: bytes, filename: str, tool_id: str) -> None:
-    if len(content) > MAX_FILE_SIZE:
+def validate_upload(
+    content: bytes, filename: str, tool_id: str, max_size: int = MAX_FILE_SIZE
+) -> None:
+    # ``max_size`` defaults to the anonymous cap (backward-compatible); the convert
+    # routes pass ×2 for a signed-in user (spec §6.3). The message reflects the
+    # actual limit so a 50MB signed-in cap never reads "25MB".
+    if len(content) > max_size:
         raise ValidationError(
-            "File exceeds the 25MB limit for this conversion type.",
+            f"File exceeds the {max_size // (1024 * 1024)}MB limit "
+            "for this conversion type.",
             "too_large",
         )
 

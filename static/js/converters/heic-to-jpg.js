@@ -1,9 +1,9 @@
-window.convertFile = function(file) {
+window.convertFile = function (file) {
   return heic2any({
     blob: file,
     toType: 'image/jpeg',
     quality: 0.92
-  }).then(function(result) {
+  }).then(function (result) {
     if (Array.isArray(result)) {
       return result[0];
     }

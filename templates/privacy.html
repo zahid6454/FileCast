@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}Your Files Stay Yours — {{ site.name }}{% endblock %}
-{% block meta_description %}How FileCast keeps your files private. We never see, store, or share your files.{% endblock %}
+{% block meta_description %}How FileCast keeps your files private. Your files are never stored — we only keep what you choose to save.{% endblock %}
 {% block canonical %}{{ site.base_url }}/privacy/{% endblock %}
 {% block og_title %}Your Files Stay Yours — {{ site.name }}{% endblock %}
 {% block og_description %}How FileCast keeps your files private.{% endblock %}
@@ -47,11 +47,42 @@
   <div class="privacy-section">
     <h2>What we promise</h2>
     <ul>
-      <li>We <strong>never store</strong> your files</li>
+      <li>We <strong>never store</strong> your files &mdash; not the content, not the filename, not the file itself</li>
       <li>We <strong>never look at</strong> what you convert</li>
-      <li>We <strong>never ask</strong> you to create an account</li>
-      <li>We <strong>never sell</strong> your information</li>
+      <li>We <strong>never require</strong> an account &mdash; every tool works without signing in</li>
+      <li>We <strong>never sell</strong> your data &mdash; not to advertisers, not to anyone.</li>
+      <li>Account data (if you sign in) is used <strong>only</strong> to power your history, favorites, and preferences &mdash; nothing else</li>
       <li>We <strong>never block features</strong> behind a paywall</li>
+    </ul>
+  </div>
+
+  <div class="privacy-section">
+    <p class="privacy-statement">
+      <strong>Your files are NEVER stored, logged, or accessible to us &mdash; whether you have an account or not. Account features only track which tools you used, not what you converted.</strong>
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Your Account Data</h2>
+    <ul>
+      <li><strong>What we collect:</strong> your name and email from Google, only when you choose to sign in.</li>
+      <li><strong>What we store:</strong> your conversion history (tool used, file size, date &mdash; <strong>not</strong> file content or filenames), your favorites, and your preferences.</li>
+      <li><strong>What we DON'T store:</strong> your files, file content, file names, file metadata, or IP addresses. (A rating-dedup hash is computed transiently server-side and never persisted &mdash; see below.)</li>
+      <li><strong>How long:</strong> history is kept for 30 days, then automatically deleted; the rest of your account data is kept until you delete your account.</li>
+      <li><strong>Who can access it:</strong> only you. We don't share, sell, or use your data for advertising.</li>
+      <li><strong>Email:</strong> used only for optional "new tools" updates if you opt in &mdash; no marketing, no third parties.</li>
+      <li><strong>Deletion:</strong> delete your account and ALL data at any time from your account page &mdash; immediate and permanent.</li>
+      <li><strong>Google sign-in:</strong> we receive your name, email, and avatar URL from Google. We don't access your Drive, contacts, or any other Google data.</li>
+    </ul>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Data We Collect From Everyone (No Account Needed)</h2>
+    <ul>
+      <li>Anonymous conversion counters (no personal data).</li>
+      <li>Anonymous ratings (yes/no, deduplicated via a transient server-side IP hash &mdash; no personal data stored).</li>
+      <li>Client-side error logs (tool name, error type, browser &mdash; no personal data).</li>
+      <li>Google Analytics, if enabled &mdash; standard anonymous usage analytics.</li>
     </ul>
   </div>
 

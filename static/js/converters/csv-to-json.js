@@ -1,4 +1,4 @@
-window.convertText = function(text) {
+window.convertText = function (text) {
   var lines = [];
   var current = '';
   var inQuotes = false;
@@ -22,7 +22,9 @@ window.convertText = function(text) {
   }
   if (current) lines.push(current);
 
-  lines = lines.filter(function(l) { return l.trim() !== ''; });
+  lines = lines.filter(function (l) {
+    return l.trim() !== '';
+  });
 
   if (lines.length < 2) {
     throw new Error('CSV must have at least a header row and one data row.');
@@ -52,7 +54,9 @@ window.convertText = function(text) {
     return fields;
   }
 
-  var headers = parseLine(lines[0]).map(function(h) { return h.trim(); });
+  var headers = parseLine(lines[0]).map(function (h) {
+    return h.trim();
+  });
   var result = [];
 
   for (var r = 1; r < lines.length; r++) {

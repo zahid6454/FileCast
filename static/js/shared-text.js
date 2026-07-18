@@ -18,6 +18,33 @@
     }
   }
 
+  // Fire-and-forget conversion tracking (Phase 5 §5.4) — see shared.js for the
+  // full contract. Success dispatches `filecast:conversion`; failure only POSTs.
+  function postConversion(payload, notify) {
+    var apiBase = window.FILECAST && window.FILECAST.apiBase;
+    if (!apiBase) return;
+    fetch(apiBase.replace(/\/$/, '') + '/api/v1/conversions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) {
+        return r.ok ? r.json() : null;
+      })
+      .then(function (d) {
+        if (!notify) return;
+        document.dispatchEvent(
+          new CustomEvent('filecast:conversion', {
+            detail: { saved: !!(d && d.saved_to_history) }
+          })
+        );
+      })
+      .catch(function () {
+        /* silent — progressive enhancement */
+      });
+  }
+
   function setState(newState) {
     state = newState;
     els.convertBtn.disabled = newState === 'converting';
@@ -40,11 +67,19 @@
   function validate(text) {
     var config = window.TOOL_CONFIG;
     if (!text.trim()) {
-      return { valid: false, error: 'Please enter or paste some text to convert.', error_type: 'empty_input' };
+      return {
+        valid: false,
+        error: 'Please enter or paste some text to convert.',
+        error_type: 'empty_input'
+      };
     }
     var bytes = new Blob([text]).size;
     if (bytes > config.max_file_size_bytes) {
-      return { valid: false, error: 'Input is too large. Maximum size: ' + config.max_file_size + '.', error_type: 'too_large' };
+      return {
+        valid: false,
+        error: 'Input is too large. Maximum size: ' + config.max_file_size + '.',
+        error_type: 'too_large'
+      };
     }
     return { valid: true };
   }
@@ -61,7 +96,10 @@
     var result = validate(text);
     if (!result.valid) {
       showError(result.error);
-      trackEvent('conversion_failed', { tool_id: window.TOOL_CONFIG.id, error_type: result.error_type });
+      trackEvent('conversion_failed', {
+        tool_id: window.TOOL_CONFIG.id,
+        error_type: result.error_type
+      });
       return;
     }
 
@@ -92,6 +130,15 @@
     } catch (err) {
       showError(err.message || 'Conversion failed. Please check your input and try again.');
       trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
+      postConversion(
+        {
+          tool_id: config.id,
+          input_format: config.input_format,
+          output_format: config.output_format,
+          status: 'failed'
+        },
+        false
+      );
     }
   }
 
@@ -104,7 +151,8 @@
 
     var inputBytes = new Blob([inputText]).size;
     var outputBytes = new Blob([outputText]).size;
-    els.resultInfo.textContent = formatBytes(inputBytes) + ' in → ' + formatBytes(outputBytes) + ' out';
+    els.resultInfo.textContent =
+      formatBytes(inputBytes) + ' in → ' + formatBytes(outputBytes) + ' out';
 
     window._convertedText = outputText;
     window._convertedFilename = output.filename;
@@ -117,6 +165,17 @@
       file_size_bytes: inputBytes,
       output_size_bytes: outputBytes
     });
+    postConversion(
+      {
+        tool_id: config.id,
+        input_format: config.input_format,
+        output_format: config.output_format,
+        file_size_kb: Math.round(inputBytes / 1024),
+        duration_ms: durationMs,
+        status: 'success'
+      },
+      true
+    );
   }
 
   function copyOutput() {
@@ -125,7 +184,9 @@
       var btn = els.copyBtn;
       var original = btn.textContent;
       btn.textContent = 'Copied!';
-      setTimeout(function () { btn.textContent = original; }, 1500);
+      setTimeout(function () {
+        btn.textContent = original;
+      }, 1500);
     });
   }
 
@@ -139,7 +200,9 @@
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
 
     trackEvent('file_downloaded', {
       tool_id: window.TOOL_CONFIG.id,
@@ -224,12 +287,16 @@
           try {
             els.inputArea.value = formatXml(text);
             updateMeta();
-          } catch (e) { /* ignore */ }
+          } catch (e) {
+            /* ignore */
+          }
         } else if (fmt === 'json') {
           try {
             els.inputArea.value = JSON.stringify(JSON.parse(text), null, 2);
             updateMeta();
-          } catch (e) { /* ignore */ }
+          } catch (e) {
+            /* ignore */
+          }
         }
       });
     }

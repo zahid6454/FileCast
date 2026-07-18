@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { createDom, boot } from './helpers.js';
+import { describe, expect, it, vi } from 'vitest';
+import { boot, createDom } from './helpers.js';
 
 // Announcement-bar shell as rendered by base.html (§6.9).
 const BAR = `
@@ -27,20 +27,31 @@ describe('nav.js announcement bar (§6.9, progressive enhancement)', () => {
   it('shows the active announcement, sets the type class, and fills the message', async () => {
     const dom = createDom(BAR);
     withApi(dom);
-    mockActive(dom, { id: 1, message: 'Scheduled maintenance tonight', link: null, type: 'maintenance' });
+    mockActive(dom, {
+      id: 1,
+      message: 'Scheduled maintenance tonight',
+      link: null,
+      type: 'maintenance'
+    });
     await boot(dom, 'nav.js');
 
     const bar = dom.window.document.getElementById('announcement-bar');
     expect(bar.classList.contains('hidden')).toBe(false);
     expect(bar.classList.contains('announcement-bar--maintenance')).toBe(true);
-    expect(dom.window.document.getElementById('announcement-bar__message').textContent)
-      .toBe('Scheduled maintenance tonight');
+    expect(dom.window.document.getElementById('announcement-bar__message').textContent).toBe(
+      'Scheduled maintenance tonight'
+    );
   });
 
   it('exposes the link only when one is present', async () => {
     const dom = createDom(BAR);
     withApi(dom);
-    mockActive(dom, { id: 2, message: 'New tool added', link: '/convert/heic-to-jpg/', type: 'new' });
+    mockActive(dom, {
+      id: 2,
+      message: 'New tool added',
+      link: '/convert/heic-to-jpg/',
+      type: 'new'
+    });
     await boot(dom, 'nav.js');
 
     const link = dom.window.document.getElementById('announcement-bar__link');
@@ -65,7 +76,12 @@ describe('nav.js announcement bar (§6.9, progressive enhancement)', () => {
   it('accepts an absolute https link', async () => {
     const dom = createDom(BAR);
     withApi(dom);
-    mockActive(dom, { id: 10, message: 'Read the post', link: 'https://blog.example.com/x', type: 'info' });
+    mockActive(dom, {
+      id: 10,
+      message: 'Read the post',
+      link: 'https://blog.example.com/x',
+      type: 'info'
+    });
     await boot(dom, 'nav.js');
     const link = dom.window.document.getElementById('announcement-bar__link');
     expect(link.classList.contains('hidden')).toBe(false);
@@ -77,7 +93,9 @@ describe('nav.js announcement bar (§6.9, progressive enhancement)', () => {
     withApi(dom);
     mockActive(dom, null);
     await boot(dom, 'nav.js');
-    expect(dom.window.document.getElementById('announcement-bar').classList.contains('hidden')).toBe(true);
+    expect(
+      dom.window.document.getElementById('announcement-bar').classList.contains('hidden')
+    ).toBe(true);
   });
 
   it('stays hidden and does not throw when the API is down', async () => {
@@ -85,7 +103,9 @@ describe('nav.js announcement bar (§6.9, progressive enhancement)', () => {
     withApi(dom);
     dom.window.fetch = vi.fn(() => Promise.reject(new Error('ECONNREFUSED')));
     await expect(boot(dom, 'nav.js')).resolves.toBeUndefined();
-    expect(dom.window.document.getElementById('announcement-bar').classList.contains('hidden')).toBe(true);
+    expect(
+      dom.window.document.getElementById('announcement-bar').classList.contains('hidden')
+    ).toBe(true);
   });
 
   it('stays hidden when no API base is configured', async () => {
@@ -94,7 +114,9 @@ describe('nav.js announcement bar (§6.9, progressive enhancement)', () => {
     dom.window.fetch = fetchFn; // no window.FILECAST
     await boot(dom, 'nav.js');
     expect(fetchFn).not.toHaveBeenCalled();
-    expect(dom.window.document.getElementById('announcement-bar').classList.contains('hidden')).toBe(true);
+    expect(
+      dom.window.document.getElementById('announcement-bar').classList.contains('hidden')
+    ).toBe(true);
   });
 
   it('dismiss hides the bar and persists the dismissal keyed by announcement id', async () => {
@@ -117,6 +139,8 @@ describe('nav.js announcement bar (§6.9, progressive enhancement)', () => {
     dom.window.localStorage.setItem('fc_announcement_dismissed', '7');
     mockActive(dom, { id: 7, message: 'Heads up again', link: null, type: 'info' });
     await boot(dom, 'nav.js');
-    expect(dom.window.document.getElementById('announcement-bar').classList.contains('hidden')).toBe(true);
+    expect(
+      dom.window.document.getElementById('announcement-bar').classList.contains('hidden')
+    ).toBe(true);
   });
 });

@@ -30,13 +30,25 @@ class Settings(BaseSettings):
     # Retention
     retention_days: int = 30
 
-    # Phase 5: google_client_id/secret ; Phase 7: github_pat, deploy config
+    # Google OAuth (Phase 5) — optional. Unset client id/secret ⇒ the Google
+    # auth routes return 503 and dev-login still works (spec §1, D-locked).
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8090/api/v1/auth/google/callback"
+    oauth_state_cookie_name: str = "fc_oauth_state"
+    oauth_state_ttl_seconds: int = 600
+
+    # Phase 7: github_pat, deploy config
 
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 
     @property
     def trusted_proxy_set(self) -> set[str]:
         return {p.strip() for p in self.trusted_proxies.split(",") if p.strip()}
+
+    @property
+    def google_oauth_configured(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
 
 
 settings = Settings()

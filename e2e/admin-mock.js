@@ -7,18 +7,92 @@
 
 export function makeState(overrides = {}) {
   return {
-    me: overrides.me || { status: 200, body: { user: { id: 'u1', email: 'admin@dev.local', role: 'admin' } } },
+    me: overrides.me || {
+      status: 200,
+      body: { user: { id: 'u1', email: 'admin@dev.local', role: 'admin' } }
+    },
     tools: overrides.tools || [
-      { id: 'img-a', enabled: true, sort_order: 1, category: 'image', name: 'Image A', display_name: null, maintenance_message: null, custom_max_file_size: null, input_format: 'A', output_format: 'B' },
-      { id: 'img-b', enabled: true, sort_order: 2, category: 'image', name: 'Image B', display_name: null, maintenance_message: null, custom_max_file_size: null, input_format: 'A', output_format: 'B' },
-      { id: 'img-c', enabled: false, sort_order: 3, category: 'image', name: 'Image C', display_name: null, maintenance_message: null, custom_max_file_size: null, input_format: 'A', output_format: 'B' },
-      { id: 'doc-a', enabled: true, sort_order: 4, category: 'document', name: 'Doc A', display_name: null, maintenance_message: null, custom_max_file_size: null, input_format: 'A', output_format: 'B' },
-      { id: 'doc-b', enabled: true, sort_order: 5, category: 'document', name: 'Doc B', display_name: null, maintenance_message: null, custom_max_file_size: null, input_format: 'A', output_format: 'B' },
+      {
+        id: 'img-a',
+        enabled: true,
+        sort_order: 1,
+        category: 'image',
+        name: 'Image A',
+        display_name: null,
+        maintenance_message: null,
+        custom_max_file_size: null,
+        input_format: 'A',
+        output_format: 'B'
+      },
+      {
+        id: 'img-b',
+        enabled: true,
+        sort_order: 2,
+        category: 'image',
+        name: 'Image B',
+        display_name: null,
+        maintenance_message: null,
+        custom_max_file_size: null,
+        input_format: 'A',
+        output_format: 'B'
+      },
+      {
+        id: 'img-c',
+        enabled: false,
+        sort_order: 3,
+        category: 'image',
+        name: 'Image C',
+        display_name: null,
+        maintenance_message: null,
+        custom_max_file_size: null,
+        input_format: 'A',
+        output_format: 'B'
+      },
+      {
+        id: 'doc-a',
+        enabled: true,
+        sort_order: 4,
+        category: 'document',
+        name: 'Doc A',
+        display_name: null,
+        maintenance_message: null,
+        custom_max_file_size: null,
+        input_format: 'A',
+        output_format: 'B'
+      },
+      {
+        id: 'doc-b',
+        enabled: true,
+        sort_order: 5,
+        category: 'document',
+        name: 'Doc B',
+        display_name: null,
+        maintenance_message: null,
+        custom_max_file_size: null,
+        input_format: 'A',
+        output_format: 'B'
+      }
     ],
     announcements: overrides.announcements || [],
     users: overrides.users || [
-      { id: 'u1', email: 'admin@dev.local', name: 'Dev Admin', role: 'admin', created_at: '2026-01-01T00:00:00Z', last_login_at: '2026-07-01T00:00:00Z', max_file_size: null },
-      { id: 'u2', email: 'user@dev.local', name: 'Dev User', role: 'user', created_at: '2026-02-01T00:00:00Z', last_login_at: null, max_file_size: null },
+      {
+        id: 'u1',
+        email: 'admin@dev.local',
+        name: 'Dev Admin',
+        role: 'admin',
+        created_at: '2026-01-01T00:00:00Z',
+        last_login_at: '2026-07-01T00:00:00Z',
+        max_file_size: null
+      },
+      {
+        id: 'u2',
+        email: 'user@dev.local',
+        name: 'Dev User',
+        role: 'user',
+        created_at: '2026-02-01T00:00:00Z',
+        last_login_at: null,
+        max_file_size: null
+      }
     ],
     dashboard: overrides.dashboard || {
       total_conversions: 120,
@@ -28,27 +102,41 @@ export function makeState(overrides = {}) {
       yes_ratings: 4,
       top_tools: [
         { tool_id: 'img-a', count: 80 },
-        { tool_id: 'doc-a', count: 40 },
-      ],
+        { tool_id: 'doc-a', count: 40 }
+      ]
     },
     series: overrides.series || [
       { date: '2026-07-10', count: 10, failures: 1 },
       { date: '2026-07-11', count: 20, failures: 0 },
-      { date: '2026-07-12', count: 15, failures: 2 },
+      { date: '2026-07-12', count: 15, failures: 2 }
     ],
     errors: overrides.errors || [
-      { id: 1, tool_id: 'img-a', error_type: 'ConversionError', error_message: '<img src=x onerror="window.__xss=1">', browser: 'Firefox', created_at: '2026-07-13T10:00:00Z' },
-      { id: 2, tool_id: 'doc-a', error_type: 'TimeoutError', error_message: 'Gateway timed out', browser: 'Chrome', created_at: '2026-07-13T11:00:00Z' },
+      {
+        id: 1,
+        tool_id: 'img-a',
+        error_type: 'ConversionError',
+        error_message: '<img src=x onerror="window.__xss=1">',
+        browser: 'Firefox',
+        created_at: '2026-07-13T10:00:00Z'
+      },
+      {
+        id: 2,
+        tool_id: 'doc-a',
+        error_type: 'TimeoutError',
+        error_message: 'Gateway timed out',
+        browser: 'Chrome',
+        created_at: '2026-07-13T11:00:00Z'
+      }
     ],
     ratings: overrides.ratings || [
       { tool_id: 'img-a', yes: 4, no: 1 },
-      { tool_id: 'doc-a', yes: 3, no: 0 },
+      { tool_id: 'doc-a', yes: 3, no: 0 }
     ],
     // Instrumentation for assertions:
     reorderCalls: [],
     ratingsCalls: 0,
     deployCalls: 0,
-    _annId: 100,
+    _annId: 100
   };
 }
 
@@ -78,7 +166,7 @@ export async function installApi(page, state) {
       return route.fulfill({
         status: state.me.status,
         contentType: 'application/json',
-        body: JSON.stringify(state.me.status === 200 ? state.me.body : { detail: 'auth' }),
+        body: JSON.stringify(state.me.status === 200 ? state.me.body : { detail: 'auth' })
       });
     }
     if (path.endsWith('/auth/logout')) {
@@ -126,7 +214,11 @@ export async function installApi(page, state) {
     if (path.endsWith('/announcements') && method === 'POST') {
       state.lastAnnouncementBody = body();
       const a = Object.assign({ id: ++state._annId, created_at: new Date().toISOString() }, body());
-      if (a.active) state.announcements.forEach((x) => (x.active = false));
+      if (a.active) {
+        state.announcements.forEach((x) => {
+          x.active = false;
+        });
+      }
       state.announcements.push(a);
       return json({ announcement: a });
     }
@@ -135,7 +227,11 @@ export async function installApi(page, state) {
       const a = state.announcements.find((x) => x.id === Number(annMatch[1]));
       if (!a) return json({ detail: 'not found' }, 404);
       Object.assign(a, body());
-      if (a.active) state.announcements.forEach((x) => (x.id !== a.id ? (x.active = false) : null));
+      if (a.active) {
+        state.announcements.forEach((x) => {
+          if (x.id !== a.id) x.active = false;
+        });
+      }
       return json({ announcement: a });
     }
     if (annMatch && method === 'DELETE') {
@@ -145,6 +241,9 @@ export async function installApi(page, state) {
 
     // --- users ---
     if (path.endsWith('/users') && method === 'GET') return json({ users: state.users });
+    if (/\/users\/[^/]+\/history$/.test(path) && method === 'GET') {
+      return json({ has_more: false, history: state.userHistory || [] });
+    }
     const userMatch = path.match(/\/users\/([^/]+)$/);
     if (userMatch && method === 'GET') {
       const u = state.users.find((x) => x.id === userMatch[1]);

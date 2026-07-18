@@ -23,19 +23,19 @@ from data.security import clear_session_cookies, require_admin, require_user
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
 
-async def _history_rows(db: AsyncSession, user_id: str, limit: int = 100) -> list[dict]:
-    rows = (
-        (
-            await db.execute(
-                select(UserConversion)
-                .where(UserConversion.user_id == user_id)
-                .order_by(UserConversion.created_at.desc())
-                .limit(limit)
-            )
-        )
-        .scalars()
-        .all()
+async def _history_rows(
+    db: AsyncSession, user_id: str, limit: int | None = 100, offset: int = 0
+) -> list[dict]:
+    # limit=None → every row (GDPR export must be complete, not truncated).
+    query = (
+        select(UserConversion)
+        .where(UserConversion.user_id == user_id)
+        .order_by(UserConversion.created_at.desc())
+        .offset(offset)
     )
+    if limit is not None:
+        query = query.limit(limit)
+    rows = (await db.execute(query)).scalars().all()
     return [
         {
             "id": r.id,
@@ -75,7 +75,7 @@ async def export_my_data(
             {"tool_id": t, "created_at": c.isoformat() if c else None}
             for t, c in favorites
         ],
-        "history": await _history_rows(db, user.id, limit=10000),
+        "history": await _history_rows(db, user.id, limit=None),
     }
 
 
@@ -133,5 +133,21 @@ async def user_detail(
     )
     return {
         "user": user_dict(user, list(favorites)),
-        "history": await _history_rows(db, user_id),
+        "history": await _history_rows(db, user_id, limit=10),
     }
+
+
+@router.get("/{user_id}/history")
+async def user_history(
+    user_id: str,
+    limit: int = 10,
+    offset: int = 0,
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Paginated conversion history for an admin viewing a user (10/page)."""
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    # limit+1 to detect a next page without a COUNT(*).
+    rows = await _history_rows(db, user_id, limit=limit + 1, offset=offset)
+    return {"has_more": len(rows) > limit, "history": rows[:limit]}

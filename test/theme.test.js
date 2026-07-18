@@ -1,66 +1,46 @@
-import { describe, it, expect } from 'vitest';
-import { createDom, evalScript, boot } from './helpers.js';
+import { describe, expect, it } from 'vitest';
+import { createDom, evalScript } from './helpers.js';
 
-describe('theme-init.js (anti-FOUC, render-blocking)', () => {
-  it('applies a stored dark choice to <html> before paint', () => {
+describe('theme-init.js (anti-FOUC + auth marker, render-blocking)', () => {
+  // Dark mode is a signed-in privilege (Phase 5): gated on the fc_logged_in cookie.
+  it("applies a signed-in user's stored dark choice before paint", () => {
     const dom = createDom();
+    dom.window.document.cookie = 'fc_logged_in=1';
     dom.window.localStorage.setItem('fc_theme', 'dark');
     evalScript(dom, 'theme-init.js');
     expect(dom.window.document.documentElement.dataset.theme).toBe('dark');
   });
 
-  it('applies a stored light choice', () => {
+  it("applies a signed-in user's stored light choice", () => {
     const dom = createDom();
+    dom.window.document.cookie = 'fc_logged_in=1';
     dom.window.localStorage.setItem('fc_theme', 'light');
     evalScript(dom, 'theme-init.js');
     expect(dom.window.document.documentElement.dataset.theme).toBe('light');
   });
 
-  it('leaves data-theme UNSET when no choice is stored (system governs via media query)', () => {
+  it('signed-in with no stored choice → data-theme UNSET (system governs)', () => {
     const dom = createDom();
+    dom.window.document.cookie = 'fc_logged_in=1';
     evalScript(dom, 'theme-init.js');
     expect(dom.window.document.documentElement.dataset.theme).toBeUndefined();
   });
-});
 
-describe('nav.js theme toggle (simple light ↔ dark, no wasted click)', () => {
-  const TOGGLE = '<button id="theme-toggle"></button>';
-
-  async function bootToggle() {
-    const dom = createDom(TOGGLE);
-    await boot(dom, 'nav.js');
-    return dom;
-  }
-
-  it('flips light ↔ dark on every click, storing an explicit choice each time', async () => {
-    const dom = await bootToggle();
-    const btn = dom.window.document.getElementById('theme-toggle');
-    const html = dom.window.document.documentElement;
-
-    // Fresh: no stored choice → resolves to the OS preference. jsdom has no
-    // matchMedia, so systemPrefersDark() is false → effective 'light'.
-    expect(dom.window.localStorage.getItem('fc_theme')).toBeNull();
-    expect(btn.dataset.themeState).toBe('light');
-
-    btn.click(); // light → dark (first click flips visibly — no wasted step)
-    expect(dom.window.localStorage.getItem('fc_theme')).toBe('dark');
-    expect(html.dataset.theme).toBe('dark');
-    expect(btn.dataset.themeState).toBe('dark');
-
-    btn.click(); // dark → light
-    expect(dom.window.localStorage.getItem('fc_theme')).toBe('light');
-    expect(html.dataset.theme).toBe('light');
-    expect(btn.dataset.themeState).toBe('light');
+  it('FORCES light for anonymous, even with a stored dark choice (dark = signed-in perk)', () => {
+    const dom = createDom();
+    dom.window.localStorage.setItem('fc_theme', 'dark'); // no fc_logged_in cookie
+    evalScript(dom, 'theme-init.js');
+    expect(dom.window.document.documentElement.dataset.theme).toBe('light');
   });
 
-  it('picks up an already-stored choice on load', async () => {
-    const dom = createDom(TOGGLE);
-    dom.window.localStorage.setItem('fc_theme', 'dark');
-    await boot(dom, 'nav.js');
-    const btn = dom.window.document.getElementById('theme-toggle');
-    expect(btn.dataset.themeState).toBe('dark');
-    // First click flips straight to light.
-    btn.click();
-    expect(dom.window.localStorage.getItem('fc_theme')).toBe('light');
+  it('sets data-auth from the fc_logged_in cookie (drives the account no-flash rule)', () => {
+    const signedIn = createDom();
+    signedIn.window.document.cookie = 'fc_logged_in=1';
+    evalScript(signedIn, 'theme-init.js');
+    expect(signedIn.window.document.documentElement.dataset.auth).toBe('in');
+
+    const anon = createDom();
+    evalScript(anon, 'theme-init.js');
+    expect(anon.window.document.documentElement.dataset.auth).toBe('out');
   });
 });

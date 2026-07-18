@@ -54,7 +54,7 @@
     var opts = {
       method: method,
       credentials: 'include',
-      headers: {},
+      headers: {}
     };
     if (body !== undefined && body !== null) {
       opts.headers['Content-Type'] = 'application/json';
@@ -72,8 +72,7 @@
       return parseBody(response).then(function (data) {
         if (response.ok) return data;
         var message =
-          (data && (data.detail || data.message)) ||
-          'Request failed (' + response.status + ')';
+          (data && (data.detail || data.message)) || 'Request failed (' + response.status + ')';
         throw new ApiError(response.status, message);
       });
     });
@@ -97,6 +96,6 @@
     ApiError: ApiError,
     isAuthError: function (err) {
       return !!(err && err.isAuthError);
-    },
+    }
   };
 })();

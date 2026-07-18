@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { makeState, installApi } from './admin-mock.js';
+import { expect, test } from '@playwright/test';
+import { installApi, makeState } from './admin-mock.js';
 
 // Admin-panel E2E (Phase 4 §Test plan). Served from the static `dist/`; the API
 // is mocked hermetically (see admin-mock.js) so these run without a live backend.
@@ -26,12 +26,17 @@ test.describe('auth gate (D6)', () => {
     await installApi(page, state);
     await page.goto('/admin/');
     await expect(page.locator('.admin-gate__title')).toHaveText('FileCast Admin');
-    await expect(page.getByText('Sign in to access')).toBeVisible();
+    await expect(page.getByText('admin Google account')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in with Google' })).toBeVisible();
     await expect(page.locator('.admin-tabs')).toHaveCount(0);
   });
 
-  test('non-admin → no-access screen, no tabs, with a sign-out escape (not a dead-end)', async ({ page }) => {
-    const state = makeState({ me: { status: 200, body: { user: { id: 'u2', email: 'user@dev.local', role: 'user' } } } });
+  test('non-admin → no-access screen, no tabs, with a sign-out escape (not a dead-end)', async ({
+    page
+  }) => {
+    const state = makeState({
+      me: { status: 200, body: { user: { id: 'u2', email: 'user@dev.local', role: 'user' } } }
+    });
     await installApi(page, state);
     await page.goto('/admin/');
     await expect(page.locator('.admin-gate__title')).toHaveText('No access');
@@ -78,7 +83,9 @@ test.describe('responsive nav (hamburger drawer)', () => {
     await expect(page.locator('#admin-hamburger')).toBeHidden();
   });
 
-  test('narrow: tabs collapse into a drawer that opens, navigates, and closes', async ({ page }) => {
+  test('narrow: tabs collapse into a drawer that opens, navigates, and closes', async ({
+    page
+  }) => {
     await page.setViewportSize({ width: 768, height: 720 });
     await installApi(page, makeState());
     await page.goto('/admin/#tools');
@@ -113,7 +120,9 @@ test.describe('responsive nav (hamburger drawer)', () => {
 });
 
 test.describe('dashboard', () => {
-  test('renders stat cards, an SVG chart, and the ratings summary from ONE /ratings call', async ({ page }) => {
+  test('renders stat cards, an SVG chart, and the ratings summary from ONE /ratings call', async ({
+    page
+  }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#dashboard');
@@ -160,10 +169,15 @@ test.describe('tools', () => {
     // Reload → the disabled state persists (came back from GET /tools).
     await page.reload();
     await page.goto('/admin/#tools');
-    await expect(page.locator('.admin-toollist .admin-switch').first()).toHaveAttribute('aria-checked', 'false');
+    await expect(page.locator('.admin-toollist .admin-switch').first()).toHaveAttribute(
+      'aria-checked',
+      'false'
+    );
   });
 
-  test('keyboard reorder sends exactly ONE PUT /tools/reorder with the full global order', async ({ page }) => {
+  test('keyboard reorder sends exactly ONE PUT /tools/reorder with the full global order', async ({
+    page
+  }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#tools');
@@ -179,7 +193,9 @@ test.describe('tools', () => {
     await expect(page.locator('.admin-banner--info')).toBeVisible();
   });
 
-  test('reorder to a category boundary keeps focus on a move button (not <body>)', async ({ page }) => {
+  test('reorder to a category boundary keeps focus on a move button (not <body>)', async ({
+    page
+  }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#tools');
@@ -193,14 +209,27 @@ test.describe('tools', () => {
     await expect(imgA.locator('.admin-tool__up')).toBeFocused();
   });
 
-  test('labels categories with the site display name (data-conversion → Text Conversion)', async ({ page }) => {
+  test('labels categories with the site display name (data-conversion → Text Conversion)', async ({
+    page
+  }) => {
     // The real admin page (from dist) bakes category id→name into its config
     // island; the admin must label groups exactly as the site does, not by
     // guessing from the slug.
     const state = makeState({
       tools: [
-        { id: 'csv-to-json', enabled: true, sort_order: 1, category: 'data-conversion', name: 'CSV to JSON', display_name: null, maintenance_message: null, custom_max_file_size: null, input_format: 'CSV', output_format: 'JSON' },
-      ],
+        {
+          id: 'csv-to-json',
+          enabled: true,
+          sort_order: 1,
+          category: 'data-conversion',
+          name: 'CSV to JSON',
+          display_name: null,
+          maintenance_message: null,
+          custom_max_file_size: null,
+          input_format: 'CSV',
+          output_format: 'JSON'
+        }
+      ]
     });
     await installApi(page, state);
     await page.goto('/admin/#tools');
@@ -218,7 +247,9 @@ test.describe('tools', () => {
     await expect(page.getByText('Shown on the homepage').first()).toBeVisible();
   });
 
-  test('divider recomputes live when a toggle changes homepage membership (no reload)', async ({ page }) => {
+  test('divider recomputes live when a toggle changes homepage membership (no reload)', async ({
+    page
+  }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#tools');
@@ -248,11 +279,15 @@ test.describe('tools', () => {
     await panel.locator('#so-name').fill('Renamed Tool');
     await panel.getByRole('button', { name: 'Save changes' }).click();
 
-    await expect.poll(() => state.tools.find((t) => t.id === 'img-a').display_name).toBe('Renamed Tool');
+    await expect
+      .poll(() => state.tools.find((t) => t.id === 'img-a').display_name)
+      .toBe('Renamed Tool');
     await expect(page.locator('.admin-banner--info')).toBeVisible();
   });
 
-  test('slide-out is a real modal: aria-modal, inert background, Escape closes, focus restored', async ({ page }) => {
+  test('slide-out is a real modal: aria-modal, inert background, Escape closes, focus restored', async ({
+    page
+  }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#tools');
@@ -282,7 +317,7 @@ test.describe('announcements', () => {
     await expect(page.getByText('No announcements yet')).toBeVisible();
 
     // Create #1 (active).
-    await page.getByRole('button', { name: '+ New announcement' }).click();
+    await page.getByRole('button', { name: 'New announcement' }).click();
     await page.locator('.admin-form .admin-input').first().fill('First announcement');
     await page.locator('.admin-form .admin-check input[type="checkbox"]').check();
     await page.getByRole('button', { name: 'Create' }).click();
@@ -290,15 +325,22 @@ test.describe('announcements', () => {
     await expect(page.locator('.admin-badge--active')).toHaveCount(1);
 
     // Create #2 (also active) → the server deactivates #1; UI reflects after re-fetch.
-    await page.getByRole('button', { name: '+ New announcement' }).click();
+    await page.getByRole('button', { name: 'New announcement' }).click();
     await page.locator('.admin-form .admin-input').first().fill('Second announcement');
     await page.locator('.admin-form .admin-check input[type="checkbox"]').check();
     await page.getByRole('button', { name: 'Create' }).click();
     await expect(page.locator('.admin-annc')).toHaveCount(2);
     await expect(page.locator('.admin-badge--active')).toHaveCount(1); // still only one active
 
-    // Delete one.
-    await page.locator('.admin-annc').first().getByRole('button', { name: 'Delete' }).click();
+    // Delete one — two-step inline confirm: first click arms, second deletes.
+    const del = page.locator('.admin-annc').first().getByRole('button', { name: 'Delete' });
+    await del.click();
+    const confirm = page
+      .locator('.admin-annc')
+      .first()
+      .getByRole('button', { name: 'Confirm delete' });
+    await expect(confirm).toBeVisible();
+    await confirm.click();
     await expect(page.locator('.admin-annc')).toHaveCount(1);
   });
 
@@ -307,13 +349,15 @@ test.describe('announcements', () => {
     await installApi(page, state);
     await page.goto('/admin/#announcements');
 
-    await page.getByRole('button', { name: '+ New announcement' }).click();
+    await page.getByRole('button', { name: 'New announcement' }).click();
     await page.locator('.admin-form .admin-input').first().fill('Scheduled');
     // datetime-local takes naive local "YYYY-MM-DDTHH:mm".
     await page.locator('input[type="datetime-local"]').first().fill('2026-08-01T09:30');
     await page.getByRole('button', { name: 'Create' }).click();
 
-    await expect.poll(() => state.lastAnnouncementBody && state.lastAnnouncementBody.starts_at).toBeTruthy();
+    await expect
+      .poll(() => state.lastAnnouncementBody && state.lastAnnouncementBody.starts_at)
+      .toBeTruthy();
     const startsAt = state.lastAnnouncementBody.starts_at;
     // Sent as an explicit UTC instant (trailing Z), not the naive local string.
     expect(startsAt).toMatch(/Z$/);
@@ -330,7 +374,7 @@ test.describe('announcements', () => {
     await installApi(page, state);
     await page.goto('/admin/#announcements');
 
-    await page.getByRole('button', { name: '+ New announcement' }).click();
+    await page.getByRole('button', { name: 'New announcement' }).click();
     await page.locator('.admin-form .admin-input').first().fill('Live one');
     await page.getByRole('button', { name: 'Create' }).click();
     await expect(page.locator('.admin-annc')).toHaveCount(1);
@@ -345,8 +389,17 @@ test.describe('announcements', () => {
   test('P23: a javascript: link is rendered inert in the preview', async ({ page }) => {
     const state = makeState({
       announcements: [
-        { id: 1, message: 'Hi', link: 'javascript:window.__xss2=1', type: 'info', active: true, starts_at: null, ends_at: null, created_at: '2026-07-13T00:00:00Z' },
-      ],
+        {
+          id: 1,
+          message: 'Hi',
+          link: 'javascript:window.__xss2=1',
+          type: 'info',
+          active: true,
+          starts_at: null,
+          ends_at: null,
+          created_at: '2026-07-13T00:00:00Z'
+        }
+      ]
     });
     await installApi(page, state);
     await page.goto('/admin/#announcements');
@@ -358,7 +411,9 @@ test.describe('announcements', () => {
 });
 
 test.describe('users', () => {
-  test('lists users, filters client-side, detail has NO role-change control (D9)', async ({ page }) => {
+  test('lists users, filters client-side, detail has NO role-change control (D9)', async ({
+    page
+  }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#users');
@@ -370,12 +425,16 @@ test.describe('users', () => {
     await page.locator('.admin-users__row').first().click();
     await expect(page.getByText('managed by an operator')).toBeVisible();
     // No promotion control of any kind.
-    expect(await page.getByRole('button', { name: /make admin|promote|change role/i }).count()).toBe(0);
+    expect(
+      await page.getByRole('button', { name: /make admin|promote|change role/i }).count()
+    ).toBe(0);
   });
 });
 
 test.describe('errors tab', () => {
-  test('lists error cards, expands details, filters, and renders messages inert (P23)', async ({ page }) => {
+  test('lists error cards, expands details, filters, and renders messages inert (P23)', async ({
+    page
+  }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#errors');
@@ -415,11 +474,18 @@ test.describe('errors tab', () => {
 test('fresh/empty DB renders placeholders with no throw (§8.5)', async ({ page }) => {
   const problems = collectProblems(page);
   const state = makeState({
-    dashboard: { total_conversions: 0, total_failures: 0, total_users: 2, total_ratings: 0, yes_ratings: 0, top_tools: [] },
+    dashboard: {
+      total_conversions: 0,
+      total_failures: 0,
+      total_users: 2,
+      total_ratings: 0,
+      yes_ratings: 0,
+      top_tools: []
+    },
     series: [],
     errors: [],
     ratings: [],
-    announcements: [],
+    announcements: []
   });
   await installApi(page, state);
 

@@ -44,15 +44,16 @@
   }
 
   function detailRow(term, value) {
-    return h('div', { class: 'admin-errrow__drow' }, [
-      h('dt', term),
-      h('dd', value || '—'),
-    ]);
+    return h('div', { class: 'admin-errrow__drow' }, [h('dt', term), h('dd', value || '—')]);
   }
 
   // A compact one-line row (card background) that expands inline to full detail.
   function row(e) {
-    var copyBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost admin-errrow__copy' }, 'Copy message');
+    var copyBtn = h(
+      'button',
+      { type: 'button', class: 'admin-btn admin-btn--ghost admin-errrow__copy' },
+      'Copy message'
+    );
     copyBtn.addEventListener('click', function () {
       try {
         navigator.clipboard.writeText(e.error_message || '').then(
@@ -75,26 +76,30 @@
         detailRow('Browser', e.browser),
         detailRow('Tool id', e.tool_id),
         detailRow('Error #', e.id != null ? String(e.id) : null),
-        detailRow('Timestamp', fmtDate(e.created_at)),
+        detailRow('Timestamp', fmtDate(e.created_at))
       ]),
-      copyBtn,
+      copyBtn
     ]);
 
     // The whole summary line is the toggle (real <button> → keyboard-operable).
-    var summary = h('button', {
-      type: 'button',
-      class: 'admin-errrow__summary',
-      'aria-expanded': 'false',
-    }, [
-      e.error_type
-        ? h('span', { class: 'admin-badge admin-badge--error' }, e.error_type)
-        : h('span', { class: 'admin-badge admin-badge--role' }, 'error'),
-      h('span', { class: 'admin-errrow__tool' }, labelFor(e.tool_id)),
-      // One-line snippet; CSS truncates with an ellipsis.
-      h('span', { class: 'admin-errrow__snippet' }, e.error_message || '(no message)'),
-      h('time', { class: 'admin-errrow__time' }, fmtDate(e.created_at)),
-      h('span', { class: 'admin-errrow__chev', 'aria-hidden': 'true' }, '▸'),
-    ]);
+    var summary = h(
+      'button',
+      {
+        type: 'button',
+        class: 'admin-errrow__summary',
+        'aria-expanded': 'false'
+      },
+      [
+        e.error_type
+          ? h('span', { class: 'admin-badge admin-badge--error' }, e.error_type)
+          : h('span', { class: 'admin-badge admin-badge--role' }, 'error'),
+        h('span', { class: 'admin-errrow__tool' }, labelFor(e.tool_id)),
+        // One-line snippet; CSS truncates with an ellipsis.
+        h('span', { class: 'admin-errrow__snippet' }, e.error_message || '(no message)'),
+        h('time', { class: 'admin-errrow__time' }, fmtDate(e.created_at)),
+        h('span', { class: 'admin-errrow__chev', 'aria-hidden': 'true' }, '▸')
+      ]
+    );
     summary.addEventListener('click', function () {
       var open = summary.getAttribute('aria-expanded') === 'true';
       summary.setAttribute('aria-expanded', open ? 'false' : 'true');
@@ -139,7 +144,7 @@
             ADMIN.emptyState({
               icon: 'check',
               title: 'No errors',
-              text: 'Nothing has gone wrong recently. Client-side errors reported by the site will show up here.',
+              text: 'Nothing has gone wrong recently. Client-side errors reported by the site will show up here.'
             })
           );
           return;
@@ -149,7 +154,7 @@
           type: 'search',
           class: 'admin-input admin-errsearch',
           placeholder: 'Search message, type, tool, browser…',
-          'aria-label': 'Search errors',
+          'aria-label': 'Search errors'
         });
         search.addEventListener('input', function () {
           renderCards(search.value);
@@ -157,7 +162,7 @@
         container.appendChild(
           h('div', { class: 'admin-toolbar' }, [
             search,
-            h('span', { class: 'admin-errcount admin-muted' }, ''),
+            h('span', { class: 'admin-errcount admin-muted' }, '')
           ])
         );
 

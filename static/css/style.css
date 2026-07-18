@@ -26,6 +26,10 @@
   --color-error-hover: #DC2626;
   --color-error-light: #FEE2E2;
   --color-error-subtle: #FEF2F2;
+  /* Saturated red for SOLID danger buttons (bg + white text). Distinct from
+     --color-error, which is tuned as a text/border color and turns pale in dark. */
+  --color-error-solid: #DC2626;
+  --color-error-solid-hover: #B91C1C;
 
   /* Warning */
   --color-warning: #F59E0B;
@@ -141,6 +145,9 @@
     --color-error: #FCA5A5;
     --color-error-hover: #F87171;
     --color-error-light: #450A0A;
+    /* Danger buttons stay a saturated red (with white text) on dark surfaces. */
+    --color-error-solid: #DC2626;
+    --color-error-solid-hover: #EF4444;
 
     --color-warning: #FBBF24;
     --color-warning-light: #451A03;
@@ -180,6 +187,8 @@
   --color-error: #FCA5A5;
   --color-error-hover: #F87171;
   --color-error-light: #450A0A;
+  --color-error-solid: #DC2626;
+  --color-error-solid-hover: #EF4444;
 
   --color-warning: #FBBF24;
   --color-warning-light: #451A03;
@@ -427,8 +436,42 @@ img { max-width: 100%; display: block; }
 .btn--primary:hover { filter: brightness(1.1); }
 .btn--success { background: var(--color-success); color: var(--color-text-inverse); }
 .btn--success:hover { background: var(--color-success-hover); }
+.btn--secondary { background: var(--color-primary-subtle); color: var(--color-primary); border: 1px solid var(--color-primary-light); }
+.btn--secondary:hover { background: var(--color-primary-light); }
+.btn--danger { background: var(--color-error-solid); color: #ffffff; }
+.btn--danger:hover { background: var(--color-error-solid-hover); }
+.btn--ghost { background: transparent; color: var(--color-text); border: 1px solid var(--color-border); }
+.btn--ghost:hover { background: var(--color-bg-sunken); border-color: var(--color-border-focus); box-shadow: var(--shadow-sm); }
 .btn--lg { font-size: var(--text-lg); padding: var(--space-4) var(--space-10); }
+.btn--sm { font-size: var(--text-sm); font-weight: var(--weight-medium); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* Official Google sign-in button (brand-fixed colors per Google's guidelines —
+   NOT theme tokens). Used for every "Sign in with Google" touchpoint EXCEPT the
+   compact header pill (.user-menu__signin). The white button is Google-approved
+   on both light and dark surfaces, so it stays identical everywhere. */
+.btn-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: 10px 20px;
+  background: #ffffff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.15);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+.btn-google:hover { background: #f8f9fa; box-shadow: 0 1px 3px rgba(60, 64, 67, 0.25); text-decoration: none; }
+.btn-google:active { background: #f1f3f4; }
+.btn-google__icon { width: 18px; height: 18px; flex-shrink: 0; }
+.btn__icon { width: 16px; height: 16px; flex-shrink: 0; }
 
 /* --- Progress Bar --- */
 .progress { height: 8px; background: var(--color-bg-sunken); border-radius: var(--radius-full); overflow: hidden; margin: var(--space-4) 0; }
@@ -769,27 +812,378 @@ img { max-width: 100%; display: block; }
   text-decoration: none;
 }
 
-/* --- Theme toggle button --- */
-.theme-toggle {
+/* --- User menu (Phase 5 §10) --- */
+.user-menu { position: relative; display: flex; align-items: center; }
+
+/* Signed-out: a compact, minimal Google button (white per Google branding). */
+.user-menu__signin {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background: #ffffff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  transition: box-shadow var(--transition-base), background var(--transition-base);
+}
+.user-menu__signin:hover { background: #f8f9fa; box-shadow: var(--shadow-sm); text-decoration: none; }
+.user-menu__gicon { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* Mobile: the header menu is hidden; account controls render at the bottom of
+   the nav drawer instead (see .nav-account). */
+@media (max-width: 767px) {
+  .user-menu { display: none; }
+}
+@media (max-width: 480px) {
+  .header { padding: 0 var(--space-4); }
+}
+
+/* Signed-in: avatar + name + caret. */
+.user-menu__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 200px;
+  padding: var(--space-1) var(--space-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.user-menu__toggle:hover { color: var(--color-text-inverse); border-color: var(--color-border); }
+.user-menu__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.user-menu__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-menu__caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  flex-shrink: 0;
+}
+
+/* Dropdown card. The [hidden] attribute (set by auth.js) hides it. */
+.user-menu__dropdown {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  min-width: 180px;
+  padding: var(--space-1);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 110;
+}
+.user-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+.user-menu__item:hover { background: var(--color-bg-sunken); text-decoration: none; }
+.user-menu__item-icon { width: 16px; height: 16px; flex-shrink: 0; color: var(--color-text-muted); }
+.user-menu__sep { height: 1px; margin: var(--space-1) var(--space-2); background: var(--color-border); }
+
+/* Animated dark-mode switch (shared by the dropdown item + the mobile drawer).
+   The label sits after the icon; the track is pushed to the far right. */
+.theme-switch__label { flex: 1 1 auto; }
+.theme-switch__track {
+  position: relative;
+  flex-shrink: 0;
+  width: 34px;
+  height: 20px;
+  margin-left: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  transition: background var(--transition-fast);
+}
+.theme-switch.is-on .theme-switch__track { background: var(--color-primary); }
+.theme-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-inverse);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast);
+}
+.theme-switch.is-on .theme-switch__knob { transform: translateX(14px); }
+
+/* Account section pinned to the bottom of the mobile nav drawer (dark surface).
+   Hidden on desktop, where the header user menu is used instead. */
+.nav-account {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-bg-dark);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.nav-account__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  color: #e2e8f0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+.nav-account__link:hover { background: rgba(255, 255, 255, 0.06); text-decoration: none; }
+/* Icons inherit the drawer's light text color (the moon icon reuses
+   .user-menu__item-icon, so override its muted color inside the drawer). */
+.nav-account__icon,
+.nav-account .user-menu__item-icon { width: 20px; height: 20px; flex-shrink: 0; color: inherit; }
+.nav-account__avatar { width: 24px; height: 24px; border-radius: var(--radius-full); object-fit: cover; flex-shrink: 0; }
+.nav-account .user-menu__signin { align-self: flex-start; }
+@media (min-width: 768px) {
+  .nav-account { display: none; }
+}
+
+/* --- Favorites heart (tool pages) --- */
+.tool-title-row { display: flex; align-items: center; gap: var(--space-3); }
+.tool-fav {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 36px;
   height: 36px;
+  flex-shrink: 0;
   background: none;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
+  color: var(--color-text-light);
+  cursor: pointer;
+  transition: color var(--transition-base), border-color var(--transition-base);
+}
+.tool-fav:hover { color: var(--color-error); border-color: var(--color-border); }
+.tool-fav__icon { width: 24px; height: 24px; }
+.tool-fav.is-fav { color: var(--color-error); }
+.tool-fav.is-fav .tool-fav__icon { fill: var(--color-error); }
+
+/* --- Post-conversion sign-in touchpoint / "Saved ✓" (#signin-slot) --- */
+.signin-slot { margin-top: var(--space-5); }
+
+.signin-banner {
+  padding: var(--space-5);
+  background: var(--color-primary-subtle);
+  border: 1px solid var(--color-primary-light);
+  border-radius: var(--radius-lg);
+}
+.signin-banner__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  color: var(--color-heading);
+}
+.signin-banner__lock { font-size: 1.1em; }
+.signin-banner__benefits {
+  margin: var(--space-3) 0;
+  padding-left: var(--space-5);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.signin-banner__benefits li { margin: var(--space-1) 0; }
+.signin-banner__trust {
+  margin: 0 0 var(--space-4);
   color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.signin-banner__actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.signin-banner__dismiss {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   cursor: pointer;
 }
-.theme-toggle:hover { color: var(--color-text-inverse); border-color: var(--color-border); }
-.theme-toggle__icon { display: none; width: 20px; height: 20px; }
-.theme-toggle[data-theme-state="light"] .theme-toggle__icon--light,
-.theme-toggle[data-theme-state="dark"] .theme-toggle__icon--dark,
-.theme-toggle[data-theme-state="system"] .theme-toggle__icon--system { display: block; }
+.signin-banner__dismiss:hover { color: var(--color-text); }
 
-/* --- User-menu placeholder (Phase 5 fills it) --- */
-.user-menu { display: flex; align-items: center; }
+.signin-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-success-subtle);
+  border: 1px solid var(--color-success-light);
+  border-radius: var(--radius-md);
+  color: var(--color-success-hover);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+/* --- Account page (Phase 5 §9) --- */
+.account-signin { max-width: 520px; }
+/* No flash of the signed-out prompt for a signed-in visitor: theme-init sets
+   data-auth="in" pre-paint, so the prompt is hidden before account.js renders. */
+:root[data-auth="in"] .account-signin { display: none; }
+.account-signin__benefits { margin: var(--space-4) 0; padding-left: var(--space-5); color: var(--color-text-secondary); }
+.account-signin__benefits li { margin: var(--space-1) 0; }
+.account-signin__trust { color: var(--color-text-muted); font-size: var(--text-sm); margin-bottom: var(--space-4); }
+
+.account-card {
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.account-card__title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-lg, 1.125rem);
+  color: var(--color-heading);
+}
+
+.account-profile { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: 140px; }
+/* Brand-gradient ring: a gradient-filled circle with the avatar inset by a
+   card-colored border, so the gradient reads as a ring around the photo. */
+.account-profile__avatar-ring {
+  order: 2;
+  align-self: center;
+  flex-shrink: 0;
+  padding: 3px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--brand-blue), var(--brand-green));
+}
+.account-profile__avatar { display: block; width: 120px; height: 120px; border-radius: var(--radius-full); object-fit: cover; border: 3px solid var(--color-bg-raised); }
+.account-profile__meta { order: 1; align-self: center; }
+.account-profile__name { font-weight: var(--weight-semibold); font-size: var(--text-base); color: var(--color-text); }
+.account-profile__email { color: var(--color-text-secondary); }
+.account-profile__since { color: var(--color-text-muted); font-size: var(--text-sm); }
+
+.account-field { display: block; margin-bottom: var(--space-3); }
+.account-field__label { display: block; margin-bottom: var(--space-1); font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--color-text-secondary); }
+.account-input {
+  width: 100%;
+  max-width: 360px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+.account-check { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-text-secondary); cursor: pointer; }
+.account-theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 220px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.account-theme-switch__icon { width: 16px; height: 16px; flex-shrink: 0; color: var(--color-text-muted); }
+.account-range { width: 220px; vertical-align: middle; }
+.account-range-row { display: flex; align-items: center; gap: var(--space-3); }
+.account-range__val { font-size: var(--text-sm); color: var(--color-text-muted); min-width: 2ch; }
+
+.account-fav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3); }
+.account-fav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.account-fav__link { font-weight: var(--weight-medium); color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-fav--gone .account-fav__link { color: var(--color-text-muted); font-style: italic; }
+.account-fav__remove {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  background: none;
+  border: none;
+  color: var(--color-text-light);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.account-fav__remove:hover { color: var(--color-error); }
+
+.account-empty { color: var(--color-text-muted); font-size: var(--text-sm); margin: 0; }
+
+.account-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.account-table th, .account-table td { padding: var(--space-2) var(--space-3); text-align: left; border-bottom: 1px solid var(--color-border-light); }
+.account-table th { color: var(--color-text-muted); font-weight: var(--weight-medium); }
+.account-pager { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-3); }
+.account-pager__info { font-size: var(--text-sm); color: var(--color-text-muted); }
+
+.account-data__cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); margin-bottom: var(--space-3); }
+.account-data__h { font-weight: var(--weight-semibold); color: var(--color-heading); margin-bottom: var(--space-1); font-size: var(--text-sm); }
+.account-data__list { margin: 0; padding-left: var(--space-5); color: var(--color-text-secondary); font-size: var(--text-sm); }
+.account-data__note { color: var(--color-text-muted); font-size: var(--text-sm); margin: 0 0 var(--space-4); }
+.account-data__actions { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+
+.account-danger {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-error-subtle);
+  border: 1px solid var(--color-error-light);
+  border-radius: var(--radius-md);
+}
+.account-danger__msg { margin: 0 0 var(--space-3); color: var(--color-error-hover); font-weight: var(--weight-medium); }
+.account-danger__actions { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+
+.account-signout-row { margin-top: var(--space-4); }
+
+/* Prominent privacy statement (§8.1) */
+.privacy-statement {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-primary-subtle);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+}
+
+@media (max-width: 640px) {
+  .account-data__cols { grid-template-columns: 1fr; }
+}
 
 /* --- Hamburger (mobile only) --- */
 .hamburger {
@@ -1058,6 +1452,15 @@ img { max-width: 100%; display: block; }
   .header__nav--open { transform: translateX(0); visibility: visible; }
   .nav-dropdown__toggle { width: 100%; justify-content: space-between; }
   .nav-dropdown__menu { position: static; box-shadow: none; padding-left: var(--space-3); }
+  /* The drawer is a FIXED dark surface (bg-dark-raised) in both themes, so its
+     links need light text — the default nav tokens are dark-on-light and turn
+     unreadable here (dark-on-dark). Hover keeps the gradient + white text. */
+  .header__nav a,
+  .nav-dropdown__toggle,
+  .nav-dropdown__all { color: #e2e8f0; }
+  .nav-dropdown__item { color: #cbd5e1; }
+  .header__nav a:hover,
+  .nav-dropdown__toggle:hover { color: #ffffff; }
 }
 @media (min-width: 768px) {
   .hamburger { display: none; }

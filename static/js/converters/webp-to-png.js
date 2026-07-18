@@ -1,13 +1,13 @@
-window.convertFile = function(file) {
-  return new Promise(function(resolve, reject) {
+window.convertFile = function (file) {
+  return new Promise(function (resolve, reject) {
     var img = new Image();
-    img.onload = function() {
+    img.onload = function () {
       var canvas = document.createElement('canvas');
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
       var ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
-      canvas.toBlob(function(blob) {
+      canvas.toBlob(function (blob) {
         if (blob) {
           resolve(blob);
         } else {
@@ -16,7 +16,7 @@ window.convertFile = function(file) {
       }, 'image/png');
       URL.revokeObjectURL(img.src);
     };
-    img.onerror = function() {
+    img.onerror = function () {
       URL.revokeObjectURL(img.src);
       reject(new Error('Failed to load image'));
     };
