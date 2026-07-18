@@ -47,6 +47,10 @@
     // hamburger toggle icons (open = three bars, close = ✕)
     menu: [['line', { x1: 3, y1: 6, x2: 21, y2: 6 }], ['line', { x1: 3, y1: 12, x2: 21, y2: 12 }], ['line', { x1: 3, y1: 18, x2: 21, y2: 18 }]],
     close: [['line', { x1: 18, y1: 6, x2: 6, y2: 18 }], ['line', { x1: 6, y1: 6, x2: 18, y2: 18 }]],
+    // action icons
+    logout: [['path', { d: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4' }], ['polyline', { points: '16 17 21 12 16 7' }], ['line', { x1: 21, y1: 12, x2: 9, y2: 12 }]],
+    external: [['path', { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' }], ['polyline', { points: '15 3 21 3 21 9' }], ['line', { x1: 10, y1: 14, x2: 21, y2: 3 }]],
+    plus: [['line', { x1: 12, y1: 5, x2: 12, y2: 19 }], ['line', { x1: 5, y1: 12, x2: 19, y2: 12 }]],
   };
 
   // Build an inline SVG icon from ICONS (stroke=currentColor). P23-safe.
@@ -397,8 +401,32 @@
       setDrawer(hamburger.getAttribute('aria-expanded') !== 'true');
     });
 
-    var signout = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, 'Sign out');
-    signout.addEventListener('click', signOut);
+    // View-site link + Sign-out button, both ghost + icon + same size. Built
+    // fresh per use so the topbar and the mobile drawer each get their own nodes.
+    function viewSiteLink() {
+      return h('a', { class: 'admin-btn admin-btn--ghost', href: '/' }, [
+        svgIcon('external', 16, 'admin-btn__icon'),
+        h('span', {}, 'View site'),
+      ]);
+    }
+    function signOutBtn() {
+      var b = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, [
+        svgIcon('logout', 16, 'admin-btn__icon'),
+        h('span', {}, 'Sign out'),
+      ]);
+      b.addEventListener('click', signOut);
+      return b;
+    }
+
+    // Mobile: email + View site + Sign out live at the BOTTOM of the tab drawer
+    // (hidden on desktop, where the top-bar actions show instead).
+    nav.appendChild(
+      h('div', { class: 'admin-nav__account' }, [
+        h('div', { class: 'admin-nav__email' }, user.email || ''),
+        viewSiteLink(),
+        signOutBtn(),
+      ])
+    );
 
     tabHost = h('main', { class: 'admin-main', id: 'admin-tab' });
 
@@ -409,8 +437,8 @@
           nav,
           h('div', { class: 'admin-topbar__actions' }, [
             h('span', { class: 'admin-topbar__user' }, user.email || ''),
-            h('a', { class: 'admin-btn admin-btn--ghost admin-btn--sm', href: '/' }, 'View site'),
-            signout,
+            viewSiteLink(),
+            signOutBtn(),
           ]),
           hamburger,
         ]),

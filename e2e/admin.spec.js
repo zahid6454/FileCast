@@ -283,7 +283,7 @@ test.describe('announcements', () => {
     await expect(page.getByText('No announcements yet')).toBeVisible();
 
     // Create #1 (active).
-    await page.getByRole('button', { name: '+ New announcement' }).click();
+    await page.getByRole('button', { name: 'New announcement' }).click();
     await page.locator('.admin-form .admin-input').first().fill('First announcement');
     await page.locator('.admin-form .admin-check input[type="checkbox"]').check();
     await page.getByRole('button', { name: 'Create' }).click();
@@ -291,7 +291,7 @@ test.describe('announcements', () => {
     await expect(page.locator('.admin-badge--active')).toHaveCount(1);
 
     // Create #2 (also active) → the server deactivates #1; UI reflects after re-fetch.
-    await page.getByRole('button', { name: '+ New announcement' }).click();
+    await page.getByRole('button', { name: 'New announcement' }).click();
     await page.locator('.admin-form .admin-input').first().fill('Second announcement');
     await page.locator('.admin-form .admin-check input[type="checkbox"]').check();
     await page.getByRole('button', { name: 'Create' }).click();
@@ -312,7 +312,7 @@ test.describe('announcements', () => {
     await installApi(page, state);
     await page.goto('/admin/#announcements');
 
-    await page.getByRole('button', { name: '+ New announcement' }).click();
+    await page.getByRole('button', { name: 'New announcement' }).click();
     await page.locator('.admin-form .admin-input').first().fill('Scheduled');
     // datetime-local takes naive local "YYYY-MM-DDTHH:mm".
     await page.locator('input[type="datetime-local"]').first().fill('2026-08-01T09:30');
@@ -335,7 +335,7 @@ test.describe('announcements', () => {
     await installApi(page, state);
     await page.goto('/admin/#announcements');
 
-    await page.getByRole('button', { name: '+ New announcement' }).click();
+    await page.getByRole('button', { name: 'New announcement' }).click();
     await page.locator('.admin-form .admin-input').first().fill('Live one');
     await page.getByRole('button', { name: 'Create' }).click();
     await expect(page.locator('.admin-annc')).toHaveCount(1);
