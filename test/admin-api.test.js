@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createDom, evalScript, flush } from './helpers.js';
 
 // api.js is the single fetch seam; its status normalization (401/403 → AuthError,
@@ -9,7 +9,7 @@ function makeResponse(status, bodyText) {
   return Promise.resolve({
     status,
     ok: status >= 200 && status < 300,
-    text: () => Promise.resolve(bodyText === undefined ? '' : bodyText),
+    text: () => Promise.resolve(bodyText === undefined ? '' : bodyText)
   });
 }
 
@@ -36,7 +36,7 @@ describe('admin/api.js — status normalization', () => {
   it('maps 501 to the { notImplemented:true } sentinel (never a rejection)', async () => {
     const api = loadApi(() => makeResponse(501, '{"detail":"Deploy is Phase 7"}'));
     await expect(api.post('/api/v1/admin/deploy', {})).resolves.toEqual({
-      notImplemented: true,
+      notImplemented: true
     });
   });
 

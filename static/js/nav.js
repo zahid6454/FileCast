@@ -136,13 +136,17 @@
 
     function setActive(i) {
       var opts = results.querySelectorAll('.hero-search__option');
-      opts.forEach(function (o) { o.classList.remove('hero-search__option--active'); });
+      opts.forEach(function (o) {
+        o.classList.remove('hero-search__option--active');
+      });
       activeIndex = i; // update state first — never let a UI side-effect below strand it
       if (i >= 0 && i < opts.length) {
         opts[i].classList.add('hero-search__option--active');
         input.setAttribute('aria-activedescendant', opts[i].id);
         if (typeof opts[i].scrollIntoView === 'function') {
-          try { opts[i].scrollIntoView({ block: 'nearest' }); } catch (e) {}
+          try {
+            opts[i].scrollIntoView({ block: 'nearest' });
+          } catch (e) {}
         }
       } else {
         input.removeAttribute('aria-activedescendant');
@@ -157,13 +161,20 @@
       }
       var html = '';
       matches.forEach(function (t, i) {
-        var label = t.input_format && t.output_format && t.input_format !== t.output_format
-          ? t.input_format + ' → ' + t.output_format
-          : t.name;
+        var label =
+          t.input_format && t.output_format && t.input_format !== t.output_format
+            ? t.input_format + ' → ' + t.output_format
+            : t.name;
         html +=
-          '<li class="hero-search__option" role="option" id="hero-search-opt-' + i + '">' +
-          '<span class="hero-search__option-name">' + escapeHtml(t.name) + '</span>' +
-          '<span class="hero-search__option-meta">' + escapeHtml(label) + '</span></li>';
+          '<li class="hero-search__option" role="option" id="hero-search-opt-' +
+          i +
+          '">' +
+          '<span class="hero-search__option-name">' +
+          escapeHtml(t.name) +
+          '</span>' +
+          '<span class="hero-search__option-meta">' +
+          escapeHtml(label) +
+          '</span></li>';
       });
       results.innerHTML = html;
       results.classList.remove('hidden');

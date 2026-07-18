@@ -32,14 +32,20 @@
       credentials: 'include',
       body: JSON.stringify(payload)
     })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) {
+        return r.ok ? r.json() : null;
+      })
       .then(function (d) {
         if (!notify) return;
-        document.dispatchEvent(new CustomEvent('filecast:conversion', {
-          detail: { saved: !!(d && d.saved_to_history) }
-        }));
+        document.dispatchEvent(
+          new CustomEvent('filecast:conversion', {
+            detail: { saved: !!(d && d.saved_to_history) }
+          })
+        );
       })
-      .catch(function () { /* silent — progressive enhancement */ });
+      .catch(function () {
+        /* silent — progressive enhancement */
+      });
   }
 
   function getExtension(filename) {
@@ -75,10 +81,18 @@
     var config = window.TOOL_CONFIG;
     var ext = getExtension(file.name);
     if (!config.accept_extensions.includes(ext)) {
-      return { valid: false, error: file.name + ': wrong format. Accepts ' + config.accept_extensions.join(', ') + '.', error_type: 'wrong_format' };
+      return {
+        valid: false,
+        error: file.name + ': wrong format. Accepts ' + config.accept_extensions.join(', ') + '.',
+        error_type: 'wrong_format'
+      };
     }
     if (file.size > config.max_file_size_bytes) {
-      return { valid: false, error: file.name + ': too large. Max: ' + config.max_file_size + '.', error_type: 'too_large' };
+      return {
+        valid: false,
+        error: file.name + ': too large. Max: ' + config.max_file_size + '.',
+        error_type: 'too_large'
+      };
     }
     if (file.size === 0) {
       return { valid: false, error: file.name + ': file is empty.', error_type: 'empty_file' };
@@ -149,7 +163,8 @@
       els.fileList.appendChild(item);
     }
 
-    els.fileListCount.textContent = selectedFiles.length + ' file' + (selectedFiles.length === 1 ? '' : 's') + ' selected';
+    els.fileListCount.textContent =
+      selectedFiles.length + ' file' + (selectedFiles.length === 1 ? '' : 's') + ' selected';
     els.fileList.classList.remove('hidden');
     els.fileListCount.classList.remove('hidden');
   }
@@ -171,7 +186,11 @@
       if (removeBtn) removeBtn.remove();
 
       var status = document.createElement('span');
-      status.className = 'file-list__status ' + (statusClass === 'file-list__item--done' ? 'file-list__status--done' : 'file-list__status--error');
+      status.className =
+        'file-list__status ' +
+        (statusClass === 'file-list__item--done'
+          ? 'file-list__status--done'
+          : 'file-list__status--error');
       status.textContent = statusText;
       item.appendChild(status);
     }
@@ -206,25 +225,40 @@
       els.progressFill.style.width = '';
 
       Promise.resolve()
-        .then(function () { return window.convertFiles(selectedFiles.slice()); })
+        .then(function () {
+          return window.convertFiles(selectedFiles.slice());
+        })
         .then(function (batchResult) {
           var durationMs = Date.now() - startTime;
           var totalIn = 0;
-          selectedFiles.forEach(function (f) { totalIn += f.size; });
-          results.push({ success: true, blob: batchResult.blob, filename: batchResult.filename, originalSize: totalIn, outputSize: batchResult.blob.size });
-          selectedFiles.forEach(function (_, idx) { updateFileItem(idx, 'file-list__item--done', 'Done'); });
+          selectedFiles.forEach(function (f) {
+            totalIn += f.size;
+          });
+          results.push({
+            success: true,
+            blob: batchResult.blob,
+            filename: batchResult.filename,
+            originalSize: totalIn,
+            outputSize: batchResult.blob.size
+          });
+          selectedFiles.forEach(function (_, idx) {
+            updateFileItem(idx, 'file-list__item--done', 'Done');
+          });
           showResults(durationMs);
         })
         .catch(function (err) {
           showError(err.message || 'Processing failed. One or more files may be corrupted.');
           setState('selected');
           trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
-          postConversion({
-            tool_id: config.id,
-            input_format: config.input_format,
-            output_format: config.output_format,
-            status: 'failed'
-          }, false);
+          postConversion(
+            {
+              tool_id: config.id,
+              input_format: config.input_format,
+              output_format: config.output_format,
+              status: 'failed'
+            },
+            false
+          );
         });
       return;
     }
@@ -245,14 +279,22 @@
       var idx = current;
 
       Promise.resolve()
-        .then(function () { return window.convertFile(file); })
+        .then(function () {
+          return window.convertFile(file);
+        })
         .then(function (blob) {
           var outExt = config.output_extension;
           if (config.input_format === config.output_format) {
             outExt = getExtension(file.name) || outExt;
           }
           var filename = generateOutputFilename(file.name, outExt);
-          results.push({ success: true, blob: blob, filename: filename, originalSize: file.size, outputSize: blob.size });
+          results.push({
+            success: true,
+            blob: blob,
+            filename: filename,
+            originalSize: file.size,
+            outputSize: blob.size
+          });
           updateFileItem(idx, 'file-list__item--done', 'Done');
           current++;
           processNext();
@@ -271,11 +313,19 @@
   function showResults(durationMs) {
     els.progressFill.style.width = '100%';
 
-    var successes = results.filter(function (r) { return r.success; });
-    var failures = results.filter(function (r) { return !r.success; });
+    var successes = results.filter(function (r) {
+      return r.success;
+    });
+    var failures = results.filter(function (r) {
+      return !r.success;
+    });
 
-    var totalIn = 0, totalOut = 0;
-    successes.forEach(function (r) { totalIn += r.originalSize; totalOut += r.outputSize; });
+    var totalIn = 0,
+      totalOut = 0;
+    successes.forEach(function (r) {
+      totalIn += r.originalSize;
+      totalOut += r.outputSize;
+    });
 
     var summary = successes.length + ' of ' + results.length + ' files converted';
     if (successes.length > 0) {
@@ -313,15 +363,18 @@
       success_count: successes.length
     });
     var cfg = window.TOOL_CONFIG;
-    postConversion({
-      tool_id: cfg.id,
-      input_format: cfg.input_format,
-      output_format: cfg.output_format,
-      file_count: results.length,
-      success_count: successes.length,
-      duration_ms: durationMs,
-      status: 'success'
-    }, true);
+    postConversion(
+      {
+        tool_id: cfg.id,
+        input_format: cfg.input_format,
+        output_format: cfg.output_format,
+        file_count: results.length,
+        success_count: successes.length,
+        duration_ms: durationMs,
+        status: 'success'
+      },
+      true
+    );
   }
 
   function downloadBlob(blob, filename) {
@@ -332,7 +385,9 @@
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
 
     trackEvent('file_downloaded', {
       tool_id: window.TOOL_CONFIG.id,
@@ -359,7 +414,9 @@
     var zone = els.uploadZone;
     var input = els.fileInput;
 
-    zone.addEventListener('click', function () { input.click(); });
+    zone.addEventListener('click', function () {
+      input.click();
+    });
 
     input.addEventListener('change', function () {
       if (input.files && input.files.length > 0) {

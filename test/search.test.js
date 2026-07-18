@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { createDom, boot } from './helpers.js';
+import { describe, expect, it, vi } from 'vitest';
+import { boot, createDom } from './helpers.js';
 
 const HERO = `
   <div class="hero-search">
@@ -9,8 +9,22 @@ const HERO = `
   </div>`;
 
 const TOOLS = [
-  { id: 'a', name: 'HEIC to JPG', slug: '/convert/heic-to-jpg', input_format: 'HEIC', output_format: 'JPG', tagline: '' },
-  { id: 'b', name: 'PNG to WebP', slug: '/convert/png-to-webp', input_format: 'PNG', output_format: 'WebP', tagline: '' }
+  {
+    id: 'a',
+    name: 'HEIC to JPG',
+    slug: '/convert/heic-to-jpg',
+    input_format: 'HEIC',
+    output_format: 'JPG',
+    tagline: ''
+  },
+  {
+    id: 'b',
+    name: 'PNG to WebP',
+    slug: '/convert/png-to-webp',
+    input_format: 'PNG',
+    output_format: 'WebP',
+    tagline: ''
+  }
 ];
 
 function mockFetch(dom, payload) {

@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createDom, evalScript } from './helpers.js';
 
 describe('theme-init.js (anti-FOUC + auth marker, render-blocking)', () => {
   // Dark mode is a signed-in privilege (Phase 5): gated on the fc_logged_in cookie.
-  it('applies a signed-in user\'s stored dark choice before paint', () => {
+  it("applies a signed-in user's stored dark choice before paint", () => {
     const dom = createDom();
     dom.window.document.cookie = 'fc_logged_in=1';
     dom.window.localStorage.setItem('fc_theme', 'dark');
@@ -11,7 +11,7 @@ describe('theme-init.js (anti-FOUC + auth marker, render-blocking)', () => {
     expect(dom.window.document.documentElement.dataset.theme).toBe('dark');
   });
 
-  it('applies a signed-in user\'s stored light choice', () => {
+  it("applies a signed-in user's stored light choice", () => {
     const dom = createDom();
     dom.window.document.cookie = 'fc_logged_in=1';
     dom.window.localStorage.setItem('fc_theme', 'light');

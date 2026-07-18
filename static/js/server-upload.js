@@ -25,8 +25,12 @@
       }
       showServiceError();
     };
-    xhr.onerror = function () { showServiceError(); };
-    xhr.ontimeout = function () { showServiceError(); };
+    xhr.onerror = function () {
+      showServiceError();
+    };
+    xhr.ontimeout = function () {
+      showServiceError();
+    };
     xhr.send();
   }
 
@@ -55,9 +59,10 @@
         var reader = new FileReader();
         reader.onload = function () {
           var html = reader.result || '';
-          var hasExternal = /<link[^>]+href\s*=/i.test(html) ||
-                            /<script[^>]+src\s*=/i.test(html) ||
-                            /<img[^>]+src\s*=\s*["'](?!data:)/i.test(html);
+          var hasExternal =
+            /<link[^>]+href\s*=/i.test(html) ||
+            /<script[^>]+src\s*=/i.test(html) ||
+            /<img[^>]+src\s*=\s*["'](?!data:)/i.test(html);
           var existing = document.getElementById('external-ref-warning');
           if (existing) existing.remove();
           if (hasExternal) {
@@ -67,7 +72,8 @@
             warning.style.borderColor = 'var(--color-warning)';
             warning.style.background = 'var(--color-warning-light)';
             warning.style.color = 'var(--color-text)';
-            warning.innerHTML = 'This file references external stylesheets, scripts, or images that ' +
+            warning.innerHTML =
+              'This file references external stylesheets, scripts, or images that ' +
               'won’t be available during conversion. The PDF may look unstyled. ' +
               'For best results, embed your CSS and images directly in the HTML file.';
             var convertAction = document.querySelector('.convert-action');

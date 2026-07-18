@@ -1,11 +1,13 @@
-window.convertText = function(text) {
+window.convertText = function (text) {
   var data = JSON.parse(text);
 
   if (!Array.isArray(data)) {
     if (typeof data === 'object' && data !== null) {
       data = [data];
     } else {
-      throw new Error('Input must be a JSON array of objects, e.g. [{"name": "Alice"}, {"name": "Bob"}]');
+      throw new Error(
+        'Input must be a JSON array of objects, e.g. [{"name": "Alice"}, {"name": "Bob"}]'
+      );
     }
   }
 
@@ -15,9 +17,9 @@ window.convertText = function(text) {
 
   var headers = [];
   var headerSet = {};
-  data.forEach(function(row) {
+  data.forEach(function (row) {
     if (typeof row !== 'object' || row === null || Array.isArray(row)) return;
-    Object.keys(row).forEach(function(key) {
+    Object.keys(row).forEach(function (key) {
       if (!headerSet[key]) {
         headerSet[key] = true;
         headers.push(key);
@@ -39,9 +41,11 @@ window.convertText = function(text) {
   }
 
   var lines = [headers.map(escapeCSV).join(',')];
-  data.forEach(function(row) {
+  data.forEach(function (row) {
     if (typeof row !== 'object' || row === null || Array.isArray(row)) return;
-    var values = headers.map(function(h) { return escapeCSV(row[h]); });
+    var values = headers.map(function (h) {
+      return escapeCSV(row[h]);
+    });
     lines.push(values.join(','));
   });
 

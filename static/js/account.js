@@ -224,16 +224,24 @@
 
       // Pager — only when there's more than one page's worth.
       if (page > 0 || data.has_more) {
-        var prev = el('button', {
-          type: 'button',
-          class: 'btn btn--ghost btn--sm',
-          'aria-label': 'Previous page'
-        }, [el('span', { text: 'Previous' })]);
-        var next = el('button', {
-          type: 'button',
-          class: 'btn btn--ghost btn--sm',
-          'aria-label': 'Next page'
-        }, [el('span', { text: 'Next' })]);
+        var prev = el(
+          'button',
+          {
+            type: 'button',
+            class: 'btn btn--ghost btn--sm',
+            'aria-label': 'Previous page'
+          },
+          [el('span', { text: 'Previous' })]
+        );
+        var next = el(
+          'button',
+          {
+            type: 'button',
+            class: 'btn btn--ghost btn--sm',
+            'aria-label': 'Next page'
+          },
+          [el('span', { text: 'Next' })]
+        );
         if (page === 0) prev.disabled = true;
         if (!data.has_more) next.disabled = true;
         prev.addEventListener('click', function () {
@@ -289,11 +297,15 @@
     );
 
     // Default PDF compression.
-    var pdf = selectControl('pref-pdf-compression', [
-      ['low', 'Low'],
-      ['medium', 'Medium'],
-      ['high', 'High']
-    ], prefs.pdf_compression || 'medium');
+    var pdf = selectControl(
+      'pref-pdf-compression',
+      [
+        ['low', 'Low'],
+        ['medium', 'Medium'],
+        ['high', 'High']
+      ],
+      prefs.pdf_compression || 'medium'
+    );
     pdf.addEventListener('change', function () {
       putPreferences({ pdf_compression: pdf.value });
     });
@@ -522,11 +534,15 @@
     }
     ids.forEach(function (id) {
       var tool = byId[id];
-      var remove = el('button', {
-        type: 'button',
-        class: 'account-fav__remove',
-        'aria-label': 'Remove favorite'
-      }, [el('span', { 'aria-hidden': 'true', text: '×' })]);
+      var remove = el(
+        'button',
+        {
+          type: 'button',
+          class: 'account-fav__remove',
+          'aria-label': 'Remove favorite'
+        },
+        [el('span', { 'aria-hidden': 'true', text: '×' })]
+      );
       var favEl = tool
         ? el('div', { class: 'account-fav' }, [
             el('a', { class: 'account-fav__link', href: tool.slug + '/', text: tool.name }),

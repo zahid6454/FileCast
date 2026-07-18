@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 // Phase 3 E2E smoke. Runs against the static `dist/` (see playwright.config.js).
 // The local server does NOT enforce the CSP, so "zero CSP violations" is a
@@ -76,9 +76,7 @@ test('tool page renders and the slider markup carries no inline handler', async 
   await page.goto('/convert/json-to-yaml/');
   await expect(page.locator('#convert-btn')).toBeVisible();
   // The F4 fix: no inline oninput anywhere on a tool page.
-  const inlineHandlers = await page.evaluate(() =>
-    document.querySelectorAll('[oninput]').length
-  );
+  const inlineHandlers = await page.evaluate(() => document.querySelectorAll('[oninput]').length);
   expect(inlineHandlers).toBe(0);
   expect(problems, problems.join('\n')).toEqual([]);
 });
@@ -103,7 +101,9 @@ const PNG_1PX = Buffer.from(
   'base64'
 );
 
-test('F4: the range read-out updates from JS (no inline handler) on a MULTI-FILE tool (R3)', async ({ page }) => {
+test('F4: the range read-out updates from JS (no inline handler) on a MULTI-FILE tool (R3)', async ({
+  page
+}) => {
   // bulk-image-compress is ui_type: multi-file — its slider only binds because
   // initToolOptions() runs BEFORE shared.js's standard-only early return.
   await page.goto('/convert/bulk-image-compress/');
@@ -118,7 +118,9 @@ test('F4: the range read-out updates from JS (no inline handler) on a MULTI-FILE
   await expect(readout).toHaveText(value + '%');
 });
 
-test('upload-zone selection flow still works after the redesign (standard tool)', async ({ page }) => {
+test('upload-zone selection flow still works after the redesign (standard tool)', async ({
+  page
+}) => {
   await page.goto('/convert/image-compress/');
   await expect(page.locator('.upload-zone__cta')).toBeVisible();
   await expect(page.locator('#convert-btn')).toBeDisabled();
@@ -136,7 +138,9 @@ test('upload-zone selection flow still works after the redesign (standard tool)'
   await expect(page.locator('#convert-btn')).toBeEnabled();
 });
 
-test('hero search fetches tool-data.json only on the homepage, not on a tool page (P21)', async ({ page }) => {
+test('hero search fetches tool-data.json only on the homepage, not on a tool page (P21)', async ({
+  page
+}) => {
   const homeRequests = [];
   page.on('request', (r) => {
     if (r.url().includes('tool-data.json')) homeRequests.push(r.url());

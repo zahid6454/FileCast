@@ -1,7 +1,7 @@
-window.convertFile = function(file) {
-  return new Promise(function(resolve, reject) {
+window.convertFile = function (file) {
+  return new Promise(function (resolve, reject) {
     var img = new Image();
-    img.onload = function() {
+    img.onload = function () {
       var canvas = document.createElement('canvas');
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
@@ -9,16 +9,20 @@ window.convertFile = function(file) {
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0);
-      canvas.toBlob(function(blob) {
-        if (blob) {
-          resolve(blob);
-        } else {
-          reject(new Error('Failed to convert image'));
-        }
-      }, 'image/jpeg', 0.92);
+      canvas.toBlob(
+        function (blob) {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to convert image'));
+          }
+        },
+        'image/jpeg',
+        0.92
+      );
       URL.revokeObjectURL(img.src);
     };
-    img.onerror = function() {
+    img.onerror = function () {
       URL.revokeObjectURL(img.src);
       reject(new Error('Failed to load image'));
     };

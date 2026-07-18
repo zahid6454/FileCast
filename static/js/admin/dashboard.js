@@ -27,14 +27,14 @@
     return h('div', { class: 'admin-stat' + (accent ? ' admin-stat--' + accent : '') }, [
       h('div', { class: 'admin-stat__value' }, value),
       h('div', { class: 'admin-stat__label' }, label),
-      sub ? h('div', { class: 'admin-stat__sub' }, sub) : null,
+      sub ? h('div', { class: 'admin-stat__sub' }, sub) : null
     ]);
   }
 
   function sectionCard(title, bodyNode) {
     return h('section', { class: 'admin-card' }, [
       h('h2', { class: 'admin-card__title' }, title),
-      bodyNode,
+      bodyNode
     ]);
   }
 
@@ -47,10 +47,7 @@
     retry.addEventListener('click', onRetry);
     return sectionCard(
       title,
-      h('div', { class: 'admin-error-state' }, [
-        h('p', "Couldn't load this section."),
-        retry,
-      ])
+      h('div', { class: 'admin-error-state' }, [h('p', "Couldn't load this section."), retry])
     );
   }
 
@@ -84,7 +81,7 @@
         viewBox: '0 0 ' + W + ' ' + H,
         preserveAspectRatio: 'xMidYMid meet',
         role: 'img',
-        'aria-label': 'Conversions over time',
+        'aria-label': 'Conversions over time'
       },
       [
         // baseline + left axis
@@ -93,15 +90,15 @@
           x1: padL,
           y1: padT,
           x2: padL,
-          y2: padT + innerH,
+          y2: padT + innerH
         }),
         svg('line', {
           class: 'admin-chart__axis',
           x1: padL,
           y1: padT + innerH,
           x2: padL + innerW,
-          y2: padT + innerH,
-        }),
+          y2: padT + innerH
+        })
       ]
     );
 
@@ -113,7 +110,7 @@
             class: 'admin-chart__placeholder',
             x: W / 2,
             y: H / 2,
-            'text-anchor': 'middle',
+            'text-anchor': 'middle'
           },
           'No data yet'
         )
@@ -163,7 +160,8 @@
     // Soft area fill under the line (line points, then down to the baseline at
     // both ends) — adds colour without a gradient def or a charting library.
     var baseY = (padT + innerH).toFixed(1);
-    var areaPoints = xAt(0).toFixed(1) + ',' + baseY + ' ' + points + ' ' + xAt(n - 1).toFixed(1) + ',' + baseY;
+    var areaPoints =
+      xAt(0).toFixed(1) + ',' + baseY + ' ' + points + ' ' + xAt(n - 1).toFixed(1) + ',' + baseY;
     frame.appendChild(svg('polygon', { class: 'admin-chart__area', points: areaPoints }));
     frame.appendChild(svg('polyline', { class: 'admin-chart__line', points: points }));
     // point dots
@@ -173,7 +171,7 @@
           class: 'admin-chart__dot',
           cx: xAt(i).toFixed(1),
           cy: yAt(p.count).toFixed(1),
-          r: 2.5,
+          r: 2.5
         })
       );
     });
@@ -202,7 +200,7 @@
       viewBox: '0 0 ' + W + ' ' + H,
       preserveAspectRatio: 'xMinYMin meet',
       role: 'img',
-      'aria-label': 'Top tools by conversions',
+      'aria-label': 'Top tools by conversions'
     });
     tools.forEach(function (t, i) {
       var y = gap + i * (rowH + gap);
@@ -210,7 +208,12 @@
       frame.appendChild(
         svg(
           'text',
-          { class: 'admin-chart__barlabel', x: labelW - 6, y: y + rowH / 2 + 4, 'text-anchor': 'end' },
+          {
+            class: 'admin-chart__barlabel',
+            x: labelW - 6,
+            y: y + rowH / 2 + 4,
+            'text-anchor': 'end'
+          },
           labelFor(t.tool_id)
         )
       );
@@ -221,7 +224,7 @@
           y: y,
           width: Math.max(w, 1).toFixed(1),
           height: rowH,
-          rx: 3,
+          rx: 3
         })
       );
       frame.appendChild(
@@ -241,9 +244,19 @@
     var attempts = data.total_conversions + data.total_failures;
     return h('div', { class: 'admin-stats' }, [
       statCard('Total conversions', String(data.total_conversions), null, 'primary'),
-      statCard('Failures', String(data.total_failures), pct(data.total_failures, attempts) + ' of attempts', 'error'),
+      statCard(
+        'Failures',
+        String(data.total_failures),
+        pct(data.total_failures, attempts) + ' of attempts',
+        'error'
+      ),
       statCard('Users', String(data.total_users), null, 'success'),
-      statCard('Ratings', String(data.total_ratings), pct(data.yes_ratings, data.total_ratings) + ' helpful', 'warning'),
+      statCard(
+        'Ratings',
+        String(data.total_ratings),
+        pct(data.yes_ratings, data.total_ratings) + ' helpful',
+        'warning'
+      )
     ]);
   }
 
@@ -262,10 +275,10 @@
             e.error_type ? h('span', { class: 'admin-errfeed__type' }, e.error_type) : null,
             e.created_at
               ? h('time', { class: 'admin-errfeed__time' }, formatDate(e.created_at))
-              : null,
+              : null
           ]),
           h('div', { class: 'admin-errfeed__msg' }, e.error_message || ''),
-          e.browser ? h('div', { class: 'admin-errfeed__browser' }, e.browser) : null,
+          e.browser ? h('div', { class: 'admin-errfeed__browser' }, e.browser) : null
         ])
       );
     });
@@ -281,7 +294,7 @@
       return b.yes + b.no - (a.yes + a.no);
     });
     var table = h('table', { class: 'admin-table admin-ratings' }, [
-      h('thead', h('tr', [h('th', 'Tool'), h('th', 'Helpful'), h('th', 'Not'), h('th', '')])),
+      h('thead', h('tr', [h('th', 'Tool'), h('th', 'Helpful'), h('th', 'Not'), h('th', '')]))
     ]);
     var tbody = h('tbody');
     sorted.forEach(function (r) {
@@ -296,8 +309,8 @@
           h('td', String(r.no)),
           h('td', [
             h('div', { class: 'admin-meter' }, [fill]),
-            h('span', { class: 'admin-meter__label' }, ratio + '%'),
-          ]),
+            h('span', { class: 'admin-meter__label' }, ratio + '%')
+          ])
         ])
       );
     });
@@ -325,7 +338,7 @@
       api.get('/api/v1/stats/dashboard'),
       api.get('/api/v1/stats/conversions?days=30'),
       api.get('/api/v1/stats/errors?limit=50'),
-      api.get('/api/v1/ratings'),
+      api.get('/api/v1/ratings')
     ]).then(function (results) {
       // Bubble auth failures up to the global gate (R8).
       for (var i = 0; i < results.length; i++) {
@@ -342,9 +355,11 @@
       if (results[0].status === 'fulfilled') {
         grid.appendChild(statsWidget(results[0].value));
       } else {
-        grid.appendChild(errorCard('Overview', function () {
-          render(container);
-        }));
+        grid.appendChild(
+          errorCard('Overview', function () {
+            render(container);
+          })
+        );
       }
 
       // Conversions line chart
@@ -352,9 +367,11 @@
         var series = (results[1].value && results[1].value.series) || [];
         grid.appendChild(sectionCard('Conversions (30 days)', lineChart(series)));
       } else {
-        grid.appendChild(errorCard('Conversions (30 days)', function () {
-          render(container);
-        }));
+        grid.appendChild(
+          errorCard('Conversions (30 days)', function () {
+            render(container);
+          })
+        );
       }
 
       // Top-tools bar chart (from the dashboard payload)
@@ -366,9 +383,11 @@
       if (results[3].status === 'fulfilled') {
         grid.appendChild(sectionCard('Ratings', ratingsWidget(results[3].value)));
       } else {
-        grid.appendChild(errorCard('Ratings', function () {
-          render(container);
-        }));
+        grid.appendChild(
+          errorCard('Ratings', function () {
+            render(container);
+          })
+        );
       }
 
       // Recent errors feed (P23 hot spot)
@@ -376,9 +395,11 @@
         var errs = (results[2].value && results[2].value.errors) || [];
         grid.appendChild(sectionCard('Recent errors', errorsWidget(errs)));
       } else {
-        grid.appendChild(errorCard('Recent errors', function () {
-          render(container);
-        }));
+        grid.appendChild(
+          errorCard('Recent errors', function () {
+            render(container);
+          })
+        );
       }
 
       container.appendChild(grid);

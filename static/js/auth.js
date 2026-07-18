@@ -95,10 +95,22 @@
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
     [
-      ['#4285F4', 'M23.52 12.27c0-.79-.07-1.54-.2-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.59-5.17 3.59-8.82z'],
-      ['#34A853', 'M12 24c3.24 0 5.95-1.08 7.96-2.91l-3.86-3c-1.08.72-2.45 1.16-4.1 1.16-3.15 0-5.82-2.13-6.77-4.99H1.24v3.09C3.24 21.3 7.31 24 12 24z'],
-      ['#FBBC05', 'M5.23 14.26c-.24-.72-.38-1.49-.38-2.26s.14-1.54.38-2.26V6.65H1.24C.45 8.24 0 10.06 0 12s.45 3.76 1.24 5.35l3.99-3.09z'],
-      ['#EA4335', 'M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.24 2.7 1.24 6.65l3.99 3.09C6.18 6.88 8.85 4.75 12 4.75z']
+      [
+        '#4285F4',
+        'M23.52 12.27c0-.79-.07-1.54-.2-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.59-5.17 3.59-8.82z'
+      ],
+      [
+        '#34A853',
+        'M12 24c3.24 0 5.95-1.08 7.96-2.91l-3.86-3c-1.08.72-2.45 1.16-4.1 1.16-3.15 0-5.82-2.13-6.77-4.99H1.24v3.09C3.24 21.3 7.31 24 12 24z'
+      ],
+      [
+        '#FBBC05',
+        'M5.23 14.26c-.24-.72-.38-1.49-.38-2.26s.14-1.54.38-2.26V6.65H1.24C.45 8.24 0 10.06 0 12s.45 3.76 1.24 5.35l3.99-3.09z'
+      ],
+      [
+        '#EA4335',
+        'M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.24 2.7 1.24 6.65l3.99 3.09C6.18 6.88 8.85 4.75 12 4.75z'
+      ]
     ].forEach(function (p) {
       var path = document.createElementNS(ns, 'path');
       path.setAttribute('fill', p[0]);
@@ -199,12 +211,16 @@
   // --- header user menu ---------------------------------------------------
 
   function googleButton() {
-    return el('a', {
-      class: 'user-menu__signin',
-      href: signInHref(null),
-      title: TRUST_LINE,
-      'aria-label': 'Sign in with Google'
-    }, [googleIcon(), el('span', { class: 'user-menu__signin-label', text: 'Sign in' })]);
+    return el(
+      'a',
+      {
+        class: 'user-menu__signin',
+        href: signInHref(null),
+        title: TRUST_LINE,
+        'aria-label': 'Sign in with Google'
+      },
+      [googleIcon(), el('span', { class: 'user-menu__signin-label', text: 'Sign in' })]
+    );
   }
 
   // The full Google-branded button (used everywhere a "Sign in with Google" CTA
@@ -212,11 +228,15 @@
   function googleBrandedButton(next) {
     var g = googleIcon();
     g.setAttribute('class', 'btn-google__icon');
-    return el('a', {
-      class: 'btn-google',
-      href: signInHref(next),
-      'aria-label': 'Sign in with Google'
-    }, [g, el('span', { text: 'Sign in with Google' })]);
+    return el(
+      'a',
+      {
+        class: 'btn-google',
+        href: signInHref(next),
+        'aria-label': 'Sign in with Google'
+      },
+      [g, el('span', { text: 'Sign in with Google' })]
+    );
   }
 
   function renderSignIn(menu) {
@@ -262,7 +282,8 @@
 
     var menuList = el('div', { class: 'user-menu__dropdown', role: 'menu', hidden: 'hidden' });
     menuList.appendChild(dropdownItem('My Account', '/account/', 'icon-user'));
-    if (user.role === 'admin') menuList.appendChild(dropdownItem('Admin', '/admin/', 'icon-shield'));
+    if (user.role === 'admin')
+      menuList.appendChild(dropdownItem('Admin', '/admin/', 'icon-shield'));
     menuList.appendChild(el('div', { class: 'user-menu__sep', role: 'separator' }));
     // Dark-mode switch in the middle (a signed-in perk).
     menuList.appendChild(themeToggleControl('user-menu__item user-menu__item--toggle'));
@@ -524,11 +545,15 @@
     var signInBtn = googleBrandedButton(null);
     signInBtn.classList.add('signin-banner__cta');
 
-    var laterBtn = el('button', {
-      class: 'signin-banner__dismiss',
-      type: 'button',
-      'aria-label': 'Dismiss'
-    }, [el('span', { text: 'Maybe later ×' })]);
+    var laterBtn = el(
+      'button',
+      {
+        class: 'signin-banner__dismiss',
+        type: 'button',
+        'aria-label': 'Dismiss'
+      },
+      [el('span', { text: 'Maybe later ×' })]
+    );
     laterBtn.addEventListener('click', function () {
       var dismisses = (parseInt(ls(K_DISMISS) || '0', 10) || 0) + 1;
       lsSet(K_DISMISS, String(dismisses));
@@ -537,15 +562,19 @@
       clear(s);
     });
 
-    var banner = el('div', { class: 'signin-banner', role: 'region', 'aria-label': 'Create an account' }, [
-      el('div', { class: 'signin-banner__head' }, [
-        el('span', { class: 'signin-banner__lock', 'aria-hidden': 'true', text: '🔒' }),
-        el('strong', { text: 'Want to track your conversions?' })
-      ]),
-      benefits,
-      el('p', { class: 'signin-banner__trust', text: TRUST_LINE }),
-      el('div', { class: 'signin-banner__actions' }, [signInBtn, laterBtn])
-    ]);
+    var banner = el(
+      'div',
+      { class: 'signin-banner', role: 'region', 'aria-label': 'Create an account' },
+      [
+        el('div', { class: 'signin-banner__head' }, [
+          el('span', { class: 'signin-banner__lock', 'aria-hidden': 'true', text: '🔒' }),
+          el('strong', { text: 'Want to track your conversions?' })
+        ]),
+        benefits,
+        el('p', { class: 'signin-banner__trust', text: TRUST_LINE }),
+        el('div', { class: 'signin-banner__actions' }, [signInBtn, laterBtn])
+      ]
+    );
 
     s.appendChild(banner);
     s.hidden = false;

@@ -27,6 +27,18 @@ jobs:
       - name: Format check (ruff format)
         run: ruff format --check .
 
+  js-lint:
+    name: Lint & format (Biome)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      # Biome version is pinned in package.json; `biome ci` checks format + lint.
+      - run: npx biome ci .
+
   test:
     name: Tests (pytest + Postgres)
     runs-on: ubuntu-latest

@@ -26,31 +26,102 @@
     { id: 'tools', label: 'Tools' },
     { id: 'announcements', label: 'Announcements' },
     { id: 'users', label: 'Users' },
-    { id: 'errors', label: 'Errors' },
+    { id: 'errors', label: 'Errors' }
   ];
   var VALID = { dashboard: 1, tools: 1, announcements: 1, users: 1, errors: 1 };
 
   // Inline SVG tab icons (Feather-style, stroke=currentColor so they follow the
   // link colour). Built via dom.svg() — no external assets, P23-safe.
   var ICONS = {
-    dashboard: [['rect', { x: 3, y: 3, width: 8, height: 8, rx: 1 }], ['rect', { x: 13, y: 3, width: 8, height: 8, rx: 1 }], ['rect', { x: 13, y: 13, width: 8, height: 8, rx: 1 }], ['rect', { x: 3, y: 13, width: 8, height: 8, rx: 1 }]],
-    tools: [['line', { x1: 4, y1: 21, x2: 4, y2: 14 }], ['line', { x1: 4, y1: 10, x2: 4, y2: 3 }], ['line', { x1: 12, y1: 21, x2: 12, y2: 12 }], ['line', { x1: 12, y1: 8, x2: 12, y2: 3 }], ['line', { x1: 20, y1: 21, x2: 20, y2: 16 }], ['line', { x1: 20, y1: 12, x2: 20, y2: 3 }], ['line', { x1: 1, y1: 14, x2: 7, y2: 14 }], ['line', { x1: 9, y1: 8, x2: 15, y2: 8 }], ['line', { x1: 17, y1: 16, x2: 23, y2: 16 }]],
-    announcements: [['path', { d: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9' }], ['path', { d: 'M13.73 21a2 2 0 0 1-3.46 0' }]],
-    users: [['path', { d: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' }], ['circle', { cx: 9, cy: 7, r: 4 }], ['path', { d: 'M23 21v-2a4 4 0 0 0-3-3.87' }], ['path', { d: 'M16 3.13a4 4 0 0 1 0 7.75' }]],
-    errors: [['path', { d: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z' }], ['line', { x1: 12, y1: 9, x2: 12, y2: 13 }], ['line', { x1: 12, y1: 17, x2: 12.01, y2: 17 }]],
+    dashboard: [
+      ['rect', { x: 3, y: 3, width: 8, height: 8, rx: 1 }],
+      ['rect', { x: 13, y: 3, width: 8, height: 8, rx: 1 }],
+      ['rect', { x: 13, y: 13, width: 8, height: 8, rx: 1 }],
+      ['rect', { x: 3, y: 13, width: 8, height: 8, rx: 1 }]
+    ],
+    tools: [
+      ['line', { x1: 4, y1: 21, x2: 4, y2: 14 }],
+      ['line', { x1: 4, y1: 10, x2: 4, y2: 3 }],
+      ['line', { x1: 12, y1: 21, x2: 12, y2: 12 }],
+      ['line', { x1: 12, y1: 8, x2: 12, y2: 3 }],
+      ['line', { x1: 20, y1: 21, x2: 20, y2: 16 }],
+      ['line', { x1: 20, y1: 12, x2: 20, y2: 3 }],
+      ['line', { x1: 1, y1: 14, x2: 7, y2: 14 }],
+      ['line', { x1: 9, y1: 8, x2: 15, y2: 8 }],
+      ['line', { x1: 17, y1: 16, x2: 23, y2: 16 }]
+    ],
+    announcements: [
+      ['path', { d: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9' }],
+      ['path', { d: 'M13.73 21a2 2 0 0 1-3.46 0' }]
+    ],
+    users: [
+      ['path', { d: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' }],
+      ['circle', { cx: 9, cy: 7, r: 4 }],
+      ['path', { d: 'M23 21v-2a4 4 0 0 0-3-3.87' }],
+      ['path', { d: 'M16 3.13a4 4 0 0 1 0 7.75' }]
+    ],
+    errors: [
+      [
+        'path',
+        {
+          d: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'
+        }
+      ],
+      ['line', { x1: 12, y1: 9, x2: 12, y2: 13 }],
+      ['line', { x1: 12, y1: 17, x2: 12.01, y2: 17 }]
+    ],
     // empty-state icons
-    megaphone: [['path', { d: 'M3 11l18-5v12L3 14v-3z' }], ['path', { d: 'M11.6 16.8a3 3 0 1 1-5.8-1.6' }]],
-    check: [['path', { d: 'M22 11.08V12a10 10 0 1 1-5.93-9.14' }], ['polyline', { points: '22 4 12 14.01 9 11.01' }]],
-    inbox: [['polyline', { points: '22 12 16 12 14 15 10 15 8 12 2 12' }], ['path', { d: 'M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z' }]],
-    info: [['circle', { cx: 12, cy: 12, r: 10 }], ['line', { x1: 12, y1: 16, x2: 12, y2: 12 }], ['line', { x1: 12, y1: 8, x2: 12.01, y2: 8 }]],
-    home: [['path', { d: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }], ['polyline', { points: '9 22 9 12 15 12 15 22' }]],
+    megaphone: [
+      ['path', { d: 'M3 11l18-5v12L3 14v-3z' }],
+      ['path', { d: 'M11.6 16.8a3 3 0 1 1-5.8-1.6' }]
+    ],
+    check: [
+      ['path', { d: 'M22 11.08V12a10 10 0 1 1-5.93-9.14' }],
+      ['polyline', { points: '22 4 12 14.01 9 11.01' }]
+    ],
+    inbox: [
+      ['polyline', { points: '22 12 16 12 14 15 10 15 8 12 2 12' }],
+      [
+        'path',
+        {
+          d: 'M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'
+        }
+      ]
+    ],
+    info: [
+      ['circle', { cx: 12, cy: 12, r: 10 }],
+      ['line', { x1: 12, y1: 16, x2: 12, y2: 12 }],
+      ['line', { x1: 12, y1: 8, x2: 12.01, y2: 8 }]
+    ],
+    home: [
+      ['path', { d: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }],
+      ['polyline', { points: '9 22 9 12 15 12 15 22' }]
+    ],
     // hamburger toggle icons (open = three bars, close = ✕)
-    menu: [['line', { x1: 3, y1: 6, x2: 21, y2: 6 }], ['line', { x1: 3, y1: 12, x2: 21, y2: 12 }], ['line', { x1: 3, y1: 18, x2: 21, y2: 18 }]],
-    close: [['line', { x1: 18, y1: 6, x2: 6, y2: 18 }], ['line', { x1: 6, y1: 6, x2: 18, y2: 18 }]],
+    menu: [
+      ['line', { x1: 3, y1: 6, x2: 21, y2: 6 }],
+      ['line', { x1: 3, y1: 12, x2: 21, y2: 12 }],
+      ['line', { x1: 3, y1: 18, x2: 21, y2: 18 }]
+    ],
+    close: [
+      ['line', { x1: 18, y1: 6, x2: 6, y2: 18 }],
+      ['line', { x1: 6, y1: 6, x2: 18, y2: 18 }]
+    ],
     // action icons
-    logout: [['path', { d: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4' }], ['polyline', { points: '16 17 21 12 16 7' }], ['line', { x1: 21, y1: 12, x2: 9, y2: 12 }]],
-    external: [['path', { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' }], ['polyline', { points: '15 3 21 3 21 9' }], ['line', { x1: 10, y1: 14, x2: 21, y2: 3 }]],
-    plus: [['line', { x1: 12, y1: 5, x2: 12, y2: 19 }], ['line', { x1: 5, y1: 12, x2: 19, y2: 12 }]],
+    logout: [
+      ['path', { d: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4' }],
+      ['polyline', { points: '16 17 21 12 16 7' }],
+      ['line', { x1: 21, y1: 12, x2: 9, y2: 12 }]
+    ],
+    external: [
+      ['path', { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' }],
+      ['polyline', { points: '15 3 21 3 21 9' }],
+      ['line', { x1: 10, y1: 14, x2: 21, y2: 3 }]
+    ],
+    plus: [
+      ['line', { x1: 12, y1: 5, x2: 12, y2: 19 }],
+      ['line', { x1: 5, y1: 12, x2: 19, y2: 12 }]
+    ]
   };
 
   // Build an inline SVG icon from ICONS (stroke=currentColor). P23-safe.
@@ -58,18 +129,22 @@
     var kids = (ICONS[name] || []).map(function (s) {
       return dom.svg(s[0], s[1]);
     });
-    return dom.svg('svg', {
-      class: cls || 'admin-icon',
-      viewBox: '0 0 24 24',
-      width: String(size || 24),
-      height: String(size || 24),
-      fill: 'none',
-      stroke: 'currentColor',
-      'stroke-width': '2',
-      'stroke-linecap': 'round',
-      'stroke-linejoin': 'round',
-      'aria-hidden': 'true',
-    }, kids);
+    return dom.svg(
+      'svg',
+      {
+        class: cls || 'admin-icon',
+        viewBox: '0 0 24 24',
+        width: String(size || 24),
+        height: String(size || 24),
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': '2',
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+        'aria-hidden': 'true'
+      },
+      kids
+    );
   }
   ADMIN.icon = svgIcon;
 
@@ -82,11 +157,15 @@
     opts = opts || {};
     var kids = [
       h('div', { class: 'admin-emptystate__icon' }, [svgIcon(opts.icon || 'inbox', 28)]),
-      h('h3', { class: 'admin-emptystate__title' }, opts.title || 'Nothing here yet'),
+      h('h3', { class: 'admin-emptystate__title' }, opts.title || 'Nothing here yet')
     ];
     if (opts.text) kids.push(h('p', { class: 'admin-emptystate__text' }, opts.text));
     if (opts.actionLabel && opts.onAction) {
-      var btn = h('button', { type: 'button', class: 'admin-btn admin-btn--primary' }, opts.actionLabel);
+      var btn = h(
+        'button',
+        { type: 'button', class: 'admin-btn admin-btn--primary' },
+        opts.actionLabel
+      );
       btn.addEventListener('click', opts.onAction);
       kids.push(btn);
     }
@@ -138,7 +217,7 @@
     label: function (id) {
       var t = this.byId[id];
       return t ? t.display_name || t.name || id : id;
-    },
+    }
   };
 
   // --- toasts -------------------------------------------------------------
@@ -157,7 +236,7 @@
     var host = ensureToastHost();
     var toast = h('div', { class: 'admin-toast admin-toast--' + type, role: 'status' }, [
       svgIcon(TOAST_ICON[type] || 'info', 18, 'admin-toast__icon'),
-      h('span', { class: 'admin-toast__msg' }, message),
+      h('span', { class: 'admin-toast__msg' }, message)
     ]);
     host.appendChild(toast);
     requestAnimationFrame(function () {
@@ -236,17 +315,24 @@
     var slot = document.getElementById('admin-banner-slot');
     if (!slot) return;
     bannerShown = true;
-    var dismiss = h('button', { type: 'button', class: 'admin-iconbtn', 'aria-label': 'Dismiss' }, '✕');
+    var dismiss = h(
+      'button',
+      { type: 'button', class: 'admin-iconbtn', 'aria-label': 'Dismiss' },
+      '✕'
+    );
     dismiss.addEventListener('click', function () {
       dom.clear(slot);
       bannerShown = false;
     });
     slot.appendChild(
       h('div', { class: 'admin-banner admin-banner--info', role: 'status' }, [
-        h('span', { class: 'admin-banner__text' },
+        h(
+          'span',
+          { class: 'admin-banner__text' },
           'Changes are saved to the database. Publishing to the live site needs a rebuild ' +
-            '(not wired until Phase 7). Locally, re-run python build.py to see them.'),
-        dismiss,
+            '(not wired until Phase 7). Locally, re-run python build.py to see them.'
+        ),
+        dismiss
       ])
     );
   }
@@ -312,8 +398,16 @@
     // Dev-login: a local-only shortcut that skips Google and mints a session for a
     // synthetic admin/user account. Gated server-side (404 unless ENVIRONMENT=
     // development), so in prod the first click hides these honestly.
-    var adminBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' }, 'Dev login as admin');
-    var userBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' }, 'Dev login as user');
+    var adminBtn = h(
+      'button',
+      { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
+      'Dev login as admin'
+    );
+    var userBtn = h(
+      'button',
+      { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
+      'Dev login as user'
+    );
     var devRow = h('div', { class: 'admin-signin__dev' }, [adminBtn, userBtn]);
     var devNote = h('p', { class: 'admin-signin__note' }, 'Local development only — skips Google.');
 
@@ -348,8 +442,8 @@
           googleBtn,
           h('a', { class: 'admin-btn admin-btn--ghost', href: '/' }, 'Go to the main site'),
           devNote,
-          devRow,
-        ]),
+          devRow
+        ])
       ])
     );
   }
@@ -357,7 +451,11 @@
   function renderNoAccess(user) {
     tabHost = null;
     dom.clear(mount);
-    var signout = h('button', { type: 'button', class: 'admin-btn admin-btn--primary' }, 'Sign out');
+    var signout = h(
+      'button',
+      { type: 'button', class: 'admin-btn admin-btn--primary' },
+      'Sign out'
+    );
     signout.addEventListener('click', signOut);
     var who = user && user.email ? "You're signed in as " + user.email + ', which' : 'This account';
     mount.appendChild(
@@ -367,8 +465,8 @@
           h('p', who + " doesn't have access to the admin panel."),
           h('p', { class: 'admin-signin__note' }, 'Sign out to switch to an admin account.'),
           signout,
-          h('a', { class: 'admin-btn admin-btn--ghost', href: '/' }, 'Back to FileCast'),
-        ]),
+          h('a', { class: 'admin-btn admin-btn--ghost', href: '/' }, 'Back to FileCast')
+        ])
       ])
     );
   }
@@ -381,21 +479,25 @@
       nav.appendChild(
         h('a', { class: 'admin-tabs__link', href: '#' + t.id, dataset: { tab: t.id } }, [
           tabIcon(t.id),
-          h('span', { class: 'admin-tabs__label' }, t.label),
+          h('span', { class: 'admin-tabs__label' }, t.label)
         ])
       );
     });
 
     // Hamburger: collapses the tab nav into a drawer on narrow screens (matches
     // the main site's header). Hidden on desktop via CSS.
-    var hamburger = h('button', {
-      type: 'button',
-      class: 'admin-hamburger',
-      id: 'admin-hamburger',
-      'aria-controls': 'admin-nav',
-      'aria-expanded': 'false',
-      'aria-label': 'Menu',
-    }, [svgIcon('menu', 24, 'admin-hamburger__icon')]);
+    var hamburger = h(
+      'button',
+      {
+        type: 'button',
+        class: 'admin-hamburger',
+        id: 'admin-hamburger',
+        'aria-controls': 'admin-nav',
+        'aria-expanded': 'false',
+        'aria-label': 'Menu'
+      },
+      [svgIcon('menu', 24, 'admin-hamburger__icon')]
+    );
     hamburger.addEventListener('click', function (e) {
       e.stopPropagation();
       setDrawer(hamburger.getAttribute('aria-expanded') !== 'true');
@@ -406,13 +508,13 @@
     function viewSiteLink() {
       return h('a', { class: 'admin-btn admin-btn--secondary', href: '/' }, [
         svgIcon('external', 16, 'admin-btn__icon'),
-        h('span', {}, 'View site'),
+        h('span', {}, 'View site')
       ]);
     }
     function signOutBtn() {
       var b = h('button', { type: 'button', class: 'admin-btn admin-btn--danger' }, [
         svgIcon('logout', 16, 'admin-btn__icon'),
-        h('span', {}, 'Sign out'),
+        h('span', {}, 'Sign out')
       ]);
       b.addEventListener('click', signOut);
       return b;
@@ -424,7 +526,7 @@
       h('div', { class: 'admin-nav__account' }, [
         h('div', { class: 'admin-nav__email' }, user.email || ''),
         viewSiteLink(),
-        signOutBtn(),
+        signOutBtn()
       ])
     );
 
@@ -438,12 +540,12 @@
           h('div', { class: 'admin-topbar__actions' }, [
             h('span', { class: 'admin-topbar__user' }, user.email || ''),
             viewSiteLink(),
-            signOutBtn(),
+            signOutBtn()
           ]),
-          hamburger,
+          hamburger
         ]),
         h('div', { class: 'admin-banner-slot', id: 'admin-banner-slot' }),
-        tabHost,
+        tabHost
       ])
     );
 

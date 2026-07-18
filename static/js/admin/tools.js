@@ -54,7 +54,7 @@
 
   function homepageDivider() {
     return h('li', { class: 'admin-tool-divider', 'aria-hidden': 'true' }, [
-      h('span', { class: 'admin-tool-divider__label' }, 'Shown on the homepage ↑'),
+      h('span', { class: 'admin-tool-divider__label' }, 'Shown on the homepage ↑')
     ]);
   }
 
@@ -92,11 +92,11 @@
       h('strong', 'Drag ≡ or use ▲ ▼'),
       ' to set the order within a category. Tools above the ',
       h('strong', '“Shown on the homepage”'),
-      ' line appear on the homepage (up to four per category); the rest live on the category page. Disabled tools keep their slot. Changes publish on the next rebuild.',
+      ' line appear on the homepage (up to four per category); the rest live on the category page. Disabled tools keep their slot. Changes publish on the next rebuild.'
     ]);
     return h('div', { class: 'admin-callout' }, [
       icon ? h('span', { class: 'admin-callout__icon' }, [icon]) : null,
-      body,
+      body
     ]);
   }
 
@@ -140,25 +140,37 @@
     var row = h('li', {
       class: 'admin-tool',
       draggable: 'true',
-      dataset: { toolId: tool.id, category: tool.category || 'other' },
+      dataset: { toolId: tool.id, category: tool.category || 'other' }
     });
 
-    var handle = h('span', {
-      class: 'admin-tool__handle',
-      'aria-hidden': 'true',
-      title: 'Drag to reorder',
-    }, '≡');
+    var handle = h(
+      'span',
+      {
+        class: 'admin-tool__handle',
+        'aria-hidden': 'true',
+        title: 'Drag to reorder'
+      },
+      '≡'
+    );
 
-    var up = h('button', {
-      type: 'button',
-      class: 'admin-tool__up admin-iconbtn',
-      'aria-label': 'Move ' + label(tool) + ' up',
-    }, '▲');
-    var down = h('button', {
-      type: 'button',
-      class: 'admin-tool__down admin-iconbtn',
-      'aria-label': 'Move ' + label(tool) + ' down',
-    }, '▼');
+    var up = h(
+      'button',
+      {
+        type: 'button',
+        class: 'admin-tool__up admin-iconbtn',
+        'aria-label': 'Move ' + label(tool) + ' up'
+      },
+      '▲'
+    );
+    var down = h(
+      'button',
+      {
+        type: 'button',
+        class: 'admin-tool__down admin-iconbtn',
+        'aria-label': 'Move ' + label(tool) + ' down'
+      },
+      '▼'
+    );
     up.addEventListener('click', function () {
       moveRow(row, -1);
     });
@@ -166,10 +178,14 @@
       moveRow(row, 1);
     });
 
-    var nameBtn = h('button', {
-      type: 'button',
-      class: 'admin-tool__name',
-    }, label(tool));
+    var nameBtn = h(
+      'button',
+      {
+        type: 'button',
+        class: 'admin-tool__name'
+      },
+      label(tool)
+    );
     nameBtn.addEventListener('click', function () {
       openSlideout(tool);
     });
@@ -178,13 +194,17 @@
       nameBtn.appendChild(h('span', { class: 'admin-tool__off' }, 'disabled'));
     }
 
-    var toggle = h('button', {
-      type: 'button',
-      role: 'switch',
-      class: 'admin-switch',
-      'aria-checked': tool.enabled ? 'true' : 'false',
-      'aria-label': 'Enable ' + label(tool),
-    }, [h('span', { class: 'admin-switch__thumb', 'aria-hidden': 'true' })]);
+    var toggle = h(
+      'button',
+      {
+        type: 'button',
+        role: 'switch',
+        class: 'admin-switch',
+        'aria-checked': tool.enabled ? 'true' : 'false',
+        'aria-label': 'Enable ' + label(tool)
+      },
+      [h('span', { class: 'admin-switch__thumb', 'aria-hidden': 'true' })]
+    );
     toggle.addEventListener('click', function () {
       toggleTool(tool, toggle, nameBtn);
     });
@@ -194,7 +214,7 @@
       h('span', { class: 'admin-tool__moves' }, [up, down]),
       nameBtn,
       h('span', { class: 'admin-tool__spacer' }),
-      toggle,
+      toggle
     ]);
 
     bindDrag(row);
@@ -348,40 +368,72 @@
     var overlay = h('div', { class: 'admin-overlay' });
     overlay.addEventListener('click', closeSlideout);
 
-    var nameInput = h('input', { type: 'text', id: 'so-name', class: 'admin-input', value: tool.display_name || '' });
+    var nameInput = h('input', {
+      type: 'text',
+      id: 'so-name',
+      class: 'admin-input',
+      value: tool.display_name || ''
+    });
     var enabledInput = h('input', { type: 'checkbox', id: 'so-enabled' });
     if (tool.enabled) enabledInput.checked = true;
     var maintInput = h('textarea', { id: 'so-maint', class: 'admin-input', rows: '3' });
     maintInput.value = tool.maintenance_message || '';
-    var sizeInput = h('input', { type: 'text', id: 'so-size', class: 'admin-input', value: tool.custom_max_file_size || '', placeholder: 'e.g. 50MB' });
+    var sizeInput = h('input', {
+      type: 'text',
+      id: 'so-size',
+      class: 'admin-input',
+      value: tool.custom_max_file_size || '',
+      placeholder: 'e.g. 50MB'
+    });
 
-    var closeBtn = h('button', { type: 'button', class: 'admin-iconbtn admin-slideout__close', 'aria-label': 'Close' }, '✕');
+    var closeBtn = h(
+      'button',
+      { type: 'button', class: 'admin-iconbtn admin-slideout__close', 'aria-label': 'Close' },
+      '✕'
+    );
     closeBtn.addEventListener('click', closeSlideout);
 
-    var saveBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--primary' }, 'Save changes');
+    var saveBtn = h(
+      'button',
+      { type: 'button', class: 'admin-btn admin-btn--primary' },
+      'Save changes'
+    );
     saveBtn.addEventListener('click', function () {
       saveSlideout(tool, {
         display_name: nameInput.value,
         enabled: enabledInput.checked,
         maintenance_message: maintInput.value,
-        custom_max_file_size: sizeInput.value,
+        custom_max_file_size: sizeInput.value
       });
     });
 
-    var panel = h('aside', { class: 'admin-slideout', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Edit ' + label(tool) }, [
-      h('div', { class: 'admin-slideout__head' }, [
-        h('h2', { class: 'admin-slideout__title' }, label(tool)),
-        closeBtn,
-      ]),
-      h('div', { class: 'admin-slideout__body' }, [
-        field('Display name', nameInput),
-        h('label', { class: 'admin-check' }, [enabledInput, h('span', 'Enabled')]),
-        field('Maintenance message', maintInput),
-        field('Override max file size', sizeInput),
-        h('p', { class: 'admin-slideout__meta' }, tool.category ? 'Category: ' + tool.category : ''),
-      ]),
-      h('div', { class: 'admin-slideout__foot' }, [saveBtn]),
-    ]);
+    var panel = h(
+      'aside',
+      {
+        class: 'admin-slideout',
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-label': 'Edit ' + label(tool)
+      },
+      [
+        h('div', { class: 'admin-slideout__head' }, [
+          h('h2', { class: 'admin-slideout__title' }, label(tool)),
+          closeBtn
+        ]),
+        h('div', { class: 'admin-slideout__body' }, [
+          field('Display name', nameInput),
+          h('label', { class: 'admin-check' }, [enabledInput, h('span', 'Enabled')]),
+          field('Maintenance message', maintInput),
+          field('Override max file size', sizeInput),
+          h(
+            'p',
+            { class: 'admin-slideout__meta' },
+            tool.category ? 'Category: ' + tool.category : ''
+          )
+        ]),
+        h('div', { class: 'admin-slideout__foot' }, [saveBtn])
+      ]
+    );
 
     document.body.appendChild(overlay);
     document.body.appendChild(panel);
@@ -410,7 +462,7 @@
   function field(labelText, control) {
     return h('label', { class: 'admin-field' }, [
       h('span', { class: 'admin-field__label' }, labelText),
-      control,
+      control
     ]);
   }
 
@@ -436,8 +488,10 @@
     var patch = {};
     if (values.display_name !== (tool.display_name || '')) patch.display_name = values.display_name;
     if (values.enabled !== tool.enabled) patch.enabled = values.enabled;
-    if (values.maintenance_message !== (tool.maintenance_message || '')) patch.maintenance_message = values.maintenance_message;
-    if (values.custom_max_file_size !== (tool.custom_max_file_size || '')) patch.custom_max_file_size = values.custom_max_file_size;
+    if (values.maintenance_message !== (tool.maintenance_message || ''))
+      patch.maintenance_message = values.maintenance_message;
+    if (values.custom_max_file_size !== (tool.custom_max_file_size || ''))
+      patch.custom_max_file_size = values.custom_max_file_size;
 
     if (Object.keys(patch).length === 0) {
       closeSlideout();
@@ -488,7 +542,7 @@
           wrap.appendChild(
             h('section', { class: 'admin-toolgroup' }, [
               h('h2', { class: 'admin-toolgroup__title' }, catTitle(cat)),
-              list,
+              list
             ])
           );
           refreshMoveButtons(list);

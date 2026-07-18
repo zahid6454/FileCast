@@ -9,10 +9,11 @@ const ROOT = path.resolve(__dirname, '..');
 // Build an isolated JSDOM window with the given <body> markup. Each test gets a
 // fresh window (fresh localStorage, fresh DOM, no leaked listeners).
 export function createDom(bodyHtml = '', { url = 'http://localhost/' } = {}) {
-  return new JSDOM(
-    `<!DOCTYPE html><html><head></head><body>${bodyHtml}</body></html>`,
-    { url, pretendToBeVisual: true, runScripts: 'outside-only' }
-  );
+  return new JSDOM(`<!DOCTYPE html><html><head></head><body>${bodyHtml}</body></html>`, {
+    url,
+    pretendToBeVisual: true,
+    runScripts: 'outside-only'
+  });
 }
 
 // Evaluate a production JS file *as-is* inside the window (no test hooks in the

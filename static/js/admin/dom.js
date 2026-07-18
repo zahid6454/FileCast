@@ -163,6 +163,6 @@
     text: text,
     clear: clear,
     append: append,
-    safeHref: safeHref,
+    safeHref: safeHref
   };
 })();

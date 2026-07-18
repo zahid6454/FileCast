@@ -34,9 +34,7 @@ async function mockMe(page, user, counter) {
 }
 
 async function signIn(context) {
-  await context.addCookies([
-    { name: 'fc_logged_in', value: '1', domain: '127.0.0.1', path: '/' }
-  ]);
+  await context.addCookies([{ name: 'fc_logged_in', value: '1', domain: '127.0.0.1', path: '/' }]);
 }
 
 test('P12: an anonymous visitor triggers ZERO /me network', async ({ page }) => {
@@ -63,7 +61,10 @@ test('signed-in: name + favorited heart, /me fetched exactly once', async ({ pag
   expect(me.n).toBe(1); // idempotent getter → single fetch shared by menu + heart
 });
 
-test('doubled limit: a signed-in user gets 2× the baked TOOL_CONFIG bytes', async ({ page, context }) => {
+test('doubled limit: a signed-in user gets 2× the baked TOOL_CONFIG bytes', async ({
+  page,
+  context
+}) => {
   await signIn(context);
   await mockMe(page, signedInUser());
   await page.goto(TOOL);
@@ -109,7 +110,10 @@ test('banner respects snooze after a dismiss and the ≥3 cap', async ({ page })
   await expect(page.locator('.signin-banner')).toHaveCount(0);
 });
 
-test('signed-in + saved → "Saved ✓"; signed-in + not saved → nothing', async ({ page, context }) => {
+test('signed-in + saved → "Saved ✓"; signed-in + not saved → nothing', async ({
+  page,
+  context
+}) => {
   await signIn(context);
   await mockMe(page, signedInUser());
 
