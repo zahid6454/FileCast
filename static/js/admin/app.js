@@ -404,13 +404,13 @@
     // View-site link + Sign-out button, both ghost + icon + same size. Built
     // fresh per use so the topbar and the mobile drawer each get their own nodes.
     function viewSiteLink() {
-      return h('a', { class: 'admin-btn admin-btn--ghost', href: '/' }, [
+      return h('a', { class: 'admin-btn admin-btn--secondary', href: '/' }, [
         svgIcon('external', 16, 'admin-btn__icon'),
         h('span', {}, 'View site'),
       ]);
     }
     function signOutBtn() {
-      var b = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, [
+      var b = h('button', { type: 'button', class: 'admin-btn admin-btn--danger' }, [
         svgIcon('logout', 16, 'admin-btn__icon'),
         h('span', {}, 'Sign out'),
       ]);

@@ -1307,6 +1307,7 @@
   }
   .admin-hamburger {
     display: inline-flex;
+    margin-left: auto; /* push to the far right (actions are hidden on mobile) */
   }
   .admin-tabs {
     position: fixed;

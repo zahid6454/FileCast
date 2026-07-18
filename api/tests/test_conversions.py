@@ -37,6 +37,15 @@ async def test_session_conversion_saves_history_truthfully(admin_client, db):
     assert len(hist) == 1 and hist[0]["tool_id"] == "jpg-to-png"
 
 
+async def test_history_pagination_has_more(admin_client, db):
+    for _ in range(3):
+        await admin_client.post("/api/v1/conversions", json=_payload())
+    p1 = (await admin_client.get("/api/v1/user/history?limit=2&offset=0")).json()
+    assert len(p1["history"]) == 2 and p1["has_more"] is True
+    p2 = (await admin_client.get("/api/v1/user/history?limit=2&offset=2")).json()
+    assert len(p2["history"]) == 1 and p2["has_more"] is False
+
+
 async def test_aggregate_increments_on_conflict(client, db):
     for _ in range(3):
         await client.post("/api/v1/conversions", json=_payload())

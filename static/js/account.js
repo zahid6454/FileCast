@@ -160,6 +160,8 @@
 
   // --- 3. Conversion history ---------------------------------------------
 
+  var HISTORY_PAGE = 10;
+
   function historySection(toolsById) {
     var card = section('Conversion history (last 30 days)');
     var body = el('div', { class: 'account-history' }, [
@@ -167,54 +169,96 @@
     ]);
     card.appendChild(body);
 
-    api('/api/v1/user/history?limit=100')
-      .then(function (r) {
-        return r.ok ? r.json() : { history: [] };
-      })
-      .catch(function () {
-        return { history: [] };
-      })
-      .then(function (data) {
-        var rows = data.history || [];
-        clear(body);
-        if (rows.length === 0) {
-          body.appendChild(
-            el('p', {
-              class: 'account-empty',
-              text: 'No conversions yet. Your history will appear here after you convert a file.'
-            })
-          );
-          return;
-        }
-        var table = el('table', { class: 'account-table' }, [
-          el('thead', {}, [
-            el('tr', {}, [
-              el('th', { text: 'Tool' }),
-              el('th', { text: 'Date' }),
-              el('th', { text: 'Size' }),
-              el('th', { text: 'Status' })
-            ])
-          ])
-        ]);
-        var tbody = el('tbody');
-        rows.forEach(function (row) {
-          var tool = toolsById[row.tool_id];
-          var toolCell = tool
-            ? el('td', {}, [el('a', { href: tool.slug + '/', text: tool.name })])
-            : el('td', { text: row.tool_id });
-          tbody.appendChild(
-            el('tr', {}, [
-              toolCell,
-              el('td', { text: formatDate(row.created_at) }),
-              el('td', { text: formatKb(row.file_size_kb) }),
-              el('td', { text: row.status || '—' })
-            ])
-          );
-        });
-        table.appendChild(tbody);
-        body.appendChild(table);
-      });
+    var page = 0;
 
+    function load() {
+      api('/api/v1/user/history?limit=' + HISTORY_PAGE + '&offset=' + page * HISTORY_PAGE)
+        .then(function (r) {
+          return r.ok ? r.json() : { history: [], has_more: false };
+        })
+        .catch(function () {
+          return { history: [], has_more: false };
+        })
+        .then(renderPage);
+    }
+
+    function renderPage(data) {
+      var rows = data.history || [];
+      clear(body);
+      if (rows.length === 0 && page === 0) {
+        body.appendChild(
+          el('p', {
+            class: 'account-empty',
+            text: 'No conversions yet. Your history will appear here after you convert a file.'
+          })
+        );
+        return;
+      }
+      var table = el('table', { class: 'account-table' }, [
+        el('thead', {}, [
+          el('tr', {}, [
+            el('th', { text: 'Tool' }),
+            el('th', { text: 'Date' }),
+            el('th', { text: 'Size' }),
+            el('th', { text: 'Status' })
+          ])
+        ])
+      ]);
+      var tbody = el('tbody');
+      rows.forEach(function (row) {
+        var tool = toolsById[row.tool_id];
+        var toolCell = tool
+          ? el('td', {}, [el('a', { href: tool.slug + '/', text: tool.name })])
+          : el('td', { text: row.tool_id });
+        tbody.appendChild(
+          el('tr', {}, [
+            toolCell,
+            el('td', { text: formatDate(row.created_at) }),
+            el('td', { text: formatKb(row.file_size_kb) }),
+            el('td', { text: row.status || '—' })
+          ])
+        );
+      });
+      table.appendChild(tbody);
+      body.appendChild(table);
+
+      // Pager — only when there's more than one page's worth.
+      if (page > 0 || data.has_more) {
+        var prev = el('button', {
+          type: 'button',
+          class: 'btn btn--ghost btn--sm',
+          'aria-label': 'Previous page'
+        }, [el('span', { text: 'Previous' })]);
+        var next = el('button', {
+          type: 'button',
+          class: 'btn btn--ghost btn--sm',
+          'aria-label': 'Next page'
+        }, [el('span', { text: 'Next' })]);
+        if (page === 0) prev.disabled = true;
+        if (!data.has_more) next.disabled = true;
+        prev.addEventListener('click', function () {
+          if (page > 0) {
+            page--;
+            load();
+          }
+        });
+        next.addEventListener('click', function () {
+          if (data.has_more) {
+            page++;
+            load();
+          }
+        });
+        body.appendChild(
+          el('div', { class: 'account-pager' }, [
+            prev,
+            el('span', { class: 'account-pager__info', text: 'Page ' + (page + 1) }),
+            next
+          ])
+        );
+      }
+    }
+
+    load();
     return card;
   }
 
