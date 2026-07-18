@@ -145,6 +145,9 @@ export async function installApi(page, state) {
 
     // --- users ---
     if (path.endsWith('/users') && method === 'GET') return json({ users: state.users });
+    if (/\/users\/[^/]+\/history$/.test(path) && method === 'GET') {
+      return json({ has_more: false, history: state.userHistory || [] });
+    }
     const userMatch = path.match(/\/users\/([^/]+)$/);
     if (userMatch && method === 'GET') {
       const u = state.users.find((x) => x.id === userMatch[1]);
