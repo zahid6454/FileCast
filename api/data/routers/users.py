@@ -24,21 +24,18 @@ router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
 
 async def _history_rows(
-    db: AsyncSession, user_id: str, limit: int = 100, offset: int = 0
+    db: AsyncSession, user_id: str, limit: int | None = 100, offset: int = 0
 ) -> list[dict]:
-    rows = (
-        (
-            await db.execute(
-                select(UserConversion)
-                .where(UserConversion.user_id == user_id)
-                .order_by(UserConversion.created_at.desc())
-                .offset(offset)
-                .limit(limit)
-            )
-        )
-        .scalars()
-        .all()
+    # limit=None → every row (GDPR export must be complete, not truncated).
+    query = (
+        select(UserConversion)
+        .where(UserConversion.user_id == user_id)
+        .order_by(UserConversion.created_at.desc())
+        .offset(offset)
     )
+    if limit is not None:
+        query = query.limit(limit)
+    rows = (await db.execute(query)).scalars().all()
     return [
         {
             "id": r.id,
@@ -78,7 +75,7 @@ async def export_my_data(
             {"tool_id": t, "created_at": c.isoformat() if c else None}
             for t, c in favorites
         ],
-        "history": await _history_rows(db, user.id, limit=10000),
+        "history": await _history_rows(db, user.id, limit=None),
     }
 
 

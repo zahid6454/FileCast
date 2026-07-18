@@ -26,6 +26,10 @@ ALLOWED_ORIGINS = [
 # active users. Longest-prefix wins (most specific first).
 PATH_LIMITS: list[tuple[str, int]] = [
     ("/api/v1/auth/dev-login", 20),
+    # Google sign-in: /google (start) + /google/callback. The callback makes an
+    # outbound token+userinfo exchange, so give it a budget. One prefix covers
+    # both; ~15 sign-in round-trips/hr per IP.
+    ("/api/v1/auth/google", 30),
     ("/api/v1/conversions", 120),
     ("/api/v1/ratings", 30),
     ("/api/v1/errors", 60),

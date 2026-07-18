@@ -279,6 +279,10 @@ def test_rate_limit_path_matching():
     assert match("/api/v1/preferences")[0] == "/api/v1/preferences"
     assert match("/api/v1/convert/docx-to-pdf")[0] == "/api/v1/convert"
     assert match("/api/v1/tools") is None  # not rate limited
+    # OAuth: start + callback share one budgeted bucket; dev-login stays separate.
+    assert match("/api/v1/auth/google")[0] == "/api/v1/auth/google"
+    assert match("/api/v1/auth/google/callback")[0] == "/api/v1/auth/google"
+    assert match("/api/v1/auth/dev-login")[0] == "/api/v1/auth/dev-login"
 
 
 def test_rate_limiter_sweep_evicts_idle_buckets():

@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, HTTPException, Request, Response
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.config import settings
@@ -181,14 +182,22 @@ async def upsert_google_user(
     Matched by email. First sign-in creates a ``role='user'`` row; a returning
     user has ``name``/``avatar_url`` refreshed. ``role`` is **never** changed here
     (D9 — no self-service admin); ``last_login_at`` is set by ``create_session``.
+
+    The create path uses ``INSERT ... ON CONFLICT DO NOTHING`` then re-selects, so
+    two simultaneous first-ever logins for the same email can't collide on the
+    unique constraint (one would otherwise 500).
     """
     user = (
         await db.execute(select(User).where(User.email == email))
     ).scalar_one_or_none()
     if user is None:
-        user = User(email=email, name=name, avatar_url=avatar_url, role="user")
-        db.add(user)
+        await db.execute(
+            pg_insert(User)
+            .values(email=email, name=name, avatar_url=avatar_url, role="user")
+            .on_conflict_do_nothing(index_elements=[User.email])
+        )
         await db.flush()
+        user = (await db.execute(select(User).where(User.email == email))).scalar_one()
     else:
         if name:
             user.name = name
