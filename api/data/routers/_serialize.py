@@ -3,7 +3,11 @@
 from data.models import Tool, User
 
 
-def user_dict(user: User, favorites: list[str] | None = None) -> dict:
+def user_dict(
+    user: User,
+    favorites: list[str] | None = None,
+    preferences: dict | None = None,
+) -> dict:
     d = {
         "id": user.id,
         "email": user.email,
@@ -18,6 +22,8 @@ def user_dict(user: User, favorites: list[str] | None = None) -> dict:
     }
     if favorites is not None:
         d["favorites"] = favorites
+    if preferences is not None:
+        d["preferences"] = preferences
     return d
 
 

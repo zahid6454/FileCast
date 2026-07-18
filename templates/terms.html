@@ -42,6 +42,16 @@
     </ul>
   </div>
 
+  <div class="privacy-section">
+    <h2>User Accounts</h2>
+    <ul>
+      <li>Accounts are optional &mdash; all tools work without signing in.</li>
+      <li>You must use a valid Google account to sign in.</li>
+      <li>You may delete your account at any time, and all associated data is permanently removed.</li>
+      <li>We reserve the right to suspend accounts used for abuse (automated spam voting, etc.).</li>
+    </ul>
+  </div>
+
   <section class="section">
     <h2 class="section__title"><span class="text-brand-blue">File Size</span> <span class="text-brand-green">& Rate Limits</span></h2>
     <div class="section__divider"></div>
@@ -50,16 +60,17 @@
   <div class="content-block" style="margin-bottom: var(--space-8);">
     <table>
       <thead>
-        <tr><th>Tool type</th><th>Max size</th></tr>
+        <tr><th>Tool type</th><th>Anonymous</th><th>Signed in</th></tr>
       </thead>
       <tbody>
-        <tr><td>Image tools</td><td>20 MB per file</td></tr>
-        <tr><td>PDF tools</td><td>50 MB per file</td></tr>
-        <tr><td>Text and data tools</td><td>5 MB per file</td></tr>
-        <tr><td>Server-side tools</td><td>25 MB per file</td></tr>
-        <tr><td>Bulk operations</td><td>10 MB per file, up to 10 files</td></tr>
+        <tr><td>Image tools</td><td>20 MB</td><td>40 MB</td></tr>
+        <tr><td>PDF tools</td><td>50 MB</td><td>100 MB</td></tr>
+        <tr><td>Text and data tools</td><td>5 MB</td><td>10 MB</td></tr>
+        <tr><td>Server-side tools</td><td>25 MB</td><td>50 MB</td></tr>
+        <tr><td>Bulk operations</td><td>10 MB/file, 10 files</td><td>20 MB/file, 20 files</td></tr>
       </tbody>
     </table>
+    <p>Sign in for 2&times; file size limits &mdash; every existing limit is doubled for signed-in users.</p>
     <p>Server-side tools are rate-limited to prevent abuse. If you hit a rate limit, wait a few minutes and try again.</p>
   </div>
 

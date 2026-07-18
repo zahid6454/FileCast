@@ -29,6 +29,31 @@
     }
   }
 
+  // Fire-and-forget conversion tracking (Phase 5 §5.4). Runs AFTER the download
+  // is in hand, POSTs with the session cookie so the server can dual-write the
+  // user's history, and — on a successful reply only — dispatches
+  // `filecast:conversion` so auth.js can show "Saved ✓"/the banner from the
+  // truthful `saved_to_history`. `notify=false` (failure path) POSTs for the
+  // admin failure-rate but dispatches nothing. Any API outage is silent.
+  function postConversion(payload, notify) {
+    var apiBase = window.FILECAST && window.FILECAST.apiBase;
+    if (!apiBase) return;
+    fetch(apiBase.replace(/\/$/, '') + '/api/v1/conversions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!notify) return;
+        document.dispatchEvent(new CustomEvent('filecast:conversion', {
+          detail: { saved: !!(d && d.saved_to_history) }
+        }));
+      })
+      .catch(function () { /* silent — progressive enhancement */ });
+  }
+
   function getExtension(filename) {
     var parts = filename.split('.');
     return parts.length > 1 ? '.' + parts.pop().toLowerCase() : '';
@@ -217,6 +242,14 @@
           output_size_bytes: blob.size,
           savings_percent: savingsPct
         });
+        postConversion({
+          tool_id: config.id,
+          input_format: config.input_format,
+          output_format: config.output_format,
+          file_size_kb: Math.round(currentFile.size / 1024),
+          duration_ms: durationMs,
+          status: 'success'
+        }, true);
       })
       .catch(function (err) {
         var msg = err && err.message ? err.message : 'Conversion failed. Please try again.';
@@ -225,6 +258,12 @@
           tool_id: config.id,
           error_type: 'conversion_error'
         });
+        postConversion({
+          tool_id: config.id,
+          input_format: config.input_format,
+          output_format: config.output_format,
+          status: 'failed'
+        }, false);
       });
   }
 

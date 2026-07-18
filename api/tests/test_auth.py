@@ -45,6 +45,60 @@ async def test_dev_login_404_outside_development(client, monkeypatch):
     assert r.status_code == 404
 
 
+def _configure_google(monkeypatch):
+    from data import config
+
+    monkeypatch.setattr(config.settings, "google_client_id", "test-id")
+    monkeypatch.setattr(config.settings, "google_client_secret", "test-secret")
+
+
+def _unconfigure_google(monkeypatch):
+    # Explicitly clear creds so the test is hermetic even when a real api/.env
+    # (with live Google creds) is present on the host.
+    from data import config
+
+    monkeypatch.setattr(config.settings, "google_client_id", "")
+    monkeypatch.setattr(config.settings, "google_client_secret", "")
+
+
+async def test_google_start_503_when_unconfigured(client, monkeypatch):
+    # Unset client id/secret ⇒ Google routes 503; dev-login stays the local path.
+    _unconfigure_google(monkeypatch)
+    r = await client.get("/api/v1/auth/google")
+    assert r.status_code == 503
+
+
+async def test_google_callback_503_when_unconfigured(client, monkeypatch):
+    _unconfigure_google(monkeypatch)
+    r = await client.get("/api/v1/auth/google/callback?code=x&state=y")
+    assert r.status_code == 503
+
+
+async def test_google_start_redirects_and_sets_state_cookie(client, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    _configure_google(monkeypatch)
+    r = await client.get("/api/v1/auth/google")
+    assert r.status_code == 302
+    assert r.headers["location"].startswith("https://accounts.google.com/")
+    joined = " ".join(r.headers.get_list("set-cookie")).lower()
+    assert "fc_oauth_state=" in joined and "httponly" in joined
+
+    # The cookie MUST equal the state embedded in the redirect URL — otherwise
+    # the callback compare always fails ("Invalid OAuth state"). Regression guard
+    # for the Authlib create_authorization_url self-generated-state gotcha.
+    url_state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+    assert r.cookies.get("fc_oauth_state") == url_state
+
+
+async def test_google_callback_rejects_bad_state(client, monkeypatch):
+    # CSRF guard: ?state without a matching fc_oauth_state cookie → 400,
+    # before any token exchange (so no network).
+    _configure_google(monkeypatch)
+    r = await client.get("/api/v1/auth/google/callback?code=x&state=mismatch")
+    assert r.status_code == 400
+
+
 async def test_admin_role_read_live_demotion_immediate(admin_client, db):
     # admin can hit an admin route
     assert (await admin_client.get("/api/v1/tools")).status_code == 200

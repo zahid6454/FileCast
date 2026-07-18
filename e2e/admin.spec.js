@@ -26,7 +26,8 @@ test.describe('auth gate (D6)', () => {
     await installApi(page, state);
     await page.goto('/admin/');
     await expect(page.locator('.admin-gate__title')).toHaveText('FileCast Admin');
-    await expect(page.getByText('Sign in to access')).toBeVisible();
+    await expect(page.getByText('admin Google account')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in with Google' })).toBeVisible();
     await expect(page.locator('.admin-tabs')).toHaveCount(0);
   });
 
@@ -297,8 +298,12 @@ test.describe('announcements', () => {
     await expect(page.locator('.admin-annc')).toHaveCount(2);
     await expect(page.locator('.admin-badge--active')).toHaveCount(1); // still only one active
 
-    // Delete one.
-    await page.locator('.admin-annc').first().getByRole('button', { name: 'Delete' }).click();
+    // Delete one — two-step inline confirm: first click arms, second deletes.
+    const del = page.locator('.admin-annc').first().getByRole('button', { name: 'Delete' });
+    await del.click();
+    const confirm = page.locator('.admin-annc').first().getByRole('button', { name: 'Confirm delete' });
+    await expect(confirm).toBeVisible();
+    await confirm.click();
     await expect(page.locator('.admin-annc')).toHaveCount(1);
   });
 

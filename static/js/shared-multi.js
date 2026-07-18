@@ -20,6 +20,28 @@
     }
   }
 
+  // Fire-and-forget conversion tracking (Phase 5 §5.4) — see shared.js for the
+  // full contract. A batch is ONE summary POST (never one per file); success
+  // dispatches `filecast:conversion`, failure only POSTs.
+  function postConversion(payload, notify) {
+    var apiBase = window.FILECAST && window.FILECAST.apiBase;
+    if (!apiBase) return;
+    fetch(apiBase.replace(/\/$/, '') + '/api/v1/conversions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!notify) return;
+        document.dispatchEvent(new CustomEvent('filecast:conversion', {
+          detail: { saved: !!(d && d.saved_to_history) }
+        }));
+      })
+      .catch(function () { /* silent — progressive enhancement */ });
+  }
+
   function getExtension(filename) {
     var parts = filename.split('.');
     return parts.length > 1 ? '.' + parts.pop().toLowerCase() : '';
@@ -197,6 +219,12 @@
           showError(err.message || 'Processing failed. One or more files may be corrupted.');
           setState('selected');
           trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
+          postConversion({
+            tool_id: config.id,
+            input_format: config.input_format,
+            output_format: config.output_format,
+            status: 'failed'
+          }, false);
         });
       return;
     }
@@ -284,6 +312,16 @@
       file_count: results.length,
       success_count: successes.length
     });
+    var cfg = window.TOOL_CONFIG;
+    postConversion({
+      tool_id: cfg.id,
+      input_format: cfg.input_format,
+      output_format: cfg.output_format,
+      file_count: results.length,
+      success_count: successes.length,
+      duration_ms: durationMs,
+      status: 'success'
+    }, true);
   }
 
   function downloadBlob(blob, filename) {

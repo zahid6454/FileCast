@@ -112,17 +112,11 @@
     </nav>
 
     <div class="header__actions">
-      {# Theme toggle (§6.1) — theme-init.js already applied the stored choice;
-         nav.js owns the button (cycle light → dark → system). Stable id: Phase 5
-         auth.js binds a second listener to persist the theme when signed in. #}
-      {# Simple light ↔ dark toggle. Defaults to the light (sun) icon pre-JS;
-         nav.js immediately reflects the resolved theme. #}
-      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme" data-theme-state="light">
-        <svg class="theme-toggle__icon theme-toggle__icon--light" aria-hidden="true" focusable="false"><use href="#icon-sun"></use></svg>
-        <svg class="theme-toggle__icon theme-toggle__icon--dark" aria-hidden="true" focusable="false"><use href="#icon-moon"></use></svg>
-      </button>
-
-      {# User-menu placeholder — populated by Phase 5 auth.js; ships empty. #}
+      {# User menu — populated by Phase 5 auth.js (sign-in button / avatar +
+         dropdown). Dark-mode toggle lives INSIDE this menu for signed-in users
+         (a signed-in privilege); anonymous visitors get no theme control. On
+         mobile the menu is hidden here and rendered at the bottom of the nav
+         drawer instead. Ships empty. #}
       <div class="user-menu" id="user-menu"></div>
 
       {# Hamburger (mobile only, <768px) — toggles the nav drawer. #}
@@ -153,6 +147,7 @@
       <div class="footer__col">
         <h2 class="footer__heading">Resources</h2>
         <a href="/about/">About</a>
+        <a href="/account/">My Account</a>
         <a href="/contact/">Contact</a>
         <a href="https://buymeacoffee.com/filecast" target="_blank" rel="noopener">Support</a>
       </div>
@@ -193,6 +188,15 @@
   {% set shared_js = assets.get('js/shared.js') %}
   {% if shared_js %}
   <script src="/{{ shared_js.path }}" integrity="{{ shared_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
+
+  {# Site-wide auth (Phase 5): user menu, /me gate, favorites heart, sign-in
+     touchpoints, "Saved ✓", doubled-limit mutation, theme DB-sync. Loads AFTER
+     nav.js (window.FILECAST) and after tool-config/shared (so window.TOOL_CONFIG
+     exists for the synchronous ×2), before page scripts. #}
+  {% set auth_js = assets.get('js/auth.js') %}
+  {% if auth_js %}
+  <script src="/{{ auth_js.path }}" integrity="{{ auth_js.sri }}" crossorigin="anonymous" defer></script>
   {% endif %}
   {% block scripts %}{% endblock %}
 

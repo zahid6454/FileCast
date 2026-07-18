@@ -93,6 +93,10 @@
 
       var xhr = new XMLHttpRequest();
       xhr.open('POST', apiBase + endpoint, true);
+      // Send the session cookie so the server can grant a signed-in user the
+      // doubled size limit (§6.3). FormData keeps this a "simple" CORS request,
+      // so credentials add no preflight; anonymous users just send no cookie.
+      xhr.withCredentials = true;
       xhr.responseType = 'blob';
       xhr.timeout = 120000;
 

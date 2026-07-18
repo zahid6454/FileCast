@@ -294,10 +294,24 @@
   function renderSignIn() {
     tabHost = null; // no panel mounted → a stray hashchange must be a no-op
     dom.clear(mount);
-    var adminBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--primary' }, 'Dev login as admin');
-    var userBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, 'Dev login as user');
+
+    // Real sign-in = Google (same flow as the main site). Admin access is granted
+    // by the DB role, not by this button: a Google user only reaches the panel if
+    // their users.role is 'admin' (D6 — no self-service admin). ?next returns here.
+    var apiBase = ((window.FILECAST && window.FILECAST.apiBase) || '').replace(/\/$/, '');
+    var googleBtn = h(
+      'a',
+      { class: 'admin-btn admin-btn--primary', href: apiBase + '/api/v1/auth/google?next=/admin/' },
+      'Sign in with Google'
+    );
+
+    // Dev-login: a local-only shortcut that skips Google and mints a session for a
+    // synthetic admin/user account. Gated server-side (404 unless ENVIRONMENT=
+    // development), so in prod the first click hides these honestly.
+    var adminBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' }, 'Dev login as admin');
+    var userBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' }, 'Dev login as user');
     var devRow = h('div', { class: 'admin-signin__dev' }, [adminBtn, userBtn]);
-    var devNote = h('p', { class: 'admin-signin__note' }, 'Local development sign-in.');
+    var devNote = h('p', { class: 'admin-signin__note' }, 'Local development only — skips Google.');
 
     function devLogin(role) {
       api
@@ -326,7 +340,8 @@
       h('div', { class: 'admin-gate' }, [
         h('div', { class: 'admin-gate__card' }, [
           h('h1', { class: 'admin-gate__title' }, 'FileCast Admin'),
-          h('p', 'Sign in to access the FileCast admin panel.'),
+          h('p', 'Sign in with your admin Google account to manage FileCast.'),
+          googleBtn,
           h('a', { class: 'admin-btn admin-btn--ghost', href: '/' }, 'Go to the main site'),
           devNote,
           devRow,
@@ -394,6 +409,7 @@
           nav,
           h('div', { class: 'admin-topbar__actions' }, [
             h('span', { class: 'admin-topbar__user' }, user.email || ''),
+            h('a', { class: 'admin-btn admin-btn--ghost admin-btn--sm', href: '/' }, 'View site'),
             signout,
           ]),
           hamburger,

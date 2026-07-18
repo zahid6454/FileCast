@@ -9,10 +9,17 @@ import time
 from collections import defaultdict
 
 import httpx
-from fastapi import APIRouter, File, Form, UploadFile
+from data.models import User
+from data.security import current_user_for_convert
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
 from log import get_logger, request_id_var
-from validation import ValidationError, validate_compress_quality, validate_upload
+from validation import (
+    MAX_FILE_SIZE,
+    ValidationError,
+    validate_compress_quality,
+    validate_upload,
+)
 
 logger = get_logger("converter")
 
@@ -254,19 +261,27 @@ def _safe_filename(filename: str, ext: str = ".pdf") -> str:
     return (safe.strip() or "converted") + ext
 
 
+def _max_size_for(user: User | None) -> int:
+    """Signed-in users get a flat ×2 (spec §6.3); anonymous gets the base cap.
+    Server-side deliberately ignores ``user.max_file_size`` to bound the
+    expensive Gotenberg/Ghostscript path and match the client rule (§6.1)."""
+    return MAX_FILE_SIZE * (2 if user else 1)
+
+
 async def _handle_conversion(
     file: UploadFile,
     tool_id: str,
     convert_fn,
     output_ext: str = ".pdf",
     output_mime: str = "application/pdf",
+    max_size: int = MAX_FILE_SIZE,
 ) -> Response:
     start = time.time()
     input_size = 0
     try:
         content = await file.read()
         input_size = len(content)
-        validate_upload(content, file.filename or "unknown", tool_id)
+        validate_upload(content, file.filename or "unknown", tool_id, max_size)
         result = await convert_fn(content, file.filename or "file")
         duration_ms = round((time.time() - start) * 1000, 1)
         _record_metric(tool_id, True, duration_ms)
@@ -356,12 +371,20 @@ async def _handle_conversion(
 
 
 @router.post("/convert/docx-to-pdf")
-async def docx_to_pdf(file: UploadFile = File(...)):
-    return await _handle_conversion(file, "docx-to-pdf", _convert_libreoffice)
+async def docx_to_pdf(
+    file: UploadFile = File(...),
+    user: User | None = Depends(current_user_for_convert),
+):
+    return await _handle_conversion(
+        file, "docx-to-pdf", _convert_libreoffice, max_size=_max_size_for(user)
+    )
 
 
 @router.post("/convert/xlsx-to-pdf")
-async def xlsx_to_pdf(file: UploadFile = File(...)):
+async def xlsx_to_pdf(
+    file: UploadFile = File(...),
+    user: User | None = Depends(current_user_for_convert),
+):
     async def _convert(content: bytes, filename: str) -> bytes:
         return await _convert_libreoffice(
             content,
@@ -369,40 +392,59 @@ async def xlsx_to_pdf(file: UploadFile = File(...)):
             extra_form={"landscape": "true", "singlePageSheets": "true"},
         )
 
-    return await _handle_conversion(file, "xlsx-to-pdf", _convert)
+    return await _handle_conversion(
+        file, "xlsx-to-pdf", _convert, max_size=_max_size_for(user)
+    )
 
 
 @router.post("/convert/pptx-to-pdf")
-async def pptx_to_pdf(file: UploadFile = File(...)):
-    return await _handle_conversion(file, "pptx-to-pdf", _convert_libreoffice)
+async def pptx_to_pdf(
+    file: UploadFile = File(...),
+    user: User | None = Depends(current_user_for_convert),
+):
+    return await _handle_conversion(
+        file, "pptx-to-pdf", _convert_libreoffice, max_size=_max_size_for(user)
+    )
 
 
 @router.post("/convert/html-to-pdf")
-async def html_to_pdf(file: UploadFile = File(...)):
-    return await _handle_conversion(file, "html-to-pdf", _convert_chromium_html)
+async def html_to_pdf(
+    file: UploadFile = File(...),
+    user: User | None = Depends(current_user_for_convert),
+):
+    return await _handle_conversion(
+        file, "html-to-pdf", _convert_chromium_html, max_size=_max_size_for(user)
+    )
 
 
 @router.post("/convert/pdf-compress")
 async def pdf_compress(
     file: UploadFile = File(...),
     quality: str = Form("ebook"),
+    user: User | None = Depends(current_user_for_convert),
 ):
     quality = validate_compress_quality(quality)
 
     async def _compress(content: bytes, filename: str) -> bytes:
         return await _compress_ghostscript(content, quality)
 
-    return await _handle_conversion(file, "pdf-compress", _compress)
+    return await _handle_conversion(
+        file, "pdf-compress", _compress, max_size=_max_size_for(user)
+    )
 
 
 @router.post("/convert/pdf-to-docx")
-async def pdf_to_docx(file: UploadFile = File(...)):
+async def pdf_to_docx(
+    file: UploadFile = File(...),
+    user: User | None = Depends(current_user_for_convert),
+):
     return await _handle_conversion(
         file,
         "pdf-to-docx",
         _convert_pdf2docx,
         output_ext=".docx",
         output_mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        max_size=_max_size_for(user),
     )
 
 

@@ -18,6 +18,27 @@
     }
   }
 
+  // Fire-and-forget conversion tracking (Phase 5 §5.4) — see shared.js for the
+  // full contract. Success dispatches `filecast:conversion`; failure only POSTs.
+  function postConversion(payload, notify) {
+    var apiBase = window.FILECAST && window.FILECAST.apiBase;
+    if (!apiBase) return;
+    fetch(apiBase.replace(/\/$/, '') + '/api/v1/conversions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!notify) return;
+        document.dispatchEvent(new CustomEvent('filecast:conversion', {
+          detail: { saved: !!(d && d.saved_to_history) }
+        }));
+      })
+      .catch(function () { /* silent — progressive enhancement */ });
+  }
+
   function setState(newState) {
     state = newState;
     els.convertBtn.disabled = newState === 'converting';
@@ -92,6 +113,12 @@
     } catch (err) {
       showError(err.message || 'Conversion failed. Please check your input and try again.');
       trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
+      postConversion({
+        tool_id: config.id,
+        input_format: config.input_format,
+        output_format: config.output_format,
+        status: 'failed'
+      }, false);
     }
   }
 
@@ -117,6 +144,14 @@
       file_size_bytes: inputBytes,
       output_size_bytes: outputBytes
     });
+    postConversion({
+      tool_id: config.id,
+      input_format: config.input_format,
+      output_format: config.output_format,
+      file_size_kb: Math.round(inputBytes / 1024),
+      duration_ms: durationMs,
+      status: 'success'
+    }, true);
   }
 
   function copyOutput() {

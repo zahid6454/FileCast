@@ -205,9 +205,27 @@
     toggle.addEventListener('click', function () {
       setActive(a, !a.active);
     });
+    // Two-step inline confirm: first click arms the button, a second click
+    // within the window deletes. Auto-reverts so a stray click can't linger armed.
     var del = h('button', { type: 'button', class: 'admin-btn admin-btn--danger' }, 'Delete');
+    var armTimer = null;
+    function disarm() {
+      if (armTimer) {
+        clearTimeout(armTimer);
+        armTimer = null;
+      }
+      del.classList.remove('is-armed');
+      del.textContent = 'Delete';
+    }
     del.addEventListener('click', function () {
-      remove(a);
+      if (armTimer) {
+        disarm();
+        remove(a);
+        return;
+      }
+      del.classList.add('is-armed');
+      del.textContent = 'Confirm delete';
+      armTimer = setTimeout(disarm, 4000);
     });
 
     return h('li', { class: 'admin-annc' }, [

@@ -18,7 +18,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.config import settings
-from data.db import get_session
+from data.db import async_session_factory, get_session
 from data.models import Session, User
 
 # Seeded dev users (§11) — the two dev-login identities.
@@ -127,6 +127,33 @@ async def current_user(
     return row
 
 
+async def current_user_for_convert(request: Request) -> User | None:
+    """Non-raising optional auth for the ``/convert`` path (spec §6.3 / C-P5-B).
+
+    ``converter.py`` is deliberately DB-decoupled: an anonymous request (no
+    session cookie) must **never** touch the DB, and a DB/session hiccup for a
+    signed-in request must **not** 500 the conversion. So this opens its own
+    session only when a cookie is present and swallows any error → treat as
+    anonymous. It does **not** use ``Depends(get_session)`` — a failing session
+    dependency would raise before the route runs, defeating the guarantee.
+    """
+    token = request.cookies.get(settings.session_cookie_name)
+    if not token:
+        return None
+    try:
+        async with async_session_factory() as db:
+            now = datetime.now(UTC)
+            return (
+                await db.execute(
+                    select(User)
+                    .join(Session, Session.user_id == User.id)
+                    .where(Session.id == hash_token(token), Session.expires_at > now)
+                )
+            ).scalar_one_or_none()
+    except Exception:
+        return None
+
+
 async def require_user(
     user: User | None = Depends(current_user),
 ) -> User:
@@ -140,6 +167,33 @@ async def require_admin(
 ) -> User:
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+async def upsert_google_user(
+    db: AsyncSession,
+    email: str,
+    name: str | None,
+    avatar_url: str | None,
+) -> User:
+    """Find/create the ``User`` for a Google identity (Phase 5 §5.2).
+
+    Matched by email. First sign-in creates a ``role='user'`` row; a returning
+    user has ``name``/``avatar_url`` refreshed. ``role`` is **never** changed here
+    (D9 — no self-service admin); ``last_login_at`` is set by ``create_session``.
+    """
+    user = (
+        await db.execute(select(User).where(User.email == email))
+    ).scalar_one_or_none()
+    if user is None:
+        user = User(email=email, name=name, avatar_url=avatar_url, role="user")
+        db.add(user)
+        await db.flush()
+    else:
+        if name:
+            user.name = name
+        if avatar_url:
+            user.avatar_url = avatar_url
     return user
 
 

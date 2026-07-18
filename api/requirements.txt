@@ -7,3 +7,4 @@ sqlalchemy[asyncio]==2.0.*
 psycopg[binary]==3.*
 alembic==1.*
 pydantic-settings==2.*
+authlib==1.3.*
