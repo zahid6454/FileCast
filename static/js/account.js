@@ -143,7 +143,8 @@
         referrerpolicy: 'no-referrer'
       });
       img.setAttribute('src', user.avatar_url);
-      head.appendChild(img);
+      // Brand-gradient ring around the (non-editable, Google-sourced) avatar.
+      head.appendChild(el('div', { class: 'account-profile__avatar-ring' }, [img]));
     }
     card.appendChild(head);
 

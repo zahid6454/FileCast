@@ -26,6 +26,10 @@
   --color-error-hover: #DC2626;
   --color-error-light: #FEE2E2;
   --color-error-subtle: #FEF2F2;
+  /* Saturated red for SOLID danger buttons (bg + white text). Distinct from
+     --color-error, which is tuned as a text/border color and turns pale in dark. */
+  --color-error-solid: #DC2626;
+  --color-error-solid-hover: #B91C1C;
 
   /* Warning */
   --color-warning: #F59E0B;
@@ -141,6 +145,9 @@
     --color-error: #FCA5A5;
     --color-error-hover: #F87171;
     --color-error-light: #450A0A;
+    /* Danger buttons stay a saturated red (with white text) on dark surfaces. */
+    --color-error-solid: #DC2626;
+    --color-error-solid-hover: #EF4444;
 
     --color-warning: #FBBF24;
     --color-warning-light: #451A03;
@@ -180,6 +187,8 @@
   --color-error: #FCA5A5;
   --color-error-hover: #F87171;
   --color-error-light: #450A0A;
+  --color-error-solid: #DC2626;
+  --color-error-solid-hover: #EF4444;
 
   --color-warning: #FBBF24;
   --color-warning-light: #451A03;
@@ -429,10 +438,10 @@ img { max-width: 100%; display: block; }
 .btn--success:hover { background: var(--color-success-hover); }
 .btn--secondary { background: var(--color-primary-subtle); color: var(--color-primary); border: 1px solid var(--color-primary-light); }
 .btn--secondary:hover { background: var(--color-primary-light); }
-.btn--danger { background: var(--color-error); color: var(--color-text-inverse); }
-.btn--danger:hover { background: var(--color-error-hover); }
-.btn--ghost { background: var(--color-bg-sunken); color: var(--color-text); border: 1px solid var(--color-border); }
-.btn--ghost:hover { background: var(--color-bg-raised); box-shadow: var(--shadow-sm); }
+.btn--danger { background: var(--color-error-solid); color: #ffffff; }
+.btn--danger:hover { background: var(--color-error-solid-hover); }
+.btn--ghost { background: transparent; color: var(--color-text); border: 1px solid var(--color-border); }
+.btn--ghost:hover { background: var(--color-bg-sunken); border-color: var(--color-border-focus); box-shadow: var(--shadow-sm); }
 .btn--lg { font-size: var(--text-lg); padding: var(--space-4) var(--space-10); }
 .btn--sm { font-size: var(--text-sm); font-weight: var(--weight-medium); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
@@ -1061,9 +1070,19 @@ img { max-width: 100%; display: block; }
   color: var(--color-heading);
 }
 
-.account-profile { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
-.account-profile__avatar { width: 120px; height: 120px; align-self: center; border-radius: var(--radius-full); object-fit: cover; flex-shrink: 0; order: 2; border: 2px solid var(--color-border); }
-.account-profile__meta { order: 1; }
+.account-profile { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: 140px; }
+/* Brand-gradient ring: a gradient-filled circle with the avatar inset by a
+   card-colored border, so the gradient reads as a ring around the photo. */
+.account-profile__avatar-ring {
+  order: 2;
+  align-self: center;
+  flex-shrink: 0;
+  padding: 3px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--brand-blue), var(--brand-green));
+}
+.account-profile__avatar { display: block; width: 120px; height: 120px; border-radius: var(--radius-full); object-fit: cover; border: 3px solid var(--color-bg-raised); }
+.account-profile__meta { order: 1; align-self: center; }
 .account-profile__name { font-weight: var(--weight-semibold); font-size: var(--text-base); color: var(--color-text); }
 .account-profile__email { color: var(--color-text-secondary); }
 .account-profile__since { color: var(--color-text-muted); font-size: var(--text-sm); }
@@ -1431,6 +1450,15 @@ img { max-width: 100%; display: block; }
   .header__nav--open { transform: translateX(0); visibility: visible; }
   .nav-dropdown__toggle { width: 100%; justify-content: space-between; }
   .nav-dropdown__menu { position: static; box-shadow: none; padding-left: var(--space-3); }
+  /* The drawer is a FIXED dark surface (bg-dark-raised) in both themes, so its
+     links need light text — the default nav tokens are dark-on-light and turn
+     unreadable here (dark-on-dark). Hover keeps the gradient + white text. */
+  .header__nav a,
+  .nav-dropdown__toggle,
+  .nav-dropdown__all { color: #e2e8f0; }
+  .nav-dropdown__item { color: #cbd5e1; }
+  .header__nav a:hover,
+  .nav-dropdown__toggle:hover { color: #ffffff; }
 }
 @media (min-width: 768px) {
   .hamburger { display: none; }
