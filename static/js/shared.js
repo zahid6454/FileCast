@@ -432,9 +432,13 @@
     return pct + '% found this helpful (' + total + ' ratings)';
   }
 
+  // Unhide BEFORE writing the text, not after. `.hidden` is display:none, which
+  // keeps the element out of the accessibility tree — a live region mutated
+  // while hidden announces nothing, so the reverse order would silently defeat
+  // the role="status" on #feedback-score (R11).
   function showScore(scoreEl, text) {
-    scoreEl.textContent = text; // safe DOM: never innerHTML with data (P23)
     scoreEl.classList.remove('hidden');
+    scoreEl.textContent = text; // safe DOM: never innerHTML with data (P23)
   }
 
   // Collapse to the resolved display: score line at 50+, else a plain thanks.

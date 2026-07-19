@@ -110,6 +110,38 @@ test('voting still resolves with the API unreachable, with no console error', as
   expect(problems, problems.join('\n')).toEqual([]);
 });
 
+test('the resolved score line lays out on its own row without overflow', async ({ page }) => {
+  // .feedback gained flex-wrap + a flex-basis:100% score line; a mistake here
+  // would push every tool page into horizontal scroll at mobile widths.
+  interceptRatings(page);
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto('/convert/image-compress/');
+
+  const overflow = () =>
+    page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+
+  const widget = page.locator('#feedback');
+  const before = await widget.boundingBox();
+  const overflowBefore = await overflow();
+
+  await page.locator('[data-feedback="yes"]').click();
+
+  const score = page.locator('#feedback-score');
+  await expect(score).toBeVisible();
+  const box = await score.boundingBox();
+  expect(box.width).toBeGreaterThan(0);
+  expect(box.height).toBeGreaterThan(0);
+  // Sits within the widget's column rather than spilling out of it.
+  expect(box.x + box.width).toBeLessThanOrEqual(before.x + before.width + 1);
+
+  // Assert the DELTA, not an absolute zero: tool pages carry a pre-existing
+  // ~23px overflow from .header__nav at 320px (unrelated to this widget, and
+  // out of Phase 6's scope). What must hold is that the score line adds none.
+  expect(await overflow()).toBeLessThanOrEqual(overflowBefore);
+});
+
 test('no inline handlers and no device fingerprinting in the shipped rating path', async ({
   page
 }) => {

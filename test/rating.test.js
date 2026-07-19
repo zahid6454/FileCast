@@ -85,6 +85,16 @@ describe('shared.js rating — parseBakedRating() robustness', () => {
     expect(isHidden(scoreOf(dom))).toBe(true);
   });
 
+  it('survives a valid-JSON-but-degenerate island (bare null)', async () => {
+    // JSON.parse('null') succeeds, then reading .yes off null throws — inside
+    // the try, so it degrades to "no score" like any other malformed island.
+    const dom = ratingDom('null');
+    await expect(boot(dom, 'shared.js')).resolves.not.toThrow();
+    expect(isHidden(scoreOf(dom))).toBe(true);
+    // The widget must remain interactive, not be left half-resolved.
+    expect(isHidden(dom.window.document.querySelector('[data-feedback="yes"]'))).toBe(false);
+  });
+
   it('coerces string counts (Number(x) || 0)', async () => {
     const dom = ratingDom({ yes: '45', no: '10' });
     await boot(dom, 'shared.js');
@@ -95,6 +105,50 @@ describe('shared.js rating — parseBakedRating() robustness', () => {
     const dom = ratingDom({ yes: 50, no: null });
     await boot(dom, 'shared.js');
     expect(scoreOf(dom).textContent).toBe('100% found this helpful (50 ratings)');
+  });
+});
+
+describe('shared.js rating — the score line is announced (R11)', () => {
+  // The end DOM state cannot distinguish "unhid then wrote" from "wrote then
+  // unhid", but only the former announces: `.hidden` is display:none, so a live
+  // region mutated while hidden is outside the accessibility tree and silent.
+  // Observe the mutation ORDER to lock the correct sequence in.
+  function recordMutations(dom, el) {
+    const seen = [];
+    const obs = new dom.window.MutationObserver((records) => {
+      for (const r of records) {
+        if (r.type === 'attributes' && r.attributeName === 'class') {
+          seen.push(el.classList.contains('hidden') ? 'hidden' : 'shown');
+        } else {
+          seen.push('text');
+        }
+      }
+    });
+    obs.observe(el, { attributes: true, childList: true, characterData: true, subtree: true });
+    return seen;
+  }
+
+  it('unhides #feedback-score before writing the resolved text', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    await boot(dom, 'shared.js');
+    const seen = recordMutations(dom, scoreOf(dom));
+
+    dom.window.document.querySelector('[data-feedback="yes"]').click();
+    await flush();
+
+    expect(seen.indexOf('shown')).toBeGreaterThanOrEqual(0);
+    expect(seen.indexOf('shown')).toBeLessThan(seen.indexOf('text'));
+  });
+
+  it('keeps the live-region attributes intact on the resolved element', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="yes"]').click();
+    await flush();
+
+    const el = scoreOf(dom);
+    expect(el.getAttribute('role')).toBe('status');
+    expect(el.getAttribute('aria-live')).toBe('polite');
   });
 });
 
@@ -162,6 +216,21 @@ describe('shared.js rating — vote resolve', () => {
     dom.window.document.querySelector('[data-feedback="yes"]').click();
     await flush();
     expect(scoreOf(dom).textContent).toBe('Thanks for your feedback!');
+  });
+
+  it('ignores a malformed data-feedback value rather than POSTing it', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    dom.window.FILECAST = { apiBase: 'https://api.example.test' };
+    await boot(dom, 'shared.js');
+
+    const btn = dom.window.document.querySelector('[data-feedback="yes"]');
+    btn.setAttribute('data-feedback', 'maybe'); // the API would 400 on this
+    btn.click();
+    await flush();
+
+    expect(dom.window.fetch).not.toHaveBeenCalled();
+    expect(isHidden(scoreOf(dom))).toBe(true); // widget stays interactive
+    expect(isHidden(btn)).toBe(false);
   });
 
   it('does not POST when no apiBase is configured', async () => {

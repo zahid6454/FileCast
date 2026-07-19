@@ -426,6 +426,24 @@ def test_fetch_rating_aggregates_empty_table_returns_empty():
     assert build.fetch_rating_aggregates() == {}
 
 
+def test_fetch_rating_aggregates_ignores_stray_vote_values():
+    # The `vote in ("yes","no")` filter is what makes a bad row inert rather than
+    # a KeyError mid-build. A stray value must not appear, crash, or be counted.
+    _seed_ratings("png-to-jpg", yes=2, no=1)
+    with sync_session() as s:
+        s.add(Rating(tool_id="png-to-jpg", vote="maybe", fingerprint="stray"))
+        s.commit()
+    assert build.fetch_rating_aggregates()["png-to-jpg"] == {"yes": 2, "no": 1}
+
+
+def test_apply_rating_aggregates_tolerates_ratings_for_unknown_tools():
+    # A retired/renamed tool can still have rows (ratings are never purged, D5).
+    tools = [_tool(id="png-to-jpg")]
+    build.apply_rating_aggregates(tools, {"deleted-tool": {"yes": 9, "no": 1}})
+    assert "rating" not in tools[0]
+    assert len(tools) == 1
+
+
 def test_fetch_rating_aggregates_graceful_when_db_down(monkeypatch):
     import data.db as ddb
 
@@ -486,8 +504,15 @@ def test_full_build_bakes_rating_island_only_where_rated(tmp_path, monkeypatch):
         encoding="utf-8"
     )
     assert 'id="tool-ratings"' not in unrated
-    # The frozen converter contract is untouched — the island is a sibling.
     assert 'id="tool-config"' in unrated
+
+    # R3 — the island is a SIBLING, never folded into #tool-config. Nesting it
+    # would corrupt that island's JSON and break every converter on the page
+    # with no build-time error, so pin the boundary on a *rated* page.
+    config_json = rated.split('id="tool-config">')[1].split("</script>")[0]
+    assert json.loads(config_json)["id"] == "png-to-jpg"
+    assert "tool-ratings" not in config_json
+    assert rated.index('id="tool-ratings"') > rated.index('id="tool-config"')
 
 
 def test_full_build_without_db_emits_no_rating_island(tmp_path, monkeypatch):
