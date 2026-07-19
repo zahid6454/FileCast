@@ -375,31 +375,130 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Feedback widget
+  // Rating widget (persisted yes/no votes; server-side dedup; baked aggregate)
+  //
+  // The vote POSTs {tool_id, vote} and NOTHING else — the dedup key is a salted
+  // IP hash computed server-side, never a client fingerprint (D4/P3). The score
+  // is baked into #tool-ratings at build time, so there is no API call on load;
+  // after a vote we update optimistically rather than re-fetching (the number is
+  // stale-by-design until the next deploy).
   // ---------------------------------------------------------------------------
-  function submitFeedback(response) {
+  var RATING_THRESHOLD = 50; // show the % line only at 50+ total ratings
+
+  function parseBakedRating() {
+    var el = document.getElementById('tool-ratings');
+    if (!el) return null; // no DB at build / unseeded tool -> default prompt
+    try {
+      var d = JSON.parse(el.textContent);
+      // Number(x) || 0 (not |0, which 32-bit-truncates) so null/undefined/string
+      // counts degrade to 0 instead of NaN-poisoning the arithmetic.
+      return { yes: Number(d.yes) || 0, no: Number(d.no) || 0 };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function ratingKey() {
+    var config = window.TOOL_CONFIG;
+    return config ? 'fc_rated_' + config.id : null;
+  }
+
+  function hasVotedLocally() {
+    var key = ratingKey();
+    try {
+      return !!(key && window.localStorage.getItem(key));
+    } catch (e) {
+      return false; // privacy mode / storage disabled
+    }
+  }
+
+  function markVotedLocally() {
+    var key = ratingKey();
+    try {
+      if (key) window.localStorage.setItem(key, '1');
+    } catch (e) {
+      /* storage disabled — the server dedup is the real one anyway */
+    }
+  }
+
+  // "X% found this helpful (N ratings)" at/above the threshold, else null. The
+  // single home of the threshold + percentage maths, reused for both the
+  // pre-vote social-proof line and the post-vote resolve.
+  function scoreLine(agg) {
+    if (!agg) return null;
+    var total = agg.yes + agg.no;
+    if (total < RATING_THRESHOLD) return null;
+    var pct = Math.round((agg.yes / total) * 100);
+    return pct + '% found this helpful (' + total + ' ratings)';
+  }
+
+  function showScore(scoreEl, text) {
+    scoreEl.textContent = text; // safe DOM: never innerHTML with data (P23)
+    scoreEl.classList.remove('hidden');
+  }
+
+  // Collapse to the resolved display: score line at 50+, else a plain thanks.
+  function resolveWidget(agg, prompt, buttons, scoreEl) {
+    if (prompt) prompt.classList.add('hidden');
+    buttons.forEach(function (b) {
+      b.classList.add('hidden');
+    });
+    showScore(scoreEl, scoreLine(agg) || 'Thanks for your feedback!');
+  }
+
+  function onVote(vote, baked, prompt, buttons, scoreEl) {
     var config = window.TOOL_CONFIG;
     if (config) {
-      trackEvent('feedback_submitted', {
-        tool_id: config.id,
-        response: response
+      trackEvent('feedback_submitted', { tool_id: config.id, response: vote });
+    }
+
+    // Read the API origin at click time, so there is no script-load-order
+    // dependency on the FILECAST config island.
+    var apiBase = window.FILECAST && window.FILECAST.apiBase;
+    if (apiBase && config) {
+      fetch(apiBase + '/api/v1/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // a signed-in vote carries user_id; never gates
+        body: JSON.stringify({ tool_id: config.id, vote: vote })
+      }).catch(function () {
+        /* silent — API down means voting no-ops (progressive enhancement) */
       });
     }
 
-    var el = document.getElementById('feedback');
-    if (el) {
-      el.textContent = 'Thanks for your feedback!';
-    }
+    markVotedLocally();
+    // Optimistic: the baked counts plus this vote. A server-deduped repeat
+    // overcounts the local display by 1 — cosmetic, corrected next deploy.
+    var agg = { yes: baked ? baked.yes : 0, no: baked ? baked.no : 0 };
+    agg[vote] += 1;
+    resolveWidget(agg, prompt, buttons, scoreEl);
   }
 
   // Wire the Yes/No buttons via delegation — no inline on* handlers, so the site
   // CSP can stay 'script-src self' (no unsafe-inline).
   function initFeedback() {
-    var el = document.getElementById('feedback');
-    if (!el) return;
-    el.querySelectorAll('[data-feedback]').forEach(function (btn) {
+    var feedback = document.getElementById('feedback');
+    if (!feedback) return; // no-op on non-tool pages
+    var buttons = feedback.querySelectorAll('[data-feedback]');
+    var prompt = document.getElementById('feedback-prompt');
+    var scoreEl = document.getElementById('feedback-score');
+    if (!buttons.length || !scoreEl) return; // pre-Phase-6 markup -> inert
+
+    var baked = parseBakedRating();
+
+    if (hasVotedLocally()) {
+      resolveWidget(baked, prompt, buttons, scoreEl); // already voted here
+      return;
+    }
+
+    var line = scoreLine(baked); // pre-vote social proof at 50+; buttons stay
+    if (line) showScore(scoreEl, line);
+
+    buttons.forEach(function (btn) {
       btn.addEventListener('click', function () {
-        submitFeedback(btn.dataset.feedback);
+        var vote = btn.dataset.feedback;
+        if (vote !== 'yes' && vote !== 'no') return; // malformed attribute
+        onVote(vote, baked, prompt, buttons, scoreEl);
       });
     });
   }

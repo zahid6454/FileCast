@@ -224,9 +224,10 @@
 
   {# Feedback Widget #}
   <div class="feedback" id="feedback">
-    <span>Was this tool helpful?</span>
+    <span class="feedback__prompt" id="feedback-prompt">Was this tool helpful?</span>
     <button class="btn btn--primary" type="button" data-feedback="yes">Yes</button>
     <button class="btn btn--primary" type="button" data-feedback="no">No</button>
+    <p class="feedback__score hidden" id="feedback-score" role="status" aria-live="polite"></p>
   </div>
 
 </div>
@@ -250,6 +251,14 @@
   "api_endpoint": {{ tool.api_endpoint|default('/api/v1/convert/' + tool.id)|tojson }}{% endif %}
 }
 </script>
+
+{# Baked rating aggregate — a SIBLING island, deliberately not folded into
+   #tool-config (the frozen converter contract). Raw counts only; shared.js owns
+   the 50-rating threshold. Absent when the build had no DB or the tool has no
+   votes, in which case the widget just shows its prompt (P10). #}
+{% if tool.get('rating') %}
+<script type="application/json" id="tool-ratings">{{ tool.rating|tojson }}</script>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

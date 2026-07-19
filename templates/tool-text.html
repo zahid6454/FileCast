@@ -173,9 +173,10 @@
 
   {# Feedback Widget #}
   <div class="feedback" id="feedback">
-    <span>Was this tool helpful?</span>
+    <span class="feedback__prompt" id="feedback-prompt">Was this tool helpful?</span>
     <button class="btn btn--primary" type="button" data-feedback="yes">Yes</button>
     <button class="btn btn--primary" type="button" data-feedback="no">No</button>
+    <p class="feedback__score hidden" id="feedback-score" role="status" aria-live="polite"></p>
   </div>
 
 </div>
@@ -196,6 +197,11 @@
   "category": {{ tool.category|tojson }}
 }
 </script>
+
+{# Baked rating aggregate — see tool.html for the sibling-island rationale. #}
+{% if tool.get('rating') %}
+<script type="application/json" id="tool-ratings">{{ tool.rating|tojson }}</script>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

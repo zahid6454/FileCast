@@ -10,6 +10,7 @@ that also exercises StrictUndefined-safe rendering of admin/account.
 
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from data.db import sync_session  # noqa: E402
-from data.models import Tool  # noqa: E402
+from data.models import Conversion, Rating, Tool  # noqa: E402
 
 import build  # noqa: E402
 
@@ -395,3 +396,132 @@ def test_full_build_sort_order_drives_ordering(tmp_path, monkeypatch):
     build.build()
     data = json.loads((tmp_path / "tool-data.json").read_text(encoding="utf-8"))
     assert data[0]["id"] == "xml-to-json"
+
+
+# --------------------------------------------------------------------------- #
+# Phase 6 — baked rating aggregates + the conversion total (all P10-degrading)
+# --------------------------------------------------------------------------- #
+
+
+def _seed_ratings(tool_id: str, yes: int, no: int) -> None:
+    with sync_session() as s:
+        for i in range(yes):
+            s.add(Rating(tool_id=tool_id, vote="yes", fingerprint=f"{tool_id}-y{i}"))
+        for i in range(no):
+            s.add(Rating(tool_id=tool_id, vote="no", fingerprint=f"{tool_id}-n{i}"))
+        s.commit()
+
+
+def test_fetch_rating_aggregates_buckets_by_string_vote():
+    # R9: the GROUP BY buckets on the literal 'yes'/'no' strings. A boolean
+    # column would drop every row here and bake all-zero scores with no error.
+    _seed_ratings("png-to-jpg", yes=44, no=8)
+    _seed_ratings("jpg-to-png", yes=2, no=0)
+    agg = build.fetch_rating_aggregates()
+    assert agg["png-to-jpg"] == {"yes": 44, "no": 8}
+    assert agg["jpg-to-png"] == {"yes": 2, "no": 0}
+
+
+def test_fetch_rating_aggregates_empty_table_returns_empty():
+    assert build.fetch_rating_aggregates() == {}
+
+
+def test_fetch_rating_aggregates_graceful_when_db_down(monkeypatch):
+    import data.db as ddb
+
+    def boom():
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(ddb, "sync_session", boom)
+    # Degrades to "no baked scores" rather than failing the build (P10).
+    assert build.fetch_rating_aggregates() == {}
+
+
+def test_apply_rating_aggregates_annotates_only_present_tools():
+    tools = [_tool(id="png-to-jpg"), _tool(id="jpg-to-png")]
+    build.apply_rating_aggregates(tools, {"png-to-jpg": {"yes": 44, "no": 8}})
+    assert tools[0]["rating"] == {"yes": 44, "no": 8}
+    # Absent from the aggregate ⇒ no key at all ⇒ the template emits no island.
+    assert "rating" not in tools[1]
+
+
+def test_apply_rating_aggregates_no_db_annotates_nothing():
+    tools = [_tool(id="png-to-jpg")]
+    build.apply_rating_aggregates(tools, {})
+    assert "rating" not in tools[0]
+
+
+def test_fetch_total_conversions_sums_and_degrades(monkeypatch):
+    with sync_session() as s:
+        s.add(Conversion(tool_id="png-to-jpg", date=date(2026, 1, 1), count=700))
+        s.add(Conversion(tool_id="jpg-to-png", date=date(2026, 1, 2), count=545))
+        s.commit()
+    assert build.fetch_total_conversions() == 1245
+
+    import data.db as ddb
+
+    def boom():
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(ddb, "sync_session", boom)
+    # None (not 0) so the homepage badge is absent rather than showing a zero.
+    assert build.fetch_total_conversions() is None
+
+
+def test_full_build_bakes_rating_island_only_where_rated(tmp_path, monkeypatch):
+    _seed_ratings("png-to-jpg", yes=44, no=8)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+
+    rated = (tmp_path / "convert" / "png-to-jpg" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'id="tool-ratings"' in rated
+    island = rated.split('id="tool-ratings">')[1].split("</script>")[0]
+    # Raw counts only — no precomputed percentage crosses the language boundary.
+    assert json.loads(island) == {"yes": 44, "no": 8}
+    assert "%" not in island
+
+    unrated = (tmp_path / "convert" / "jpg-to-png" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'id="tool-ratings"' not in unrated
+    # The frozen converter contract is untouched — the island is a sibling.
+    assert 'id="tool-config"' in unrated
+
+
+def test_full_build_without_db_emits_no_rating_island(tmp_path, monkeypatch):
+    import data.db as ddb
+
+    def boom():
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(ddb, "sync_session", boom)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()  # must not raise (P10)
+
+    page = (tmp_path / "convert" / "png-to-jpg" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'id="tool-ratings"' not in page
+    assert 'id="feedback"' in page  # widget still ships; voting still POSTs
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "Files Converted" not in home
+
+
+def test_homepage_conversion_badge_floor(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+
+    # Below the 1000 floor → hidden, so the counter is never a sad small number.
+    monkeypatch.setattr(build, "fetch_total_conversions", lambda: 999)
+    build.build()
+    assert "Files Converted" not in (tmp_path / "index.html").read_text(
+        encoding="utf-8"
+    )
+
+    # At/above the floor → shown, thousands-formatted in Python (R12).
+    monkeypatch.setattr(build, "fetch_total_conversions", lambda: 1245)
+    build.build()
+    assert "1,245+ Files Converted" in (tmp_path / "index.html").read_text(
+        encoding="utf-8"
+    )

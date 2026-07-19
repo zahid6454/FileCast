@@ -1,5 +1,22 @@
 """Integration — rating dedup + pinned Phase 6 response shapes."""
 
+from data.db import sync_session
+from data.models import Rating
+
+
+def _seed_votes(tool_id: str, yes: int, no: int) -> None:
+    """Insert distinct-fingerprint votes, bypassing the per-client dedup.
+
+    The API gives one vote per (tool, fingerprint, day), so multi-vote aggregate
+    behaviour can only be exercised by writing rows directly.
+    """
+    with sync_session() as s:
+        for i in range(yes):
+            s.add(Rating(tool_id=tool_id, vote="yes", fingerprint=f"{tool_id}-y{i}"))
+        for i in range(no):
+            s.add(Rating(tool_id=tool_id, vote="no", fingerprint=f"{tool_id}-n{i}"))
+        s.commit()
+
 
 async def test_vote_and_read_shape(client):
     await client.post("/api/v1/ratings", json={"tool_id": "jpg-to-png", "vote": "yes"})
@@ -35,3 +52,45 @@ async def test_bulk_ratings_admin_only_and_shape(client, admin_client):
     await client.post("/api/v1/ratings", json={"tool_id": "jpg-to-png", "vote": "yes"})
     bulk = (await admin_client.get("/api/v1/ratings")).json()
     assert bulk == [{"tool_id": "jpg-to-png", "yes": 1, "no": 0}]
+
+
+async def test_vote_is_a_string_column_not_a_boolean(client):
+    """R9 — the hard cross-phase contract, guarded at the storage layer.
+
+    Both the API bucketing and ``build.fetch_rating_aggregates()`` group by
+    ``vote`` and filter ``vote in ("yes", "no")``. A boolean column would make
+    that filter drop every row and bake all-zero scores with no error, so assert
+    the literal strings actually land in the DB.
+    """
+    await client.post("/api/v1/ratings", json={"tool_id": "jpg-to-png", "vote": "yes"})
+    with sync_session() as s:
+        stored = s.query(Rating).filter_by(tool_id="jpg-to-png").all()
+    assert [r.vote for r in stored] == ["yes"]
+    assert all(isinstance(r.vote, str) for r in stored)
+
+
+async def test_aggregates_bucket_many_distinct_voters(client):
+    # Multi-voter counts survive the GROUP BY intact (the R9 failure mode would
+    # silently return zeroes here).
+    _seed_votes("png-to-jpg", yes=44, no=8)
+    assert (await client.get("/api/v1/ratings/png-to-jpg")).json() == {
+        "tool_id": "png-to-jpg",
+        "yes": 44,
+        "no": 8,
+    }
+
+
+async def test_bulk_aggregates_span_multiple_tools(admin_client):
+    _seed_votes("png-to-jpg", yes=3, no=1)
+    _seed_votes("jpg-to-png", yes=2, no=0)
+    bulk = {r["tool_id"]: r for r in (await admin_client.get("/api/v1/ratings")).json()}
+    assert bulk["png-to-jpg"] == {"tool_id": "png-to-jpg", "yes": 3, "no": 1}
+    assert bulk["jpg-to-png"] == {"tool_id": "jpg-to-png", "yes": 2, "no": 0}
+
+
+async def test_unrated_tool_reports_zeroes(client):
+    assert (await client.get("/api/v1/ratings/never-rated")).json() == {
+        "tool_id": "never-rated",
+        "yes": 0,
+        "no": 0,
+    }
