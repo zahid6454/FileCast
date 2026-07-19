@@ -1,10 +1,13 @@
-// Users tab (#users) — Phase 4 §8.4.
+// Users tab (#users) — Phase 4 §8.4, relaxed by Phase 5.5.
 //
-// List + client-side search over the loaded users (counts are tiny; server-side
-// search/pagination is a noted future extension). Row → detail with history,
-// favorites, and role. Role is DISPLAYED READ-ONLY — there is deliberately no
-// role-change control (D9/R7); a "make admin" button would be a
-// privilege-escalation vector. All user-supplied fields (email/name) render via
+// List + client-side search over the loaded users. Row → detail with history,
+// favorites, and role. Role is now ADMIN-EDITABLE (Phase 5.5 relaxes R7): a
+// per-row Grant/Revoke toggle, plus a "Staff & invites" panel to invite admins
+// by email (pending until their first Google login) and cancel pending invites.
+// This is NOT self-service escalation (D9 KEPT): every action is require_admin,
+// the toggle is disabled for yourself and for configured owners
+// (INITIAL_ADMIN_EMAILS), and the server re-enforces all guards (self → 409,
+// owner → 403, last-admin → 409). All user-supplied fields render via
 // textContent (P23).
 (function () {
   'use strict';
@@ -16,6 +19,21 @@
 
   var CONTAINER = null;
   var USERS = [];
+  var OWNERS = {}; // lowercased owner email -> true (INITIAL_ADMIN_EMAILS)
+  var PENDING = []; // [{ email, granted_at, granted_by_email }]
+  var STAFF_LOADED = false; // did GET /admin/staff succeed this render?
+  var SEARCH = null; // the search <input>, for filter-preserving re-renders
+
+  function selfEmail() {
+    var u = ADMIN.currentUser;
+    return u && u.email ? String(u.email).toLowerCase() : '';
+  }
+  function isSelf(email) {
+    return !!email && email === selfEmail();
+  }
+  function isOwner(email) {
+    return !!email && OWNERS[email] === true;
+  }
 
   function labelFor(toolId) {
     if (ADMIN.catalog && typeof ADMIN.catalog.label === 'function') {
@@ -58,6 +76,58 @@
     );
   }
 
+  // --- role toggle (Phase 5.5) --------------------------------------------
+
+  // Grant/Revoke admin for one row. Disabled (with a reason) for yourself and for
+  // configured owners; the server re-enforces both regardless. Optimistically
+  // patches the local role on success and re-renders the (filtered) list.
+  function roleToggle(u) {
+    var email = (u.email || '').toLowerCase();
+    var isAdmin = u.role === 'admin';
+    var btn = h(
+      'button',
+      {
+        type: 'button',
+        class:
+          'admin-btn admin-btn--sm ' + (isAdmin ? 'admin-btn--danger' : 'admin-btn--secondary'),
+        dataset: { roleToggle: email }
+      },
+      isAdmin ? 'Revoke admin' : 'Make admin'
+    );
+    var reason = null;
+    if (isSelf(email)) reason = 'You can’t change your own role';
+    else if (isOwner(email)) reason = 'Configured owner — set via INITIAL_ADMIN_EMAILS';
+    if (reason) {
+      btn.disabled = true;
+      btn.setAttribute('title', reason);
+    }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation(); // don't open the row detail
+      toggleRole(u, btn);
+    });
+    return btn;
+  }
+
+  function toggleRole(u, btn) {
+    var email = (u.email || '').toLowerCase();
+    var promote = u.role !== 'admin';
+    btn.disabled = true;
+    var req = promote
+      ? api.post('/api/v1/admin/staff', { email: email })
+      : api.del('/api/v1/admin/staff/' + encodeURIComponent(email));
+    req
+      .then(function () {
+        u.role = promote ? 'admin' : 'user';
+        ADMIN.toast(promote ? 'Granted admin' : 'Revoked admin', 'success');
+        renderList(SEARCH ? SEARCH.value : '');
+      })
+      .catch(function (err) {
+        if (err && err.isAuthError) return ADMIN.onAuthError(err);
+        ADMIN.toast((err && err.message) || 'Could not update role', 'error');
+        btn.disabled = false;
+      });
+  }
+
   // --- list ---------------------------------------------------------------
 
   function renderList(filter) {
@@ -74,11 +144,14 @@
     });
     if (shown.length === 0) {
       tbody.appendChild(
-        h('tr', h('td', { colspan: '4', class: 'admin-empty' }, 'No matching users.'))
+        h('tr', h('td', { colspan: '5', class: 'admin-empty' }, 'No matching users.'))
       );
       return;
     }
     shown.forEach(function (u) {
+      var actionCell = h('td', { class: 'admin-users__actions' }, roleToggle(u));
+      // The action cell is interactive on its own; a click there must not also
+      // open the row detail (handled by stopPropagation in the button).
       var row = h('tr', { class: 'admin-users__row' }, [
         h(
           'td',
@@ -92,7 +165,8 @@
         ),
         h('td', rolePill(u.role)),
         h('td', { class: 'admin-users__date' }, fmtDate(u.created_at)),
-        h('td', { class: 'admin-users__date' }, fmtDate(u.last_login_at))
+        h('td', { class: 'admin-users__date' }, fmtDate(u.last_login_at)),
+        actionCell
       ]);
       row.addEventListener('click', function () {
         openDetail(u.id);
@@ -224,7 +298,7 @@
                 'Role',
                 h('span', [
                   rolePill(u.role),
-                  h('span', { class: 'admin-deflist__note' }, ' — managed by an operator')
+                  h('span', { class: 'admin-deflist__note' }, ' — change it from the Users list')
                 ])
               ),
               dt('Joined', fmtDate(u.created_at)),
@@ -281,6 +355,170 @@
 
   // --- render -------------------------------------------------------------
 
+  // --- staff & invites panel (Phase 5.5) ----------------------------------
+
+  function invite(raw, input) {
+    var email = (raw || '').trim().toLowerCase();
+    if (!email) return;
+    api
+      .post('/api/v1/admin/staff', { email: email })
+      .then(function (res) {
+        input.value = '';
+        var status = res && res.status;
+        if (status === 'pending') {
+          ADMIN.toast('Invited ' + email + ' — tell them to sign in at /admin/', 'success');
+        } else if (status === 'promoted') {
+          ADMIN.toast('Granted admin to ' + email, 'success');
+        } else if (status === 'owner') {
+          ADMIN.toast(email + ' is a configured owner (already admin)', 'info');
+        } else {
+          ADMIN.toast('Invited ' + email, 'success');
+        }
+        render(CONTAINER); // refetch users + staff so both lists reflect the change
+      })
+      .catch(function (err) {
+        if (err && err.isAuthError) return ADMIN.onAuthError(err);
+        ADMIN.toast((err && err.message) || 'Invite failed', 'error');
+      });
+  }
+
+  function cancelInvite(email) {
+    api
+      .del('/api/v1/admin/staff/' + encodeURIComponent(email))
+      .then(function () {
+        ADMIN.toast('Invite cancelled', 'success');
+        render(CONTAINER);
+      })
+      .catch(function (err) {
+        if (err && err.isAuthError) return ADMIN.onAuthError(err);
+        ADMIN.toast((err && err.message) || 'Could not cancel', 'error');
+      });
+  }
+
+  function staffPanel() {
+    var input = h('input', {
+      type: 'email',
+      class: 'admin-input admin-staff__input',
+      placeholder: 'name@example.com',
+      'aria-label': 'Invite admin by email'
+    });
+    var inviteBtn = h(
+      'button',
+      { type: 'button', class: 'admin-btn admin-btn--primary' },
+      'Invite admin'
+    );
+    inviteBtn.addEventListener('click', function () {
+      invite(input.value, input);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') invite(input.value, input);
+    });
+
+    var kids = [
+      h('h2', { class: 'admin-card__title' }, 'Staff & invites'),
+      h(
+        'p',
+        { class: 'admin-staff__hint' },
+        'Invite an admin by email. They become admin the first time they sign in ' +
+          'with that Google account. Email delivery isn’t wired yet — send them to /admin/.'
+      ),
+      h('div', { class: 'admin-staff__invite' }, [input, inviteBtn])
+    ];
+
+    // Pending invites (unconsumed grants).
+    if (PENDING.length > 0) {
+      var items = PENDING.map(function (p) {
+        var cancel = h(
+          'button',
+          { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
+          'Cancel'
+        );
+        cancel.addEventListener('click', function () {
+          cancelInvite(p.email);
+        });
+        var meta =
+          'invited ' +
+          fmtDate(p.granted_at) +
+          (p.granted_by_email ? ' by ' + p.granted_by_email : '');
+        return h('li', { class: 'admin-staff__row' }, [
+          h('div', { class: 'admin-staff__who' }, [
+            h('span', { class: 'admin-staff__email' }, p.email),
+            h('span', { class: 'admin-staff__meta' }, meta)
+          ]),
+          cancel
+        ]);
+      });
+      kids.push(h('h3', { class: 'admin-staff__subhead' }, 'Pending invites'));
+      kids.push(h('ul', { class: 'admin-staff__list' }, items));
+    }
+
+    // Configured owners (immutable — INITIAL_ADMIN_EMAILS).
+    var ownerEmails = Object.keys(OWNERS);
+    if (ownerEmails.length > 0) {
+      var ownerItems = ownerEmails.sort().map(function (e) {
+        return h('li', { class: 'admin-staff__row' }, [
+          h('div', { class: 'admin-staff__who' }, [
+            h('span', { class: 'admin-staff__email' }, e),
+            h('span', { class: 'admin-staff__meta' }, 'configured owner — always admin')
+          ]),
+          h('span', { class: 'admin-badge admin-badge--admin' }, 'owner')
+        ]);
+      });
+      kids.push(h('h3', { class: 'admin-staff__subhead' }, 'Owners'));
+      kids.push(h('ul', { class: 'admin-staff__list' }, ownerItems));
+    }
+
+    return h('section', { class: 'admin-card admin-staff' }, kids);
+  }
+
+  // --- render -------------------------------------------------------------
+
+  function renderAll(container) {
+    dom.clear(container);
+
+    SEARCH = h('input', {
+      type: 'search',
+      class: 'admin-input admin-users__search',
+      placeholder: 'Search by email or name…',
+      'aria-label': 'Search users'
+    });
+    SEARCH.addEventListener('input', function () {
+      renderList(SEARCH.value);
+    });
+    container.appendChild(h('div', { class: 'admin-toolbar' }, [SEARCH]));
+
+    if (USERS.length === 0) {
+      container.appendChild(
+        ADMIN.emptyState({
+          icon: 'users',
+          title: 'No users yet',
+          text: 'Signed-in users will appear here once someone signs in with Google.'
+        })
+      );
+    } else {
+      var table = h('table', { class: 'admin-table admin-users' }, [
+        h(
+          'thead',
+          h('tr', [
+            h('th', 'User'),
+            h('th', 'Role'),
+            h('th', 'Joined'),
+            h('th', 'Last login'),
+            h('th', 'Actions')
+          ])
+        ),
+        h('tbody')
+      ]);
+      container.appendChild(h('div', { class: 'admin-tablecard' }, [table]));
+      renderList('');
+    }
+
+    // The staff panel needs the owners/pending lists from GET /admin/staff; if
+    // that call failed we degrade to the plain list (row toggles still work, the
+    // server enforces the owner guard).
+    if (STAFF_LOADED) container.appendChild(staffPanel());
+  }
+
   function render(container) {
     CONTAINER = container;
     dom.clear(container);
@@ -290,39 +528,28 @@
       .get('/api/v1/users')
       .then(function (data) {
         USERS = (data && data.users) || [];
-        dom.clear(container);
-
-        var search = h('input', {
-          type: 'search',
-          class: 'admin-input admin-users__search',
-          placeholder: 'Search by email or name…',
-          'aria-label': 'Search users'
-        });
-        search.addEventListener('input', function () {
-          renderList(search.value);
-        });
-        container.appendChild(h('div', { class: 'admin-toolbar' }, [search]));
-
-        if (USERS.length === 0) {
-          container.appendChild(
-            ADMIN.emptyState({
-              icon: 'users',
-              title: 'No users yet',
-              text: 'Signed-in users will appear here once Google sign-in is live.'
-            })
-          );
-          return;
-        }
-
-        var table = h('table', { class: 'admin-table admin-users' }, [
-          h(
-            'thead',
-            h('tr', [h('th', 'User'), h('th', 'Role'), h('th', 'Joined'), h('th', 'Last login')])
-          ),
-          h('tbody')
-        ]);
-        container.appendChild(h('div', { class: 'admin-tablecard' }, [table]));
-        renderList('');
+        // Best-effort staff fetch — never let it fail the whole tab.
+        return api.get('/api/v1/admin/staff').then(
+          function (staff) {
+            OWNERS = {};
+            ((staff && staff.owners) || []).forEach(function (e) {
+              OWNERS[String(e).toLowerCase()] = true;
+            });
+            PENDING = (staff && staff.pending) || [];
+            STAFF_LOADED = true;
+          },
+          function (err) {
+            // A genuine auth failure must still drop to the gate (R8) — only a
+            // non-auth staff error degrades to the plain list.
+            if (err && err.isAuthError) throw err;
+            OWNERS = {};
+            PENDING = [];
+            STAFF_LOADED = false;
+          }
+        );
+      })
+      .then(function () {
+        renderAll(container);
       })
       .catch(function (err) {
         if (err && err.isAuthError) return ADMIN.onAuthError(err);

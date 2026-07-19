@@ -5,13 +5,14 @@ The literal ``/users/me/...`` routes are declared before ``/users/{user_id}``.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
 from data.models import (
     Rating,
     Session,
+    StaffGrant,
     User,
     UserConversion,
     UserFavorite,
@@ -91,6 +92,12 @@ async def delete_my_account(
     await db.execute(delete(UserConversion).where(UserConversion.user_id == uid))
     await db.execute(delete(UserFavorite).where(UserFavorite.user_id == uid))
     await db.execute(delete(UserPreference).where(UserPreference.user_id == uid))
+    # Phase 5.5: clear any staff grant keyed to this email (clean slate on erase).
+    # The FK on staff_grants.granted_by is ON DELETE SET NULL, so grants this user
+    # *issued* survive with a null granter.
+    await db.execute(
+        delete(StaffGrant).where(StaffGrant.email == func.lower(user.email))
+    )
     await db.execute(delete(Session).where(Session.user_id == uid))
     await db.execute(delete(User).where(User.id == uid))
     await db.commit()

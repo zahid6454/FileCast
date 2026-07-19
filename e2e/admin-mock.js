@@ -74,6 +74,9 @@ export function makeState(overrides = {}) {
       }
     ],
     announcements: overrides.announcements || [],
+    // Phase 5.5 staff state: configured owners (immutable) + pending invites.
+    owners: overrides.owners || [],
+    pending: overrides.pending || [],
     users: overrides.users || [
       {
         id: 'u1',
@@ -249,6 +252,49 @@ export async function installApi(page, state) {
       const u = state.users.find((x) => x.id === userMatch[1]);
       if (!u) return json({ detail: 'not found' }, 404);
       return json({ user: Object.assign({ favorites: ['img-a'] }, u), history: [] });
+    }
+
+    // --- staff & invites (Phase 5.5) ---
+    const meEmail =
+      (state.me.body && state.me.body.user && (state.me.body.user.email || '').toLowerCase()) || '';
+    const emailOk = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+    if (path.endsWith('/admin/staff') && method === 'GET') {
+      return json({
+        admins: state.users.filter((u) => u.role === 'admin'),
+        pending: state.pending,
+        owners: state.owners
+      });
+    }
+    if (path.endsWith('/admin/staff') && method === 'POST') {
+      const email = String(body().email || '')
+        .trim()
+        .toLowerCase();
+      if (!emailOk(email)) return json({ detail: 'Malformed email' }, 400);
+      if (state.owners.indexOf(email) >= 0) return json({ status: 'owner', email });
+      const u = state.users.find((x) => (x.email || '').toLowerCase() === email);
+      if (u) {
+        u.role = 'admin';
+        return json({ status: 'promoted', email });
+      }
+      if (!state.pending.some((p) => p.email === email)) {
+        state.pending.push({
+          email,
+          granted_at: new Date().toISOString(),
+          granted_by_email: meEmail
+        });
+      }
+      return json({ status: 'pending', email });
+    }
+    const staffMatch = path.match(/\/admin\/staff\/(.+)$/);
+    if (staffMatch && method === 'DELETE') {
+      const email = decodeURIComponent(staffMatch[1]).trim().toLowerCase();
+      if (state.owners.indexOf(email) >= 0)
+        return json({ detail: 'Config owners cannot be revoked' }, 403);
+      if (email === meEmail) return json({ detail: 'no self-demote' }, 409);
+      const u = state.users.find((x) => (x.email || '').toLowerCase() === email);
+      if (u) u.role = 'user';
+      state.pending = state.pending.filter((p) => p.email !== email);
+      return json({ status: 'revoked', email });
     }
 
     // --- deploy stub (501, exactly like Phase 1) ---

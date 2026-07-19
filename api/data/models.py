@@ -73,6 +73,32 @@ class User(Base):
     )
 
 
+class StaffGrant(Base):
+    """Pending-invite + audit record for admin access (Phase 5.5).
+
+    NOT a second source of truth — ``users.role`` remains the sole live authority
+    (D6). A row exists to (a) hold an admin grant for an email that hasn't signed
+    in yet (consumed on first Google login by ``apply_staff_role``) and (b) keep an
+    audit trail of who granted what. ``email`` is stored **lowercased**; the unique
+    constraint gives one row per email and a free index.
+    """
+
+    __tablename__ = "staff_grants"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    role: Mapped[str] = mapped_column(String, nullable=False, default="admin")
+    granted_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class Session(Base):
     """DB-backed session. PK is ``sha256(raw_token)`` — a DB dump can't be
     replayed as live sessions (§6 Session note). The cookie carries the raw

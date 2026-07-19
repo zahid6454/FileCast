@@ -26,8 +26,12 @@ test.describe('auth gate (D6)', () => {
     await installApi(page, state);
     await page.goto('/admin/');
     await expect(page.locator('.admin-gate__title')).toHaveText('FileCast Admin');
-    await expect(page.getByText('admin Google account')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Sign in with Google' })).toBeVisible();
+    await expect(page.getByText('Admin access is invite-only')).toBeVisible();
+    // Branded white Google button (obs 5/6) — a link carrying the multi-color G.
+    const gbtn = page.getByRole('link', { name: 'Sign in with Google' });
+    await expect(gbtn).toBeVisible();
+    await expect(gbtn).toHaveClass(/btn-google/);
+    await expect(gbtn.locator('svg.btn-google__icon')).toBeVisible();
     await expect(page.locator('.admin-tabs')).toHaveCount(0);
   });
 
@@ -411,9 +415,7 @@ test.describe('announcements', () => {
 });
 
 test.describe('users', () => {
-  test('lists users, filters client-side, detail has NO role-change control (D9)', async ({
-    page
-  }) => {
+  test('lists users and filters client-side', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#users');
@@ -421,13 +423,62 @@ test.describe('users', () => {
     await expect(page.locator('.admin-users tbody tr')).toHaveCount(2);
     await page.locator('.admin-users__search').fill('admin@');
     await expect(page.locator('.admin-users tbody tr')).toHaveCount(1);
+  });
 
-    await page.locator('.admin-users__row').first().click();
-    await expect(page.getByText('managed by an operator')).toBeVisible();
-    // No promotion control of any kind.
-    expect(
-      await page.getByRole('button', { name: /make admin|promote|change role/i }).count()
-    ).toBe(0);
+  test('per-row role toggle grants admin (Phase 5.5) and persists in state', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#users');
+
+    const userRow = page.locator('.admin-users__row', { hasText: 'user@dev.local' });
+    await expect(userRow.getByRole('button', { name: 'Make admin' })).toBeVisible();
+    await userRow.getByRole('button', { name: 'Make admin' }).click();
+
+    // Server state actually mutated + the row now reads as admin.
+    await expect
+      .poll(() => state.users.find((u) => u.email === 'user@dev.local').role)
+      .toBe('admin');
+    await expect(userRow.getByRole('button', { name: 'Revoke admin' })).toBeVisible();
+  });
+
+  test('role toggle is disabled for your own row (no self-demote)', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#users');
+
+    const selfRow = page.locator('.admin-users__row', { hasText: 'admin@dev.local' });
+    await expect(selfRow.getByRole('button', { name: 'Revoke admin' })).toBeDisabled();
+  });
+
+  test('invite an admin by email → shows in pending, then cancel removes it', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#users');
+
+    await page.locator('.admin-staff__input').fill('newadmin@example.com');
+    await page.getByRole('button', { name: 'Invite admin' }).click();
+
+    // Appears as a pending invite (server holds an unconsumed grant).
+    const pendingRow = page.locator('.admin-staff__row', { hasText: 'newadmin@example.com' });
+    await expect(pendingRow).toBeVisible();
+    await expect.poll(() => state.pending.length).toBe(1);
+
+    // Cancel removes it.
+    await pendingRow.getByRole('button', { name: 'Cancel' }).click();
+    await expect(
+      page.locator('.admin-staff__row', { hasText: 'newadmin@example.com' })
+    ).toHaveCount(0);
+    await expect.poll(() => state.pending.length).toBe(0);
+  });
+
+  test('configured owners are listed and cannot be revoked', async ({ page }) => {
+    const state = makeState({ owners: ['owner@example.com'] });
+    await installApi(page, state);
+    await page.goto('/admin/#users');
+
+    const ownerRow = page.locator('.admin-staff__row', { hasText: 'owner@example.com' });
+    await expect(ownerRow).toBeVisible();
+    await expect(ownerRow.getByText('configured owner')).toBeVisible();
   });
 });
 

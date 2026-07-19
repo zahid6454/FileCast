@@ -124,6 +124,44 @@
     ]
   };
 
+  // The multi-color Google "G" (same paths as the main site's auth.js, 24-grid).
+  // Built with dom.svg so it stays P23-safe; each path carries its own brand fill.
+  var GOOGLE_G_PATHS = [
+    [
+      '#4285F4',
+      'M23.52 12.27c0-.79-.07-1.54-.2-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.59-5.17 3.59-8.82z'
+    ],
+    [
+      '#34A853',
+      'M12 24c3.24 0 5.95-1.08 7.96-2.91l-3.86-3c-1.08.72-2.45 1.16-4.1 1.16-3.15 0-5.82-2.13-6.77-4.99H1.24v3.09C3.24 21.3 7.31 24 12 24z'
+    ],
+    [
+      '#FBBC05',
+      'M5.23 14.26c-.24-.72-.38-1.49-.38-2.26s.14-1.54.38-2.26V6.65H1.24C.45 8.24 0 10.06 0 12s.45 3.76 1.24 5.35l3.99-3.09z'
+    ],
+    [
+      '#EA4335',
+      'M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.24 2.7 1.24 6.65l3.99 3.09C6.18 6.88 8.85 4.75 12 4.75z'
+    ]
+  ];
+
+  function googleGIcon() {
+    var kids = GOOGLE_G_PATHS.map(function (p) {
+      return dom.svg('path', { fill: p[0], d: p[1] });
+    });
+    return dom.svg(
+      'svg',
+      {
+        class: 'btn-google__icon',
+        viewBox: '0 0 24 24',
+        'aria-hidden': 'true',
+        focusable: 'false'
+      },
+      kids
+    );
+  }
+  ADMIN.googleGIcon = googleGIcon;
+
   // Build an inline SVG icon from ICONS (stroke=currentColor). P23-safe.
   function svgIcon(name, size, cls) {
     var kids = (ICONS[name] || []).map(function (s) {
@@ -385,14 +423,19 @@
     tabHost = null; // no panel mounted → a stray hashchange must be a no-op
     dom.clear(mount);
 
-    // Real sign-in = Google (same flow as the main site). Admin access is granted
-    // by the DB role, not by this button: a Google user only reaches the panel if
-    // their users.role is 'admin' (D6 — no self-service admin). ?next returns here.
+    // Real sign-in = Google (same flow as the main site), rendered as the branded
+    // white Google button (obs 5/6). Admin access is invite-gated: a Google user
+    // only reaches the panel if their users.role is 'admin' (D6 — no self-service
+    // admin; granted by an existing admin or INITIAL_ADMIN_EMAILS). ?next returns here.
     var apiBase = ((window.FILECAST && window.FILECAST.apiBase) || '').replace(/\/$/, '');
     var googleBtn = h(
       'a',
-      { class: 'admin-btn admin-btn--primary', href: apiBase + '/api/v1/auth/google?next=/admin/' },
-      'Sign in with Google'
+      {
+        class: 'btn-google admin-gate__google',
+        href: apiBase + '/api/v1/auth/google?next=/admin/',
+        'aria-label': 'Sign in with Google'
+      },
+      [googleGIcon(), h('span', {}, 'Sign in with Google')]
     );
 
     // Dev-login: a local-only shortcut that skips Google and mints a session for a
@@ -410,6 +453,7 @@
     );
     var devRow = h('div', { class: 'admin-signin__dev' }, [adminBtn, userBtn]);
     var devNote = h('p', { class: 'admin-signin__note' }, 'Local development only — skips Google.');
+    var devBlock = h('div', { class: 'admin-signin__devblock' }, [devNote, devRow]);
 
     function devLogin(role) {
       api
@@ -438,11 +482,18 @@
       h('div', { class: 'admin-gate' }, [
         h('div', { class: 'admin-gate__card' }, [
           h('h1', { class: 'admin-gate__title' }, 'FileCast Admin'),
-          h('p', 'Sign in with your admin Google account to manage FileCast.'),
+          h(
+            'p',
+            { class: 'admin-gate__lead' },
+            'Admin access is invite-only — sign in with the Google account you were granted.'
+          ),
           googleBtn,
-          h('a', { class: 'admin-btn admin-btn--ghost', href: '/' }, 'Go to the main site'),
-          devNote,
-          devRow
+          h(
+            'a',
+            { class: 'admin-btn admin-btn--ghost admin-gate__site', href: '/' },
+            'Go to the main site'
+          ),
+          devBlock
         ])
       ])
     );
@@ -473,6 +524,8 @@
 
   function renderPanel(user) {
     dom.clear(mount);
+    // Stash the signed-in admin so tabs (Users) can guard self-actions client-side.
+    ADMIN.currentUser = user;
 
     var nav = h('nav', { class: 'admin-tabs', id: 'admin-nav', 'aria-label': 'Admin sections' });
     TABS.forEach(function (t) {

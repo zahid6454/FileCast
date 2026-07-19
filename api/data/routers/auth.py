@@ -20,6 +20,7 @@ from data.db import get_session
 from data.models import UserFavorite, UserPreference
 from data.routers._serialize import user_dict
 from data.security import (
+    apply_staff_role,
     create_session,
     destroy_session,
     get_or_create_dev_user,
@@ -230,6 +231,9 @@ async def google_callback(
     user = await upsert_google_user(
         db, email, userinfo.get("name"), userinfo.get("picture")
     )
+    # Phase 5.5: resolve admin access (config owner / pending grant) before the
+    # session is created — never demotes (§2).
+    await apply_staff_role(db, user)
     response = RedirectResponse(settings.site_origin + next_path, status_code=302)
     await create_session(db, user, response, request)
     await db.commit()

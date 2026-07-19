@@ -11,6 +11,7 @@ from data.routers import (
     history,
     preferences,
     ratings,
+    staff,
     stats,
     tools,
     users,
@@ -29,4 +30,5 @@ all_routers = [
     preferences.router,
     history.router,
     admin_deploy.router,
+    staff.router,
 ]
