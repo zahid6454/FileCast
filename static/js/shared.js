@@ -424,23 +424,27 @@
     }
   }
 
-  // "X% found this helpful (N ratings)" at/above the threshold, else null. The
-  // single home of the threshold + percentage maths, reused for both the
-  // pre-vote social-proof line and the post-vote resolve.
+  // "X% helpful (N ratings)" at/above the threshold, else null. The single home
+  // of the threshold + percentage maths, reused for both the pre-vote
+  // social-proof line and the post-vote resolve.
   //
-  // The count is deliberately CONSERVATIVE and can undercount real voters. The
-  // server dedup key is sha256(daily_salt : client_ip : tool_id) upserted under
+  // The wording describes the RATINGS RECORDED, not the people behind them, and
+  // that distinction is deliberate. The count is conservative and can undercount
+  // real voters: the server dedup key is
+  // sha256(daily_salt : client_ip : tool_id) upserted under
   // UNIQUE(tool_id, fingerprint), so everyone sharing an egress IP (carrier
   // CGNAT, an office, a VPN exit) collapses to one row per tool per day, and a
-  // later voter overwrites an earlier one. That is the privacy-preserving trade
-  // (no client fingerprinting, D4/P3); the error direction is always under-,
-  // never over-counting. See api/data/fingerprint.py.
+  // later voter overwrites an earlier one. N is therefore a count of stored
+  // rows — literally accurate — while "N people found this helpful" would not
+  // be. That skew is the privacy-preserving trade (no client fingerprinting,
+  // D4/P3); the error direction is always under-, never over-counting. See
+  // api/data/fingerprint.py.
   function scoreLine(agg) {
     if (!agg) return null;
     var total = agg.yes + agg.no;
     if (total < RATING_THRESHOLD) return null;
     var pct = Math.round((agg.yes / total) * 100);
-    return pct + '% found this helpful (' + total + ' ratings)';
+    return pct + '% helpful (' + total + ' ratings)';
   }
 
   // Unhide BEFORE writing the text, not after. `.hidden` is display:none, which
