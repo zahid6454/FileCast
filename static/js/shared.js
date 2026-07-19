@@ -375,31 +375,176 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Feedback widget
+  // Rating widget (persisted yes/no votes; server-side dedup; baked aggregate)
+  //
+  // The vote POSTs {tool_id, vote} and NOTHING else — the dedup key is a salted
+  // IP hash computed server-side, never a client fingerprint (D4/P3). The score
+  // is baked into #tool-ratings at build time, so there is no API call on load;
+  // after a vote we update optimistically rather than re-fetching (the number is
+  // stale-by-design until the next deploy).
   // ---------------------------------------------------------------------------
-  function submitFeedback(response) {
+  var RATING_THRESHOLD = 50; // show the % line only at 50+ total ratings
+
+  function parseBakedRating() {
+    var el = document.getElementById('tool-ratings');
+    if (!el) return null; // no DB at build / unseeded tool -> default prompt
+    try {
+      var d = JSON.parse(el.textContent);
+      // Number(x) || 0 (not |0, which 32-bit-truncates) so null/undefined/string
+      // counts degrade to 0 instead of NaN-poisoning the arithmetic.
+      return { yes: Number(d.yes) || 0, no: Number(d.no) || 0 };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function ratingKey() {
+    var config = window.TOOL_CONFIG;
+    return config ? 'fc_rated_' + config.id : null;
+  }
+
+  // Returns the recorded vote ('yes'/'no'), a legacy truthy value, or null.
+  function votedLocally() {
+    var key = ratingKey();
+    try {
+      return key ? window.localStorage.getItem(key) : null;
+    } catch (e) {
+      return null; // privacy mode / storage disabled
+    }
+  }
+
+  // Stores the DIRECTION, not a flag, so the reload path can reproduce the same
+  // count the vote path showed (see initFeedback).
+  function markVotedLocally(vote) {
+    var key = ratingKey();
+    try {
+      if (key) window.localStorage.setItem(key, vote);
+    } catch (e) {
+      /* storage disabled — the server dedup is the real one anyway */
+    }
+  }
+
+  // "X% found this helpful (N ratings)" at/above the threshold, else null. The
+  // single home of the threshold + percentage maths, reused for both the
+  // pre-vote social-proof line and the post-vote resolve.
+  //
+  // The count is deliberately CONSERVATIVE and can undercount real voters. The
+  // server dedup key is sha256(daily_salt : client_ip : tool_id) upserted under
+  // UNIQUE(tool_id, fingerprint), so everyone sharing an egress IP (carrier
+  // CGNAT, an office, a VPN exit) collapses to one row per tool per day, and a
+  // later voter overwrites an earlier one. That is the privacy-preserving trade
+  // (no client fingerprinting, D4/P3); the error direction is always under-,
+  // never over-counting. See api/data/fingerprint.py.
+  function scoreLine(agg) {
+    if (!agg) return null;
+    var total = agg.yes + agg.no;
+    if (total < RATING_THRESHOLD) return null;
+    var pct = Math.round((agg.yes / total) * 100);
+    return pct + '% found this helpful (' + total + ' ratings)';
+  }
+
+  // Unhide BEFORE writing the text, not after. `.hidden` is display:none, which
+  // keeps the element out of the accessibility tree — a live region mutated
+  // while hidden announces nothing, so the reverse order would silently defeat
+  // the role="status" on #feedback-score (R11).
+  function showScore(scoreEl, text) {
+    scoreEl.classList.remove('hidden');
+    scoreEl.textContent = text; // safe DOM: never innerHTML with data (P23)
+  }
+
+  // Baked counts plus this vote — the recorded vote is not in the baked data
+  // until the next deploy, so add it back.
+  function withVote(baked, vote) {
+    var agg = { yes: baked ? baked.yes : 0, no: baked ? baked.no : 0 };
+    agg[vote] += 1;
+    return agg;
+  }
+
+  // Collapse to the resolved display: score line at 50+, else a plain thanks.
+  // `target` decides whether the message is ANNOUNCED: the vote path passes the
+  // live #feedback-score, the page-load path passes the inert #feedback-baked.
+  function resolveWidget(agg, prompt, buttons, target) {
+    if (prompt) prompt.classList.add('hidden');
+    buttons.forEach(function (b) {
+      b.classList.add('hidden');
+    });
+    showScore(target, scoreLine(agg) || 'Thanks for your feedback!');
+  }
+
+  function onVote(vote, baked, els) {
     var config = window.TOOL_CONFIG;
     if (config) {
-      trackEvent('feedback_submitted', {
-        tool_id: config.id,
-        response: response
-      });
+      trackEvent('feedback_submitted', { tool_id: config.id, response: vote });
     }
 
-    var el = document.getElementById('feedback');
-    if (el) {
-      el.textContent = 'Thanks for your feedback!';
+    // Read the API origin at click time, so there is no script-load-order
+    // dependency on the FILECAST config island.
+    var apiBase = window.FILECAST && window.FILECAST.apiBase;
+    if (apiBase && config) {
+      fetch(apiBase + '/api/v1/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // a signed-in vote carries user_id; never gates
+        body: JSON.stringify({ tool_id: config.id, vote: vote })
+      })
+        .then(function (r) {
+          // Lock ONLY once the server has actually recorded the vote. A network
+          // failure (API down, or the origin blocked by an ad-blocker — and
+          // Brave/uBlock/Tor users are exactly our users) or a 429/4xx means
+          // nothing was persisted; locking anyway would discard that person's
+          // feedback on this tool permanently, and would do it disproportionately
+          // to the privacy-tooling population, biasing the published percentage.
+          if (r && r.ok) markVotedLocally(vote);
+        })
+        .catch(function () {
+          /* silent — API down means voting no-ops (progressive enhancement) */
+        });
     }
+
+    // Resolve optimistically regardless: the UX is identical on the happy path,
+    // and a vote that never reached the server simply stays retryable.
+    if (els.baked) els.baked.classList.add('hidden');
+    resolveWidget(withVote(baked, vote), els.prompt, els.buttons, els.score);
   }
 
   // Wire the Yes/No buttons via delegation — no inline on* handlers, so the site
   // CSP can stay 'script-src self' (no unsafe-inline).
   function initFeedback() {
-    var el = document.getElementById('feedback');
-    if (!el) return;
-    el.querySelectorAll('[data-feedback]').forEach(function (btn) {
+    var feedback = document.getElementById('feedback');
+    if (!feedback) return; // no-op on non-tool pages
+    var els = {
+      buttons: feedback.querySelectorAll('[data-feedback]'),
+      prompt: document.getElementById('feedback-prompt'),
+      score: document.getElementById('feedback-score'), // live: vote confirmation
+      baked: document.getElementById('feedback-baked') // inert: page-load text
+    };
+    // Both score elements are part of the markup contract. Requiring them keeps
+    // a partial template inert (obvious in testing) rather than quietly routing
+    // load-time text through the live region (invisible to everyone sighted).
+    if (!els.buttons.length || !els.score || !els.baked) return;
+
+    var baked = parseBakedRating();
+
+    // NOTHING on this path may write to the live region: it runs at
+    // DOMContentLoaded, so a screen reader would interrupt whatever the user is
+    // doing to read out text they never asked for, on every single page load.
+    var voted = votedLocally();
+    if (voted) {
+      // Mirror what the vote itself displayed. A legacy flag lock has no
+      // direction to restore, so it falls back to the bare baked counts.
+      var seen = voted === 'yes' || voted === 'no' ? withVote(baked, voted) : baked;
+      resolveWidget(seen, els.prompt, els.buttons, els.baked);
+      return;
+    }
+
+    var line = scoreLine(baked); // pre-vote social proof at 50+; buttons stay
+    if (line) showScore(els.baked, line);
+
+    els.buttons.forEach(function (btn) {
       btn.addEventListener('click', function () {
-        submitFeedback(btn.dataset.feedback);
+        var vote = btn.dataset.feedback;
+        if (vote !== 'yes' && vote !== 'no') return; // malformed attribute
+        onVote(vote, baked, els);
       });
     });
   }

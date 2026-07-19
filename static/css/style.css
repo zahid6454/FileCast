@@ -538,12 +538,20 @@ img { max-width: 100%; display: block; }
 .feedback {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
   padding: var(--space-4) 0;
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
 .feedback .btn { font-size: var(--text-sm); padding: var(--space-1) var(--space-4); }
+/* Baked/resolved rating line — wraps to its own row under the prompt + buttons. */
+.feedback__score {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
 
 /* --- Ad Slots (fixed dimensions prevent CLS) --- */
 .ad-slot { min-height: var(--ad-leaderboard-h); display: flex; align-items: center; justify-content: center; margin: var(--space-6) 0; }

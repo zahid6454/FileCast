@@ -271,6 +271,97 @@ def apply_tool_overrides(tools: list[dict], overrides: dict) -> list[dict]:
     return result
 
 
+def fetch_rating_aggregates() -> dict:
+    """Read per-tool yes/no vote counts from Postgres via the Phase 1 sync engine.
+
+    Returns ``{tool_id: {"yes": int, "no": int}}``, or ``{}`` on ANY failure
+    (shared package not importable, ``DATABASE_URL`` unset/unreachable, DB down,
+    empty table) so tool pages simply render without a baked score — never
+    fail-closed (ledger P10). One ``GROUP BY`` query, not one per tool.
+
+    ``Rating.vote`` is a **String** holding the literal ``'yes'``/``'no'`` (the
+    hard Phase 6 §7/R9 contract): a boolean column would make the bucket filter
+    below drop every row and bake all-zero aggregates with no error.
+
+    Ratings are RETAINED by the purge (D5), so this aggregate is stable across
+    deploys rather than decaying.
+    """
+    try:
+        api_path = str(ROOT / "api")  # Phase 1 shared package
+        if api_path not in sys.path:  # avoid unbounded growth across watch rebuilds
+            sys.path.insert(0, api_path)
+        from data.db import sync_session
+        from data.models import Rating
+        from sqlalchemy import func, select
+
+        result: dict = {}
+        with sync_session() as session:
+            rows = session.execute(
+                select(Rating.tool_id, Rating.vote, func.count()).group_by(
+                    Rating.tool_id, Rating.vote
+                )
+            ).all()
+        for tool_id, vote, n in rows:
+            if vote in ("yes", "no"):
+                bucket = result.setdefault(tool_id, {"yes": 0, "no": 0})
+                bucket[vote] += int(n)
+        if result:
+            print(f"  [db] rating aggregates baked ({len(result)} tool(s))")
+        return result
+    except Exception as e:  # noqa: BLE001 — intentional catch-all (ledger P10)
+        print(
+            f"  [db] rating aggregates unavailable ({type(e).__name__}); "
+            f"tool pages render without baked scores"
+        )
+        return {}
+
+
+def apply_rating_aggregates(tools: list[dict], aggregates: dict) -> list[dict]:
+    """Annotate each tool with its raw ``{yes, no}`` counts, where it has any.
+
+    A tool absent from ``aggregates`` keeps **no** ``rating`` key, so its template
+    renders no ``#tool-ratings`` island and the widget falls back to the plain
+    prompt — the per-tool P10 degrade.
+
+    Raw counts only: the 50-rating threshold and the percentage are computed
+    client-side in ``shared.js`` (``scoreLine()``), in one place rather than
+    duplicated across two languages (R4).
+    """
+    for tool in tools:
+        agg = aggregates.get(tool["id"])
+        if agg:
+            tool["rating"] = {"yes": agg.get("yes", 0), "no": agg.get("no", 0)}
+    return tools
+
+
+def fetch_total_conversions() -> int | None:
+    """Sum the anonymous conversions aggregate for the homepage trust counter.
+
+    Returns the total, or ``None`` on ANY failure (P10) — the homepage badge is
+    guarded on it, so no DB simply means no badge and a homepage identical to
+    Phase 3's.
+    """
+    try:
+        api_path = str(ROOT / "api")  # Phase 1 shared package
+        if api_path not in sys.path:  # avoid unbounded growth across watch rebuilds
+            sys.path.insert(0, api_path)
+        from data.db import sync_session
+        from data.models import Conversion
+        from sqlalchemy import func, select
+
+        with sync_session() as session:
+            total = session.execute(
+                select(func.coalesce(func.sum(Conversion.count), 0))
+            ).scalar_one()
+        return int(total)
+    except Exception as e:  # noqa: BLE001 — intentional catch-all (ledger P10)
+        print(
+            f"  [db] conversion total unavailable ({type(e).__name__}); "
+            f"homepage counter hidden"
+        )
+        return None
+
+
 def sort_tools(tools: list[dict]) -> list[dict]:
     """Stable global sort of the flat tools list by the DB ``sort_order`` (P9/D1).
 
@@ -971,6 +1062,10 @@ def build():
     tools = load_tools()
     tools = apply_tool_overrides(tools, fetch_tool_overrides())  # may DROP disabled
     tools = sort_tools(tools)
+    # Bake the ratings aggregate onto each tool (raw counts only — the threshold
+    # is computed client-side). Independent of the overlay read: either can
+    # degrade on its own without failing the build (P10).
+    tools = apply_rating_aggregates(tools, fetch_rating_aggregates())
     print(f"       Found {len(tools)} tool(s)")
 
     # 5. Group by category
@@ -1001,6 +1096,18 @@ def build():
     # 13. Jinja2 environment
     print("[8/10] Setting up Jinja2")
     env = create_jinja_env(site_config, asset_map, categories_with_tools)
+
+    # Site-wide totals for the homepage trust counter. Always defined (so the
+    # StrictUndefined template guard is a plain `is not none` check); the
+    # thousands-separated display string is formatted here in Python so the
+    # template stays dumb (R12).
+    conversions_total = fetch_total_conversions()
+    env.globals["totals"] = {
+        "conversions": conversions_total,
+        "conversions_display": (
+            f"{conversions_total:,}" if conversions_total is not None else None
+        ),
+    }
 
     # 14. Render pages
     print("[9/10] Rendering pages")

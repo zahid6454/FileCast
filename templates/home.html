@@ -45,6 +45,11 @@
     <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>{{ tools|length }} Free Tools</span>
     <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>No Sign-up</span>
     <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>No Limits</span>
+    {# Conversion counter — baked from the DB at build time. Guarded on a floor so
+       it only ever reads as a real trust signal; absent with no DB (P10). #}
+    {% if totals.conversions is not none and totals.conversions >= 1000 %}
+    <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>{{ totals.conversions_display }}+ Files Converted</span>
+    {% endif %}
   </div>
 </section>
 
