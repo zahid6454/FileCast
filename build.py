@@ -290,10 +290,9 @@ def fetch_rating_aggregates() -> dict:
         api_path = str(ROOT / "api")  # Phase 1 shared package
         if api_path not in sys.path:  # avoid unbounded growth across watch rebuilds
             sys.path.insert(0, api_path)
-        from sqlalchemy import func, select
-
         from data.db import sync_session
         from data.models import Rating
+        from sqlalchemy import func, select
 
         result: dict = {}
         with sync_session() as session:
@@ -346,10 +345,9 @@ def fetch_total_conversions() -> int | None:
         api_path = str(ROOT / "api")  # Phase 1 shared package
         if api_path not in sys.path:  # avoid unbounded growth across watch rebuilds
             sys.path.insert(0, api_path)
-        from sqlalchemy import func, select
-
         from data.db import sync_session
         from data.models import Conversion
+        from sqlalchemy import func, select
 
         with sync_session() as session:
             total = session.execute(
