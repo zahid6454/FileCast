@@ -36,6 +36,17 @@ async def lifespan(app: FastAPI):
             extra={"data": {"event": "startup_db_error"}},
         )
 
+    # Phase 5.5: an empty owner allow-list in prod means no path to a first admin
+    # (dev-login is 404, DB surgery is gone, POST /admin/staff needs an admin).
+    from data.config import settings
+
+    if ENVIRONMENT != "development" and not settings.initial_admin_email_set:
+        logger.warning(
+            "INITIAL_ADMIN_EMAILS is empty in a non-development environment — no "
+            "account can become admin. Set it to at least one owner email.",
+            extra={"data": {"event": "startup_no_admin_bootstrap"}},
+        )
+
     logger.info(
         "FileCast API started",
         extra={

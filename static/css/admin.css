@@ -339,6 +339,27 @@
   color: var(--color-text-muted);
   margin-top: var(--space-4) !important;
 }
+.admin-gate__lead {
+  line-height: 1.5;
+}
+/* Branded Google button spans the card width for a clear primary action. */
+.admin-gate__google {
+  width: 100%;
+}
+.admin-gate__site {
+  width: 100%;
+}
+/* Dev-login is visually separated below a divider — clearly secondary/local. */
+.admin-signin__devblock {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
 
 /* ---- banner ------------------------------------------------------------ */
 
@@ -1059,6 +1080,72 @@
 .admin-users__date {
   color: var(--color-text-secondary);
   white-space: nowrap;
+}
+/* Per-row role toggle cell (Phase 5.5) — right-aligned, doesn't trigger the row. */
+.admin-users__actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* ---- staff & invites panel (Phase 5.5) --------------------------------- */
+
+.admin-staff {
+  margin-top: var(--space-6);
+}
+.admin-staff__hint {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  margin: 0 0 var(--space-4);
+}
+.admin-staff__invite {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.admin-staff__input {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.admin-staff__subhead {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-secondary);
+  margin: var(--space-5) 0 var(--space-2);
+}
+.admin-staff__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.admin-staff__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.admin-staff__who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.admin-staff__email {
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.admin-staff__meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 /* Elevated table container (rounded, shadow, header band). */

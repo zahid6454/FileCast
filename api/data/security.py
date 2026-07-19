@@ -14,13 +14,13 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, HTTPException, Request, Response
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.config import settings
 from data.db import async_session_factory, get_session
-from data.models import Session, User
+from data.models import Session, StaffGrant, User
 
 # Seeded dev users (§11) — the two dev-login identities.
 DEV_USERS = {
@@ -179,16 +179,19 @@ async def upsert_google_user(
 ) -> User:
     """Find/create the ``User`` for a Google identity (Phase 5 §5.2).
 
-    Matched by email. First sign-in creates a ``role='user'`` row; a returning
-    user has ``name``/``avatar_url`` refreshed. ``role`` is **never** changed here
-    (D9 — no self-service admin); ``last_login_at`` is set by ``create_session``.
+    Matched by email (case-insensitive; stored **lowercased** so the staff code —
+    which normalizes input to lowercase — always finds an existing row). First
+    sign-in creates a ``role='user'`` row; a returning user has ``name``/
+    ``avatar_url`` refreshed. ``role`` is **never** changed here (D9 — no
+    self-service admin); ``last_login_at`` is set by ``create_session``.
 
     The create path uses ``INSERT ... ON CONFLICT DO NOTHING`` then re-selects, so
     two simultaneous first-ever logins for the same email can't collide on the
     unique constraint (one would otherwise 500).
     """
+    email = email.lower()
     user = (
-        await db.execute(select(User).where(User.email == email))
+        await db.execute(select(User).where(func.lower(User.email) == email))
     ).scalar_one_or_none()
     if user is None:
         await db.execute(
@@ -197,13 +200,48 @@ async def upsert_google_user(
             .on_conflict_do_nothing(index_elements=[User.email])
         )
         await db.flush()
-        user = (await db.execute(select(User).where(User.email == email))).scalar_one()
+        user = (
+            await db.execute(select(User).where(func.lower(User.email) == email))
+        ).scalar_one()
     else:
         if name:
             user.name = name
         if avatar_url:
             user.avatar_url = avatar_url
     return user
+
+
+async def apply_staff_role(db: AsyncSession, user: User) -> None:
+    """Resolve a user's admin access on Google sign-in (Phase 5.5 §2).
+
+    Run inside the callback transaction, right after ``upsert_google_user`` and
+    before ``create_session``. Resolution order:
+
+    1. **Config owner** — ``email ∈ INITIAL_ADMIN_EMAILS`` → force ``role='admin'``
+       (continuous break-glass; an owner can never be locked out).
+    2. **Pending grant** — else an *unconsumed* ``staff_grants`` row for the email →
+       set ``role = grant.role`` and stamp ``consumed_at`` (one-shot).
+    3. Otherwise leave ``role`` untouched.
+
+    **Never demotes** — a login must not silently strip access; demotion is an
+    explicit admin action on ``users.role`` (D6, effective next request).
+    """
+    email = user.email.lower()
+
+    if email in settings.initial_admin_email_set:
+        user.role = "admin"
+        return
+
+    grant = (
+        await db.execute(
+            select(StaffGrant).where(
+                StaffGrant.email == email, StaffGrant.consumed_at.is_(None)
+            )
+        )
+    ).scalar_one_or_none()
+    if grant is not None:
+        user.role = grant.role
+        grant.consumed_at = datetime.now(UTC)
 
 
 async def get_or_create_dev_user(db: AsyncSession, role: str) -> User:

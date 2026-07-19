@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     oauth_state_cookie_name: str = "fc_oauth_state"
     oauth_state_ttl_seconds: int = 600
 
+    # Phase 5.5: bootstrap admins. Comma-separated allow-list of emails that are
+    # ALWAYS admin on Google login (break-glass owners; never revocable via the UI).
+    # Effectively REQUIRED in production — with it empty and no pre-existing admin
+    # row there is no path to a first admin (main.py warns at startup).
+    initial_admin_emails: str = ""
+
     # Phase 7: github_pat, deploy config
 
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
@@ -49,6 +55,12 @@ class Settings(BaseSettings):
     @property
     def google_oauth_configured(self) -> bool:
         return bool(self.google_client_id and self.google_client_secret)
+
+    @property
+    def initial_admin_email_set(self) -> set[str]:
+        return {
+            e.strip().lower() for e in self.initial_admin_emails.split(",") if e.strip()
+        }
 
 
 settings = Settings()
