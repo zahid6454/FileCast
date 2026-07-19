@@ -136,9 +136,12 @@ test('the resolved score line lays out on its own row without overflow', async (
   // Sits within the widget's column rather than spilling out of it.
   expect(box.x + box.width).toBeLessThanOrEqual(before.x + before.width + 1);
 
-  // Assert the DELTA, not an absolute zero: tool pages carry a pre-existing
-  // ~23px overflow from .header__nav at 320px (unrelated to this widget, and
-  // out of Phase 6's scope). What must hold is that the score line adds none.
+  // Assert the DELTA, not an absolute zero. Tool pages carried a pre-existing
+  // ~23px overflow at 320px from the slider read-out (`.tool-options__value`,
+  // a flex min-width:auto trap) — nothing to do with this widget, and fixed
+  // separately in its own PR. Measuring the delta keeps this test honest about
+  // what it owns: the score line must add no overflow of its own, whether or
+  // not that other fix has landed on this branch yet.
   expect(await overflow()).toBeLessThanOrEqual(overflowBefore);
 });
 
