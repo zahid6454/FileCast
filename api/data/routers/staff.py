@@ -79,6 +79,11 @@ async def list_staff(
             .order_by(StaffGrant.granted_at.desc())
         )
     ).all()
+    # An email that became a config owner AFTER being invited keeps an unconsumed
+    # grant forever (the owner branch of apply_staff_role short-circuits before
+    # consuming it). Owners are always admin, so a "pending invite" for one is
+    # meaningless noise — hide it; they show in `owners` instead.
+    owner_set = settings.initial_admin_email_set
     pending = [
         {
             "email": email,
@@ -86,6 +91,7 @@ async def list_staff(
             "granted_by_email": granted_by_email,
         }
         for email, granted_at, granted_by_email in rows
+        if email not in owner_set
     ]
 
     return {

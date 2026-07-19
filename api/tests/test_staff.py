@@ -154,6 +154,22 @@ async def test_grant_owner_email_is_noop(admin_client, monkeypatch):
     assert not any(p["email"] == "owner@example.com" for p in body["pending"])
 
 
+async def test_pending_hides_email_that_became_an_owner(admin_client, monkeypatch, db):
+    from data import config
+
+    # Invited while NOT an owner → a pending grant is created.
+    await admin_client.post("/api/v1/admin/staff", json={"email": "later@example.com"})
+    body = (await admin_client.get("/api/v1/admin/staff")).json()
+    assert any(p["email"] == "later@example.com" for p in body["pending"])
+
+    # Now they're promoted to a config owner: the stale pending row (which
+    # apply_staff_role will never consume) must not surface as pending noise.
+    monkeypatch.setattr(config.settings, "initial_admin_emails", "later@example.com")
+    body = (await admin_client.get("/api/v1/admin/staff")).json()
+    assert not any(p["email"] == "later@example.com" for p in body["pending"])
+    assert "later@example.com" in body["owners"]
+
+
 async def test_grant_malformed_email_400(admin_client):
     r = await admin_client.post("/api/v1/admin/staff", json={"email": "not-an-email"})
     assert r.status_code == 400
@@ -294,3 +310,31 @@ async def test_callback_consumes_pending_grant(client, monkeypatch, db):
         )
     ).scalar_one()
     assert grant.consumed_at is not None
+
+
+async def test_invite_then_first_login_becomes_admin_end_to_end(
+    admin_client, client, monkeypatch, db
+):
+    """The core acceptance path: invite an email that has never signed in, then
+    that person's first Google login turns them into an admin (POST → callback)."""
+    r = await admin_client.post(
+        "/api/v1/admin/staff", json={"email": "future@example.com"}
+    )
+    assert r.status_code == 200 and r.json()["status"] == "pending"
+
+    # A brand-new Google identity for that email signs in for the first time.
+    cb = await _callback_with(
+        client,
+        monkeypatch,
+        {"email": "future@example.com", "email_verified": True, "name": "Future"},
+    )
+    assert cb.status_code == 302
+
+    row = (
+        await db.execute(select(User).where(User.email == "future@example.com"))
+    ).scalar_one()
+    assert row.role == "admin"
+    # The invite is now consumed → no longer pending.
+    listing = (await admin_client.get("/api/v1/admin/staff")).json()
+    assert not any(p["email"] == "future@example.com" for p in listing["pending"])
+    assert any(a["email"] == "future@example.com" for a in listing["admins"])
