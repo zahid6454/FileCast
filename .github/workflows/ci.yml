@@ -39,6 +39,43 @@ jobs:
       # Biome version is pinned in package.json; `biome ci` checks format + lint.
       - run: npx biome ci .
 
+  js-test:
+    name: Tests (vitest + Playwright)
+    runs-on: ubuntu-latest
+    # No Postgres service on purpose. All three of build.py's DB reads degrade to
+    # a warning line and never fail the build (P10), so the suite runs against a
+    # no-DB build: no #tool-ratings island, no homepage conversion badge. Verified
+    # locally with postgres stopped — all 56 specs pass. The rating THRESHOLD
+    # maths is unit-tested in vitest precisely so no e2e assertion needs baked
+    # rating data (see the header comment of e2e/rating.spec.js).
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      # jsdom only, no build needed — runs first so a unit failure reports fast.
+      - name: Unit tests (vitest)
+        run: npx vitest run
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      # Root requirements.txt only: these tests drive the built dist/, not the API.
+      - name: Install build dependencies
+        run: pip install -r requirements.txt
+      # playwright.config.js serves dist/ via `python -m http.server`, so dist/
+      # must exist before the browser starts.
+      - name: Build site
+        run: python build.py
+      - run: npx playwright install --with-deps chromium
+      # --workers=2: the static preview server is single-threaded and the suite
+      # has been observed to flake at higher parallelism.
+      - name: E2E tests (Playwright)
+        run: npx playwright test --project=chromium --workers=2
+
   test:
     name: Tests (pytest + Postgres)
     runs-on: ubuntu-latest
