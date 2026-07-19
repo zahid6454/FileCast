@@ -403,19 +403,22 @@
     return config ? 'fc_rated_' + config.id : null;
   }
 
-  function hasVotedLocally() {
+  // Returns the recorded vote ('yes'/'no'), a legacy truthy value, or null.
+  function votedLocally() {
     var key = ratingKey();
     try {
-      return !!(key && window.localStorage.getItem(key));
+      return key ? window.localStorage.getItem(key) : null;
     } catch (e) {
-      return false; // privacy mode / storage disabled
+      return null; // privacy mode / storage disabled
     }
   }
 
-  function markVotedLocally() {
+  // Stores the DIRECTION, not a flag, so the reload path can reproduce the same
+  // count the vote path showed (see initFeedback).
+  function markVotedLocally(vote) {
     var key = ratingKey();
     try {
-      if (key) window.localStorage.setItem(key, '1');
+      if (key) window.localStorage.setItem(key, vote);
     } catch (e) {
       /* storage disabled — the server dedup is the real one anyway */
     }
@@ -424,6 +427,14 @@
   // "X% found this helpful (N ratings)" at/above the threshold, else null. The
   // single home of the threshold + percentage maths, reused for both the
   // pre-vote social-proof line and the post-vote resolve.
+  //
+  // The count is deliberately CONSERVATIVE and can undercount real voters. The
+  // server dedup key is sha256(daily_salt : client_ip : tool_id) upserted under
+  // UNIQUE(tool_id, fingerprint), so everyone sharing an egress IP (carrier
+  // CGNAT, an office, a VPN exit) collapses to one row per tool per day, and a
+  // later voter overwrites an earlier one. That is the privacy-preserving trade
+  // (no client fingerprinting, D4/P3); the error direction is always under-,
+  // never over-counting. See api/data/fingerprint.py.
   function scoreLine(agg) {
     if (!agg) return null;
     var total = agg.yes + agg.no;
@@ -441,16 +452,26 @@
     scoreEl.textContent = text; // safe DOM: never innerHTML with data (P23)
   }
 
+  // Baked counts plus this vote — the recorded vote is not in the baked data
+  // until the next deploy, so add it back.
+  function withVote(baked, vote) {
+    var agg = { yes: baked ? baked.yes : 0, no: baked ? baked.no : 0 };
+    agg[vote] += 1;
+    return agg;
+  }
+
   // Collapse to the resolved display: score line at 50+, else a plain thanks.
-  function resolveWidget(agg, prompt, buttons, scoreEl) {
+  // `target` decides whether the message is ANNOUNCED: the vote path passes the
+  // live #feedback-score, the page-load path passes the inert #feedback-baked.
+  function resolveWidget(agg, prompt, buttons, target) {
     if (prompt) prompt.classList.add('hidden');
     buttons.forEach(function (b) {
       b.classList.add('hidden');
     });
-    showScore(scoreEl, scoreLine(agg) || 'Thanks for your feedback!');
+    showScore(target, scoreLine(agg) || 'Thanks for your feedback!');
   }
 
-  function onVote(vote, baked, prompt, buttons, scoreEl) {
+  function onVote(vote, baked, els) {
     var config = window.TOOL_CONFIG;
     if (config) {
       trackEvent('feedback_submitted', { tool_id: config.id, response: vote });
@@ -465,17 +486,25 @@
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // a signed-in vote carries user_id; never gates
         body: JSON.stringify({ tool_id: config.id, vote: vote })
-      }).catch(function () {
-        /* silent — API down means voting no-ops (progressive enhancement) */
-      });
+      })
+        .then(function (r) {
+          // Lock ONLY once the server has actually recorded the vote. A network
+          // failure (API down, or the origin blocked by an ad-blocker — and
+          // Brave/uBlock/Tor users are exactly our users) or a 429/4xx means
+          // nothing was persisted; locking anyway would discard that person's
+          // feedback on this tool permanently, and would do it disproportionately
+          // to the privacy-tooling population, biasing the published percentage.
+          if (r && r.ok) markVotedLocally(vote);
+        })
+        .catch(function () {
+          /* silent — API down means voting no-ops (progressive enhancement) */
+        });
     }
 
-    markVotedLocally();
-    // Optimistic: the baked counts plus this vote. A server-deduped repeat
-    // overcounts the local display by 1 — cosmetic, corrected next deploy.
-    var agg = { yes: baked ? baked.yes : 0, no: baked ? baked.no : 0 };
-    agg[vote] += 1;
-    resolveWidget(agg, prompt, buttons, scoreEl);
+    // Resolve optimistically regardless: the UX is identical on the happy path,
+    // and a vote that never reached the server simply stays retryable.
+    if (els.baked) els.baked.classList.add('hidden');
+    resolveWidget(withVote(baked, vote), els.prompt, els.buttons, els.score);
   }
 
   // Wire the Yes/No buttons via delegation — no inline on* handlers, so the site
@@ -483,26 +512,39 @@
   function initFeedback() {
     var feedback = document.getElementById('feedback');
     if (!feedback) return; // no-op on non-tool pages
-    var buttons = feedback.querySelectorAll('[data-feedback]');
-    var prompt = document.getElementById('feedback-prompt');
-    var scoreEl = document.getElementById('feedback-score');
-    if (!buttons.length || !scoreEl) return; // pre-Phase-6 markup -> inert
+    var els = {
+      buttons: feedback.querySelectorAll('[data-feedback]'),
+      prompt: document.getElementById('feedback-prompt'),
+      score: document.getElementById('feedback-score'), // live: vote confirmation
+      baked: document.getElementById('feedback-baked') // inert: page-load text
+    };
+    // Both score elements are part of the markup contract. Requiring them keeps
+    // a partial template inert (obvious in testing) rather than quietly routing
+    // load-time text through the live region (invisible to everyone sighted).
+    if (!els.buttons.length || !els.score || !els.baked) return;
 
     var baked = parseBakedRating();
 
-    if (hasVotedLocally()) {
-      resolveWidget(baked, prompt, buttons, scoreEl); // already voted here
+    // NOTHING on this path may write to the live region: it runs at
+    // DOMContentLoaded, so a screen reader would interrupt whatever the user is
+    // doing to read out text they never asked for, on every single page load.
+    var voted = votedLocally();
+    if (voted) {
+      // Mirror what the vote itself displayed. A legacy flag lock has no
+      // direction to restore, so it falls back to the bare baked counts.
+      var seen = voted === 'yes' || voted === 'no' ? withVote(baked, voted) : baked;
+      resolveWidget(seen, els.prompt, els.buttons, els.baked);
       return;
     }
 
     var line = scoreLine(baked); // pre-vote social proof at 50+; buttons stay
-    if (line) showScore(scoreEl, line);
+    if (line) showScore(els.baked, line);
 
-    buttons.forEach(function (btn) {
+    els.buttons.forEach(function (btn) {
       btn.addEventListener('click', function () {
         var vote = btn.dataset.feedback;
         if (vote !== 'yes' && vote !== 'no') return; // malformed attribute
-        onVote(vote, baked, prompt, buttons, scoreEl);
+        onVote(vote, baked, els);
       });
     });
   }

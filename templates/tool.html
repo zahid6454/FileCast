@@ -227,6 +227,12 @@
     <span class="feedback__prompt" id="feedback-prompt">Was this tool helpful?</span>
     <button class="btn btn--primary" type="button" data-feedback="yes">Yes</button>
     <button class="btn btn--primary" type="button" data-feedback="no">No</button>
+    {# Two score elements with different a11y roles: #feedback-baked carries
+       page-load text (baked social proof, or the resolved state after a prior
+       vote) and must NOT be a live region, or a screen reader announces it
+       unprompted on every load; #feedback-score is the live region for the
+       confirmation of a vote the user just cast. #}
+    <p class="feedback__score hidden" id="feedback-baked"></p>
     <p class="feedback__score hidden" id="feedback-score" role="status" aria-live="polite"></p>
   </div>
 

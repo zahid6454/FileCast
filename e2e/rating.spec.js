@@ -22,14 +22,35 @@ function collectPageProblems(page) {
 
 // Capture rating POSTs and fulfil them locally — these tests must not depend on
 // the API container being up.
-function interceptRatings(page, { fulfil = true } = {}) {
+// The vote is a cross-origin credentialed POST with a JSON content-type, so the
+// browser preflights it and will not expose the response unless CORS allows the
+// page's origin. The mock must therefore answer OPTIONS and send the same
+// headers the real API does — otherwise the fetch rejects and we would be
+// testing the failure path while believing we were testing success.
+const CORS = {
+  'Access-Control-Allow-Origin': 'http://127.0.0.1:8000',
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+
+function interceptRatings(page, { fulfil = true, status = 200 } = {}) {
   const posts = [];
   page.route('**/api/v1/ratings', async (route) => {
-    if (route.request().method() === 'POST') {
-      posts.push(route.request().postDataJSON());
+    const request = route.request();
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: CORS });
+      return;
+    }
+    if (request.method() === 'POST') {
+      posts.push(request.postDataJSON());
     }
     if (fulfil) {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+      await route.fulfill({
+        status,
+        headers: Object.assign({ 'Content-Type': 'application/json' }, CORS),
+        body: '{"ok":true}'
+      });
     } else {
       await route.abort('failed'); // API down
     }
@@ -86,14 +107,24 @@ test('the localStorage lock keeps the buttons hidden across a reload', async ({ 
   await page.locator('[data-feedback="yes"]').click();
   await expect(page.locator('#feedback-score')).toBeVisible();
 
-  expect(await page.evaluate(() => window.localStorage.getItem('fc_rated_image-compress'))).toBe(
-    '1'
-  );
+  // POLL, don't read once: the widget resolves optimistically and synchronously,
+  // but the lock is deliberately deferred until the server confirms the vote, so
+  // it lands a tick later. The lock stores the vote DIRECTION so the reload path
+  // can reproduce the same count the vote showed.
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem('fc_rated_image-compress')))
+    .toBe('yes');
 
   await page.reload();
-  await expect(page.locator('#feedback-score')).toBeVisible();
   await expect(page.locator('[data-feedback="yes"]')).toBeHidden();
   await expect(page.locator('[data-feedback="no"]')).toBeHidden();
+
+  // On reload the resolved message must land in the INERT element: this path
+  // runs at DOMContentLoaded, and routing it through the live region would make
+  // a screen reader announce it unprompted on every single page load.
+  await expect(page.locator('#feedback-baked')).toBeVisible();
+  await expect(page.locator('#feedback-score')).toBeHidden();
+  await expect(page.locator('#feedback-score')).toBeEmpty();
 });
 
 test('voting still resolves with the API unreachable, with no console error', async ({ page }) => {
@@ -101,13 +132,49 @@ test('voting still resolves with the API unreachable, with no console error', as
   interceptRatings(page, { fulfil: false }); // aborted request === API down
 
   await page.goto('/convert/image-compress/');
+  // Wait for the request to actually FAIL before asserting the lock is absent —
+  // otherwise "still null" would pass simply because the handler hadn't run yet.
+  const failed = page.waitForEvent('requestfailed', {
+    predicate: (r) => r.url().includes('/api/v1/ratings')
+  });
   await page.locator('[data-feedback="yes"]').click();
+  await failed;
 
   // Progressive enhancement: the .catch swallows the failure and the widget
   // still resolves optimistically.
   await expect(page.locator('#feedback-score')).toHaveText('Thanks for your feedback!');
   await expect(page.locator('[data-feedback="yes"]')).toBeHidden();
   expect(problems, problems.join('\n')).toEqual([]);
+
+  // Nothing reached the server, so the vote must NOT be locked out — otherwise
+  // anyone whose ad-blocker blocks the API origin is silently excluded forever.
+  expect(
+    await page.evaluate(() => window.localStorage.getItem('fc_rated_image-compress'))
+  ).toBeNull();
+  await page.reload();
+  await expect(page.locator('[data-feedback="yes"]')).toBeVisible();
+});
+
+test('a rate-limited vote is not locked out', async ({ page }) => {
+  // 429 means the server did NOT record the vote (30/hr per IP). Locking on it
+  // would be the same silent-discard bug as locking on a network failure.
+  interceptRatings(page, { status: 429 });
+  await page.goto('/convert/image-compress/');
+  // Anchor on the response landing, so a null lock means "declined to lock"
+  // rather than "hasn't got there yet".
+  const responded = page.waitForResponse(
+    (r) => r.url().includes('/api/v1/ratings') && r.request().method() === 'POST'
+  );
+  await page.locator('[data-feedback="yes"]').click();
+  await responded;
+  await expect(page.locator('#feedback-score')).toBeVisible();
+
+  expect(
+    await page.evaluate(() => window.localStorage.getItem('fc_rated_image-compress'))
+  ).toBeNull();
+  // And the user can still vote next visit.
+  await page.reload();
+  await expect(page.locator('[data-feedback="yes"]')).toBeVisible();
 });
 
 test('the resolved score line lays out on its own row without overflow', async ({ page }) => {

@@ -12,6 +12,7 @@ const WIDGET = `
     <span class="feedback__prompt" id="feedback-prompt">Was this tool helpful?</span>
     <button class="btn" type="button" data-feedback="yes">Yes</button>
     <button class="btn" type="button" data-feedback="no">No</button>
+    <p class="feedback__score hidden" id="feedback-baked"></p>
     <p class="feedback__score hidden" id="feedback-score" role="status" aria-live="polite"></p>
   </div>`;
 
@@ -34,33 +35,38 @@ function ratingDom(island) {
   return dom;
 }
 
-const scoreOf = (dom) => dom.window.document.getElementById('feedback-score');
+// #feedback-score is the LIVE region (vote confirmation only); #feedback-baked
+// is inert and carries anything rendered at page load.
+const liveOf = (dom) => dom.window.document.getElementById('feedback-score');
+const bakedOf = (dom) => dom.window.document.getElementById('feedback-baked');
 const isHidden = (el) => el.classList.contains('hidden');
+// Whichever element is currently showing text.
+const shownScore = (dom) => (isHidden(bakedOf(dom)) ? liveOf(dom) : bakedOf(dom));
 
 describe('shared.js rating — scoreLine() threshold boundary', () => {
   it('49 total ratings: below threshold, no score line pre-vote', async () => {
     const dom = ratingDom({ yes: 40, no: 9 });
     await boot(dom, 'shared.js');
-    expect(isHidden(scoreOf(dom))).toBe(true);
+    expect(isHidden(bakedOf(dom))).toBe(true);
   });
 
   it('50 total ratings: at threshold, score line shows', async () => {
     const dom = ratingDom({ yes: 40, no: 10 });
     await boot(dom, 'shared.js');
-    expect(scoreOf(dom).textContent).toBe('80% found this helpful (50 ratings)');
+    expect(bakedOf(dom).textContent).toBe('80% found this helpful (50 ratings)');
   });
 
   it('51 total ratings: above threshold, score line shows', async () => {
     const dom = ratingDom({ yes: 41, no: 10 });
     await boot(dom, 'shared.js');
-    expect(isHidden(scoreOf(dom))).toBe(false);
-    expect(scoreOf(dom).textContent).toContain('(51 ratings)');
+    expect(isHidden(bakedOf(dom))).toBe(false);
+    expect(bakedOf(dom).textContent).toContain('(51 ratings)');
   });
 
   it('rounds the percentage rather than truncating (34/51 = 66.67 -> 67%)', async () => {
     const dom = ratingDom({ yes: 34, no: 17 });
     await boot(dom, 'shared.js');
-    expect(scoreOf(dom).textContent).toBe('67% found this helpful (51 ratings)');
+    expect(bakedOf(dom).textContent).toBe('67% found this helpful (51 ratings)');
   });
 
   it('keeps the buttons visible pre-vote even when the score shows', async () => {
@@ -75,14 +81,14 @@ describe('shared.js rating — parseBakedRating() robustness', () => {
   it('no island (no DB at build) leaves the widget on its plain prompt', async () => {
     const dom = ratingDom(null);
     await boot(dom, 'shared.js');
-    expect(isHidden(scoreOf(dom))).toBe(true);
+    expect(isHidden(bakedOf(dom))).toBe(true);
     expect(isHidden(dom.window.document.getElementById('feedback-prompt'))).toBe(false);
   });
 
   it('malformed JSON degrades to no score instead of throwing', async () => {
     const dom = ratingDom('{"yes": 40, "no":');
     await expect(boot(dom, 'shared.js')).resolves.not.toThrow();
-    expect(isHidden(scoreOf(dom))).toBe(true);
+    expect(isHidden(bakedOf(dom))).toBe(true);
   });
 
   it('survives a valid-JSON-but-degenerate island (bare null)', async () => {
@@ -90,7 +96,7 @@ describe('shared.js rating — parseBakedRating() robustness', () => {
     // the try, so it degrades to "no score" like any other malformed island.
     const dom = ratingDom('null');
     await expect(boot(dom, 'shared.js')).resolves.not.toThrow();
-    expect(isHidden(scoreOf(dom))).toBe(true);
+    expect(isHidden(bakedOf(dom))).toBe(true);
     // The widget must remain interactive, not be left half-resolved.
     expect(isHidden(dom.window.document.querySelector('[data-feedback="yes"]'))).toBe(false);
   });
@@ -98,13 +104,13 @@ describe('shared.js rating — parseBakedRating() robustness', () => {
   it('coerces string counts (Number(x) || 0)', async () => {
     const dom = ratingDom({ yes: '45', no: '10' });
     await boot(dom, 'shared.js');
-    expect(scoreOf(dom).textContent).toBe('82% found this helpful (55 ratings)');
+    expect(bakedOf(dom).textContent).toBe('82% found this helpful (55 ratings)');
   });
 
   it('treats null/undefined counts as 0, not NaN', async () => {
     const dom = ratingDom({ yes: 50, no: null });
     await boot(dom, 'shared.js');
-    expect(scoreOf(dom).textContent).toBe('100% found this helpful (50 ratings)');
+    expect(bakedOf(dom).textContent).toBe('100% found this helpful (50 ratings)');
   });
 });
 
@@ -131,7 +137,7 @@ describe('shared.js rating — the score line is announced (R11)', () => {
   it('unhides #feedback-score before writing the resolved text', async () => {
     const dom = ratingDom({ yes: 5, no: 1 });
     await boot(dom, 'shared.js');
-    const seen = recordMutations(dom, scoreOf(dom));
+    const seen = recordMutations(dom, liveOf(dom));
 
     dom.window.document.querySelector('[data-feedback="yes"]').click();
     await flush();
@@ -146,9 +152,134 @@ describe('shared.js rating — the score line is announced (R11)', () => {
     dom.window.document.querySelector('[data-feedback="yes"]').click();
     await flush();
 
-    const el = scoreOf(dom);
+    const el = liveOf(dom);
     expect(el.getAttribute('role')).toBe('status');
     expect(el.getAttribute('aria-live')).toBe('polite');
+  });
+});
+
+describe('shared.js rating — nothing is announced on page load', () => {
+  // #feedback-score is role="status" aria-live="polite". init() runs at
+  // DOMContentLoaded, so ANY text written there on the load path is read out
+  // unprompted, interrupting whatever the user is doing — on every page load,
+  // for content they never acted on. Page-load text belongs in the inert
+  // element; the live region is reserved for confirming a vote just cast.
+  it('renders baked social proof into the inert element, not the live region', async () => {
+    const dom = ratingDom({ yes: 40, no: 10 });
+    await boot(dom, 'shared.js');
+
+    expect(bakedOf(dom).textContent).toBe('80% found this helpful (50 ratings)');
+    expect(isHidden(liveOf(dom))).toBe(true);
+    expect(liveOf(dom).textContent).toBe('');
+  });
+
+  it('renders the already-voted state into the inert element too', async () => {
+    const dom = ratingDom({ yes: 40, no: 10 });
+    dom.window.localStorage.setItem('fc_rated_pdf-to-png', 'yes');
+    await boot(dom, 'shared.js');
+
+    expect(isHidden(bakedOf(dom))).toBe(false);
+    expect(isHidden(liveOf(dom))).toBe(true);
+    expect(liveOf(dom).textContent).toBe('');
+  });
+
+  it('moves the message into the live region once the user votes', async () => {
+    const dom = ratingDom({ yes: 40, no: 10 });
+    await boot(dom, 'shared.js');
+    expect(bakedOf(dom).textContent).toContain('(50 ratings)'); // pre-vote
+
+    dom.window.document.querySelector('[data-feedback="yes"]').click();
+    await flush();
+
+    // The pre-vote line is retired so the two never show at once.
+    expect(isHidden(bakedOf(dom))).toBe(true);
+    expect(liveOf(dom).textContent).toBe('80% found this helpful (51 ratings)');
+  });
+});
+
+describe('shared.js rating — the lock follows the SERVER, not the click', () => {
+  const ok = () => Promise.resolve({ ok: true, status: 200 });
+  const lock = (dom) => dom.window.localStorage.getItem('fc_rated_pdf-to-png');
+
+  function votingDom(agg, fetchImpl) {
+    const dom = ratingDom(agg);
+    dom.window.FILECAST = { apiBase: 'https://api.example.test' };
+    dom.window.fetch = vi.fn(fetchImpl);
+    return dom;
+  }
+
+  it('locks on a recorded vote, storing the direction', async () => {
+    const dom = votingDom({ yes: 5, no: 1 }, ok);
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="no"]').click();
+    await flush();
+    expect(lock(dom)).toBe('no');
+  });
+
+  it('does NOT lock when the POST fails — the vote stays retryable', async () => {
+    // An ad-blocker blocking the API origin is the common case, and it hits the
+    // privacy-tooling population hardest. Locking here would discard their
+    // feedback permanently and skew the published percentage.
+    const dom = votingDom({ yes: 5, no: 1 }, () => Promise.reject(new Error('blocked')));
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="yes"]').click();
+    await flush();
+
+    expect(lock(dom)).toBeNull();
+    expect(liveOf(dom).textContent).toBe('Thanks for your feedback!'); // UX unchanged
+  });
+
+  it('does NOT lock on a non-ok response (e.g. 429 rate-limited)', async () => {
+    const dom = votingDom({ yes: 5, no: 1 }, () => Promise.resolve({ ok: false, status: 429 }));
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="yes"]').click();
+    await flush();
+    expect(lock(dom)).toBeNull();
+  });
+
+  it('does NOT lock when there is no apiBase to POST to', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="yes"]').click();
+    await flush();
+    expect(lock(dom)).toBeNull();
+  });
+
+  it('a failed vote leaves the buttons live again on the next load', async () => {
+    const dom = votingDom({ yes: 5, no: 1 }, () => Promise.reject(new Error('blocked')));
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="yes"]').click();
+    await flush();
+
+    // Second visit: same storage, fresh DOM.
+    const again = ratingDom({ yes: 5, no: 1 });
+    again.window.localStorage.setItem('probe', '1');
+    expect(again.window.localStorage.getItem('fc_rated_pdf-to-png')).toBeNull();
+    await boot(again, 'shared.js');
+    expect(isHidden(again.window.document.querySelector('[data-feedback="yes"]'))).toBe(false);
+  });
+
+  it('the reload count matches what the vote displayed (no phantom -1)', async () => {
+    const dom = votingDom({ yes: 40, no: 10 }, ok);
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="yes"]').click();
+    await flush();
+    const atVote = liveOf(dom).textContent;
+    expect(atVote).toBe('80% found this helpful (51 ratings)');
+
+    // Reload with the lock in place: the recorded vote is still not in the
+    // baked counts, so the reload path must add it back the same way.
+    const reloaded = ratingDom({ yes: 40, no: 10 });
+    reloaded.window.localStorage.setItem('fc_rated_pdf-to-png', 'yes');
+    await boot(reloaded, 'shared.js');
+    expect(bakedOf(reloaded).textContent).toBe(atVote);
+  });
+
+  it('a legacy flag lock still resolves, falling back to bare baked counts', async () => {
+    const dom = ratingDom({ yes: 40, no: 10 });
+    dom.window.localStorage.setItem('fc_rated_pdf-to-png', '1'); // pre-direction
+    await boot(dom, 'shared.js');
+    expect(bakedOf(dom).textContent).toBe('80% found this helpful (50 ratings)');
   });
 });
 
@@ -176,7 +307,7 @@ describe('shared.js rating — vote resolve', () => {
     dom.window.document.querySelector('[data-feedback="yes"]').click();
     await flush();
 
-    expect(scoreOf(dom).textContent).toBe('80% found this helpful (51 ratings)');
+    expect(liveOf(dom).textContent).toBe('80% found this helpful (51 ratings)');
     const buttons = dom.window.document.querySelectorAll('[data-feedback]');
     expect([...buttons].every((b) => isHidden(b))).toBe(true);
     expect(isHidden(dom.window.document.getElementById('feedback-prompt'))).toBe(true);
@@ -187,7 +318,7 @@ describe('shared.js rating — vote resolve', () => {
     await boot(dom, 'shared.js');
     dom.window.document.querySelector('[data-feedback="no"]').click();
     await flush();
-    expect(scoreOf(dom).textContent).toBe('Thanks for your feedback!');
+    expect(liveOf(dom).textContent).toBe('Thanks for your feedback!');
   });
 
   it('a prior localStorage lock renders the resolved state, buttons never shown', async () => {
@@ -195,17 +326,9 @@ describe('shared.js rating — vote resolve', () => {
     dom.window.localStorage.setItem('fc_rated_pdf-to-png', '1');
     await boot(dom, 'shared.js');
 
-    expect(scoreOf(dom).textContent).toBe('80% found this helpful (50 ratings)');
+    expect(bakedOf(dom).textContent).toBe('80% found this helpful (50 ratings)');
     const buttons = dom.window.document.querySelectorAll('[data-feedback]');
     expect([...buttons].every((b) => isHidden(b))).toBe(true);
-  });
-
-  it('sets the localStorage lock on vote', async () => {
-    const dom = ratingDom({ yes: 5, no: 1 });
-    await boot(dom, 'shared.js');
-    dom.window.document.querySelector('[data-feedback="yes"]').click();
-    await flush();
-    expect(dom.window.localStorage.getItem('fc_rated_pdf-to-png')).toBe('1');
   });
 
   it('still resolves when the API rejects (progressive enhancement)', async () => {
@@ -215,7 +338,7 @@ describe('shared.js rating — vote resolve', () => {
     await boot(dom, 'shared.js');
     dom.window.document.querySelector('[data-feedback="yes"]').click();
     await flush();
-    expect(scoreOf(dom).textContent).toBe('Thanks for your feedback!');
+    expect(liveOf(dom).textContent).toBe('Thanks for your feedback!');
   });
 
   it('ignores a malformed data-feedback value rather than POSTing it', async () => {
@@ -229,7 +352,8 @@ describe('shared.js rating — vote resolve', () => {
     await flush();
 
     expect(dom.window.fetch).not.toHaveBeenCalled();
-    expect(isHidden(scoreOf(dom))).toBe(true); // widget stays interactive
+    expect(isHidden(liveOf(dom))).toBe(true); // widget stays interactive
+    expect(isHidden(bakedOf(dom))).toBe(true);
     expect(isHidden(btn)).toBe(false);
   });
 
