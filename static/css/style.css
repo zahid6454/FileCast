@@ -529,6 +529,13 @@ img { max-width: 100%; display: block; }
 .content-block table { width: 100%; border-collapse: collapse; margin: var(--space-3) 0; font-size: var(--text-sm); }
 .content-block th, .content-block td { padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); text-align: left; }
 .content-block th { background: var(--color-bg-sunken); font-weight: var(--weight-semibold); }
+/* Markdown tables overflow a 320px viewport by ~11px, and the root
+   `overflow-x: clip` then hides the last column with no way to reach it.
+   Trimming the horizontal cell padding recovers more than the shortfall, so the
+   table keeps wrapping normally instead of becoming a scroll strip. */
+@media (max-width: 480px) {
+  .content-block th, .content-block td { padding: var(--space-2) var(--space-1); }
+}
 
 /* --- Related Tools --- */
 .related-tools { margin: var(--space-8) 0; }
@@ -742,7 +749,10 @@ img { max-width: 100%; display: block; }
   max-width: fit-content;
 }
 .tool-options__input:focus { border-color: var(--color-border-focus); }
-.tool-options__slider { flex: 1; accent-color: var(--color-primary); }
+/* `min-width: 0` is load-bearing: a flex item defaults to min-width:auto, so
+   without it the range input cannot shrink below its UA intrinsic width and the
+   value read-out is pushed off-screen, where the root clip hides it. */
+.tool-options__slider { flex: 1; min-width: 0; accent-color: var(--color-primary); }
 .tool-options__value { font-size: var(--text-sm); color: var(--color-text-muted); min-width: 40px; text-align: right; }
 
 /* --- Responsive grid ladder (§5b): 1 → 2 (480) → 3 (768) → 4 (1024) --- */
