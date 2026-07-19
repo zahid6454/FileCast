@@ -53,7 +53,7 @@ describe('shared.js rating — scoreLine() threshold boundary', () => {
   it('50 total ratings: at threshold, score line shows', async () => {
     const dom = ratingDom({ yes: 40, no: 10 });
     await boot(dom, 'shared.js');
-    expect(bakedOf(dom).textContent).toBe('80% found this helpful (50 ratings)');
+    expect(bakedOf(dom).textContent).toBe('80% helpful (50 ratings)');
   });
 
   it('51 total ratings: above threshold, score line shows', async () => {
@@ -66,7 +66,7 @@ describe('shared.js rating — scoreLine() threshold boundary', () => {
   it('rounds the percentage rather than truncating (34/51 = 66.67 -> 67%)', async () => {
     const dom = ratingDom({ yes: 34, no: 17 });
     await boot(dom, 'shared.js');
-    expect(bakedOf(dom).textContent).toBe('67% found this helpful (51 ratings)');
+    expect(bakedOf(dom).textContent).toBe('67% helpful (51 ratings)');
   });
 
   it('keeps the buttons visible pre-vote even when the score shows', async () => {
@@ -104,13 +104,13 @@ describe('shared.js rating — parseBakedRating() robustness', () => {
   it('coerces string counts (Number(x) || 0)', async () => {
     const dom = ratingDom({ yes: '45', no: '10' });
     await boot(dom, 'shared.js');
-    expect(bakedOf(dom).textContent).toBe('82% found this helpful (55 ratings)');
+    expect(bakedOf(dom).textContent).toBe('82% helpful (55 ratings)');
   });
 
   it('treats null/undefined counts as 0, not NaN', async () => {
     const dom = ratingDom({ yes: 50, no: null });
     await boot(dom, 'shared.js');
-    expect(bakedOf(dom).textContent).toBe('100% found this helpful (50 ratings)');
+    expect(bakedOf(dom).textContent).toBe('100% helpful (50 ratings)');
   });
 });
 
@@ -168,7 +168,7 @@ describe('shared.js rating — nothing is announced on page load', () => {
     const dom = ratingDom({ yes: 40, no: 10 });
     await boot(dom, 'shared.js');
 
-    expect(bakedOf(dom).textContent).toBe('80% found this helpful (50 ratings)');
+    expect(bakedOf(dom).textContent).toBe('80% helpful (50 ratings)');
     expect(isHidden(liveOf(dom))).toBe(true);
     expect(liveOf(dom).textContent).toBe('');
   });
@@ -193,7 +193,7 @@ describe('shared.js rating — nothing is announced on page load', () => {
 
     // The pre-vote line is retired so the two never show at once.
     expect(isHidden(bakedOf(dom))).toBe(true);
-    expect(liveOf(dom).textContent).toBe('80% found this helpful (51 ratings)');
+    expect(liveOf(dom).textContent).toBe('80% helpful (51 ratings)');
   });
 });
 
@@ -265,7 +265,7 @@ describe('shared.js rating — the lock follows the SERVER, not the click', () =
     dom.window.document.querySelector('[data-feedback="yes"]').click();
     await flush();
     const atVote = liveOf(dom).textContent;
-    expect(atVote).toBe('80% found this helpful (51 ratings)');
+    expect(atVote).toBe('80% helpful (51 ratings)');
 
     // Reload with the lock in place: the recorded vote is still not in the
     // baked counts, so the reload path must add it back the same way.
@@ -279,7 +279,7 @@ describe('shared.js rating — the lock follows the SERVER, not the click', () =
     const dom = ratingDom({ yes: 40, no: 10 });
     dom.window.localStorage.setItem('fc_rated_pdf-to-png', '1'); // pre-direction
     await boot(dom, 'shared.js');
-    expect(bakedOf(dom).textContent).toBe('80% found this helpful (50 ratings)');
+    expect(bakedOf(dom).textContent).toBe('80% helpful (50 ratings)');
   });
 });
 
@@ -307,7 +307,7 @@ describe('shared.js rating — vote resolve', () => {
     dom.window.document.querySelector('[data-feedback="yes"]').click();
     await flush();
 
-    expect(liveOf(dom).textContent).toBe('80% found this helpful (51 ratings)');
+    expect(liveOf(dom).textContent).toBe('80% helpful (51 ratings)');
     const buttons = dom.window.document.querySelectorAll('[data-feedback]');
     expect([...buttons].every((b) => isHidden(b))).toBe(true);
     expect(isHidden(dom.window.document.getElementById('feedback-prompt'))).toBe(true);
@@ -326,7 +326,7 @@ describe('shared.js rating — vote resolve', () => {
     dom.window.localStorage.setItem('fc_rated_pdf-to-png', '1');
     await boot(dom, 'shared.js');
 
-    expect(bakedOf(dom).textContent).toBe('80% found this helpful (50 ratings)');
+    expect(bakedOf(dom).textContent).toBe('80% helpful (50 ratings)');
     const buttons = dom.window.document.querySelectorAll('[data-feedback]');
     expect([...buttons].every((b) => isHidden(b))).toBe(true);
   });
