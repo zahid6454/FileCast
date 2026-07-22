@@ -45,8 +45,15 @@ def _use(monkeypatch, client):
 
 @pytest.fixture(autouse=True)
 def _configured_and_fast(monkeypatch):
-    # A configured PAT + no real sleeps between run-id polls (keeps tests instant).
+    # Pin the deploy config so tests are deterministic regardless of ambient env.
+    # (This matters: GitHub Actions sets a reserved GITHUB_WORKFLOW=<name> var that
+    # pydantic's empty-prefix Settings would otherwise read into github_workflow —
+    # e.g. "CI" in this repo's own CI — so we pin all four here.)
     monkeypatch.setattr(settings, "github_pat", PAT)
+    monkeypatch.setattr(settings, "github_owner", "zahid6454")
+    monkeypatch.setattr(settings, "github_repo", "FileCast")
+    monkeypatch.setattr(settings, "github_workflow", "deploy.yml")
+    # No real sleeps between run-id polls (keeps tests instant).
     monkeypatch.setattr(admin_deploy, "_RUN_RESOLVE_DELAY", 0)
     monkeypatch.setattr(admin_deploy, "_RUN_RESOLVE_ATTEMPTS", 3)
 

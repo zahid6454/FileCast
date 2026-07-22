@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     # backend .env — never a GitHub Actions secret (the backend IS the dispatcher)
     # and never returned in any response. Empty ⇒ POST /admin/deploy fails with a
     # real 5xx (NOT 501 — api.js swallows 501 into a calm "pending rebuild" banner).
+    #
+    # ⚠ These read the bare GITHUB_* env vars (env_prefix=""). Fine on the prod
+    # host (docker-compose sets none of them), but note ``github_workflow`` shadows
+    # GitHub Actions' RESERVED ``GITHUB_WORKFLOW=<name>`` var — so do NOT run this
+    # backend inside an Actions runner expecting the .env value to win (it wouldn't;
+    # you'd dispatch to a workflow named after the CI job). It never runs there.
     github_pat: str = ""
     github_owner: str = "zahid6454"
     github_repo: str = "FileCast"
