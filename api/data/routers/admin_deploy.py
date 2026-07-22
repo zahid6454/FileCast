@@ -76,10 +76,17 @@ async def _resolve_run_id(client: httpx.AsyncClient, deploy_id: str):
         f"{_repo_base()}/actions/workflows/{settings.github_workflow}/runs"
         "?event=workflow_dispatch&per_page=30"
     )
+    # Best-effort: this runs AFTER a successful 204 dispatch, so a transient error
+    # here (network blip / rate-limit / non-200) must NOT turn a successful deploy
+    # into a reported failure — swallow it as a failed attempt and degrade to the
+    # newest run or None.
     newest = None
     for attempt in range(_RUN_RESOLVE_ATTEMPTS):
-        resp = await client.get(runs_url, headers=_gh_headers())
-        if resp.status_code == 200:
+        try:
+            resp = await client.get(runs_url, headers=_gh_headers())
+        except httpx.HTTPError:
+            resp = None  # transient — dispatch already succeeded; keep trying
+        if resp is not None and resp.status_code == 200:
             runs = resp.json().get("workflow_runs", []) or []
             for run in runs:
                 if newest is None:

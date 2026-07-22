@@ -63,8 +63,12 @@ class ResolvingClient(FakeClient):
         self.run_id = run_id
         self.deploy_id = None
         self.get_calls = 0
+        self.post_url = None
+        self.post_headers = None
 
     async def post(self, url, headers=None, json=None):  # noqa: A002
+        self.post_url = url
+        self.post_headers = headers or {}
         self.deploy_id = json["inputs"]["deploy_id"]
         assert json["ref"] == "master"  # not "main" (§8)
         return FakeResp(204)
@@ -91,6 +95,10 @@ async def test_dispatch_resolves_and_returns_run_id(admin_client, monkeypatch):
     assert body["run_id"] == 4242
     assert body["deploy_id"] == client.deploy_id
     assert body["status"] == "queued"
+    # Dispatched to the workflow's dispatches endpoint with a Bearer PAT (a typo
+    # in the path/header would 404/401 in prod → 502, never a real deploy).
+    assert client.post_url.endswith("/actions/workflows/deploy.yml/dispatches")
+    assert client.post_headers.get("Authorization") == f"Bearer {PAT}"
 
 
 class FallbackClient(FakeClient):
@@ -130,6 +138,27 @@ async def test_run_id_none_when_no_runs_yet(admin_client, monkeypatch):
     _use(monkeypatch, EmptyRunsClient())
     r = await admin_client.post("/api/v1/admin/deploy")
     assert r.status_code == 200
+    assert r.json()["run_id"] is None
+
+
+class DispatchOkResolveErrorsClient(FakeClient):
+    """POST→204 (dispatch SUCCEEDS); every resolution GET raises a network error."""
+
+    async def post(self, url, headers=None, json=None):  # noqa: A002
+        return FakeResp(204)
+
+    async def get(self, url, headers=None):
+        raise httpx.ConnectError("blip during resolution")
+
+
+async def test_resolution_error_does_not_mask_successful_dispatch(
+    admin_client, monkeypatch
+):
+    # A transient error DURING run-id resolution must not turn a successful 204
+    # dispatch into a 502 — the deploy is running; we just couldn't resolve its id.
+    _use(monkeypatch, DispatchOkResolveErrorsClient())
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200  # NOT 502
     assert r.json()["run_id"] is None
 
 
