@@ -1,0 +1,64 @@
+name: Deploy
+
+# Server-triggered publish (Phase 7). The backend dispatches this via the GitHub
+# REST API with a server-side PAT (never a GitHub secret — D7/P18), passing a
+# unique deploy_id. `run-name` echoes that id into the run's title so the backend
+# can resolve the run_id from the runs list (workflow_dispatch returns 204 with no
+# run id — R2). Kept a SEPARATE workflow from ci.yml on purpose (§5.2).
+run-name: Deploy ${{ inputs.deploy_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_id:
+        description: Unique id echoed into run-name for run-id resolution
+        required: false
+        default: manual
+
+# Serialize deploys: two Saves inside the ~1-minute build window must QUEUE, not
+# race. cancel-in-progress:false is the entire P17/D8 fix — `true` silently
+# reintroduces the race the block exists to prevent (the Settings tab is a second
+# producer of rebuilds, so this matters more now).
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and publish to Cloudflare Pages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # Root requirements.txt only — the SSG deps (jinja2/markdown/csscompressor/
+      # rjsmin). The api container CANNOT run build.py (it lacks these), which is
+      # why publishing runs here in a plain Python env, not in the backend.
+      - name: Install build dependencies
+        run: pip install -r requirements.txt
+
+      # Bake the site. The read-only Neon DATABASE_URL lets build.py apply the
+      # site-settings + tool overlays; if it's unset/unreachable the build still
+      # succeeds all-off (P10). API_URL points the static site at the prod API.
+      - name: Build site
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          API_URL: https://api.filecast.io
+        run: python build.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # --branch=master MUST match the Pages project's production branch — a
+      # mismatch publishes a *preview* that looks like a successful deploy (§8).
+      - name: Publish to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler@3 pages deploy dist/ --project-name=filecast --branch=master

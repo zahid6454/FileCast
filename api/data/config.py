@@ -44,7 +44,14 @@ class Settings(BaseSettings):
     # row there is no path to a first admin (main.py warns at startup).
     initial_admin_emails: str = ""
 
-    # Phase 7: github_pat, deploy config
+    # Phase 7: server-side deploy trigger (D7/P18). The PAT is held ONLY in the
+    # backend .env — never a GitHub Actions secret (the backend IS the dispatcher)
+    # and never returned in any response. Empty ⇒ POST /admin/deploy fails with a
+    # real 5xx (NOT 501 — api.js swallows 501 into a calm "pending rebuild" banner).
+    github_pat: str = ""
+    github_owner: str = "zahid6454"
+    github_repo: str = "FileCast"
+    github_workflow: str = "deploy.yml"
 
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 
