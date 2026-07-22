@@ -14,7 +14,8 @@ from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator, model_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
@@ -177,14 +178,22 @@ async def update_site_settings(
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
-    row = await _get_singleton(db)
     values = body.model_dump()
-    if row is None:
-        row = SiteSetting(id=SINGLETON_ID, **values)
-        db.add(row)
-    else:
-        for key, value in values.items():
-            setattr(row, key, value)
+    # Race-safe singleton upsert: a plain read-then-insert lets two concurrent
+    # first-time PUTs both see no row and collide on the id=1 PK (IntegrityError
+    # → 500). ON CONFLICT DO UPDATE folds the insert and update into one atomic
+    # statement so the second writer updates instead of erroring. ``updated_at``
+    # is bumped explicitly on the update path (the model's ``onupdate`` is
+    # ORM-flush-level and does not fire for a Core upsert).
+    stmt = (
+        pg_insert(SiteSetting)
+        .values(id=SINGLETON_ID, **values)
+        .on_conflict_do_update(
+            index_elements=["id"],
+            set_={**values, "updated_at": func.now()},
+        )
+    )
+    await db.execute(stmt)
     await db.commit()
-    await db.refresh(row)
+    row = await _get_singleton(db)
     return {"site_settings": _dict(row)}
