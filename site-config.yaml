@@ -45,7 +45,7 @@ categories:
     # As a category-level promise it breaks silently the first time a
     # server-side image tool is added, so it is hedged like document-tools
     # above; the per-tool Local/Cloud badge carries the exact claim.
-    description: "Convert between image formats instantly. Most tools run in your browser, so your files never leave your device."
+    description: "Convert between image formats instantly. Most tools run entirely in your browser — nothing is uploaded."
     search_placeholder: "Filter tools... (e.g. PNG, WebP, TIFF)"
 
   - id: data-conversion

@@ -53,10 +53,17 @@ NEW_DESCRIPTION = (
 
 
 def _swap(before: str, after: str) -> None:
-    """Rewrite the singleton's description only if it still holds `before`."""
+    """Rewrite the singleton's description only if it still holds `before`.
+
+    ``updated_at`` is bumped explicitly for the same reason the PUT handler
+    does it (``routers/site_settings.py``): the model's ``onupdate=func.now()``
+    is ORM-flush-level and does not fire for raw Core SQL like this. Without
+    it, ``GET /site-settings`` would report a timestamp older than the content
+    it is returning.
+    """
     op.execute(
         sa.text(
-            "UPDATE site_settings SET site_description = :after "
+            "UPDATE site_settings SET site_description = :after, updated_at = now() "
             "WHERE id = 1 AND site_description = :before"
         ).bindparams(after=after, before=before)
     )
