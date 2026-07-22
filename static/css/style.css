@@ -362,21 +362,13 @@ img { max-width: 100%; display: block; }
 /* The current page (last crumb) reads as the anchor of the trail. */
 .breadcrumb__current { font-weight: var(--weight-semibold); color: var(--color-heading); }
 
-/* --- Privacy Badge --- */
-.badge {
-  display: inline-block;
-  background: var(--color-success-subtle);
-  border: 1px solid var(--color-success);
-  color: var(--color-success);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  margin: 0;
-  transition: opacity var(--transition-fast);
-}
-.badge:hover { opacity: 0.8; text-decoration: none; }
-.badge--inline { margin: 0; }
+/* The old `.badge` / `.badge--inline` privacy pill lived here. Every call site
+   moved to the Local/Cloud processing pill (.badge--local / .badge--cloud,
+   further down) — which was always a separate class, never a modifier of this
+   one (P13) — so nothing inherits from it. Removed rather than left dangling:
+   a green-for-everything pill is what let the server-side case on about.html
+   render identically to the client-side one. `.hero__badge` and `.admin-badge`
+   are unrelated classes and are untouched. */
 
 /* --- Reverse Tool Swap Link --- */
 .reverse-link {

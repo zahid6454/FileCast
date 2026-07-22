@@ -52,7 +52,11 @@ categories:
     name: Text Conversion
     nav_label: Text
     slug: data-conversion
-    description: "Convert between data formats like JSON, XML, YAML, CSV, and Markdown. All processing happens in your browser."
+    # Same accidental-truth class as image-conversion above: "All processing
+    # happens in your browser" holds only because every text tool is
+    # client-side today. Hedged so it degrades gracefully rather than becoming
+    # false the moment that stops being true.
+    description: "Convert between data formats like JSON, XML, YAML, CSV, and Markdown. Most tools process everything in your browser."
     search_placeholder: "Filter tools... (e.g. JSON, XML, YAML)"
 
   - id: audio-video
