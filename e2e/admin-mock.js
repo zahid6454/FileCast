@@ -135,6 +135,21 @@ export function makeState(overrides = {}) {
       { tool_id: 'img-a', yes: 4, no: 1 },
       { tool_id: 'doc-a', yes: 3, no: 0 }
     ],
+    // Phase 7 Site Settings singleton (integrations off, YAML-mirrored copy).
+    siteSettings: overrides.siteSettings || {
+      site_name: 'FileCast',
+      site_tagline: 'Free File Conversion',
+      site_description: 'Convert files privately in your browser.',
+      adsense_enabled: false,
+      adsense_publisher_id: null,
+      adsense_slot_leaderboard: null,
+      adsense_slot_in_content: null,
+      ga4_enabled: false,
+      ga4_measurement_id: null,
+      sentry_enabled: false,
+      sentry_dsn: null,
+      updated_at: '2026-07-20T00:00:00Z'
+    },
     // Instrumentation for assertions:
     reorderCalls: [],
     ratingsCalls: 0,
@@ -295,6 +310,18 @@ export async function installApi(page, state) {
       if (u) u.role = 'user';
       state.pending = state.pending.filter((p) => p.email !== email);
       return json({ status: 'revoked', email });
+    }
+
+    // --- site settings (Phase 7 singleton) ---
+    if (path.endsWith('/admin/site-settings') && method === 'GET') {
+      return json({ site_settings: state.siteSettings });
+    }
+    if (path.endsWith('/admin/site-settings') && method === 'PUT') {
+      state.lastSiteSettingsBody = body();
+      state.siteSettings = Object.assign({}, state.siteSettings, body(), {
+        updated_at: new Date().toISOString()
+      });
+      return json({ site_settings: state.siteSettings });
     }
 
     // --- deploy stub (501, exactly like Phase 1) ---

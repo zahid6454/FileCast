@@ -53,19 +53,19 @@ test.describe('auth gate (D6)', () => {
     await expect(page.getByText('Dev login as admin')).toBeVisible();
   });
 
-  test('admin → full panel with all five tabs', async ({ page }) => {
+  test('admin → full panel with all six tabs', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/');
     await expect(page.locator('.admin-topbar__brand')).toBeVisible();
-    await expect(page.locator('.admin-tabs__link')).toHaveCount(5);
+    await expect(page.locator('.admin-tabs__link')).toHaveCount(6);
   });
 
   test('mid-session 401/403 drops back to the sign-in gate (R8)', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#tools');
-    await expect(page.locator('.admin-tabs__link')).toHaveCount(5);
+    await expect(page.locator('.admin-tabs__link')).toHaveCount(6);
 
     // Session expires mid-session: /me now 401 and any mutation 403.
     state.me = { status: 401 };
@@ -556,11 +556,51 @@ test('fresh/empty DB renders placeholders with no throw (§8.5)', async ({ page 
   expect(problems, problems.join('\n')).toEqual([]);
 });
 
+test.describe('settings (Phase 7)', () => {
+  test('renders the form, saves via PUT, and fires a rebuild (settings bake at build time)', async ({
+    page
+  }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#settings');
+
+    // Form renders, pre-filled from the singleton.
+    await expect(page.locator('input[name="site_name"]')).toHaveValue('FileCast');
+
+    await page.locator('input[name="site_tagline"]').fill('New tagline');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    // The PUT reached the server with the edited copy.
+    await expect
+      .poll(() => state.lastSiteSettingsBody && state.lastSiteSettingsBody.site_tagline)
+      .toBe('New tagline');
+
+    // Unlike announcements, settings bake into static HTML → notifySaved() (no
+    // { live:true }) fires the deploy, so the pending-rebuild banner appears (§5.3b).
+    await expect(page.locator('.admin-banner--info')).toBeVisible();
+    expect(state.deployCalls).toBeGreaterThan(0);
+  });
+
+  test('client-validates a bad GA4 id before any PUT (422 guard, no rebuild)', async ({ page }) => {
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#settings');
+
+    await page.locator('input[name="ga4_measurement_id"]').fill('UA-not-ga4');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    // Client validation blocks the request: an inline error shows and no PUT fired.
+    await expect(page.locator('.admin-field--invalid')).toHaveCount(1);
+    expect(state.lastSiteSettingsBody).toBeUndefined();
+    expect(state.deployCalls).toBe(0);
+  });
+});
+
 test('the whole admin session produces no JS exceptions or console errors', async ({ page }) => {
   const problems = collectProblems(page);
   const state = makeState();
   await installApi(page, state);
-  for (const hash of ['#dashboard', '#tools', '#announcements', '#users', '#errors']) {
+  for (const hash of ['#dashboard', '#tools', '#announcements', '#users', '#errors', '#settings']) {
     await page.goto('/admin/' + hash);
     await expect(page.locator('.admin-main')).toBeVisible();
   }
