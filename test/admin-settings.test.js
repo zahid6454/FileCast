@@ -155,12 +155,38 @@ describe('admin/settings.js — Save', () => {
 
     // Only the initial GET happened — no PUT.
     expect(calls.filter((x) => x.method === 'PUT').length).toBe(0);
-    const errSlot = c
-      .querySelector('[name="adsense_publisher_id"]')
-      .closest('.admin-field')
-      .querySelector('.admin-field__error');
+    const pub = c.querySelector('[name="adsense_publisher_id"]');
+    const errSlot = pub.closest('.admin-field').querySelector('.admin-field__error');
     expect(errSlot.hidden).toBe(false);
     expect(errSlot.textContent).toBeTruthy();
+    // a11y: the invalid control is flagged for assistive tech.
+    expect(pub.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('clears a prior error once the fixed body validates and issues the PUT', async () => {
+    const calls = [];
+    const dom = load((url, opts) => {
+      calls.push({ method: (opts && opts.method) || 'GET' });
+      return makeResponse(200, '{"site_settings":null}');
+    });
+    dom.window.ADMIN.notifySaved = () => {};
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.settings.render(c);
+    await flush();
+
+    setField(c, 'site_name', 'OK');
+    setField(c, 'site_tagline', 'OK');
+    const pub = setField(c, 'adsense_publisher_id', 'bad');
+    c.querySelector('.admin-form__actions .admin-btn--primary').click();
+    await flush();
+    expect(pub.getAttribute('aria-invalid')).toBe('true');
+    expect(calls.filter((x) => x.method === 'PUT').length).toBe(0);
+
+    // Fix the field and re-save → the error clears and the PUT fires.
+    setField(c, 'adsense_publisher_id', 'ca-pub-1234567890123456');
+    c.querySelector('.admin-form__actions .admin-btn--primary').click();
+    await flush();
+    expect(calls.filter((x) => x.method === 'PUT').length).toBe(1);
   });
 
   it('issues a PUT with the body and calls notifySaved() with NO { live:true }', async () => {

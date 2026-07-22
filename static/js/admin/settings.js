@@ -181,10 +181,12 @@
 
     function clearErrors() {
       Object.keys(fields).forEach(function (k) {
-        var slot = fields[k]._errSlot;
-        slot.textContent = '';
-        slot.hidden = true;
-        fields[k].classList.remove('admin-field--invalid');
+        var wrap = fields[k];
+        wrap._errSlot.textContent = '';
+        wrap._errSlot.hidden = true;
+        wrap.classList.remove('admin-field--invalid');
+        var ctrl = wrap.querySelector('.admin-input');
+        if (ctrl) ctrl.removeAttribute('aria-invalid');
       });
     }
 
@@ -196,6 +198,8 @@
         wrap._errSlot.textContent = errors[k];
         wrap._errSlot.hidden = false;
         wrap.classList.add('admin-field--invalid');
+        var ctrl = wrap.querySelector('.admin-input');
+        if (ctrl) ctrl.setAttribute('aria-invalid', 'true');
       });
     }
 
