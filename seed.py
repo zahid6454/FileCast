@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT / "api"))
 
 from data.config import settings  # noqa: E402
 from data.db import sync_session  # noqa: E402
-from data.models import Tool, User  # noqa: E402
+from data.models import SiteSetting, Tool, User  # noqa: E402
 
 TOOLS_DIR = ROOT / "tools"
 SITE_CONFIG = ROOT / "site-config.yaml"
@@ -153,6 +153,39 @@ def seed_tools(only_new: bool) -> None:
     )
 
 
+def seed_site_settings() -> None:
+    """Insert the Site Settings singleton (``id=1``) if absent.
+
+    NOT environment-gated (unlike ``seed_dev_users``): this row is safe in
+    production and MUST exist there — without it the admin panel has nothing to
+    edit and ``build.py``'s overlay finds no row. Integrations seed **all-off**
+    and the copy is mirrored from ``site-config.yaml`` so an untouched overlay
+    reproduces today's site verbatim. Idempotent: an existing row is left alone,
+    never clobbering owner edits on a re-seed.
+    """
+    with open(SITE_CONFIG, encoding="utf-8") as f:
+        cfg = yaml.safe_load(f) or {}
+    site = cfg.get("site", {})
+
+    created = 0
+    with sync_session() as db:
+        existing = db.query(SiteSetting).filter(SiteSetting.id == 1).one_or_none()
+        if existing is None:
+            db.add(
+                SiteSetting(
+                    id=1,
+                    site_name=site.get("name", "FileCast"),
+                    site_tagline=site.get("tagline", ""),
+                    site_description=site.get("description", ""),
+                    adsense_enabled=False,
+                    ga4_enabled=False,
+                    sentry_enabled=False,
+                )
+            )
+            created = 1
+    print(f"  site settings: created={created} (of 1 singleton)")
+
+
 def seed_dev_users() -> None:
     if settings.environment != "development":
         print("  dev users: skipped (ENVIRONMENT != development)")
@@ -178,6 +211,7 @@ def main() -> int:
 
     print("Seeding FileCast data layer...")
     seed_tools(args.only_new)
+    seed_site_settings()
     seed_dev_users()
     print("Done.")
     return 0

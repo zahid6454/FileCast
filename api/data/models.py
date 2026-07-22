@@ -232,6 +232,44 @@ class Announcement(Base):
     )
 
 
+class SiteSetting(Base):
+    """Singleton (``id`` is always ``1``) display + integration overlay on
+    ``site-config.yaml`` (Phase 7).
+
+    Overlays only the **display** copy (``site.name``/``tagline``/``description``)
+    and the AdSense / GA4 / Sentry integration toggles. Structural fields
+    (``site.base_url``, ``api.base_url``, every ``categories[].*``) stay
+    YAML-only and are deliberately NOT columns here — editing them from a textbox
+    would orphan tools and 404 live URLs. ``build.py`` reads this row and merges
+    it over the YAML, all-or-nothing (P10). Integrations default OFF.
+    """
+
+    __tablename__ = "site_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    # display copy (overlays the site: block)
+    site_name: Mapped[str] = mapped_column(String, nullable=False)
+    site_tagline: Mapped[str] = mapped_column(String, nullable=False)
+    site_description: Mapped[str] = mapped_column(Text, nullable=False)
+    # integrations — all default OFF
+    adsense_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    adsense_publisher_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    adsense_slot_leaderboard: Mapped[str | None] = mapped_column(String, nullable=True)
+    adsense_slot_in_content: Mapped[str | None] = mapped_column(String, nullable=True)
+    ga4_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ga4_measurement_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    sentry_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    sentry_dsn: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class Error(Base):
     """Append-only client error log. Purged after ``retention_days`` (§12)."""
 
