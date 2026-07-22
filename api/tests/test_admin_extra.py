@@ -1,6 +1,5 @@
 """Integration — coverage for endpoints not exercised elsewhere:
-users admin list/detail, announcements update/delete, admin-deploy 501 stub,
-and preferences auth gate."""
+users admin list/detail, announcements update/delete, and preferences auth gate."""
 
 
 # --- users (admin) ---
@@ -86,17 +85,7 @@ async def test_announcement_update_unknown_404(admin_client):
     ).status_code == 404
 
 
-# --- admin deploy stub (Phase 7) ---
-
-
-async def test_admin_deploy_returns_501(admin_client):
-    assert (await admin_client.post("/api/v1/admin/deploy")).status_code == 501
-    assert (await admin_client.get("/api/v1/admin/deploy/abc")).status_code == 501
-
-
-async def test_admin_deploy_requires_admin(user_client):
-    # authz is checked before the 501 stub
-    assert (await user_client.post("/api/v1/admin/deploy")).status_code == 403
+# admin-deploy is covered in test_admin_deploy.py (Phase 7 real round-trip).
 
 
 # --- preferences auth gate ---

@@ -150,6 +150,9 @@ export function makeState(overrides = {}) {
       sentry_dsn: null,
       updated_at: '2026-07-20T00:00:00Z'
     },
+    // Phase 7 deploy: unset ⇒ the 501 stub (banner tests); an object ⇒ the wired
+    // endpoint returns its run_id + status/conclusion (deploy round-trip tests).
+    deploy: overrides.deploy || null,
     // Instrumentation for assertions:
     reorderCalls: [],
     ratingsCalls: 0,
@@ -324,10 +327,24 @@ export async function installApi(page, state) {
       return json({ site_settings: state.siteSettings });
     }
 
-    // --- deploy stub (501, exactly like Phase 1) ---
-    if (path.includes('/admin/deploy')) {
+    // --- deploy ---
+    // Default: the Phase 1 501 stub (drives the "pending rebuild" banner tests).
+    // If state.deploy is set, behave like the wired Phase 7 endpoint: POST returns
+    // a run_id, GET returns GitHub's raw status/conclusion so the poll loop can be
+    // exercised (success vs completed-but-failed).
+    const deployStatusMatch = path.match(/\/admin\/deploy\/([^/]+)$/);
+    if (deployStatusMatch && method === 'GET') {
+      if (!state.deploy) return json({ detail: 'Deploy is configured in Phase 7' }, 501);
+      return json({
+        status: state.deploy.status,
+        conclusion: state.deploy.conclusion,
+        html_url: state.deploy.html_url || 'https://github.com/run/1'
+      });
+    }
+    if (path.endsWith('/admin/deploy') && method === 'POST') {
       state.deployCalls += 1;
-      return json({ detail: 'Deploy is configured in Phase 7' }, 501);
+      if (!state.deploy) return json({ detail: 'Deploy is configured in Phase 7' }, 501);
+      return json({ deploy_id: 'dep-1', run_id: state.deploy.run_id || 999, status: 'queued' });
     }
 
     return json({ detail: 'unhandled ' + method + ' ' + path }, 500);

@@ -8,9 +8,10 @@
 //     tool fetches, no N+1.
 //   - Hash router (#dashboard default) over the four tabs.
 //   - Toast + the honest save→publish flow: each successful mutation calls
-//     ADMIN.notifySaved() → success toast + a debounced POST /admin/deploy →
-//     501 sentinel → persistent info-styled "pending rebuild" banner (§7). The
-//     Phase 7 run_id-poll path is written but dormant behind the 501 guard.
+//     ADMIN.notifySaved() → success toast + a debounced POST /admin/deploy. With
+//     deploy wired (Phase 7) the reply carries a run_id we poll to a terminal
+//     conclusion (success → "Published", else a failure toast); a 501 reply (deploy
+//     not configured) still degrades to the info "pending rebuild" banner (§7).
 //   - Any AuthError from api.js (mid-session 401/403) re-invokes the gate (R8).
 //   - Dev-login buttons that self-hide in prod on first click (dev-login 404s
 //     unless ENVIRONMENT=development — R11).
@@ -339,14 +340,22 @@
       });
   }
 
-  // Dormant until Phase 7 wires a real deploy (501 short-circuits above).
+  // Poll the deploy run to a terminal state. GitHub's `status` reaching
+  // 'completed' is NOT success — 'completed' covers failure/cancelled too. The
+  // terminal signal is the CONCLUSION: only 'success' means the site is actually
+  // live; anything else was saved to the DB but never published, so say so rather
+  // than showing a misleading green "Published".
   function pollDeploy(runId) {
     api
       .get('/api/v1/admin/deploy/' + encodeURIComponent(runId))
       .then(function (res) {
         if (res && res.notImplemented) return;
-        if (res && (res.status === 'completed' || res.status === 'success')) {
-          ADMIN.toast('Published', 'success');
+        if (res && res.status === 'completed') {
+          if (res.conclusion === 'success') {
+            ADMIN.toast('Published', 'success');
+          } else {
+            ADMIN.toast('Publish failed — changes are saved but not live.', 'error');
+          }
           return;
         }
         setTimeout(function () {
@@ -354,7 +363,8 @@
         }, 4000);
       })
       .catch(function () {
-        /* silent — dormant path */
+        /* silent — a status-poll error ends polling (the deploy still runs; the
+           admin just won't get a terminal toast). Never masks the save. */
       });
   }
 
