@@ -271,6 +271,92 @@ def apply_tool_overrides(tools: list[dict], overrides: dict) -> list[dict]:
     return result
 
 
+def fetch_site_settings() -> dict:
+    """Read the admin Site Settings overlay from Postgres via the Phase 1 sync engine.
+
+    Returns an overlay shaped like the ``site-config.yaml`` blocks it overrides
+    (``site`` / ``adsense`` / ``ga4`` / ``sentry``), or ``{}`` on ANY failure
+    (shared package not importable, ``DATABASE_URL`` unset/unreachable, DB down,
+    no singleton row) so the build degrades to pure-YAML output — all
+    integrations OFF and today's copy (ledger P10).
+
+    **All-or-nothing (load-bearing).** A partial merge would ship a
+    half-configured site with no warning: the CSP and the templates could
+    disagree about which integrations are on. So this returns either the FULL
+    overlay or ``{}`` — never a subset. Same DB seam as ``fetch_tool_overrides``.
+    """
+    try:
+        api_path = str(ROOT / "api")  # Phase 1 shared package
+        if api_path not in sys.path:  # avoid unbounded growth across watch rebuilds
+            sys.path.insert(0, api_path)
+        from data.db import sync_session
+        from data.models import SiteSetting
+
+        with sync_session() as session:
+            row = session.query(SiteSetting).filter(SiteSetting.id == 1).one_or_none()
+            if row is None:
+                return {}  # no row → pure YAML (all-off launch posture)
+            overlay = {
+                "site": {
+                    "name": row.site_name,
+                    "tagline": row.site_tagline,
+                    "description": row.site_description,
+                },
+                "adsense": {
+                    "enabled": row.adsense_enabled,
+                    "publisher_id": row.adsense_publisher_id or "",
+                    "slots": {
+                        "leaderboard": row.adsense_slot_leaderboard or "",
+                        "in_content": row.adsense_slot_in_content or "",
+                    },
+                },
+                "ga4": {
+                    "enabled": row.ga4_enabled,
+                    "measurement_id": row.ga4_measurement_id or "",
+                },
+                "sentry": {
+                    "enabled": row.sentry_enabled,
+                    "dsn": row.sentry_dsn or "",
+                },
+            }
+        print("  [db] site settings overlay applied")
+        return overlay  # populated only on full success
+    except Exception as e:  # noqa: BLE001 — intentional catch-all (ledger P10/R4)
+        print(
+            f"  [db] site settings unavailable ({type(e).__name__}); "
+            f"building from YAML only"
+        )
+        return {}  # all-or-nothing: never a half overlay
+
+
+def _deep_merge(base: dict, overlay: dict) -> dict:
+    """Recursively overlay ``overlay`` onto ``base`` in place.
+
+    Only keys present in ``overlay`` are touched, so YAML-only structural fields
+    (``site.base_url``, ``adsense.slots.footer``) survive the merge — the overlay
+    carries just the admin-editable display/integration keys.
+    """
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def apply_site_settings(site_config: dict, overlay: dict) -> dict:
+    """Merge the DB Site Settings overlay onto the YAML ``site_config``.
+
+    An empty ``overlay`` (DB down / no row) leaves ``site_config`` untouched → the
+    all-off YAML launch posture. Applied ONCE right after ``load_site_config()`` so
+    BOTH ``create_jinja_env()`` (``env.globals``) and ``generate_headers()`` (the
+    CSP) read the same merged dict and can never disagree.
+    """
+    if not overlay:
+        return site_config
+    return _deep_merge(site_config, overlay)
+
+
 def fetch_rating_aggregates() -> dict:
     """Read per-tool yes/no vote counts from Postgres via the Phase 1 sync engine.
 
@@ -1051,9 +1137,13 @@ def build():
     print("[1/10] Cleaning dist/")
     clean_dist()
 
-    # 2. Load config
+    # 2. Load config, then overlay the admin Site Settings (graceful fallback to
+    # YAML). Merged HERE — before create_jinja_env() and generate_headers() — so
+    # the templates and the CSP read one merged dict and never disagree about
+    # which integrations are on (P10; all-or-nothing overlay).
     print("[2/10] Loading site-config.yaml")
     site_config = load_site_config()
+    site_config = apply_site_settings(site_config, fetch_site_settings())
 
     # 3-4. Load tools, then overlay DB state (graceful fallback to YAML) and
     # apply the global sort_order upstream of all rendering (P9/D1). Disabled

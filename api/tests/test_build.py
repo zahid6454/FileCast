@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from data.db import sync_session  # noqa: E402
-from data.models import Conversion, Rating, Tool  # noqa: E402
+from data.models import Conversion, Rating, SiteSetting, Tool  # noqa: E402
 
 import build  # noqa: E402
 
@@ -115,6 +115,132 @@ def test_sync_engine_has_bounded_connect_timeout():
 
     assert isinstance(ddb.CONNECT_TIMEOUT_SECONDS, int)
     assert 0 < ddb.CONNECT_TIMEOUT_SECONDS <= 30
+
+
+# --------------------------------------------------------------------------- #
+# fetch_site_settings — DB read + graceful fallback + all-or-nothing (P10)
+# --------------------------------------------------------------------------- #
+
+
+def _seed_site_settings(**kw) -> None:
+    base = dict(
+        id=1,
+        site_name="Custom Name",
+        site_tagline="Custom Tagline",
+        site_description="Custom description.",
+        adsense_enabled=False,
+        ga4_enabled=False,
+        sentry_enabled=False,
+    )
+    base.update(kw)
+    with sync_session() as s:
+        s.add(SiteSetting(**base))
+
+
+def test_fetch_site_settings_reads_db():
+    _seed_site_settings(
+        ga4_enabled=True,
+        ga4_measurement_id="G-ABCD1234",
+        adsense_slot_leaderboard="1234567890",
+    )
+    ov = build.fetch_site_settings()
+    assert ov["site"]["name"] == "Custom Name"
+    assert ov["site"]["tagline"] == "Custom Tagline"
+    assert ov["ga4"] == {"enabled": True, "measurement_id": "G-ABCD1234"}
+    assert ov["adsense"]["slots"]["leaderboard"] == "1234567890"
+    # nullable fields coalesce to "" so they match the YAML string convention.
+    assert ov["adsense"]["publisher_id"] == ""
+    assert ov["sentry"] == {"enabled": False, "dsn": ""}
+
+
+def test_fetch_site_settings_no_row_returns_empty():
+    # No singleton row degrades to {} (pure-YAML path), never a crash.
+    assert build.fetch_site_settings() == {}
+
+
+def test_fetch_site_settings_graceful_when_db_down(monkeypatch):
+    import data.db as ddb
+
+    def boom():
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(ddb, "sync_session", boom)
+    # Must swallow the failure and degrade to YAML-only (P10/R4), not raise.
+    assert build.fetch_site_settings() == {}
+
+
+def test_apply_site_settings_empty_overlay_is_noop():
+    cfg = {"site": {"name": "FileCast", "base_url": "https://filecast.io"}}
+    out = build.apply_site_settings(cfg, {})
+    assert out == {"site": {"name": "FileCast", "base_url": "https://filecast.io"}}
+
+
+def test_apply_site_settings_preserves_structural_fields():
+    # The overlay carries only display/integration keys; base_url and the unused
+    # footer slot are YAML-only and must survive the merge.
+    cfg = {
+        "site": {"name": "FileCast", "base_url": "https://filecast.io"},
+        "adsense": {"enabled": False, "slots": {"in_content": "", "footer": ""}},
+    }
+    overlay = build.apply_site_settings(
+        cfg,
+        {
+            "site": {"name": "Renamed"},
+            "adsense": {"enabled": True, "slots": {"in_content": "999"}},
+        },
+    )
+    assert overlay["site"]["name"] == "Renamed"
+    assert overlay["site"]["base_url"] == "https://filecast.io"  # preserved
+    assert overlay["adsense"]["enabled"] is True
+    assert overlay["adsense"]["slots"]["in_content"] == "999"
+    assert overlay["adsense"]["slots"]["footer"] == ""  # structural, preserved
+
+
+def test_site_settings_merge_is_all_or_nothing(monkeypatch):
+    # A failed read yields {} → the merge is a no-op → pure YAML. Never a subset
+    # of the overlay's keys.
+    import data.db as ddb
+
+    monkeypatch.setattr(
+        ddb, "sync_session", lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+    cfg = {"site": {"name": "FileCast"}, "ga4": {"enabled": False}}
+    out = build.apply_site_settings(dict(cfg), build.fetch_site_settings())
+    assert out == cfg  # whole, not half
+
+
+def _csp_from_build(built) -> str:
+    line = next(
+        ln
+        for ln in (built / "_headers").read_text(encoding="utf-8").splitlines()
+        if "Content-Security-Policy" in ln
+    )
+    return line
+
+
+def test_full_build_no_db_emits_all_off(tmp_path, monkeypatch):
+    # No site_settings row (the CI-with-no-data posture) ⇒ all integrations off:
+    # script-src stays literally 'self' and no gtag/adsense host leaks in.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    csp = _csp_from_build(tmp_path)
+    assert "script-src 'self';" in csp
+    assert "googletagmanager" not in csp
+    assert "googlesyndication" not in csp
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "FileCast" in home  # YAML-seeded copy renders
+
+
+def test_full_build_overlay_bakes_ga4(tmp_path, monkeypatch):
+    # An all-off YAML + a DB row enabling GA4 ⇒ the CSP gains the GTM host and the
+    # gtag script is baked. Proves the overlay reaches BOTH the CSP and templates.
+    _seed_site_settings(ga4_enabled=True, ga4_measurement_id="G-TESTBUILD")
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    csp = _csp_from_build(tmp_path)
+    assert "https://www.googletagmanager.com" in csp
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "G-TESTBUILD" in home
 
 
 # --------------------------------------------------------------------------- #
