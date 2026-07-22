@@ -74,6 +74,22 @@ describe('admin/settings.js — tab contract', () => {
       expect(c.querySelector('[name="' + n + '"]'), n).not.toBeNull();
     });
   });
+
+  it('wires the error via aria-describedby and keeps it out of the <label>', async () => {
+    const dom = load();
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.settings.render(c);
+    await flush();
+    const pub = c.querySelector('[name="adsense_publisher_id"]');
+    const errId = pub.getAttribute('aria-describedby');
+    expect(errId).toBeTruthy();
+    const err = c.querySelector('#' + errId);
+    expect(err).not.toBeNull();
+    expect(err.classList.contains('admin-field__error')).toBe(true);
+    // Error is a sibling, not a label descendant — so it can't fold into the
+    // control's accessible name (pr-review a11y nit).
+    expect(err.closest('label')).toBeNull();
+  });
 });
 
 describe('admin/settings.js — validate() mirrors the server', () => {

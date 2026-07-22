@@ -1025,10 +1025,6 @@
   color: var(--color-text-muted);
   margin: calc(-1 * var(--space-2)) 0 var(--space-4);
 }
-.admin-field__hint {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
 /* Inline validation affordance: the error text is the injection-guard feedback
    (mirrors the server's 422). Red text + a red control border on the invalid field. */
 .admin-field__error {

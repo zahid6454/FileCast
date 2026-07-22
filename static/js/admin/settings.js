@@ -90,13 +90,20 @@
     return errors;
   }
 
-  // A labelled control with an inline (initially empty) error slot underneath.
-  function field(labelText, control, hint) {
-    var err = h('span', { class: 'admin-field__error', role: 'alert', hidden: true });
-    var kids = [h('span', { class: 'admin-field__label' }, labelText), control];
-    if (hint) kids.push(h('span', { class: 'admin-field__hint' }, hint));
-    kids.push(err);
-    var wrap = h('label', { class: 'admin-field' }, kids);
+  // A field: an explicit <label for> + control + an error node that is a SIBLING
+  // of the control (NOT a child of the label), wired via aria-describedby. Keeping
+  // the error outside the <label> stops it folding into the control's accessible
+  // name; role="alert" still announces it when it appears (pr-review a11y nit).
+  function field(labelText, control) {
+    var id = control.id;
+    var errId = id + '-err';
+    var err = h('span', { class: 'admin-field__error', role: 'alert', id: errId, hidden: true });
+    control.setAttribute('aria-describedby', errId);
+    var wrap = h('div', { class: 'admin-field' }, [
+      h('label', { class: 'admin-field__label', for: id }, labelText),
+      control,
+      err
+    ]);
     wrap._errSlot = err;
     return wrap;
   }
@@ -105,6 +112,7 @@
     return h('input', {
       type: 'text',
       class: 'admin-input',
+      id: 'sf-' + nameAttr,
       name: nameAttr,
       value: value || '',
       placeholder: placeholder || ''
@@ -123,6 +131,7 @@
     var tagline = textInput('site_tagline', s.site_tagline, 'Free File Conversion — …');
     var description = h('textarea', {
       class: 'admin-input',
+      id: 'sf-site_description',
       name: 'site_description',
       rows: '3',
       placeholder: 'One-sentence meta description (≤ 300 chars)'
