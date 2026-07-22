@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import processing_pill %}
 
 {% block title %}{{ tool.meta.title }}{% endblock %}
 {% block meta_description %}{{ tool.meta.description }}{% endblock %}
@@ -74,9 +75,11 @@
   {# Ad slot: leaderboard #}
   <div class="ad-slot" id="ad-leaderboard"></div>
 
-  {# Privacy Badge #}
+  {# Privacy Badge — same Local/Cloud pill as the tool cards (see tool.html).
+     Text tools are always client-side, so the pill resolves to Local. #}
   <div class="tool-badge">
-    <a href="/privacy/" class="badge">Your Files Stay Yours</a>
+    {{ processing_pill(tool) }}
+    <a href="/privacy/" class="tool-badge__note">Your files stay yours &mdash; this tool runs entirely in your browser.</a>
   </div>
 
   {# Text Input #}

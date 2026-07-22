@@ -1,4 +1,8 @@
 {% extends "base.html" %}
+{# The Local/Cloud pills below are the *shipped* per-tool badges (_macros.html),
+   rendered inline so this page points at something a reader can actually find
+   on a tool card. #}
+{% from "_macros.html" import processing_pill %}
 
 {% block title %}Your Files Stay Yours — {{ site.name }}{% endblock %}
 {% block meta_description %}How FileCast keeps your files private. Your files are never stored — we only keep what you choose to save.{% endblock %}
@@ -14,15 +18,15 @@
   <p class="page__desc">Everything we do is built around one idea: your files belong to you, not us.</p>
 
   <div class="privacy-section">
-    <h2>We never see your files</h2>
+    <h2>We never look at your files</h2>
     <p>
       Most tools on <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span> work right inside your browser. Your file never leaves your device &mdash; it's converted on your computer, not on our servers.
     </p>
     <p>
-      Nothing is uploaded. Nothing is sent over the internet. When you close the tab, it's like the conversion never happened.
+      For those tools nothing is uploaded and nothing is sent over the internet. When you close the tab, it's like the conversion never happened. The few tools that do need our server are covered in the next section &mdash; and even there, we never look at what you send.
     </p>
     <p>
-      Look for the <span class="badge badge--inline">Your Files Stay Yours</span> badge &mdash; it means the tool works entirely on your device.
+      Look for the {{ processing_pill({'type': 'client-side'}) }} badge on a tool card &mdash; it means the tool works entirely on your device.
     </p>
   </div>
 
@@ -40,7 +44,7 @@
       We never look at, save, or share what you send. The entire process takes seconds, and nothing is left behind.
     </p>
     <p>
-      Look for the <span class="badge badge--inline">Files encrypted, processed, deleted immediately</span> badge &mdash; it means the tool uses a secure server round trip.
+      Look for the {{ processing_pill({'type': 'server-side'}) }} badge on a tool card &mdash; it means the tool uses a secure server round trip: your file is encrypted in transit, converted, and deleted immediately.
     </p>
   </div>
 

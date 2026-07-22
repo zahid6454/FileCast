@@ -262,7 +262,16 @@ img { max-width: 100%; display: block; }
 .header__nav { margin-left: auto; display: flex; gap: var(--space-5); }
 .header__nav a { color: var(--color-text-muted); font-size: var(--text-sm); font-weight: var(--weight-medium); transition: color var(--transition-base); }
 .header__nav a:hover { color: var(--color-text-inverse); text-decoration: none; }
+/* Pill + its description on one centered line. The pill itself is .badge--local
+   / .badge--cloud (see the processing-pill rules), so the two processing modes
+   are visually distinct here exactly as they are on the tool cards.
+   Deliberately NOT a flex container: .badge--local/.badge--cloud carry
+   `margin-top: auto` for card bottom-alignment, which in a flex row would
+   override align-items and drop the pill to the bottom edge. Inline layout
+   makes that auto margin a no-op. */
 .tool-badge { text-align: center; margin-bottom: var(--space-3); }
+.tool-badge__note { font-size: var(--text-xs); color: var(--color-text-muted); margin-left: var(--space-2); }
+.tool-badge__note:hover { color: var(--color-text); }
 
 /* --- Hero --- */
 .hero {

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import processing_pill %}
 
 {% block title %}{{ tool.meta.title }}{% endblock %}
 {% block meta_description %}{{ tool.meta.description }}{% endblock %}
@@ -74,12 +75,13 @@
   {# Ad slot: leaderboard #}
   <div class="ad-slot" id="ad-leaderboard"></div>
 
-  {# Privacy Badge #}
+  {# Privacy Badge — same Local/Cloud pill as the tool cards (see tool.html). #}
   <div class="tool-badge">
+    {{ processing_pill(tool) }}
     {% if tool.type == 'client-side' %}
-    <a href="/privacy/" class="badge">Your Files Stay Yours</a>
+    <a href="/privacy/" class="tool-badge__note">Your files stay yours &mdash; this tool runs entirely in your browser.</a>
     {% else %}
-    <a href="/privacy/" class="badge">Files encrypted, processed, deleted immediately</a>
+    <a href="/privacy/" class="tool-badge__note">Encrypted in transit, converted, and deleted immediately.</a>
     {% endif %}
   </div>
 

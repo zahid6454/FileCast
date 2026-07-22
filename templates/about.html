@@ -1,4 +1,8 @@
 {% extends "base.html" %}
+{# Reuse the shipped Local/Cloud pill rather than hand-writing badge markup, so
+   this page can't drift from the tool cards again (the old hand-written
+   `.badge--server` had no CSS rule and rendered as the green .badge). #}
+{% from "_macros.html" import processing_pill %}
 
 {% block title %}About — {{ site.name }}{% endblock %}
 {% block meta_description %}What this free file conversion service is, how it works, and why it exists.{% endblock %}
@@ -35,17 +39,23 @@
 
   <div class="card-grid card-grid--lg" style="margin-bottom: var(--space-8);">
     <div class="card card--lg">
-      <div><span class="badge">Client-Side</span></div>
+      <div>{{ processing_pill({'type': 'client-side'}) }}</div>
       <div class="card__desc" style="margin-top: var(--space-3);">
-        The majority of tools run entirely in your browser. Your file never leaves your device &mdash; it's converted on your own computer, not on a server. These tools work offline once the page has loaded.
+        Most tools carry the <strong>Local</strong> badge &mdash; they run entirely in your browser. Your file never leaves your device; it's converted on your own computer, not on a server. These tools work offline once the page has loaded.
       </div>
     </div>
     <div class="card card--lg">
-      <div><span class="badge badge--server">Server-Side</span></div>
+      <div>{{ processing_pill({'type': 'server-side'}) }}</div>
       <div class="card__desc" style="margin-top: var(--space-3);">
-        A few conversions &mdash; like Word to PDF &mdash; need software that can't run in a browser. Your file is sent over an encrypted connection, converted, and sent back. The file is deleted from the server immediately. Nothing is stored, logged, or retained.
+        A few conversions &mdash; like Word to PDF &mdash; need software that can't run in a browser. These carry the <strong>Cloud</strong> badge. Your file is sent over an encrypted connection, converted, and sent back. The file is deleted from the server immediately. Nothing is stored, logged, or retained.
       </div>
     </div>
+  </div>
+
+  <div class="privacy-section">
+    <p>
+      Every tool card shows which of the two it is, so you always know before you pick a file.
+    </p>
   </div>
 
   <div class="privacy-section">
@@ -55,6 +65,16 @@
     </p>
     <p>
       There is no premium tier and no paywalled features. Every conversion tool works the same whether you're signed in or not. Signing in simply adds convenience features like conversion history and favorites. The goal is to keep this service free and useful for as long as possible.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Accounts are optional</h2>
+    <p>
+      You can sign in with Google, but you never have to &mdash; every tool works anonymously, with the same limits and the same features. An account only adds convenience: a list of your <strong>favorite</strong> tools, a <strong>conversion history</strong> of which tools you used (kept for 30 days, then deleted automatically), and saved <strong>preferences</strong> like JPEG quality and theme.
+    </p>
+    <p>
+      History records the tool, the file size, and the date &mdash; never the file, its contents, or its name. You can download everything we hold on you, or delete your account and all of its data, from your <a href="/account/">account page</a>. See the <a href="/privacy/">privacy page</a> for the full detail.
     </p>
   </div>
 
