@@ -48,6 +48,17 @@ async def test_put_upserts_same_row(admin_client, db):
     assert rows[0].site_name == "Renamed"
 
 
+async def test_get_after_put_returns_saved_values(admin_client):
+    body = {**VALID, "site_tagline": "Persisted Tagline"}
+    await admin_client.put("/api/v1/admin/site-settings", json=body)
+    r = await admin_client.get("/api/v1/admin/site-settings")
+    assert r.status_code == 200
+    out = r.json()["site_settings"]
+    assert out is not None
+    assert out["site_tagline"] == "Persisted Tagline"
+    assert out["updated_at"] is not None  # server-stamped
+
+
 async def test_put_full_integration_roundtrip(admin_client):
     body = {
         **VALID,

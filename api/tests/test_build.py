@@ -243,6 +243,47 @@ def test_full_build_overlay_bakes_ga4(tmp_path, monkeypatch):
     assert "G-TESTBUILD" in home
 
 
+def test_full_build_all_off_row_keeps_script_src(tmp_path, monkeypatch):
+    # §3.6: with the overlay row PRESENT but all integrations off, the CSP must be
+    # untouched — script-src stays literally 'self', no vendor host leaks in. This
+    # is the launch posture (a seeded but unconfigured site), distinct from no-row.
+    _seed_site_settings(site_name="Present But Off")
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    csp = _csp_from_build(tmp_path)
+    assert "script-src 'self';" in csp
+    assert "googletagmanager" not in csp
+    assert "googlesyndication" not in csp
+    assert "sentry-cdn" not in csp
+
+
+def test_full_build_overlay_bakes_site_copy(tmp_path, monkeypatch):
+    # The three copy fields overlay the site: block and reach the templates with
+    # NO template change — tagline lands in <title>, description in <meta>.
+    _seed_site_settings(
+        site_name="Overlaid Name",
+        site_tagline="Overlaid Tagline",
+        site_description="Overlaid description text.",
+    )
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "<title>Overlaid Name — Overlaid Tagline</title>" in home
+    assert "Overlaid description text." in home
+
+
+def test_full_build_site_name_html_is_escaped(tmp_path, monkeypatch):
+    # Injection guard, defence in depth: even though site_name is admin-only and
+    # length-capped, a value containing markup must render escaped (Jinja
+    # autoescape), never as a live tag that breaks out of the JSON-LD <script>.
+    _seed_site_settings(site_name="</script><script>alert(1)</script>")
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "<script>alert(1)</script>" not in home  # no live injected tag
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in home  # escaped instead
+
+
 # --------------------------------------------------------------------------- #
 # apply_tool_overrides — overlay semantics
 # --------------------------------------------------------------------------- #
