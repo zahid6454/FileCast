@@ -82,20 +82,29 @@ async def _resolve_run_id(client: httpx.AsyncClient, deploy_id: str):
     # newest run or None.
     newest = None
     for attempt in range(_RUN_RESOLVE_ATTEMPTS):
+        runs = []
+        # The GET and the body-parse are both best-effort: a network error
+        # (httpx.HTTPError) or a malformed 200 body (json → ValueError, of which
+        # JSONDecodeError is a subclass) is swallowed as a failed attempt, never
+        # bubbled up to fail an already-succeeded dispatch.
         try:
             resp = await client.get(runs_url, headers=_gh_headers())
-        except httpx.HTTPError:
-            resp = None  # transient — dispatch already succeeded; keep trying
-        if resp is not None and resp.status_code == 200:
-            runs = resp.json().get("workflow_runs", []) or []
-            for run in runs:
-                if newest is None:
-                    newest = run.get("id")
-                name = (run.get("name") or "") + " " + (run.get("display_title") or "")
-                if deploy_id in name:
-                    return run.get("id")
+            if resp.status_code == 200:
+                runs = resp.json().get("workflow_runs", []) or []
+        except (httpx.HTTPError, ValueError):
+            runs = []
+        for run in runs:
+            if newest is None:
+                newest = run.get("id")
+            name = (run.get("name") or "") + " " + (run.get("display_title") or "")
+            if deploy_id in name:
+                return run.get("id")
         if attempt < _RUN_RESOLVE_ATTEMPTS - 1:
             await asyncio.sleep(_RUN_RESOLVE_DELAY)
+    # Fallback caveat: if this deploy's run hasn't surfaced in the list yet (e.g.
+    # two Saves queued in the build window), `newest` may be an UNRELATED run, so
+    # the panel could briefly poll the wrong run's status. Acceptable — the deploy
+    # itself is serialized by the workflow's concurrency group, not this id.
     return newest
 
 

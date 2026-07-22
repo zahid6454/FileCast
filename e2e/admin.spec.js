@@ -596,6 +596,39 @@ test.describe('settings (Phase 7)', () => {
   });
 });
 
+test.describe('deploy terminal state (Phase 7)', () => {
+  // Wiring the real endpoint makes run_id truthy, so pollDeploy() now runs. The
+  // terminal signal is the CONCLUSION, not status==='completed' (which also covers
+  // failure/cancelled) — a failed publish must NOT show a green "Published".
+  test('a completed run with conclusion success reports "Published"', async ({ page }) => {
+    const state = makeState({
+      deploy: { run_id: 42, status: 'completed', conclusion: 'success' }
+    });
+    await installApi(page, state);
+    await page.goto('/admin/#settings');
+    await page.locator('input[name="site_tagline"]').fill('Deployed tagline');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect(page.locator('.admin-toast--success', { hasText: 'Published' })).toBeVisible();
+  });
+
+  test('a completed run with conclusion failure reports a failure, never "Published"', async ({
+    page
+  }) => {
+    const state = makeState({
+      deploy: { run_id: 42, status: 'completed', conclusion: 'failure' }
+    });
+    await installApi(page, state);
+    await page.goto('/admin/#settings');
+    await page.locator('input[name="site_tagline"]').fill('Broken publish');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect(page.locator('.admin-toast--error', { hasText: 'Publish failed' })).toBeVisible();
+    // The misleading green toast must never appear for a failed conclusion.
+    await expect(page.locator('.admin-toast--success', { hasText: 'Published' })).toHaveCount(0);
+  });
+});
+
 test('the whole admin session produces no JS exceptions or console errors', async ({ page }) => {
   const problems = collectProblems(page);
   const state = makeState();

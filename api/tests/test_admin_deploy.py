@@ -169,6 +169,34 @@ async def test_resolution_error_does_not_mask_successful_dispatch(
     assert r.json()["run_id"] is None
 
 
+class BadJsonResp:
+    status_code = 200
+
+    def json(self):
+        raise ValueError("malformed body")  # json.JSONDecodeError is a ValueError
+
+
+class DispatchOkBadJsonClient(FakeClient):
+    """POST→204; the runs GET returns 200 with an unparseable body."""
+
+    async def post(self, url, headers=None, json=None):  # noqa: A002
+        return FakeResp(204)
+
+    async def get(self, url, headers=None):
+        return BadJsonResp()
+
+
+async def test_resolution_malformed_body_does_not_mask_dispatch(
+    admin_client, monkeypatch
+):
+    # A malformed 200 body during resolution (ValueError) is swallowed too, so a
+    # successful dispatch is never reported as a 500.
+    _use(monkeypatch, DispatchOkBadJsonClient())
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200
+    assert r.json()["run_id"] is None
+
+
 # --------------------------------------------------------------------------- #
 # never 501 for a real failure (§5.3a)
 # --------------------------------------------------------------------------- #
