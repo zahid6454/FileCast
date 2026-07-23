@@ -64,15 +64,13 @@ def _sentences(text: str):
 def assert_claims_are_scoped(text: str, where: str):
     for sentence in _sentences(text.lower()):
         for claim in ABSOLUTE_CLAIMS:
-            if claim in sentence and not any(
-                q in sentence for q in SCOPING_QUALIFIERS
-            ):
+            if claim in sentence and not any(q in sentence for q in SCOPING_QUALIFIERS):
                 raise AssertionError(
                     f"{where} asserts {claim!r} without scoping it to a subset "
                     f"of tools, which is false for the six server-side tools.\n"
                     f"  sentence: {sentence.strip()!r}\n"
-                    f"  fix: qualify it, e.g. \"Most tools run entirely in "
-                    f"your browser — nothing is uploaded.\""
+                    f'  fix: qualify it, e.g. "Most tools run entirely in '
+                    f'your browser — nothing is uploaded."'
                 )
 
 

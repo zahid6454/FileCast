@@ -81,17 +81,18 @@
   <div class="ad-slot" id="ad-leaderboard"></div>
   {% endif %}
 
-  {# Privacy Badge. Uses the same Local/Cloud pill the tool cards use, so the
-     badge a reader is told to look for is named identically everywhere. The
-     long phrase that used to *be* the badge name is now its description —
-     and the server-side case is no longer rendered in the green .badge. #}
+  {# Privacy Badge. The same Local/Cloud pill the tool cards use, so the badge a
+     reader is told to look for is named identically everywhere.
+
+     The link is deliberately a bare affordance, not a sentence: 22 of 34
+     `tagline_long` values already state the processing mode in their own words
+     (all six server-side ones end "…encrypted in transit, processed securely,
+     and deleted immediately", which renders directly above this). A descriptive
+     caption here restated the tagline almost verbatim. The pill carries the
+     mode, the tagline carries the reassurance, and this carries the link. #}
   <div class="tool-badge">
     {{ processing_pill(tool) }}
-    {% if tool.type == 'client-side' %}
-    <a href="/privacy/" class="tool-badge__note">Your files stay yours &mdash; this tool runs entirely in your browser.</a>
-    {% else %}
-    <a href="/privacy/" class="tool-badge__note">Encrypted in transit, converted, and deleted immediately.</a>
-    {% endif %}
+    <a href="/privacy/" class="tool-badge__note">How we handle your files</a>
   </div>
 
   {# Tool Options (for tools with settings like rotation, quality, dimensions) #}

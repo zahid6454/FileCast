@@ -75,14 +75,11 @@
   {# Ad slot: leaderboard #}
   <div class="ad-slot" id="ad-leaderboard"></div>
 
-  {# Privacy Badge — same Local/Cloud pill as the tool cards (see tool.html). #}
+  {# Privacy Badge — same Local/Cloud pill and privacy link as tool.html; see
+     the comment there for why this is a bare link rather than a caption. #}
   <div class="tool-badge">
     {{ processing_pill(tool) }}
-    {% if tool.type == 'client-side' %}
-    <a href="/privacy/" class="tool-badge__note">Your files stay yours &mdash; this tool runs entirely in your browser.</a>
-    {% else %}
-    <a href="/privacy/" class="tool-badge__note">Encrypted in transit, converted, and deleted immediately.</a>
-    {% endif %}
+    <a href="/privacy/" class="tool-badge__note">How we handle your files</a>
   </div>
 
   {# Tool Options (for tools that need settings like quality slider) #}
