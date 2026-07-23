@@ -14,6 +14,27 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # The 30-day retention purge (D5/F13). This is THE single purge trigger —
+  # one container, not one scheduler per uvicorn worker. Phase 7 specified a
+  # host systemd timer instead, but that was a manual VPS step that never got
+  # installed, so nothing purged and the privacy page's "auto-deleted after 30
+  # days" promise went unkept. Shipping it as a service means it starts with
+  # `docker compose up -d` and cannot be forgotten.
+  #
+  # If you install a host cron/timer instead, delete this service — exactly one
+  # trigger (F13). Reuses the api image (`build: .`) so it shares the code and
+  # DB config with no second thing to keep in sync. No ports, no inbound access.
+  purge:
+    build: .
+    command: ["python", "-m", "data.tasks", "purge", "--loop"]
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=postgresql+psycopg://filecast:${POSTGRES_PASSWORD:-filecast_dev}@postgres:5432/filecast
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   gotenberg:
     image: gotenberg/gotenberg:8
     ports:
