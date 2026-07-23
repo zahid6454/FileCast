@@ -25,6 +25,27 @@ Stay Yours" is true for server-side tools too (the file is converted and
 deleted immediately, never retained or looked at) and it is the home page
 ``<h1>``.
 
+**Deploy ordering matters — merging alone does not fix production.**
+
+The two halves of the fix land through different pipelines and nothing
+sequences them:
+
+* this migration runs when the **API container restarts**
+  (``api/Dockerfile``: ``alembic upgrade head && uvicorn``)
+* the public HTML is baked by **``deploy.yml``**, which is ``workflow_dispatch``
+  — fired by an admin Save or by hand — and reads the prod database directly,
+  so the row still wins over the YAML
+
+Publish before the API is redeployed and ``build.py`` reads the *uncorrected*
+row, merges it over the fixed YAML, and republishes the false description with
+a green CI run and no warning.
+
+So: **redeploy the API first, confirm ``GET /api/v1/site-settings`` returns the
+new sentence, and only then dispatch a rebuild.** ``build.py`` prints
+``[db] site settings overlay applied`` when the overlay is live; its absence
+means it fell back to YAML (which is now also correct, but for the wrong
+reason — worth noticing).
+
 Revision ID: 0004_honest_site_description
 Revises: 0003_site_settings
 Create Date: 2026-07-22 00:00:00.000000

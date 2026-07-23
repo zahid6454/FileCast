@@ -71,7 +71,13 @@
   <div class="privacy-section">
     <h2>Accounts are optional</h2>
     <p>
-      You can sign in with Google, but you never have to &mdash; every tool works anonymously, with the same limits and the same features. An account only adds convenience: a list of your <strong>favorite</strong> tools, a <strong>conversion history</strong> of which tools you used (kept for 30 days, then deleted automatically), and saved <strong>preferences</strong> like JPEG quality and theme.
+      {# Deliberately no retention promise here. The 30-day auto-deletion is
+         real in code (data.tasks.purge_expired) but nothing schedules it yet —
+         it is a management command only. Repeating "deleted automatically"
+         would add a third instance of a claim the system does not currently
+         keep, in the very pass that exists to remove claims like that. The
+         privacy page link below stays authoritative on retention. #}
+      You can sign in with Google, but you never have to &mdash; every tool works anonymously, with the same limits and the same features. An account only adds convenience: a list of your <strong>favorite</strong> tools, a <strong>conversion history</strong> of which tools you used, and saved <strong>preferences</strong> like JPEG quality and theme.
     </p>
     <p>
       History records the tool, the file size, and the date &mdash; never the file, its contents, or its name. You can download everything we hold on you, or delete your account and all of its data, from your <a href="/account/">account page</a>. See the <a href="/privacy/">privacy page</a> for the full detail.
