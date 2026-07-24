@@ -66,13 +66,23 @@ test('the tool title is centred in its panel (flex row must not pack left)', asy
   // badge below stay centred. text-align:center cannot fix that on its own.
   await page.goto(TOOL);
   const offset = await page.evaluate(() => {
-    const mid = (el) => {
+    // The centring container differs by template: tool.html wraps the header in
+    // .tool-panel; tool-text/tool-multi (csv-to-json is a text tool) do not, so
+    // fall back to the page container. Measure the TITLE TEXT via a Range, not
+    // the <h1> box (a block box spans full width regardless of text-align).
+    const container =
+      document.querySelector('.tool-panel') || document.querySelector('.container.page');
+    const boxMid = (el) => {
       const r = el.getBoundingClientRect();
       return r.left + r.width / 2;
     };
-    return Math.abs(
-      mid(document.querySelector('.tool-panel')) - mid(document.querySelector('.page__title'))
-    );
+    const textMid = (el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const r = range.getBoundingClientRect();
+      return r.left + r.width / 2;
+    };
+    return Math.abs(boxMid(container) - textMid(document.querySelector('.page__title')));
   });
   expect(offset).toBeLessThan(2); // anonymous ⇒ no heart in the row ⇒ dead centre
 });
