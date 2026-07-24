@@ -1434,6 +1434,8 @@ img { max-width: 100%; display: block; }
 .signin-band { text-align: center; }
 .signin-band__lead { max-width: 44ch; margin: 0 auto var(--space-8); color: var(--color-text-secondary); font-size: var(--text-base); line-height: var(--leading-relaxed); }
 .signin-band__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-8); margin-bottom: var(--space-8); }
+/* Four tiles: stack on mobile, 2×2 on tablet, one row of four on desktop. */
+@media (min-width: 560px) { .signin-band__grid { grid-template-columns: repeat(2, 1fr); } }
 .signin-band__col { text-align: center; }
 .signin-band__icon { width: 32px; height: 32px; color: var(--color-primary); margin: 0 auto var(--space-3); }
 .signin-band__col-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-heading); margin-bottom: var(--space-2); }
@@ -1445,8 +1447,8 @@ img { max-width: 100%; display: block; }
 .btn--google { background: var(--color-bg-raised); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
 .btn--google:hover { text-decoration: none; }
 .btn__gicon { width: 18px; height: 18px; flex-shrink: 0; }
-@media (min-width: 768px) {
-  .signin-band__grid { grid-template-columns: repeat(3, 1fr); }
+@media (min-width: 900px) {
+  .signin-band__grid { grid-template-columns: repeat(4, 1fr); }
 }
 
 .why-filecast { padding: var(--space-16) 0; }
