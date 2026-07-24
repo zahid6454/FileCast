@@ -1426,6 +1426,29 @@ img { max-width: 100%; display: block; }
 .badge__icon { width: 12px; height: 12px; }
 
 /* --- Why FileCast dark band --- */
+/* --- "Why sign in?" band (light, sits above the dark Why-FileCast band) --- */
+/* Hidden pre-paint for signed-in visitors: theme-init.js stamps data-auth in
+   <head> before the CSS loads, so the band never flashes for someone who
+   already has an account (same technique as .account-signin). */
+:root[data-auth="in"] .signin-band { display: none; }
+.signin-band { text-align: center; }
+.signin-band__lead { max-width: 44ch; margin: 0 auto var(--space-8); color: var(--color-text-secondary); font-size: var(--text-base); line-height: var(--leading-relaxed); }
+.signin-band__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-8); margin-bottom: var(--space-8); }
+.signin-band__col { text-align: center; }
+.signin-band__icon { width: 32px; height: 32px; color: var(--color-primary); margin: 0 auto var(--space-3); }
+.signin-band__col-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-heading); margin-bottom: var(--space-2); }
+.signin-band__col-text { font-size: var(--text-sm); color: var(--color-text-muted); line-height: var(--leading-relaxed); }
+.signin-band__cta-row { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); }
+.signin-band__foot { max-width: 46ch; font-size: var(--text-sm); color: var(--color-text-muted); }
+/* White, bordered Google button (Google branding wants a light surface + the
+   full-colour mark). The shared .btn:hover rule already applies the brand glow. */
+.btn--google { background: var(--color-bg-raised); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+.btn--google:hover { text-decoration: none; }
+.btn__gicon { width: 18px; height: 18px; flex-shrink: 0; }
+@media (min-width: 768px) {
+  .signin-band__grid { grid-template-columns: repeat(3, 1fr); }
+}
+
 .why-filecast { padding: var(--space-16) 0; }
 .why-filecast__title { font-family: var(--font-heading); font-size: var(--text-2xl); font-weight: var(--weight-bold); text-align: center; color: var(--color-text-inverse); margin-bottom: var(--space-10); }
 .why-filecast__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-8); }

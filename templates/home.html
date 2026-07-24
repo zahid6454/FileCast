@@ -100,6 +100,43 @@
   {% endfor %}
 </div>
 
+{# ===== Why sign in? (the positive counterweight to the "no sign-up" messaging:
+   the site sells not-needing an account four times but never said what an account
+   is FOR). Hidden pre-paint for signed-in visitors via [data-auth="in"] (theme-
+   init.js sets it in <head>), same pattern as .account-signin. The CTA href is
+   baked from api.base_url — a plain navigation link, no JS, works under CSP. #}
+<section class="section signin-band">
+  <div class="container container--narrow">
+    <h2 class="section__title"><span class="text-brand-blue">Why</span> <span class="text-brand-green">sign in?</span></h2>
+    <div class="section__divider"></div>
+    <p class="signin-band__lead">Every tool works without an account — you never have to. But a free account remembers your work across visits:</p>
+    <div class="signin-band__grid">
+      <div class="signin-band__col">
+        <svg class="signin-band__icon" aria-hidden="true" focusable="false"><use href="#icon-heart"></use></svg>
+        <div class="signin-band__col-title">Favorites</div>
+        <p class="signin-band__col-text">Save your go-to tools and jump straight to them next time.</p>
+      </div>
+      <div class="signin-band__col">
+        <svg class="signin-band__icon" aria-hidden="true" focusable="false"><use href="#icon-clock"></use></svg>
+        <div class="signin-band__col-title">30-day history</div>
+        <p class="signin-band__col-text">See what you converted &mdash; the tool, size and date, never the files themselves.</p>
+      </div>
+      <div class="signin-band__col">
+        <svg class="signin-band__icon" aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg>
+        <div class="signin-band__col-title">Saved preferences</div>
+        <p class="signin-band__col-text">Your JPEG quality, PDF compression and theme, remembered on every device.</p>
+      </div>
+    </div>
+    <div class="signin-band__cta-row">
+      <a class="btn btn--google" href="{{ api.base_url }}/api/v1/auth/google?next=/">
+        <svg class="btn__gicon" aria-hidden="true" focusable="false"><use href="#icon-google"></use></svg>
+        Sign in with Google
+      </a>
+      <p class="signin-band__foot">Plus higher file-size limits on every tool. Always optional, always free &mdash; <a href="/privacy/">we only store what you choose to save</a>.</p>
+    </div>
+  </div>
+</section>
+
 {# ===== Why FileCast? (dark band, continuous with footer; P15 honest framing) ===== #}
 <section class="section--dark why-filecast">
   <div class="container">
