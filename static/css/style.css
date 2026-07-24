@@ -1453,10 +1453,13 @@ img { max-width: 100%; display: block; }
   font-weight: var(--weight-bold);
   transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
-/* On zone hover, warm up toward the brand — but stay muted vs the primary CTA. */
+/* On zone hover the button stays white with its text unchanged, so it pops
+   against the zone's tinted-and-glowing surface instead of dissolving into it —
+   the old rule tinted the CTA the same blue as the zone, hiding it. Only the
+   border warms slightly to tie it to the brand. */
 .upload-zone:hover .upload-zone__cta {
-  background: var(--color-primary-subtle);
-  color: var(--color-primary);
+  background: var(--color-bg-raised);
+  color: var(--color-text-secondary);
   border-color: var(--color-primary-light);
 }
 .upload-zone--active { transform: scale(1.01); }
