@@ -92,7 +92,11 @@
      mode, the tagline carries the reassurance, and this carries the link. #}
   <div class="tool-badge">
     {{ processing_pill(tool) }}
-    <a href="/privacy/" class="tool-badge__note">How we handle your files</a>
+    <a href="/privacy/" class="tool-badge__note">
+      <svg class="tool-badge__note-icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+      <span>How we handle your files</span>
+      <svg class="tool-badge__note-chevron" aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg>
+    </a>
   </div>
 
   {# Tool Options (for tools with settings like rotation, quality, dimensions) #}

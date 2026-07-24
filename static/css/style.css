@@ -262,19 +262,48 @@ img { max-width: 100%; display: block; }
 .header__nav { margin-left: auto; display: flex; gap: var(--space-5); }
 .header__nav a { color: var(--color-text-muted); font-size: var(--text-sm); font-weight: var(--weight-medium); transition: color var(--transition-base); }
 .header__nav a:hover { color: var(--color-text-inverse); text-decoration: none; }
-/* Pill + a link to the privacy page on one centered line. The pill itself is .badge--local
-   / .badge--cloud (see the processing-pill rules), so the two processing modes
-   are visually distinct here exactly as they are on the tool cards.
-   Deliberately NOT a flex container: .badge--local/.badge--cloud carry
-   `margin-top: auto` for card bottom-alignment, which in a flex row would
-   override align-items and drop the pill to the bottom edge. Inline layout
-   makes that auto margin a no-op. */
-.tool-badge { text-align: center; margin-bottom: var(--space-3); }
-/* Underlined because it is now a bare label whose only job is to be clickable —
-   as a muted, undecorated phrase it read as inert caption text. Matches the
-   .privacy-section a treatment so links look the same site-wide. */
-.tool-badge__note { font-size: var(--text-xs); color: var(--color-text-muted); margin-left: var(--space-2); text-decoration: underline; text-underline-offset: 2px; }
-.tool-badge__note:hover { color: var(--color-primary); }
+/* The processing pill (.badge--local/.badge--cloud) + a privacy link, centered
+   on one row. A flex container reads cleaner than the old inline layout, but the
+   pill carries `margin-top: auto` for bottom-alignment on the cards — in a flex
+   row that auto margin would drop it to the row's bottom edge, so reset it here. */
+.tool-badge { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.tool-badge .badge--local, .tool-badge .badge--cloud { margin-top: 0; align-self: center; }
+
+/* The link is a ghost chip that rhymes with the solid pill beside it: same pill
+   shape and height, but outlined rather than filled so it reads as the secondary
+   of the pair. A leading shield keeps the privacy meaning; the chevron signals
+   "go read" and nudges right on hover. This replaces a bare underlined phrase
+   that looked like inert caption text next to the styled pill. */
+.tool-badge__note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+.tool-badge__note:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+  text-decoration: none;
+  /* The site-wide blue-left / green-right brand glow — the same
+     --shadow-brand-hover that buttons, cards, the upload zone and inputs use,
+     so this chip's hover reads as part of the same system (theme-aware; the
+     token is redefined per theme). */
+  box-shadow: var(--shadow-brand-hover);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-badge__note { transition: none; }
+}
+.tool-badge__note-icon { width: 12px; height: 12px; flex-shrink: 0; }
+.tool-badge__note-chevron { width: 12px; height: 12px; flex-shrink: 0; opacity: 0.55; transition: transform var(--transition-fast), opacity var(--transition-fast); }
+.tool-badge__note:hover .tool-badge__note-chevron { opacity: 1; transform: translateX(2px); }
 
 /* --- Hero --- */
 .hero {
@@ -396,10 +425,16 @@ img { max-width: 100%; display: block; }
   padding: var(--space-6);
   margin: var(--space-4) 0 var(--space-6);
 }
-/* Title + tagline sit at the top of the card, centered to match the converter
-   controls below them. */
-.tool-panel .page__title { text-align: center; color: var(--color-heading); }
-.tool-panel .page__tagline { text-align: center; margin-bottom: var(--space-5); }
+.tool-panel .page__title { color: var(--color-heading); }
+
+/* Tool-page header: title, tagline and badge centre together, matching the
+   converter controls below them. Scoped to `.tool-title-row` (present in
+   tool/tool-text/tool-multi) rather than to `.tool-panel` — only tool.html has
+   a panel, so the old `.tool-panel`-scoped rules left the text and multi
+   templates with a left-aligned header under a centred badge. Not scoped to
+   `.page__title` alone: privacy/terms/about reuse that class and stay left. */
+.tool-title-row .page__title { text-align: center; }
+.tool-title-row ~ .page__tagline { text-align: center; margin-bottom: var(--space-5); }
 
 .upload-zone {
   border: 2px dashed var(--color-text-light);
@@ -997,7 +1032,14 @@ img { max-width: 100%; display: block; }
 }
 
 /* --- Favorites heart (tool pages) --- */
-.tool-title-row { display: flex; align-items: center; gap: var(--space-3); }
+/* justify-content is load-bearing: without it the row packs from flex-start and
+   the <h1> — shrink-to-fit as a flex item — sits hard left, while the tagline
+   and badge below stay centred. `.tool-panel .page__title { text-align: center }`
+   cannot fix that on its own, because centring text inside a box that already
+   hugs the text is a no-op. Signed-in, [title ♡] centres as a group, so the
+   title reads ~24px left of true centre; anonymous, the heart is display:none
+   and the title is exactly centred. */
+.tool-title-row { display: flex; align-items: center; justify-content: center; gap: var(--space-3); }
 .tool-fav {
   display: inline-flex;
   align-items: center;
@@ -1012,6 +1054,12 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
   transition: color var(--transition-base), border-color var(--transition-base);
 }
+/* The `display` above beats the UA sheet's `[hidden] { display: none }` — author
+   rules win over UA rules at any specificity — so this is what actually honours
+   the attribute auth.js toggles. Without it the heart shows to anonymous
+   visitors, and since auth.js only attaches the click handler when signed in,
+   it renders as a button that does nothing. */
+.tool-fav[hidden] { display: none; }
 .tool-fav:hover { color: var(--color-error); border-color: var(--color-border); }
 .tool-fav__icon { width: 24px; height: 24px; }
 .tool-fav.is-fav { color: var(--color-error); }

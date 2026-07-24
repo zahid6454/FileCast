@@ -49,6 +49,34 @@ test('P12: an anonymous visitor triggers ZERO /me network', async ({ page }) => 
   expect(me.n).toBe(0);
 });
 
+test('anonymous: the favorites heart is hidden, not just inert', async ({ page }) => {
+  // The button ships with the `hidden` attribute and auth.js clears it only for
+  // a signed-in user. But an author `display` on .tool-fav beats the UA sheet's
+  // `[hidden] { display: none }`, so it once rendered for everyone — and since
+  // the click handler is attached only in initFavHeart(), anonymous visitors
+  // got a heart that did nothing. It also pushed the centred <h1> off-centre.
+  await page.goto(TOOL);
+  await page.waitForSelector('#user-menu .user-menu__signin'); // auth.js has run
+  await expect(page.locator('#tool-fav')).toBeHidden();
+});
+
+test('the tool title is centred in its panel (flex row must not pack left)', async ({ page }) => {
+  // .tool-title-row is a flex container; without justify-content it packs from
+  // flex-start and the shrink-to-fit <h1> sits hard left while the tagline and
+  // badge below stay centred. text-align:center cannot fix that on its own.
+  await page.goto(TOOL);
+  const offset = await page.evaluate(() => {
+    const mid = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.left + r.width / 2;
+    };
+    return Math.abs(
+      mid(document.querySelector('.tool-panel')) - mid(document.querySelector('.page__title'))
+    );
+  });
+  expect(offset).toBeLessThan(2); // anonymous ⇒ no heart in the row ⇒ dead centre
+});
+
 test('signed-in: name + favorited heart, /me fetched exactly once', async ({ page, context }) => {
   await signIn(context);
   const me = { n: 0 };
