@@ -288,9 +288,12 @@ img { max-width: 100%; display: block; }
   transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
 }
 .tool-badge__note:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-  background: var(--color-primary-subtle);
+  /* Text and colour stay put on hover; the affordance is carried entirely by
+     the surface lifting to white and the brand glow behind it. `--color-bg-raised`
+     is white in light mode and the raised dark surface in dark, so "white" holds
+     without breaking the signed-in dark theme. */
+  background: var(--color-bg-raised);
+  border-color: var(--color-border);
   text-decoration: none;
   /* The site-wide blue-left / green-right brand glow — the same
      --shadow-brand-hover that buttons, cards, the upload zone and inputs use,
