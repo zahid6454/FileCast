@@ -1440,13 +1440,6 @@ img { max-width: 100%; display: block; }
 .signin-band__icon { width: 32px; height: 32px; color: var(--color-primary); margin: 0 auto var(--space-3); }
 .signin-band__col-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-heading); margin-bottom: var(--space-2); }
 .signin-band__col-text { font-size: var(--text-sm); color: var(--color-text-muted); line-height: var(--leading-relaxed); }
-.signin-band__cta-row { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); }
-.signin-band__foot { max-width: 46ch; font-size: var(--text-sm); color: var(--color-text-muted); }
-/* White, bordered Google button (Google branding wants a light surface + the
-   full-colour mark). The shared .btn:hover rule already applies the brand glow. */
-.btn--google { background: var(--color-bg-raised); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
-.btn--google:hover { text-decoration: none; }
-.btn__gicon { width: 18px; height: 18px; flex-shrink: 0; }
 @media (min-width: 900px) {
   .signin-band__grid { grid-template-columns: repeat(4, 1fr); }
 }

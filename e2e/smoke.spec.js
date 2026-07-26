@@ -46,12 +46,12 @@ test('homepage renders with no horizontal overflow across breakpoints', async ({
 test('the "Why sign in?" band shows for anonymous visitors and hides when signed in', async ({
   page
 }) => {
-  // Anonymous (no fc_logged_in cookie): the account pitch is visible with a
-  // working sign-in CTA pointing at the OAuth start.
+  // Anonymous (no fc_logged_in cookie): the account pitch is visible with its
+  // benefit tiles.
   await page.goto('/');
   const band = page.locator('.signin-band');
   await expect(band).toBeVisible();
-  await expect(band.locator('.btn--google')).toHaveAttribute('href', /\/api\/v1\/auth\/google/);
+  await expect(band.locator('.signin-band__col-title')).toHaveCount(4);
 
   // Signed-in visitors don't need the pitch. theme-init.js stamps data-auth from
   // the cookie in <head>, and the CSS hides the band on [data-auth="in"] —

@@ -43,7 +43,7 @@
 
   <div class="hero__badges">
     <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>{{ tools|length }} Free Tools</span>
-    <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>No Sign-up</span>
+    <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Sign-up optional</span>
     <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>No Limits</span>
     {# Conversion counter — baked from the DB at build time. Guarded on a floor so
        it only ever reads as a real trust signal; absent with no DB (P10). #}
@@ -131,13 +131,6 @@
         <div class="signin-band__col-title">Bigger files</div>
         <p class="signin-band__col-text">Every tool's file-size limit doubles when you're signed in.</p>
       </div>
-    </div>
-    <div class="signin-band__cta-row">
-      <a class="btn btn--google" href="{{ api.base_url }}/api/v1/auth/google?next=/">
-        <svg class="btn__gicon" aria-hidden="true" focusable="false"><use href="#icon-google"></use></svg>
-        Sign in with Google
-      </a>
-      <p class="signin-band__foot">Always optional, always free &mdash; <a href="/privacy/">we never store your files</a>, signed in or not.</p>
     </div>
   </div>
 </section>
