@@ -23,7 +23,9 @@ ALLOWED_ORIGINS = [
 # Per-path request budgets per RATE_WINDOW (§10/§16-R3). The heavy server-side
 # /convert keeps the original 20/hr; the per-conversion tracking POST fires on
 # EVERY conversion, so it needs a far higher limit or history/counter breaks for
-# active users. Longest-prefix wins (most specific first).
+# active users. The longest matching prefix wins (see ``_match_limit``), so the
+# ordering here is for readability only — ``/api/v1/conversions`` (120/hr) can
+# never be captured by the shorter ``/api/v1/convert`` (20/hr) regardless of order.
 PATH_LIMITS: list[tuple[str, int]] = [
     ("/api/v1/auth/dev-login", 20),
     # Google sign-in: /google (start) + /google/callback. The callback makes an
@@ -117,10 +119,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _match_limit(path: str) -> tuple[str, int] | None:
+        # Longest matching prefix wins, independent of PATH_LIMITS ordering — so a
+        # reorder can never let the shorter /api/v1/convert (20/hr) swallow
+        # /api/v1/conversions (120/hr) and throttle active users' history writes.
+        best: tuple[str, int] | None = None
         for prefix, limit in PATH_LIMITS:
-            if path.startswith(prefix):
-                return prefix, limit
-        return None
+            if path.startswith(prefix) and (best is None or len(prefix) > len(best[0])):
+                best = (prefix, limit)
+        return best
 
     def _clean_old(self, key: str, now: float):
         cutoff = now - RATE_WINDOW

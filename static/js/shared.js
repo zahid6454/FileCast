@@ -13,63 +13,15 @@
   var els = {};
 
   // ---------------------------------------------------------------------------
-  // Utilities
+  // Utilities — defined once in fc-util.js (loaded before this file) and aliased
+  // here so the call sites below stay unchanged.
   // ---------------------------------------------------------------------------
-  function formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    var k = 1024;
-    var sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    var i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  }
-
-  function trackEvent(name, params) {
-    if (typeof gtag === 'function') {
-      gtag('event', name, params);
-    }
-  }
-
-  // Fire-and-forget conversion tracking (Phase 5 §5.4). Runs AFTER the download
-  // is in hand, POSTs with the session cookie so the server can dual-write the
-  // user's history, and — on a successful reply only — dispatches
-  // `filecast:conversion` so auth.js can show "Saved ✓"/the banner from the
-  // truthful `saved_to_history`. `notify=false` (failure path) POSTs for the
-  // admin failure-rate but dispatches nothing. Any API outage is silent.
-  function postConversion(payload, notify) {
-    var apiBase = window.FILECAST && window.FILECAST.apiBase;
-    if (!apiBase) return;
-    fetch(apiBase.replace(/\/$/, '') + '/api/v1/conversions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(payload)
-    })
-      .then(function (r) {
-        return r.ok ? r.json() : null;
-      })
-      .then(function (d) {
-        if (!notify) return;
-        document.dispatchEvent(
-          new CustomEvent('filecast:conversion', {
-            detail: { saved: !!(d && d.saved_to_history) }
-          })
-        );
-      })
-      .catch(function () {
-        /* silent — progressive enhancement */
-      });
-  }
-
-  function getExtension(filename) {
-    var parts = filename.split('.');
-    return parts.length > 1 ? '.' + parts.pop().toLowerCase() : '';
-  }
-
-  function generateOutputFilename(originalName, outputExt) {
-    var base = originalName.substring(0, originalName.lastIndexOf('.'));
-    if (!base) base = originalName;
-    return base + outputExt;
-  }
+  var FC = window.FC || {};
+  var formatBytes = FC.formatBytes;
+  var trackEvent = FC.trackEvent;
+  var postConversion = FC.postConversion;
+  var getExtension = FC.getExtension;
+  var generateOutputFilename = FC.generateOutputFilename;
 
   // ---------------------------------------------------------------------------
   // Validation
@@ -219,6 +171,11 @@
 
     setState('converting');
 
+    // A converter that renders its own multi-output result UI (e.g. per-page
+    // downloads for a multi-page PDF) sets this so the single-file result panel
+    // below doesn't overwrite its accurate summary. Reset on every run.
+    window._converterOwnsResult = false;
+
     var config = window.TOOL_CONFIG;
     var startTime = Date.now();
 
@@ -249,7 +206,14 @@
         var durationMs = Date.now() - startTime;
         var savingsPct =
           currentFile.size > 0 ? Math.round((1 - blob.size / currentFile.size) * 100) : 0;
-        showResult(currentFile, blob, durationMs);
+        // If the converter already rendered its own result UI (multi-page
+        // output), just mark complete — overwriting #result-info here would
+        // replace its accurate page summary with a page-1-only size stat.
+        if (window._converterOwnsResult) {
+          setState('complete');
+        } else {
+          showResult(currentFile, blob, durationMs);
+        }
         trackEvent('conversion_completed', {
           tool_id: config.id,
           input_format: config.input_format,
@@ -485,7 +449,7 @@
     // dependency on the FILECAST config island.
     var apiBase = window.FILECAST && window.FILECAST.apiBase;
     if (apiBase && config) {
-      fetch(apiBase + '/api/v1/ratings', {
+      fetch(apiBase.replace(/\/$/, '') + '/api/v1/ratings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // a signed-in vote carries user_id; never gates

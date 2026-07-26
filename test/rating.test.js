@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { boot, createDom, flush } from './helpers.js';
+import { boot, createDom, evalScript, flush } from './helpers.js';
 
 // The rating threshold + percentage maths (`scoreLine`) and the baked-island
 // parser (`parseBakedRating`) are pure, but they live inside the shared.js IIFE
@@ -25,6 +25,10 @@ function ratingDom(island) {
     markup += `<script type="application/json" id="tool-ratings">${body}</script>`;
   }
   const dom = createDom(markup);
+  // Shared helpers (window.FC: trackEvent/postConversion/…) now live in fc-util.js,
+  // loaded before shared.js in the browser. Provide them here so the isolated
+  // shared.js eval below has them (the vote path calls trackEvent).
+  evalScript(dom, 'fc-util.js');
   // `text-input` (not `standard`) so init() takes its early return before the
   // upload-zone wiring this fixture has no markup for. That the widget still
   // binds is the point: initFeedback() runs among the UNCONDITIONAL inits, above

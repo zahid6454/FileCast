@@ -4,7 +4,9 @@
   var config = window.TOOL_CONFIG;
   if (!config || config.type !== 'server-side') return;
 
-  var apiBase = config.api_base_url || 'https://api.filecast.io';
+  // Normalize once (strip any trailing slash) so `apiBase + '/api/…'` never
+  // produces a double slash if the configured base_url ever gains one.
+  var apiBase = (config.api_base_url || 'https://api.filecast.io').replace(/\/$/, '');
   var endpoint = config.api_endpoint || '/api/v1/convert/' + config.id;
 
   // Check API health before enabling uploads
@@ -49,7 +51,6 @@
 
   // HTML external reference warning
   if (config.id === 'html-to-pdf') {
-    var origOnFileSelected = window.onFileSelected;
     window.addEventListener('DOMContentLoaded', function () {
       var fileInput = document.getElementById('file-input');
       if (!fileInput) return;
