@@ -23,9 +23,12 @@ ALLOWED_ORIGINS = [
 # Per-path request budgets per RATE_WINDOW (§10/§16-R3). The heavy server-side
 # /convert keeps the original 20/hr; the per-conversion tracking POST fires on
 # EVERY conversion, so it needs a far higher limit or history/counter breaks for
-# active users. The longest matching prefix wins (see ``_match_limit``), so the
-# ordering here is for readability only — ``/api/v1/conversions`` (120/hr) can
-# never be captured by the shorter ``/api/v1/convert`` (20/hr) regardless of order.
+# active users. Match is longest-prefix (see ``_match_limit``), so ordering here
+# is for readability only. Note ``/api/v1/convert`` and ``/api/v1/conversions``
+# are NOT a nested pair — they diverge mid-segment, so neither is a startswith
+# prefix of the other and no ordering could confuse them. Longest-prefix only
+# matters if a genuinely nested pair (e.g. ``/api/v1/x`` + ``/api/v1/x/y``) is
+# ever added; this keeps that future case order-independent.
 PATH_LIMITS: list[tuple[str, int]] = [
     ("/api/v1/auth/dev-login", 20),
     # Google sign-in: /google (start) + /google/callback. The callback makes an
@@ -119,9 +122,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _match_limit(path: str) -> tuple[str, int] | None:
-        # Longest matching prefix wins, independent of PATH_LIMITS ordering — so a
-        # reorder can never let the shorter /api/v1/convert (20/hr) swallow
-        # /api/v1/conversions (120/hr) and throttle active users' history writes.
+        # Longest matching prefix wins, independent of PATH_LIMITS ordering.
+        # Defensive future-proofing: no current pair is nested (/convert is not a
+        # startswith-prefix of /conversions — they diverge mid-segment), but a
+        # genuinely nested pair added later would otherwise be order-sensitive.
         best: tuple[str, int] | None = None
         for prefix, limit in PATH_LIMITS:
             if path.startswith(prefix) and (best is None or len(prefix) > len(best[0])):
