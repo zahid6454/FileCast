@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import processing_pill %}
 
 {% block title %}{{ tool.meta.title }}{% endblock %}
 {% block meta_description %}{{ tool.meta.description }}{% endblock %}
@@ -74,9 +75,15 @@
   {# Ad slot: leaderboard #}
   <div class="ad-slot" id="ad-leaderboard"></div>
 
-  {# Privacy Badge #}
+  {# Privacy Badge — same Local/Cloud pill and privacy link as tool.html; see
+     the comment there for why this is a bare link rather than a caption. #}
   <div class="tool-badge">
-    <a href="/privacy/" class="badge">Your Files Stay Yours</a>
+    {{ processing_pill(tool) }}
+    <a href="/privacy/" class="tool-badge__note">
+      <svg class="tool-badge__note-icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+      <span>How we handle your files</span>
+      <svg class="tool-badge__note-chevron" aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg>
+    </a>
   </div>
 
   {# Text Input #}

@@ -1,12 +1,25 @@
-{# Reusable card/badge macros (§6.5). Imported by home/category/404.
+{# Reusable card/badge macros (§6.5). tool_card is imported by home/category/404;
+   processing_pill additionally by tool/tool-multi/tool-text (the trust badge) and
+   by about/privacy (which describe the badge, and must not re-invent it).
    All StrictUndefined-safe: name/slug/type/input_format/output_format/category
    are guaranteed on every tool dict; `tagline` is guarded with dict .get so a
    future tagline-less tool can't crash the build. #}
 
 {# processing_pill(tool) — Local (client-side, green) / Cloud (server-side, blue)
-   with a tooltip (P13/P14). New classes, NOT the existing .badge (which is the
-   green "Your Files Stay Yours" pill — reusing it would collide). This is the
-   first visual treatment for the .card--server conditional. #}
+   with a tooltip (P13/P14). This is the first visual treatment for the
+   .card--server conditional, and the single source of truth for the badge:
+   about/privacy render it rather than describing a badge by name, which is how
+   the three vocabularies (Local/Cloud vs Client-Side/Server-Side vs the long
+   phrases) drifted apart in the first place.
+
+   `tool` only needs a `type` key, so pages with no tool in scope can call this
+   with a literal — processing_pill({'type': 'server-side'}). Dict access works
+   because Jinja falls back from getattr to __getitem__.
+
+   These are deliberately NOT modifiers of a base `.badge` class (P13). The old
+   `.badge` pill was green for every case, which is precisely what let the
+   server-side card on about.html render identically to the client-side one; it
+   has since been removed entirely. #}
 {% macro processing_pill(tool) -%}
 {%- if tool.type == 'server-side' -%}
 <span class="badge--cloud" title="Secure server processing — your file is deleted immediately." aria-label="Cloud processing: secure server processing, your file is deleted immediately.">

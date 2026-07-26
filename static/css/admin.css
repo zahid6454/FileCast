@@ -205,6 +205,12 @@
 
 .admin-btn--primary {
   background: linear-gradient(to right, var(--brand-blue), var(--brand-green));
+  /* Span the gradient over .admin-btn's 1px transparent border as well. By
+     default it is sized to the padding box but clipped to the border box, so
+     the border ring shows a repeat of the tile — a green sliver on the left
+     edge and a blue one on the right. Must sit after the shorthand above,
+     which resets background-origin. */
+  background-origin: border-box;
   color: var(--color-text-inverse);
 }
 .admin-btn--primary:hover {

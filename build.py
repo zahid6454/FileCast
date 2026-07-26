@@ -46,6 +46,10 @@ TOOLS_DIR = ROOT / "tools"
 STATIC_DIR = ROOT / "static"
 ASSETS_DIR = ROOT / "assets"
 
+# The only accepted values for a tool's `type`. Enforced in load_tools() because
+# this field decides a public privacy claim (the Local/Cloud badge); see there.
+VALID_TOOL_TYPES = {"client-side", "server-side"}
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -477,6 +481,23 @@ def load_tools() -> list[dict]:
         if "id" not in tool:
             print(f"  [warn] Skipping tool without 'id': {yaml_path.name}")
             continue
+        # `type` is privacy-critical, not cosmetic: it selects the Local/Cloud
+        # badge, the HowTo structured data, whether api_base_url reaches
+        # TOOL_CONFIG, and whether server-upload.js loads. Those consumers do
+        # not agree on a default — the badge macro treats "not server-side" as
+        # Local, while tool.html's HowTo block treats "not client-side" as
+        # uploaded — so a typo like `server` or `Server-Side` would render a
+        # green "Local / runs entirely in your browser" pill on a tool that
+        # uploads. Fail loudly here instead: a skip would silently drop the
+        # tool from the live site, and a warning would scroll past in a 34-tool
+        # build. An *absent* type already crashes via StrictUndefined; this
+        # closes the typo case.
+        if tool.get("type") not in VALID_TOOL_TYPES:
+            raise SystemExit(
+                f"  [fail] {yaml_path.name}: 'type' is {tool.get('type')!r}, "
+                f"expected one of {sorted(VALID_TOOL_TYPES)}. This field drives "
+                f"the privacy badge — fix the YAML rather than relaxing this check."
+            )
         if not tool.get("enabled", True):
             print(f"  [skip] {tool['id']} (disabled)")
             continue

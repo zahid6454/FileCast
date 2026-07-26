@@ -2,7 +2,12 @@ site:
   name: FileCast
   tagline: "Free File Conversion — Your Files Stay Yours"
   base_url: https://filecast.io
-  description: "Convert files instantly in your browser. Free, fast, and private — your files never leave your device."
+  # P15 honest framing (ledger §9, applied verbatim). The old text — "…your
+  # files never leave your device" — is false for the 6 server-side tools.
+  # NOTE: since Phase 7 this field is also stored in site_settings (id=1) and
+  # the DB overlay WINS at build time, so editing this line alone is a no-op on
+  # any environment that has a settings row. Migration 0004 corrects the row.
+  description: "Most tools run entirely in your browser — nothing is uploaded. The few server-side tools convert and delete your file immediately."
 
 adsense:
   enabled: false
@@ -35,14 +40,23 @@ categories:
     name: Image Conversion
     nav_label: Images
     slug: image-conversion
-    description: "Convert between image formats instantly in your browser. Your files never leave your device."
+    # The old text ("Your files never leave your device") was only
+    # *accidentally* true — every image tool happens to be client-side today.
+    # As a category-level promise it breaks silently the first time a
+    # server-side image tool is added, so it is hedged like document-tools
+    # above; the per-tool Local/Cloud badge carries the exact claim.
+    description: "Convert between image formats instantly. Most tools run entirely in your browser — nothing is uploaded."
     search_placeholder: "Filter tools... (e.g. PNG, WebP, TIFF)"
 
   - id: data-conversion
     name: Text Conversion
     nav_label: Text
     slug: data-conversion
-    description: "Convert between data formats like JSON, XML, YAML, CSV, and Markdown. All processing happens in your browser."
+    # Same accidental-truth class as image-conversion above: "All processing
+    # happens in your browser" holds only because every text tool is
+    # client-side today. Hedged so it degrades gracefully rather than becoming
+    # false the moment that stops being true.
+    description: "Convert between data formats like JSON, XML, YAML, CSV, and Markdown. Most tools process everything in your browser."
     search_placeholder: "Filter tools... (e.g. JSON, XML, YAML)"
 
   - id: audio-video

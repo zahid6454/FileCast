@@ -43,6 +43,23 @@ test('homepage renders with no horizontal overflow across breakpoints', async ({
   expect(problems, problems.join('\n')).toEqual([]);
 });
 
+test('the "Why sign in?" band shows for anonymous visitors and hides when signed in', async ({
+  page
+}) => {
+  // Anonymous (no fc_logged_in cookie): the account pitch is visible with its
+  // benefit tiles.
+  await page.goto('/');
+  const band = page.locator('.signin-band');
+  await expect(band).toBeVisible();
+  await expect(band.locator('.signin-band__col-title')).toHaveCount(4);
+
+  // Signed-in visitors don't need the pitch. theme-init.js stamps data-auth from
+  // the cookie in <head>, and the CSS hides the band on [data-auth="in"] —
+  // asserted directly so the test doesn't need a live /me round-trip.
+  await page.evaluate(() => document.documentElement.setAttribute('data-auth', 'in'));
+  await expect(band).toBeHidden();
+});
+
 test('mobile hamburger opens the drawer without leaking horizontal scroll', async ({ page }) => {
   await page.goto('/');
   await page.setViewportSize({ width: 375, height: 800 });

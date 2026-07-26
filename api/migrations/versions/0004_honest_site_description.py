@@ -1,0 +1,100 @@
+"""correct the false site_description (P15 / ledger §9)
+
+The shipped description asserted an absolute that does not hold:
+
+    "Convert files instantly in your browser. Free, fast, and private —
+     your files never leave your device."
+
+Six of the 34 tools are ``type: server-side`` (docx-to-pdf, pptx-to-pdf,
+xlsx-to-pdf, html-to-pdf, pdf-compress, pdf-to-docx) and do upload the file to
+the API. This field feeds the meta description and the JSON-LD payload, so the
+false claim reaches search results and social cards.
+
+Fixing ``site-config.yaml`` alone is not enough: since Phase 7 the field is
+also stored in ``site_settings`` (id=1) and ``build.py`` deep-merges the DB row
+*on top of* the YAML, so the DB wins. ``seed.py`` won't repair it either — it
+only inserts when the row is absent. Hence this data migration.
+
+**Guarded on purpose.** The ``WHERE`` clause matches the exact false string, so
+the update is a no-op on any environment where an admin has already changed the
+description. Admin-owned content is only overwritten when it is still holding
+the known-bad text.
+
+``site_tagline`` is deliberately left alone: "Free File Conversion — Your Files
+Stay Yours" is true for server-side tools too (the file is converted and
+deleted immediately, never retained or looked at) and it is the home page
+``<h1>``.
+
+**Deploy ordering matters — merging alone does not fix production.**
+
+The two halves of the fix land through different pipelines and nothing
+sequences them:
+
+* this migration runs when the **API container restarts**
+  (``api/Dockerfile``: ``alembic upgrade head && uvicorn``)
+* the public HTML is baked by **``deploy.yml``**, which is ``workflow_dispatch``
+  — fired by an admin Save or by hand — and reads the prod database directly,
+  so the row still wins over the YAML
+
+Publish before the API is redeployed and ``build.py`` reads the *uncorrected*
+row, merges it over the fixed YAML, and republishes the false description with
+a green CI run and no warning.
+
+So: **redeploy the API first, confirm ``GET /api/v1/site-settings`` returns the
+new sentence, and only then dispatch a rebuild.** ``build.py`` prints
+``[db] site settings overlay applied`` when the overlay is live; its absence
+means it fell back to YAML (which is now also correct, but for the wrong
+reason — worth noticing).
+
+Revision ID: 0004_honest_site_description
+Revises: 0003_site_settings
+Create Date: 2026-07-22 00:00:00.000000
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+# revision identifiers, used by Alembic.
+revision: str = '0004_honest_site_description'
+down_revision: Union[str, None] = '0003_site_settings'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+# Kept as module constants so the guard and the downgrade can't drift apart.
+# The dashes are em-dashes (U+2014), matching site-config.yaml exactly.
+OLD_DESCRIPTION = (
+    "Convert files instantly in your browser. Free, fast, and private "
+    "— your files never leave your device."
+)
+NEW_DESCRIPTION = (
+    "Most tools run entirely in your browser — nothing is uploaded. "
+    "The few server-side tools convert and delete your file immediately."
+)
+
+
+def _swap(before: str, after: str) -> None:
+    """Rewrite the singleton's description only if it still holds `before`.
+
+    ``updated_at`` is bumped explicitly for the same reason the PUT handler
+    does it (``routers/site_settings.py``): the model's ``onupdate=func.now()``
+    is ORM-flush-level and does not fire for raw Core SQL like this. Without
+    it, ``GET /site-settings`` would report a timestamp older than the content
+    it is returning.
+    """
+    op.execute(
+        sa.text(
+            "UPDATE site_settings SET site_description = :after, updated_at = now() "
+            "WHERE id = 1 AND site_description = :before"
+        ).bindparams(after=after, before=before)
+    )
+
+
+def upgrade() -> None:
+    _swap(OLD_DESCRIPTION, NEW_DESCRIPTION)
+
+
+def downgrade() -> None:
+    # Symmetric and equally guarded: restores the old text only where this
+    # migration is what put the new text there.
+    _swap(NEW_DESCRIPTION, OLD_DESCRIPTION)

@@ -262,7 +262,51 @@ img { max-width: 100%; display: block; }
 .header__nav { margin-left: auto; display: flex; gap: var(--space-5); }
 .header__nav a { color: var(--color-text-muted); font-size: var(--text-sm); font-weight: var(--weight-medium); transition: color var(--transition-base); }
 .header__nav a:hover { color: var(--color-text-inverse); text-decoration: none; }
-.tool-badge { text-align: center; margin-bottom: var(--space-3); }
+/* The processing pill (.badge--local/.badge--cloud) + a privacy link, centered
+   on one row. A flex container reads cleaner than the old inline layout, but the
+   pill carries `margin-top: auto` for bottom-alignment on the cards — in a flex
+   row that auto margin would drop it to the row's bottom edge, so reset it here. */
+.tool-badge { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.tool-badge .badge--local, .tool-badge .badge--cloud { margin-top: 0; align-self: center; }
+
+/* The link is a ghost chip that rhymes with the solid pill beside it: same pill
+   shape and height, but outlined rather than filled so it reads as the secondary
+   of the pair. A leading shield keeps the privacy meaning; the chevron signals
+   "go read" and nudges right on hover. This replaces a bare underlined phrase
+   that looked like inert caption text next to the styled pill. */
+.tool-badge__note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+.tool-badge__note:hover {
+  /* Text and colour stay put on hover; the affordance is carried entirely by
+     the surface lifting to white and the brand glow behind it. `--color-bg-raised`
+     is white in light mode and the raised dark surface in dark, so "white" holds
+     without breaking the signed-in dark theme. */
+  background: var(--color-bg-raised);
+  border-color: var(--color-border);
+  text-decoration: none;
+  /* The site-wide blue-left / green-right brand glow — the same
+     --shadow-brand-hover that buttons, cards, the upload zone and inputs use,
+     so this chip's hover reads as part of the same system (theme-aware; the
+     token is redefined per theme). */
+  box-shadow: var(--shadow-brand-hover);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-badge__note { transition: none; }
+}
+.tool-badge__note-icon { width: 12px; height: 12px; flex-shrink: 0; }
+.tool-badge__note-chevron { width: 12px; height: 12px; flex-shrink: 0; opacity: 0.55; transition: transform var(--transition-fast), opacity var(--transition-fast); }
+.tool-badge__note:hover .tool-badge__note-chevron { opacity: 1; transform: translateX(2px); }
 
 /* --- Hero --- */
 .hero {
@@ -353,21 +397,13 @@ img { max-width: 100%; display: block; }
 /* The current page (last crumb) reads as the anchor of the trail. */
 .breadcrumb__current { font-weight: var(--weight-semibold); color: var(--color-heading); }
 
-/* --- Privacy Badge --- */
-.badge {
-  display: inline-block;
-  background: var(--color-success-subtle);
-  border: 1px solid var(--color-success);
-  color: var(--color-success);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  margin: 0;
-  transition: opacity var(--transition-fast);
-}
-.badge:hover { opacity: 0.8; text-decoration: none; }
-.badge--inline { margin: 0; }
+/* The old `.badge` / `.badge--inline` privacy pill lived here. Every call site
+   moved to the Local/Cloud processing pill (.badge--local / .badge--cloud,
+   further down) — which was always a separate class, never a modifier of this
+   one (P13) — so nothing inherits from it. Removed rather than left dangling:
+   a green-for-everything pill is what let the server-side case on about.html
+   render identically to the client-side one. `.hero__badge` and `.admin-badge`
+   are unrelated classes and are untouched. */
 
 /* --- Reverse Tool Swap Link --- */
 .reverse-link {
@@ -392,10 +428,16 @@ img { max-width: 100%; display: block; }
   padding: var(--space-6);
   margin: var(--space-4) 0 var(--space-6);
 }
-/* Title + tagline sit at the top of the card, centered to match the converter
-   controls below them. */
-.tool-panel .page__title { text-align: center; color: var(--color-heading); }
-.tool-panel .page__tagline { text-align: center; margin-bottom: var(--space-5); }
+.tool-panel .page__title { color: var(--color-heading); }
+
+/* Tool-page header: title, tagline and badge centre together, matching the
+   converter controls below them. Scoped to `.tool-title-row` (present in
+   tool/tool-text/tool-multi) rather than to `.tool-panel` — only tool.html has
+   a panel, so the old `.tool-panel`-scoped rules left the text and multi
+   templates with a left-aligned header under a centred badge. Not scoped to
+   `.page__title` alone: privacy/terms/about reuse that class and stay left. */
+.tool-title-row .page__title { text-align: center; }
+.tool-title-row ~ .page__tagline { text-align: center; margin-bottom: var(--space-5); }
 
 .upload-zone {
   border: 2px dashed var(--color-text-light);
@@ -993,7 +1035,14 @@ img { max-width: 100%; display: block; }
 }
 
 /* --- Favorites heart (tool pages) --- */
-.tool-title-row { display: flex; align-items: center; gap: var(--space-3); }
+/* justify-content is load-bearing: without it the row packs from flex-start and
+   the <h1> — shrink-to-fit as a flex item — sits hard left, while the tagline
+   and badge below stay centred. `.tool-panel .page__title { text-align: center }`
+   cannot fix that on its own, because centring text inside a box that already
+   hugs the text is a no-op. Signed-in, [title ♡] centres as a group, so the
+   title reads ~24px left of true centre; anonymous, the heart is display:none
+   and the title is exactly centred. */
+.tool-title-row { display: flex; align-items: center; justify-content: center; gap: var(--space-3); }
 .tool-fav {
   display: inline-flex;
   align-items: center;
@@ -1008,6 +1057,12 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
   transition: color var(--transition-base), border-color var(--transition-base);
 }
+/* The `display` above beats the UA sheet's `[hidden] { display: none }` — author
+   rules win over UA rules at any specificity — so this is what actually honours
+   the attribute auth.js toggles. Without it the heart shows to anonymous
+   visitors, and since auth.js only attaches the click handler when signed in,
+   it renders as a button that does nothing. */
+.tool-fav[hidden] { display: none; }
 .tool-fav:hover { color: var(--color-error); border-color: var(--color-border); }
 .tool-fav__icon { width: 24px; height: 24px; }
 .tool-fav.is-fav { color: var(--color-error); }
@@ -1371,6 +1426,24 @@ img { max-width: 100%; display: block; }
 .badge__icon { width: 12px; height: 12px; }
 
 /* --- Why FileCast dark band --- */
+/* --- "Why sign in?" band (light, sits above the dark Why-FileCast band) --- */
+/* Hidden pre-paint for signed-in visitors: theme-init.js stamps data-auth in
+   <head> before the CSS loads, so the band never flashes for someone who
+   already has an account (same technique as .account-signin). */
+:root[data-auth="in"] .signin-band { display: none; }
+.signin-band { text-align: center; }
+.signin-band__lead { max-width: 44ch; margin: 0 auto var(--space-8); color: var(--color-text-secondary); font-size: var(--text-base); line-height: var(--leading-relaxed); }
+.signin-band__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-8); margin-bottom: var(--space-8); }
+/* Four tiles: stack on mobile, 2×2 on tablet, one row of four on desktop. */
+@media (min-width: 560px) { .signin-band__grid { grid-template-columns: repeat(2, 1fr); } }
+.signin-band__col { text-align: center; }
+.signin-band__icon { width: 32px; height: 32px; color: var(--color-primary); margin: 0 auto var(--space-3); }
+.signin-band__col-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-heading); margin-bottom: var(--space-2); }
+.signin-band__col-text { font-size: var(--text-sm); color: var(--color-text-muted); line-height: var(--leading-relaxed); }
+@media (min-width: 900px) {
+  .signin-band__grid { grid-template-columns: repeat(4, 1fr); }
+}
+
 .why-filecast { padding: var(--space-16) 0; }
 .why-filecast__title { font-family: var(--font-heading); font-size: var(--text-2xl); font-weight: var(--weight-bold); text-align: center; color: var(--color-text-inverse); margin-bottom: var(--space-10); }
 .why-filecast__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-8); }
@@ -1398,10 +1471,13 @@ img { max-width: 100%; display: block; }
   font-weight: var(--weight-bold);
   transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
-/* On zone hover, warm up toward the brand — but stay muted vs the primary CTA. */
+/* On zone hover the button stays white with its text unchanged, so it pops
+   against the zone's tinted-and-glowing surface instead of dissolving into it —
+   the old rule tinted the CTA the same blue as the zone, hiding it. Only the
+   border warms slightly to tie it to the brand. */
 .upload-zone:hover .upload-zone__cta {
-  background: var(--color-primary-subtle);
-  color: var(--color-primary);
+  background: var(--color-bg-raised);
+  color: var(--color-text-secondary);
   border-color: var(--color-primary-light);
 }
 .upload-zone--active { transform: scale(1.01); }
