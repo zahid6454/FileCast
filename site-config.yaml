@@ -59,6 +59,11 @@ categories:
     description: "Convert between data formats like JSON, XML, YAML, CSV, and Markdown. Most tools process everything in your browser."
     search_placeholder: "Filter tools... (e.g. JSON, XML, YAML)"
 
+  # Reserved for a future audio/video tool set. It has 0 tools today, so
+  # group_tools_by_category() omits it — no nav entry, no category page, no
+  # sitemap URL. Kept here (and in seed.py's CATEGORY_ORDER_FALLBACK) so the walk
+  # order is already correct the moment the first media tool ships. Intentional,
+  # not a leftover.
   - id: audio-video
     name: Audio & Video
     nav_label: Media

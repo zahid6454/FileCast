@@ -182,6 +182,15 @@
   <script src="/{{ nav_js.path }}" integrity="{{ nav_js.sri }}" crossorigin="anonymous" defer></script>
   {% endif %}
 
+  {# Shared converter helpers (window.FC), loaded before shared.js and the
+     shared-multi/shared-text handlers so all three see them. Single home for the
+     formatBytes/trackEvent/postConversion/getExtension/generateOutputFilename
+     helpers that used to be duplicated across those three files. #}
+  {% set fc_util_js = assets.get('js/fc-util.js') %}
+  {% if fc_util_js %}
+  <script src="/{{ fc_util_js.path }}" integrity="{{ fc_util_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
+
   {# Parses the #tool-config JSON data island into window.TOOL_CONFIG; must run
      before shared.js so tool handlers see the config. No-op on non-tool pages. #}
   {% set tool_config_js = assets.get('js/tool-config.js') %}

@@ -73,6 +73,8 @@
     var actionsEl = resultEl.querySelector('.result__actions');
     if (!actionsEl) return;
 
+    // Take over the result panel: tell shared.js not to overwrite our summary.
+    window._converterOwnsResult = true;
     actionsEl.innerHTML = '';
 
     blobs.forEach(function (item) {

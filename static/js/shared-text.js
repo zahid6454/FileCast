@@ -4,46 +4,12 @@
   var state = 'empty';
   var els = {};
 
-  function formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    var k = 1024;
-    var sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    var i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  }
-
-  function trackEvent(name, params) {
-    if (typeof gtag === 'function') {
-      gtag('event', name, params);
-    }
-  }
-
-  // Fire-and-forget conversion tracking (Phase 5 §5.4) — see shared.js for the
-  // full contract. Success dispatches `filecast:conversion`; failure only POSTs.
-  function postConversion(payload, notify) {
-    var apiBase = window.FILECAST && window.FILECAST.apiBase;
-    if (!apiBase) return;
-    fetch(apiBase.replace(/\/$/, '') + '/api/v1/conversions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(payload)
-    })
-      .then(function (r) {
-        return r.ok ? r.json() : null;
-      })
-      .then(function (d) {
-        if (!notify) return;
-        document.dispatchEvent(
-          new CustomEvent('filecast:conversion', {
-            detail: { saved: !!(d && d.saved_to_history) }
-          })
-        );
-      })
-      .catch(function () {
-        /* silent — progressive enhancement */
-      });
-  }
+  // Shared helpers live in fc-util.js (loaded before this file); see there for
+  // the fire-and-forget postConversion tracking contract.
+  var FC = window.FC || {};
+  var formatBytes = FC.formatBytes;
+  var trackEvent = FC.trackEvent;
+  var postConversion = FC.postConversion;
 
   function setState(newState) {
     state = newState;
