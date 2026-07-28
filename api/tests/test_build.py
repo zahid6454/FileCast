@@ -285,6 +285,52 @@ def test_full_build_site_name_html_is_escaped(tmp_path, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
+# Ad slots — one page per ui_type (Phase 9 §2.1)
+#
+# The all-off build tests above assert only on the CSP and index.html and never
+# open a tool page, which is exactly how the §1.2 defect shipped: `tool.html`
+# guarded its slots and the other two templates did not, so 11 of 34 tool pages
+# rendered two permanently blank ~90px reservations with AdSense OFF. These
+# assert on a built page of EACH ui_type so divergence between the three
+# templates fails a test instead of shipping silently.
+# --------------------------------------------------------------------------- #
+
+# ui_type → a concrete built tool page. Keep one entry per template.
+TOOL_PAGES = {
+    "standard": "convert/pdf-to-jpg",  # tool.html
+    "text-input": "convert/csv-to-json",  # tool-text.html
+    "multi-file": "convert/pdf-merge",  # tool-multi.html
+}
+
+
+def _tool_page(built, slug: str) -> str:
+    return (built / slug / "index.html").read_text(encoding="utf-8")
+
+
+def test_full_build_all_off_row_renders_no_ad_slots(tmp_path, monkeypatch):
+    # §2: with the overlay row present and AdSense off, NO tool page of ANY
+    # ui_type may ship a reserved `.ad-slot` box. Asserting on all three
+    # templates is the point — testing only the 23 `standard` tools is what
+    # left the other 11 unverified.
+    _seed_site_settings(site_name="Present But Off")
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for ui_type, slug in TOOL_PAGES.items():
+        html = _tool_page(tmp_path, slug)
+        assert 'class="ad-slot' not in html, f"{ui_type} ({slug}) ships a blank ad slot"
+
+
+def test_full_build_no_db_renders_no_ad_slots(tmp_path, monkeypatch):
+    # Same invariant on the no-row (pure-YAML) path, where `adsense.enabled`
+    # comes from site-config.yaml rather than the overlay.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for ui_type, slug in TOOL_PAGES.items():
+        html = _tool_page(tmp_path, slug)
+        assert 'class="ad-slot' not in html, f"{ui_type} ({slug}) ships a blank ad slot"
+
+
+# --------------------------------------------------------------------------- #
 # apply_tool_overrides — overlay semantics
 # --------------------------------------------------------------------------- #
 

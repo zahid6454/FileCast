@@ -98,6 +98,21 @@ test('tool page renders and the slider markup carries no inline handler', async 
   expect(problems, problems.join('\n')).toEqual([]);
 });
 
+// The `js-test` dist is built with no database, so it is permanently ads-OFF
+// (Phase 9 §1.4). That makes an ABSENCE assertion the only sound one here — an
+// ads-ON check would pass vacuously because the markup is never present. The
+// ads-on surface is covered in api/tests/test_build.py, where the `test` job's
+// Postgres makes a seeded overlay real.
+test('ads-off tool pages reserve no blank ad space', async ({ page }) => {
+  // One page per ui_type: text-input and multi-file are the two templates that
+  // shipped unguarded slots (§1.2); standard is the control that already worked.
+  for (const slug of ['/convert/csv-to-json/', '/convert/pdf-merge/', '/convert/pdf-to-jpg/']) {
+    await page.goto(slug);
+    await expect(page.locator('#convert-btn')).toBeVisible();
+    expect(await page.locator('.ad-slot').count(), slug).toBe(0);
+  }
+});
+
 test('a client-side converter still works end-to-end (regression guard)', async ({ page }) => {
   const problems = collectPageProblems(page);
   await page.goto('/convert/json-to-yaml/');

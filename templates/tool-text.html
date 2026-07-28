@@ -72,8 +72,10 @@
   <p class="page__tagline">{{ tool.tagline_long or tool.tagline }}</p>
   {% endif %}
 
+  {% if adsense.enabled %}
   {# Ad slot: leaderboard #}
   <div class="ad-slot" id="ad-leaderboard"></div>
+  {% endif %}
 
   {# Privacy Badge — same Local/Cloud pill and privacy link as tool.html; see
      the comment there for why this is a bare link rather than a caption. #}
@@ -133,8 +135,10 @@
   {# Post-conversion sign-in touchpoint / "Saved ✓" — populated by auth.js (§10). #}
   <div class="signin-slot" id="signin-slot" hidden></div>
 
+  {% if adsense.enabled %}
   {# Ad slot: in-content #}
   <div class="ad-slot" id="ad-in-content"></div>
+  {% endif %}
 
   {# Content Blocks #}
   {% if tool.content_html.get('what_is') %}
