@@ -933,6 +933,28 @@ def generate_headers(site_config: dict):
     img_src = "'self' data: blob: https://lh3.googleusercontent.com"
     frame_src = "'none'"
 
+    # ⚠ UNVERIFIED — SPECULATIVE, NOT MEASURED (Phase 9 §3.3, still open).
+    #
+    # This branch was written in Phase 2 against Google's documentation and has
+    # never been exercised against a live ad serve. AdSense is not approved yet,
+    # so there is no real publisher id to measure with, and no CI job can do it:
+    # it needs a real ad response in a real browser with the CSP ENFORCED.
+    #
+    # It is very likely INSUFFICIENT. Ads render through frames and images from
+    # hosts not listed here (tpc.googlesyndication.com and www.google.com are the
+    # usual first two), and img-src/connect-src are untouched entirely. Do NOT
+    # add origins on the strength of what the docs imply — an origin allowlisted
+    # on a guess is a permanent widening bought with no evidence.
+    #
+    # Method when approval lands: deploy preview, real publisher id, toggle on,
+    # tool page, CSP enforced, drive the console to zero violations adding ONE
+    # origin at a time — then replace this comment with one saying it was
+    # measured, and on what date. See §7.2 item 1.
+    #
+    # Hard constraint regardless of what the measurement shows: script-src never
+    # gains 'unsafe-inline' and no inline <script> enters a built page. If ads
+    # cannot render without inline script, stop and escalate — ads.js and the
+    # external loader exist precisely to avoid that trade (P6/P7).
     if adsense_enabled:
         script_src += (
             " https://pagead2.googlesyndication.com https://www.googletagmanager.com"

@@ -63,6 +63,38 @@
   <script src="/{{ analytics_js.path }}" integrity="{{ analytics_js.sri }}" crossorigin="anonymous"{% if ga4.enabled and ga4.measurement_id %} data-ga4-id="{{ ga4.measurement_id }}"{% endif %}{% if sentry.enabled and sentry.dsn %} data-sentry-dsn="{{ sentry.dsn }}"{% endif %}></script>
   {% endif %}
   {% endif %}
+
+  {# AdSense (Phase 9 §3.2). Same shape as the analytics block above: an
+     allowlisted vendor loader plus a self-hosted module, no inline script, so
+     `script-src 'self'` survives (P6/P7). ads.js does the per-unit push that
+     Google's documented snippet does inline.
+
+     The condition must render at least one unit, not merely "ads are on" —
+     otherwise this is §1.1's failure in miniature: Google's ad server contacted
+     on a page carrying no inventory. Two ways that happens, both gated here:
+
+       · `tool is defined` — all six slots live in the three tool templates, so
+         the homepage, category and static pages have no units at all. (Adding
+         slots elsewhere is a density decision, not a follow-up — §6.)
+       · at least one slot id — a half-configured overlay (enabled, publisher
+         set, both slot ids blank) makes ad_slot() render nothing, so the loader
+         would have no <ins> to fill.
+
+     Keep this in step with ad_slot()'s guard in _macros.html; they answer the
+     same question from opposite ends and drift silently if only one changes.
+
+     ⚠ `defer` is load-bearing — ads.js must run AFTER the <ins> elements exist
+     or it finds zero units and silently pushes nothing. Do not copy
+     analytics.js's non-deferred loading here. #}
+  {% set ad_slots = adsense.get('slots', {}) %}
+  {% if adsense.get('enabled') and adsense.get('publisher_id') and tool is defined and (ad_slots.get('leaderboard') or ad_slots.get('in_content')) %}
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ adsense.publisher_id }}"
+          crossorigin="anonymous"></script>
+  {% set ads_js = assets.get('js/ads.js') %}
+  {% if ads_js %}
+  <script src="/{{ ads_js.path }}" integrity="{{ ads_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
+  {% endif %}
 </head>
 <body>
 

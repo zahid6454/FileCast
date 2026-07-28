@@ -9,6 +9,7 @@ that also exercises StrictUndefined-safe rendering of admin/account.
 """
 
 import json
+import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -328,6 +329,133 @@ def test_full_build_no_db_renders_no_ad_slots(tmp_path, monkeypatch):
     for ui_type, slug in TOOL_PAGES.items():
         html = _tool_page(tmp_path, slug)
         assert 'class="ad-slot' not in html, f"{ui_type} ({slug}) ships a blank ad slot"
+
+
+def test_full_build_all_off_row_renders_no_adsense(tmp_path, monkeypatch):
+    # §3.4: off means off end-to-end — no unit markup, no vendor loader, and a
+    # script-src that is literally 'self'.
+    _seed_site_settings(site_name="Present But Off")
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    assert "script-src 'self';" in _csp_from_build(tmp_path)
+    for slug in TOOL_PAGES.values():
+        html = _tool_page(tmp_path, slug)
+        assert "adsbygoogle" not in html
+        assert "googlesyndication" not in html
+
+
+# A publisher id / slot ids matching the validation in site_settings.py
+# (^ca-pub-\d{16}$ and ^\d+$). Anything outside those shapes is rejected by the
+# API, so the templates only ever see values of this form.
+ADS_ON = dict(
+    adsense_enabled=True,
+    adsense_publisher_id="ca-pub-1234567890123456",
+    adsense_slot_leaderboard="1111111111",
+    adsense_slot_in_content="2222222222",
+)
+
+
+def test_full_build_ads_on_renders_units_on_all_three_templates(tmp_path, monkeypatch):
+    # §3.4, the ads-ON surface. This belongs in pytest and NOT in Playwright:
+    # the `test` job has Postgres, so a seeded overlay is real here, whereas the
+    # js-test dist has no database and is permanently ads-off — an ads-on
+    # Playwright assertion would pass vacuously (§1.4).
+    #
+    # Asserted on one page of EACH ui_type, per §8: covering only the 23
+    # `standard` tools is exactly how the §1.2 defect stayed invisible, and it
+    # would recur in the opposite direction (units on tool.html only).
+    _seed_site_settings(**ADS_ON)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+
+    for ui_type, slug in TOOL_PAGES.items():
+        html = _tool_page(tmp_path, slug)
+        ctx = f"{ui_type} ({slug})"
+        assert html.count('class="adsbygoogle"') == 2, ctx
+        assert html.count('data-ad-client="ca-pub-1234567890123456"') == 2, ctx
+        assert 'data-ad-slot="1111111111"' in html, ctx
+        assert 'data-ad-slot="2222222222"' in html, ctx
+        # §4.1: the modifier classes the scoped min-heights key off. Without
+        # them a 280px rectangle renders in a 90px reservation.
+        assert 'class="ad-slot ad-slot--leaderboard"' in html, ctx
+        assert 'class="ad-slot ad-slot--in-content"' in html, ctx
+        # The vendor loader + the self-hosted pusher, both external (P6/P7).
+        assert "pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" in html, ctx
+        assert re.search(r'<script src="/js/ads\.[0-9a-f]+\.js"', html), ctx
+
+    csp = _csp_from_build(tmp_path)
+    assert "https://pagead2.googlesyndication.com" in csp
+    assert "frame-src https://googleads.g.doubleclick.net" in csp
+    # The whole point of ads.js: enabling ads must never buy inline script.
+    assert "'unsafe-inline'" not in csp.split("script-src")[1].split(";")[0]
+
+
+def test_full_build_ads_on_leaves_adless_pages_alone(tmp_path, monkeypatch):
+    # All six slots live in the three tool templates. The homepage and static
+    # pages carry no inventory, so they must not contact Google's ad server
+    # either — §7.2 item 1's "confirm no leakage", pinned in CI.
+    _seed_site_settings(**ADS_ON)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for page in ("index.html", "about/index.html", "privacy/index.html"):
+        html = (tmp_path / page).read_text(encoding="utf-8")
+        assert "adsbygoogle" not in html, page
+
+
+def test_full_build_half_configured_adsense_renders_nothing(tmp_path, monkeypatch):
+    # §8: enabled with a publisher id but no slot ids must render ZERO units —
+    # an <ins data-ad-slot=""> fails opaquely at Google's end, with nothing in
+    # the build or the page to say so.
+    _seed_site_settings(
+        adsense_enabled=True,
+        adsense_publisher_id="ca-pub-1234567890123456",
+    )
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for ui_type, slug in TOOL_PAGES.items():
+        html = _tool_page(tmp_path, slug)
+        assert "adsbygoogle" not in html, f"{ui_type} ({slug})"
+        assert 'class="ad-slot' not in html, f"{ui_type} ({slug})"
+
+
+def test_full_build_one_slot_configured_renders_only_that_slot(tmp_path, monkeypatch):
+    # The guard is per-slot, not per-page: a leaderboard id with no in-content
+    # id yields exactly one unit, not two and not zero.
+    _seed_site_settings(
+        adsense_enabled=True,
+        adsense_publisher_id="ca-pub-1234567890123456",
+        adsense_slot_leaderboard="1111111111",
+    )
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for ui_type, slug in TOOL_PAGES.items():
+        html = _tool_page(tmp_path, slug)
+        assert html.count('class="adsbygoogle"') == 1, f"{ui_type} ({slug})"
+        assert "ad-slot--leaderboard" in html
+        assert "ad-slot--in-content" not in html
+
+
+def test_full_build_no_inline_script_anywhere(tmp_path, monkeypatch):
+    # P6/P7, with ads ON — the posture that most tempts an inline snippet, since
+    # Google's documented per-unit push IS inline. A single inline unit push
+    # would silently defeat `script-src 'self'` for the whole site.
+    #
+    # `<script type="application/json">` islands are data, not executable, and
+    # are explicitly the CSP-safe pattern this codebase uses (#tool-config,
+    # #filecast-config); JSON-LD likewise. Everything else must carry a src.
+    _seed_site_settings(**ADS_ON)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+
+    offenders = []
+    for path in tmp_path.rglob("*.html"):
+        for tag in re.findall(r"<script\b[^>]*>", path.read_text(encoding="utf-8")):
+            if " src=" in tag:
+                continue
+            if 'type="application/json"' in tag or 'type="application/ld+json"' in tag:
+                continue
+            offenders.append(f"{path.relative_to(tmp_path)}: {tag}")
+    assert not offenders, "inline <script> in built pages:\n" + "\n".join(offenders)
 
 
 # --------------------------------------------------------------------------- #

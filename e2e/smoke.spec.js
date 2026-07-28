@@ -113,6 +113,24 @@ test('ads-off tool pages reserve no blank ad space', async ({ page }) => {
   }
 });
 
+// P6/P7 in the browser's own terms. Distinct from the existing `[oninput]`
+// audits in this file and rating.spec.js — those count inline HANDLER
+// ATTRIBUTES; this counts inline SCRIPT BODIES, which is what AdSense's
+// documented per-unit push would have added. Safe as an ads-off assertion
+// because the invariant holds in both postures; the ads-ON version of it lives
+// in api/tests/test_build.py, where a seeded overlay is real (§1.4).
+test('no inline <script> body on a tool page', async ({ page }) => {
+  await page.goto('/convert/json-to-yaml/');
+  const inline = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('script:not([src])'))
+      // JSON data islands (#tool-config, #filecast-config) and JSON-LD are
+      // inert data, not executable — they are the CSP-safe pattern here.
+      .filter((s) => !/^application\/(ld\+)?json$/.test(s.type))
+      .map((s) => s.outerHTML.slice(0, 120))
+  );
+  expect(inline, inline.join('\n')).toEqual([]);
+});
+
 test('a client-side converter still works end-to-end (regression guard)', async ({ page }) => {
   const problems = collectPageProblems(page);
   await page.goto('/convert/json-to-yaml/');

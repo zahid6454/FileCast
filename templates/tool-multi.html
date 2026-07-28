@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import processing_pill %}
+{% from "_macros.html" import ad_slot, processing_pill %}
 
 {% block title %}{{ tool.meta.title }}{% endblock %}
 {% block meta_description %}{{ tool.meta.description }}{% endblock %}
@@ -72,10 +72,7 @@
   <p class="page__tagline">{{ tool.tagline_long or tool.tagline }}</p>
   {% endif %}
 
-  {% if adsense.enabled %}
-  {# Ad slot: leaderboard #}
-  <div class="ad-slot" id="ad-leaderboard"></div>
-  {% endif %}
+  {{ ad_slot(adsense, 'leaderboard') }}
 
   {# Privacy Badge — same Local/Cloud pill and privacy link as tool.html; see
      the comment there for why this is a bare link rather than a caption. #}
@@ -156,10 +153,7 @@
   {# Post-conversion sign-in touchpoint / "Saved ✓" — populated by auth.js (§10). #}
   <div class="signin-slot" id="signin-slot" hidden></div>
 
-  {% if adsense.enabled %}
-  {# Ad slot: in-content #}
-  <div class="ad-slot" id="ad-in-content"></div>
-  {% endif %}
+  {{ ad_slot(adsense, 'in_content') }}
 
   {# Content Blocks #}
   {% if tool.content_html.get('what_is') %}
