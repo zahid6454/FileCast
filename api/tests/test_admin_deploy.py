@@ -457,6 +457,30 @@ async def test_status_failure_is_502(admin_client, monkeypatch):
     assert r.status_code == 502
 
 
+async def test_status_unparseable_body_is_502_not_500(admin_client, monkeypatch):
+    # A bare resp.json() on a 200 raised ValueError → an opaque 500. Same class
+    # as the runs-body hardening; a 502 naming the cause is the right answer.
+    class BadJsonStatusClient(FakeClient):
+        async def get(self, url, headers=None):
+            return BadJsonResp()
+
+    _use(monkeypatch, BadJsonStatusClient())
+    r = await admin_client.get("/api/v1/admin/deploy/123")
+    assert r.status_code == 502
+    assert r.status_code != 500
+
+
+async def test_status_non_object_body_is_502_not_500(admin_client, monkeypatch):
+    # Parses fine, then .get would raise AttributeError.
+    class ArrayStatusClient(FakeClient):
+        async def get(self, url, headers=None):
+            return FakeResp(200, [1, 2, 3])
+
+    _use(monkeypatch, ArrayStatusClient())
+    r = await admin_client.get("/api/v1/admin/deploy/123")
+    assert r.status_code == 502
+
+
 # --------------------------------------------------------------------------- #
 # authz + secret hygiene
 # --------------------------------------------------------------------------- #

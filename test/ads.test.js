@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDom, evalScript } from './helpers.js';
+import { createDom, evalScript, flush } from './helpers.js';
 
 // ads.js is the CSP-safe replacement for AdSense's documented INLINE per-unit
 // push (P6/P7). vitest is the only harness that can exercise it at all: the
@@ -19,20 +19,23 @@ function slotMarkup(modifier) {
   </div>`;
 }
 
-// ads.js schedules the unfilled-slot collapse on a 2s timer. Capture the
-// callback instead of waiting for it, so the tests stay deterministic AND can
-// assert the not-yet-fired state (that the collapse is not eager).
+// ads.js arms one long fallback timer for units that never report a status.
+// Capture the callback instead of waiting for it, so the tests stay
+// deterministic AND can assert the not-yet-fired state.
 function captureTimers(dom) {
   const queued = [];
-  dom.window.setTimeout = (fn) => queued.push(fn);
-  return function runTimers() {
-    for (const fn of queued) fn();
-  };
+  dom.window.setTimeout = (fn, ms) => queued.push({ fn, ms });
+  function runTimers() {
+    for (const t of queued) t.fn();
+  }
+  runTimers.delays = queued.map.bind(queued, (t) => t.ms);
+  Object.defineProperty(runTimers, 'ms', { get: () => queued.map((t) => t.ms) });
+  return runTimers;
 }
 
-// jsdom has no layout: offsetHeight is 0 for every element, which is ads.js's
-// "unfilled" signal. An own property shadows the prototype getter, letting a
-// fixture stand in for a unit that actually rendered.
+// jsdom has no layout: offsetHeight is 0 for every element. An own property
+// shadows the prototype getter, letting a fixture stand in for a unit that
+// actually rendered.
 function setRendered(el, height) {
   Object.defineProperty(el, 'offsetHeight', { value: height, configurable: true });
 }
@@ -79,68 +82,111 @@ describe('ads.js — per-unit push', () => {
   });
 });
 
-describe('ads.js — unfilled-slot collapse', () => {
-  it('collapses a slot whose unit reports data-ad-status="unfilled"', () => {
+describe('ads.js — collapsing slots that never fill', () => {
+  // Google sets data-ad-status on the <ins> when the response lands. That is
+  // the only signal distinguishing "no ad for you" from "not yet", so it drives
+  // the collapse via MutationObserver rather than a timer.
+  async function setStatus(ins, status) {
+    ins.setAttribute('data-ad-status', status);
+    await flush(); // MutationObserver callbacks are microtasks in jsdom
+  }
+
+  it('collapses a slot as soon as Google reports it unfilled', async () => {
+    const dom = createDom(slotMarkup('leaderboard'));
+    captureTimers(dom); // no timer involved in this path
+    evalScript(dom, 'ads.js');
+    await setStatus(dom.window.document.querySelector('ins.adsbygoogle'), 'unfilled');
+    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('none');
+  });
+
+  it('leaves a slot alone when Google reports it filled', async () => {
+    const dom = createDom(slotMarkup('in-content'));
+    captureTimers(dom);
+    evalScript(dom, 'ads.js');
+    await setStatus(dom.window.document.querySelector('ins.adsbygoogle'), 'filled');
+    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('');
+  });
+
+  it('does NOT collapse a unit that has simply not responded yet', async () => {
+    const dom = createDom(slotMarkup('leaderboard'));
+    captureTimers(dom); // fallback deliberately never fired
+    evalScript(dom, 'ads.js');
+    await flush();
+    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('');
+  });
+
+  it('arms the fallback far beyond one ad round-trip, not on a 2s timer', () => {
+    // 🔴 The regression this pins, and it is about the NUMBER. ads.js is
+    // deferred, so its clock starts at DOMContentLoaded; the vendor loader is
+    // async and may not have executed by then, let alone completed a request.
+    // At 2s a slow-connection unit has no status and no height, so a
+    // height-based collapse hides a slot that then fills anyway — the
+    // impression is served into a display:none box.
+    const dom = createDom(slotMarkup('leaderboard'));
+    const timers = captureTimers(dom);
+    evalScript(dom, 'ads.js');
+    expect(timers.ms).toHaveLength(1);
+    expect(timers.ms[0]).toBeGreaterThanOrEqual(10000);
+  });
+
+  it('restores a slot the fallback hid when the fill finally lands', async () => {
+    // The fallback is only safe because a late 'filled' un-hides the slot —
+    // otherwise an ad would render inside a display:none box.
     const dom = createDom(slotMarkup('leaderboard'));
     const runTimers = captureTimers(dom);
-    const ins = dom.window.document.querySelector('ins.adsbygoogle');
-    setRendered(ins, 90); // has height, but Google says there was no fill
-    ins.setAttribute('data-ad-status', 'unfilled');
+    evalScript(dom, 'ads.js');
+    runTimers(); // still silent at the timeout → collapsed
+    const slot = dom.window.document.querySelector('.ad-slot');
+    expect(slot.style.display).toBe('none');
+
+    await setStatus(dom.window.document.querySelector('ins.adsbygoogle'), 'filled');
+    expect(slot.style.display).toBe('');
+  });
+
+  it('collapses a permanently silent unit once the fallback fires (blocked)', () => {
+    const dom = createDom(slotMarkup('in-content'));
+    const runTimers = captureTimers(dom);
     evalScript(dom, 'ads.js');
     runTimers();
     expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('none');
   });
 
-  it('collapses a slot whose unit rendered no height (blocked)', () => {
+  it('the fallback spares a unit that rendered without reporting a status', () => {
+    // Height is consulted only as a reason NOT to collapse. If something is on
+    // screen, hiding it is wrong regardless of what the attribute says.
     const dom = createDom(slotMarkup('in-content'));
     const runTimers = captureTimers(dom);
-    // offsetHeight stays 0 — jsdom's default, and the blocked-ad signal.
     evalScript(dom, 'ads.js');
-    runTimers();
-    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('none');
-  });
-
-  it('leaves a filled slot alone', () => {
-    const dom = createDom(slotMarkup('in-content'));
-    const runTimers = captureTimers(dom);
-    const ins = dom.window.document.querySelector('ins.adsbygoogle');
-    setRendered(ins, 280);
-    ins.setAttribute('data-ad-status', 'filled');
-    evalScript(dom, 'ads.js');
+    setRendered(dom.window.document.querySelector('ins.adsbygoogle'), 280);
     runTimers();
     expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('');
   });
 
-  it('collapses only the slots that failed, not their neighbours', () => {
+  it('collapses only the slot that failed, not its neighbour', async () => {
     const dom = createDom(slotMarkup('leaderboard') + slotMarkup('in-content'));
-    const runTimers = captureTimers(dom);
-    const [filled, unfilled] = dom.window.document.querySelectorAll('ins.adsbygoogle');
-    setRendered(filled, 90);
-    filled.setAttribute('data-ad-status', 'filled');
-    unfilled.setAttribute('data-ad-status', 'unfilled');
+    captureTimers(dom);
     evalScript(dom, 'ads.js');
-    runTimers();
+    const [filled, unfilled] = dom.window.document.querySelectorAll('ins.adsbygoogle');
+    await setStatus(filled, 'filled');
+    await setStatus(unfilled, 'unfilled');
     const slots = dom.window.document.querySelectorAll('.ad-slot');
     expect(slots[0].style.display).toBe('');
     expect(slots[1].style.display).toBe('none');
   });
 
-  it('does NOT collapse eagerly — a slow but successful fill must not be hidden', () => {
+  it('honours a status already set before ads.js ran', () => {
     const dom = createDom(slotMarkup('leaderboard'));
-    captureTimers(dom); // deliberately never run
+    captureTimers(dom);
+    dom.window.document.querySelector('ins.adsbygoogle').setAttribute('data-ad-status', 'unfilled');
     evalScript(dom, 'ads.js');
-    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('');
+    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('none');
   });
 
-  it('ignores a .ad-slot that holds no unit', () => {
-    const dom = createDom(
-      `<div class="ad-slot" id="ad-leaderboard"></div>${slotMarkup('in-content')}`
-    );
+  it('ignores an <ins> that is not inside a .ad-slot', async () => {
+    const dom = createDom('<ins class="adsbygoogle"></ins>');
     const runTimers = captureTimers(dom);
-    const ins = dom.window.document.querySelector('ins.adsbygoogle');
-    setRendered(ins, 280);
     evalScript(dom, 'ads.js');
+    await setStatus(dom.window.document.querySelector('ins.adsbygoogle'), 'unfilled');
     expect(() => runTimers()).not.toThrow();
-    expect(dom.window.document.querySelectorAll('.ad-slot')[0].style.display).toBe('');
   });
 });

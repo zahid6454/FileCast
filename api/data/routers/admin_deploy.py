@@ -24,9 +24,12 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from log import get_logger
 
 from data.config import settings
 from data.security import require_admin
+
+logger = get_logger("admin-deploy")
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin-deploy"])
 
@@ -108,18 +111,52 @@ def _runs_from(resp) -> list[dict]:
     AttributeError). None of them are actionable — we cannot resolve a run id
     from them — but none are worth a 500 either.
     """
+    # Every rejection below is logged. Degrading silently is what makes this
+    # undiagnosable in production: the only symptom of a broken runs query is
+    # "the admin stopped getting a terminal toast", with nothing to separate
+    # rate-limiting from a revoked PAT scope from a GitHub schema change.
     if resp.status_code != 200:
+        logger.warning(
+            "runs query returned %s; cannot resolve a run id",
+            resp.status_code,
+            extra={"data": {"event": "deploy_runs_http", "status": resp.status_code}},
+        )
         return []
     try:
         body = resp.json()
     except ValueError:  # JSONDecodeError is a subclass
+        logger.warning(
+            "runs query returned an unparseable body",
+            extra={"data": {"event": "deploy_runs_bad_json"}},
+        )
         return []
     if not isinstance(body, dict):
+        logger.warning(
+            "runs body is %s, expected an object",
+            type(body).__name__,
+            extra={
+                "data": {"event": "deploy_runs_bad_shape", "got": type(body).__name__}
+            },
+        )
         return []
     runs = body.get("workflow_runs")
     if not isinstance(runs, list):
+        logger.warning(
+            "workflow_runs is %s, expected a list",
+            type(runs).__name__,
+            extra={
+                "data": {"event": "deploy_runs_bad_shape", "got": type(runs).__name__}
+            },
+        )
         return []
-    return [r for r in runs if isinstance(r, dict)]
+    objects = [r for r in runs if isinstance(r, dict)]
+    if len(objects) != len(runs):
+        logger.warning(
+            "dropped %s non-object entries from workflow_runs",
+            len(runs) - len(objects),
+            extra={"data": {"event": "deploy_runs_bad_entries"}},
+        )
+    return objects
 
 
 async def _resolve_run_id(
@@ -155,7 +192,12 @@ async def _resolve_run_id(
         # already-succeeded dispatch. Body shape is _runs_from's job.
         try:
             runs = _runs_from(await client.get(runs_url, headers=_gh_headers()))
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "runs query failed (%s); retrying if attempts remain",
+                exc.__class__.__name__,
+                extra={"data": {"event": "deploy_runs_network", "attempt": attempt}},
+            )
             runs = []
         for run in runs:
             created = _created_at(run)
@@ -220,7 +262,30 @@ async def deploy_status(run_id: str, _admin=Depends(require_admin)):
         raise HTTPException(
             status_code=502, detail=f"GitHub status failed ({resp.status_code})."
         )
-    data = resp.json()
+    # Same bug class _runs_from() exists for, one endpoint down: a bare .json()
+    # on an unparseable 200 raises ValueError → an opaque 500, and a body that
+    # parses to a non-object then raises AttributeError on .get. Lower stakes
+    # than the dispatch path — app.js's .catch absorbs it and now retries — but
+    # a 502 naming the cause beats a 500 naming nothing.
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        logger.warning(
+            "deploy status returned an unparseable body",
+            extra={"data": {"event": "deploy_status_bad_json", "run_id": run_id}},
+        )
+        raise HTTPException(
+            status_code=502, detail="GitHub returned an unreadable status body."
+        ) from exc
+    if not isinstance(data, dict):
+        logger.warning(
+            "deploy status body is %s, expected an object",
+            type(data).__name__,
+            extra={"data": {"event": "deploy_status_bad_shape", "run_id": run_id}},
+        )
+        raise HTTPException(
+            status_code=502, detail="GitHub returned an unexpected status body."
+        )
     # Return GitHub's RAW status — app.js matches 'completed'/'success' (§5.3a).
     return {
         "status": data.get("status"),

@@ -60,13 +60,20 @@
    a quote or an angle bracket, and Jinja autoescapes regardless. Never relax
    those regexes to accommodate a "special" id; fix the id. #}
 {% macro ad_slot(adsense, slot) -%}
-{%- set slot_id = adsense.get('slots', {}).get(slot, '') -%}
-{%- if adsense.get('enabled') and adsense.get('publisher_id') and slot_id -%}
+{#- Mirror adsense_is_live()'s `or {}` rather than relying on .get's default,
+    which only covers an ABSENT key and not a present-but-None value. A
+    `site-config.yaml` with a childless `adsense:` or `slots:` key parses to
+    None, and this macro is called UNCONDITIONALLY from all three tool
+    templates — so without this the build crashes on a config the predicate
+    deliberately tolerates, even with ads off. -#}
+{%- set ads = adsense or {} -%}
+{%- set slot_id = (ads.get('slots') or {}).get(slot, '') -%}
+{%- if ads.get('enabled') and ads.get('publisher_id') and slot_id -%}
 {%- set name = slot|replace('_', '-') -%}
 <div class="ad-slot ad-slot--{{ name }}" id="ad-{{ name }}">
   <ins class="adsbygoogle"
        style="display:block"
-       data-ad-client="{{ adsense.publisher_id }}"
+       data-ad-client="{{ ads.get('publisher_id') }}"
        data-ad-slot="{{ slot_id }}"
        data-ad-format="auto"
        data-full-width-responsive="true"></ins>

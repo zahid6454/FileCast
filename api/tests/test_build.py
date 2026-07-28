@@ -449,6 +449,40 @@ def test_adsense_is_live_requires_enabled_publisher_and_a_slot():
     assert build.adsense_is_live({"adsense": {"enabled": True, "slots": None}}) is False
 
 
+@pytest.mark.parametrize(
+    "adsense",
+    [
+        None,
+        {},
+        {"enabled": True, "publisher_id": "ca-pub-1", "slots": None},
+        {"enabled": True, "publisher_id": "ca-pub-1"},
+        {"enabled": True, "publisher_id": None, "slots": {"leaderboard": "1"}},
+    ],
+    ids=["adsense-none", "empty", "slots-none", "slots-absent", "publisher-none"],
+)
+def test_ad_slot_macro_tolerates_what_the_predicate_tolerates(adsense):
+    # ad_slot() is called UNCONDITIONALLY from all three tool templates — the
+    # guard is inside it — so any shape it cannot render must yield "" rather
+    # than crash the build. adsense_is_live() returns False for all of these, so
+    # the macro disagreeing with it is a build failure on a config the rest of
+    # the system deliberately tolerates, and with ads OFF at that.
+    #
+    # `.get(k, default)` covers an ABSENT key, not a present-but-None value, and
+    # `adsense:` / `slots:` with no children is valid YAML that parses to None.
+    import jinja2
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(build.TEMPLATES_DIR)),
+        autoescape=True,
+        undefined=jinja2.StrictUndefined,
+    )
+    tpl = env.from_string(
+        "{% from '_macros.html' import ad_slot %}{{ ad_slot(ads, 'leaderboard') }}"
+    )
+    assert build.adsense_is_live({"adsense": adsense}) is False
+    assert tpl.render(ads=adsense).strip() == ""
+
+
 def test_half_configured_adsense_does_not_widen_the_csp(tmp_path, monkeypatch):
     # 🔴 §8: "enabling AdSense must not widen the CSP without rendering ads."
     # The template guard needs a publisher id AND a slot id; if the CSP branch
