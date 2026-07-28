@@ -14,6 +14,10 @@
 (function () {
   'use strict';
 
+  // How long to give a unit before treating it as unfilled. Long enough that a
+  // slow-but-successful fill is not hidden (see collapseUnfilled).
+  var COLLAPSE_DELAY_MS = 2000;
+
   var units = document.querySelectorAll('ins.adsbygoogle');
   if (!units.length) return;
 
@@ -25,7 +29,28 @@
     try {
       window.adsbygoogle.push({});
     } catch (e) {
-      /* blocked or failed — the slot just stays empty */
+      /* blocked or failed — the slot just stays empty, and collapses below */
     }
   }
+
+  // Collapse any slot that never filled, rather than leaving a reserved 90px or
+  // 280px blank box. FileCast's audience skews privacy-conscious (see
+  // api/data/fingerprint.py) so expect a higher-than-typical blocked share.
+  //
+  // Collapsing after a delay is itself a layout shift, but a one-time collapse
+  // of an empty box beats a permanent gap. Do NOT collapse eagerly: a
+  // slow-but-successful fill would be hidden.
+  function collapseUnfilled() {
+    var slots = document.querySelectorAll('.ad-slot');
+    for (var i = 0; i < slots.length; i++) {
+      var slot = slots[i];
+      var ins = slot.querySelector('ins.adsbygoogle');
+      if (!ins) continue;
+      if (ins.getAttribute('data-ad-status') === 'unfilled' || ins.offsetHeight === 0) {
+        slot.style.display = 'none';
+      }
+    }
+  }
+
+  setTimeout(collapseUnfilled, COLLAPSE_DELAY_MS);
 })();

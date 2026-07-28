@@ -435,6 +435,27 @@ def test_full_build_one_slot_configured_renders_only_that_slot(tmp_path, monkeyp
         assert "ad-slot--in-content" not in html
 
 
+def test_built_css_reserves_each_slot_at_its_own_height(tmp_path, monkeypatch):
+    # §4.1. Both units shared one 90px reservation, so the in-content rectangle
+    # (280px) would shift the page ~190px on fill. Asserted on the BUILT sheet
+    # on purpose: `assets/style.css` is a dead pre-Phase-3 leftover that already
+    # contains a similar-looking rule and greps as if it were live, so editing
+    # it instead produces a clean diff, a green build and no behaviour change
+    # (§8). Only static/css/style.css reaches dist.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    sheets = list((tmp_path / "css").glob("style.*.css"))
+    assert len(sheets) == 1, sheets
+    # process_assets() minifies, so match the minified form.
+    css = sheets[0].read_text(encoding="utf-8")
+    assert ".ad-slot--leaderboard{min-height:var(--ad-leaderboard-h)}" in css
+    assert ".ad-slot--in-content{min-height:var(--ad-rectangle-h)}" in css
+    # The base rule must carry no height of its own, or the leaderboard value
+    # wins for both and the rectangle is back to under-reserving.
+    base = re.search(r"\.ad-slot\{([^}]*)\}", css)
+    assert base and "min-height" not in base.group(1), base
+
+
 def test_full_build_no_inline_script_anywhere(tmp_path, monkeypatch):
     # P6/P7, with ads ON — the posture that most tempts an inline snippet, since
     # Google's documented per-unit push IS inline. A single inline unit push
