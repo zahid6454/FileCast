@@ -188,6 +188,104 @@ async def test_fallback_ignores_runs_with_unusable_created_at(
     assert r.json()["run_id"] is None
 
 
+class ArbitraryBodyClient(FakeClient):
+    """POST→204; the runs GET returns 200 with an arbitrary JSON body."""
+
+    def __init__(self, body):
+        self.body = body
+
+    async def post(self, url, headers=None, json=None):  # noqa: A002
+        return FakeResp(204)
+
+    async def get(self, url, headers=None):
+        return FakeResp(200, self.body)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        [1, 2],  # body is an array, not an object → .get AttributeError
+        "nope",  # body is a string → .get AttributeError
+        {"workflow_runs": "oops"},  # iterating a str yields chars → AttributeError
+        {"workflow_runs": [1, 2]},  # entries aren't run objects → AttributeError
+        {"workflow_runs": 5},  # not iterable → TypeError
+        {"workflow_runs": None},
+        {"workflow_runs": [{"id": 9, "name": 123}]},  # int + str → TypeError
+    ],
+    ids=[
+        "body-is-array",
+        "body-is-string",
+        "runs-is-string",
+        "runs-holds-ints",
+        "runs-is-number",
+        "runs-is-null",
+        "run-name-is-number",
+    ],
+)
+async def test_malformed_runs_body_never_fails_a_succeeded_dispatch(
+    admin_client, monkeypatch, body
+):
+    # Every one of these raised before _runs_from() existed — AttributeError or
+    # TypeError, depending on which layer was wrong — and NONE of them were
+    # caught: the inner except covered httpx.HTTPError/ValueError, the outer
+    # only httpx.HTTPError. So a body GitHub should never send would escape
+    # _resolve_run_id, which runs AFTER a successful 204, and turn a deploy that
+    # already started into a 500. Unresolvable is fine; raising is not.
+    _use(monkeypatch, ArbitraryBodyClient(body))
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200, r.text  # NOT 500
+    assert r.json()["run_id"] is None
+
+
+async def test_junk_entries_do_not_hide_a_real_run(admin_client, monkeypatch):
+    # Skipping malformed entries must not mean skipping the list. A real run
+    # sitting behind junk is still matched on its deploy_id — otherwise the
+    # hardening would have quietly cost the panel its polling.
+    class MixedClient(FakeClient):
+        def __init__(self):
+            self.deploy_id = None
+
+        async def post(self, url, headers=None, json=None):  # noqa: A002
+            self.deploy_id = json["inputs"]["deploy_id"]
+            return FakeResp(204)
+
+        async def get(self, url, headers=None):
+            return FakeResp(
+                200,
+                {
+                    "workflow_runs": [
+                        1,
+                        "junk",
+                        None,
+                        {
+                            "id": 7,
+                            "name": f"Deploy {self.deploy_id}",
+                            "created_at": _iso(1),
+                        },
+                    ]
+                },
+            )
+
+    _use(monkeypatch, MixedClient())
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.json()["run_id"] == 7
+
+
+async def test_non_200_runs_response_yields_no_candidates(admin_client, monkeypatch):
+    # A 404/500 body is not a runs list, and must not be read as one.
+    class NotOkClient(FakeClient):
+        async def post(self, url, headers=None, json=None):  # noqa: A002
+            return FakeResp(204)
+
+        async def get(self, url, headers=None):
+            return FakeResp(500, {"workflow_runs": [{"id": 1, "created_at": _iso(1)}]})
+
+    _use(monkeypatch, NotOkClient())
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200
+    assert r.json()["run_id"] is None
+
+
 async def test_deploy_id_match_wins_over_the_timestamp_filter(
     admin_client, monkeypatch
 ):

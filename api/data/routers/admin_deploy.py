@@ -92,6 +92,36 @@ def _created_at(run: dict) -> datetime | None:
     return parsed if parsed.tzinfo is not None else None
 
 
+def _runs_from(resp) -> list[dict]:
+    """The ``workflow_runs`` array of a runs-list response, as run objects only.
+
+    Paranoid about shape because of WHERE the caller runs — after a successful
+    204 dispatch, where ANY escaping exception turns a deploy that already
+    started into a reported failure. That is the one thing this module must
+    never do, so an unexpected body degrades to "no candidates" instead.
+
+    Every layer can be wrong independently, and each raised a different
+    exception before this existed: a body that isn't an object (``.get`` on a
+    list/str → AttributeError), a ``workflow_runs`` that isn't a list (iterating
+    a str yields characters → AttributeError; an int isn't iterable →
+    TypeError), and entries that aren't run objects (``.get`` on an int →
+    AttributeError). None of them are actionable — we cannot resolve a run id
+    from them — but none are worth a 500 either.
+    """
+    if resp.status_code != 200:
+        return []
+    try:
+        body = resp.json()
+    except ValueError:  # JSONDecodeError is a subclass
+        return []
+    if not isinstance(body, dict):
+        return []
+    runs = body.get("workflow_runs")
+    if not isinstance(runs, list):
+        return []
+    return [r for r in runs if isinstance(r, dict)]
+
+
 async def _resolve_run_id(
     client: httpx.AsyncClient, deploy_id: str, dispatched_at: datetime
 ):
@@ -120,22 +150,21 @@ async def _resolve_run_id(
     floor = dispatched_at - timedelta(seconds=_RUN_CLOCK_SKEW_GRACE)
     newest = None
     for attempt in range(_RUN_RESOLVE_ATTEMPTS):
-        runs = []
-        # The GET and the body-parse are both best-effort: a network error
-        # (httpx.HTTPError) or a malformed 200 body (json → ValueError, of which
-        # JSONDecodeError is a subclass) is swallowed as a failed attempt, never
-        # bubbled up to fail an already-succeeded dispatch.
+        # Both the GET and the body are best-effort: a network error here is
+        # swallowed as a failed attempt and never bubbled up to fail an
+        # already-succeeded dispatch. Body shape is _runs_from's job.
         try:
-            resp = await client.get(runs_url, headers=_gh_headers())
-            if resp.status_code == 200:
-                runs = resp.json().get("workflow_runs", []) or []
-        except (httpx.HTTPError, ValueError):
+            runs = _runs_from(await client.get(runs_url, headers=_gh_headers()))
+        except httpx.HTTPError:
             runs = []
         for run in runs:
             created = _created_at(run)
             if newest is None and created is not None and created >= floor:
                 newest = run.get("id")
-            name = (run.get("name") or "") + " " + (run.get("display_title") or "")
+            # f-string rather than concatenation: these are attacker-irrelevant
+            # but type-unstable, and a non-string `name` used to raise TypeError
+            # on `int + str`. Formatting coerces whatever arrives.
+            name = f"{run.get('name') or ''} {run.get('display_title') or ''}"
             if deploy_id in name:
                 # An exact deploy_id match is authoritative — it identifies OUR
                 # run regardless of what its timestamp says.
