@@ -364,9 +364,10 @@ def test_full_build_all_off_row_renders_no_adsense(tmp_path, monkeypatch):
 # A publisher id / slot ids matching the validation in site_settings.py
 # (^ca-pub-\d{16}$ and ^\d+$). Anything outside those shapes is rejected by the
 # API, so the templates only ever see values of this form.
+_PUB = "ca-pub-1234567890123456"
 ADS_ON = dict(
     adsense_enabled=True,
-    adsense_publisher_id="ca-pub-1234567890123456",
+    adsense_publisher_id=_PUB,
     adsense_slot_leaderboard="1111111111",
     adsense_slot_in_content="2222222222",
 )
@@ -398,7 +399,13 @@ def test_full_build_ads_on_renders_units_on_all_three_templates(tmp_path, monkey
         assert 'class="ad-slot ad-slot--in-content"' in html, ctx
         # The vendor loader + the self-hosted pusher, both external (P6/P7).
         assert "pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" in html, ctx
-        assert re.search(r'<script src="/js/ads\.[0-9a-f]+\.js"', html), ctx
+        # §8: ads.js MUST be deferred. Non-deferred it runs before the <ins>
+        # elements exist, finds zero units and silently pushes nothing — no
+        # error, no ads. SRI'd and crossorigin like every other module here.
+        loader = re.search(r"<script src=\"/js/ads\.[0-9a-f]+\.js\"[^>]*>", html)
+        assert loader, ctx
+        assert " defer" in loader.group(0), loader.group(0)
+        assert "integrity=" in loader.group(0), loader.group(0)
 
     csp = _csp_from_build(tmp_path)
     assert "https://pagead2.googlesyndication.com" in csp
@@ -417,6 +424,74 @@ def test_full_build_ads_on_leaves_adless_pages_alone(tmp_path, monkeypatch):
     for page in ("index.html", "about/index.html", "privacy/index.html"):
         html = (tmp_path / page).read_text(encoding="utf-8")
         assert "adsbygoogle" not in html, page
+
+
+def test_adsense_is_live_requires_enabled_publisher_and_a_slot():
+    # The single predicate both the CSP branch and base.html's loader read.
+    def cfg(**kw):
+        base = {"enabled": True, "publisher_id": "ca-pub-1", "slots": {}}
+        slots = kw.pop("slots", {"leaderboard": "1"})
+        base.update(kw)
+        base["slots"] = slots
+        return {"adsense": base}
+
+    assert build.adsense_is_live(cfg()) is True
+    assert build.adsense_is_live(cfg(slots={"in_content": "2"})) is True
+    assert build.adsense_is_live(cfg(enabled=False)) is False
+    assert build.adsense_is_live(cfg(publisher_id="")) is False
+    assert build.adsense_is_live(cfg(slots={})) is False
+    assert (
+        build.adsense_is_live(cfg(slots={"leaderboard": "", "in_content": ""})) is False
+    )
+    # Structurally absent config must not raise.
+    assert build.adsense_is_live({}) is False
+    assert build.adsense_is_live({"adsense": None}) is False
+    assert build.adsense_is_live({"adsense": {"enabled": True, "slots": None}}) is False
+
+
+def test_half_configured_adsense_does_not_widen_the_csp(tmp_path, monkeypatch):
+    # 🔴 §8: "enabling AdSense must not widen the CSP without rendering ads."
+    # The template guard needs a publisher id AND a slot id; if the CSP branch
+    # asked only for `enabled`, this overlay would open Google's origins for
+    # inventory that never appears — an attack-surface increase bought for
+    # nothing, with no error anywhere. The two conditions must agree.
+    _seed_site_settings(
+        adsense_enabled=True,
+        adsense_publisher_id="ca-pub-1234567890123456",
+    )
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    csp = _csp_from_build(tmp_path)
+    assert "script-src 'self';" in csp
+    assert "googlesyndication" not in csp
+    assert "frame-src 'none'" in csp
+
+
+@pytest.mark.parametrize(
+    ("overlay", "expect_ads"),
+    [
+        ({}, False),  # all off
+        ({"adsense_enabled": True}, False),  # toggle only
+        ({"adsense_enabled": True, "adsense_publisher_id": _PUB}, False),  # no slot
+        ({"adsense_slot_leaderboard": "1111111111"}, False),  # slot, not enabled
+        ({"adsense_publisher_id": _PUB, "adsense_slot_leaderboard": "1"}, False),
+        (ADS_ON, True),  # fully configured
+    ],
+)
+def test_csp_ad_origins_appear_exactly_when_units_do(
+    tmp_path, monkeypatch, overlay, expect_ads
+):
+    # The §8 invariant stated as an EQUIVALENCE rather than a one-way check:
+    # across every overlay shape, ad origins are in the CSP if and only if a
+    # built tool page actually carries units. Either direction is a bug — a CSP
+    # opened for nothing (§1.1), or units whose origins are blocked.
+    _seed_site_settings(**overlay)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    has_origins = "googlesyndication" in _csp_from_build(tmp_path)
+    has_units = "adsbygoogle" in _tool_page(tmp_path, TOOL_PAGES["standard"])
+    assert has_origins == has_units, overlay
+    assert has_units is expect_ads, overlay
 
 
 def test_full_build_half_configured_adsense_renders_nothing(tmp_path, monkeypatch):

@@ -47,11 +47,13 @@
    Renders nothing unless the toggle is on AND both ids are usable. A
    half-configured overlay (enabled, publisher set, slot id blank) would
    otherwise emit `<ins data-ad-slot="">`, which fails opaquely at Google's end.
-   generate_headers() widens the CSP on `adsense.enabled` alone, so the
-   half-configured case is the one where the two conditions differ: the CSP
-   opens without a unit to justify it. That is the strictly safer direction —
-   an ad origin allowed but never contacted — and the alternative (emitting a
-   broken unit to match the CSP) is worse.
+   This is a per-slot REFINEMENT of build.py's adsense_is_live(), which gates
+   both the CSP's ad origins and base.html's loader. That predicate asks "will
+   any unit render"; this asks "will THIS one". It can therefore render fewer
+   units than the CSP allows for — one slot configured, the other not — but
+   never more, and never any when the CSP has not opened. The direction matters:
+   the reverse (a unit whose origins are blocked) is a broken ad, and a CSP
+   opened for zero units is §1.1's fail-silently bug.
 
    Both ids are attribute-injected, which is why site_settings.py validates
    publisher_id as `^ca-pub-\d{16}$` and slot ids as `^\d+$` — neither can carry

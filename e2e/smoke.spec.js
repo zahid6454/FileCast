@@ -126,6 +126,14 @@ test('no inline <script> body on a tool page', async ({ page }) => {
       // JSON data islands (#tool-config, #filecast-config) and JSON-LD are
       // inert data, not executable — they are the CSP-safe pattern here.
       .filter((s) => !/^application\/(ld\+)?json$/.test(s.type))
+      // `python build.py --watch` injects a live-reload shim into every page it
+      // serves (build.py's ReloadHandler). It is never in dist/ and never in
+      // CI — playwright.config.js starts a plain `python -m http.server` — but
+      // reuseExistingServer means a --watch server left running on :8000 gets
+      // reused locally, and without this the test would fail on a dev machine
+      // for a script the build never emitted. Matched narrowly on its own
+      // endpoint so a genuine inline script still fails.
+      .filter((s) => !s.textContent.includes("EventSource('/__reload')"))
       .map((s) => s.outerHTML.slice(0, 120))
   );
   expect(inline, inline.join('\n')).toEqual([]);

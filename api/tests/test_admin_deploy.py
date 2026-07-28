@@ -173,6 +173,13 @@ async def test_fallback_ignores_runs_with_unusable_created_at(
             {"id": 1, "name": "no timestamp"},
             {"id": 2, "name": "bad timestamp", "created_at": "not-a-date"},
             {"id": 3, "name": "null timestamp", "created_at": None},
+            # Parses fine but has NO offset. Comparing it against the aware
+            # floor raises TypeError, which would escape _resolve_run_id — a
+            # function that runs AFTER a successful 204 — and turn a deploy that
+            # already started into a 500. Must be treated as unusable, not
+            # allowed to raise.
+            {"id": 4, "name": "naive timestamp", "created_at": "2099-01-01T00:00:00"},
+            {"id": 5, "name": "numeric timestamp", "created_at": 1234567890},
         ]
     )
     _use(monkeypatch, client)

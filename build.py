@@ -737,6 +737,9 @@ def create_jinja_env(
     env.filters["format_bytes"] = format_bytes_filter
     env.globals["site"] = site_config.get("site", {})
     env.globals["adsense"] = site_config.get("adsense", {})
+    # Precomputed so base.html's loader block and generate_headers()'s CSP branch
+    # cannot drift apart — they are the two halves of the §1.1 invariant.
+    env.globals["adsense_live"] = adsense_is_live(site_config)
     env.globals["ga4"] = site_config.get("ga4", {})
     env.globals["sentry"] = site_config.get("sentry", {})
     api_config = site_config.get("api", {})
@@ -914,6 +917,33 @@ def generate_robots(site_config: dict):
 # ---------------------------------------------------------------------------
 
 
+def adsense_is_live(site_config: dict) -> bool:
+    """True when AdSense is enabled AND configured well enough for at least one
+    unit to actually render.
+
+    🔴 This is the SINGLE source of truth for that question, deliberately. The
+    CSP branch below and the loader block in ``base.html`` (via the
+    ``adsense_live`` Jinja global) must agree on it, or enabling AdSense widens
+    the CSP for Google's origins while nothing renders — a real, if small,
+    attack-surface increase bought for zero inventory, with nothing erroring or
+    warning anywhere. That is the §1.1 failure this phase exists to close, and a
+    half-configured overlay (enabled, no publisher or no slot id) is exactly how
+    it happens.
+
+    ``ad_slot()`` narrows this further per slot: a slot whose own id is blank
+    renders nothing even when the other one does. That is a refinement, not a
+    disagreement — it can only ever render fewer units than this predicate
+    allows, never more.
+    """
+    ads = site_config.get("adsense", {}) or {}
+    slots = ads.get("slots", {}) or {}
+    return bool(
+        ads.get("enabled")
+        and ads.get("publisher_id")
+        and (slots.get("leaderboard") or slots.get("in_content"))
+    )
+
+
 def generate_headers(site_config: dict):
     # Derived from site-config.yaml rather than hardcoded, so a new environment
     # is a config edit rather than a code edit — and so connect-src can never
@@ -921,7 +951,10 @@ def generate_headers(site_config: dict):
     # AFTER create_jinja_env(), which is where an API_URL env override is folded
     # into site_config["api"], so the override reaches the CSP too.
     api_url = site_config.get("api", {}).get("base_url", "").rstrip("/")
-    adsense_enabled = site_config.get("adsense", {}).get("enabled", False)
+    # NOT `adsense.enabled` alone — see adsense_is_live()'s docstring. The
+    # templates render units only when a publisher id and a slot id are present,
+    # so gating the origins on anything weaker opens them with nothing to fill.
+    adsense_enabled = adsense_is_live(site_config)
     ga4_enabled = site_config.get("ga4", {}).get("enabled", False)
     sentry_enabled = site_config.get("sentry", {}).get("enabled", False)
 

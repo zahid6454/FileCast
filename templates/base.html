@@ -69,25 +69,22 @@
      `script-src 'self'` survives (P6/P7). ads.js does the per-unit push that
      Google's documented snippet does inline.
 
-     The condition must render at least one unit, not merely "ads are on" —
-     otherwise this is §1.1's failure in miniature: Google's ad server contacted
-     on a page carrying no inventory. Two ways that happens, both gated here:
+     `adsense_live` is build.py's adsense_is_live() — enabled AND a publisher id
+     AND at least one slot id, i.e. "at least one unit will actually render".
+     generate_headers() gates the CSP's ad origins on the SAME predicate, which
+     is what stops the toggle from widening the CSP for inventory that never
+     appears (§1.1). Do not re-derive that condition here; change the predicate.
 
-       · `tool is defined` — all six slots live in the three tool templates, so
-         the homepage, category and static pages have no units at all. (Adding
-         slots elsewhere is a density decision, not a follow-up — §6.)
-       · at least one slot id — a half-configured overlay (enabled, publisher
-         set, both slot ids blank) makes ad_slot() render nothing, so the loader
-         would have no <ins> to fill.
-
-     Keep this in step with ad_slot()'s guard in _macros.html; they answer the
-     same question from opposite ends and drift silently if only one changes.
+     `tool is defined` is the second half: all six slots live in the three tool
+     templates, so the homepage, category and static pages carry no inventory
+     and have no reason to contact Google's ad server. (Adding slots elsewhere
+     is a density decision, not a follow-up — §6.) It is deliberately NOT part
+     of adsense_is_live(), since the CSP is one document for the whole site.
 
      ⚠ `defer` is load-bearing — ads.js must run AFTER the <ins> elements exist
      or it finds zero units and silently pushes nothing. Do not copy
      analytics.js's non-deferred loading here. #}
-  {% set ad_slots = adsense.get('slots', {}) %}
-  {% if adsense.get('enabled') and adsense.get('publisher_id') and tool is defined and (ad_slots.get('leaderboard') or ad_slots.get('in_content')) %}
+  {% if adsense_live and tool is defined %}
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ adsense.publisher_id }}"
           crossorigin="anonymous"></script>
   {% set ads_js = assets.get('js/ads.js') %}

@@ -82,9 +82,14 @@ def _created_at(run: dict) -> datetime | None:
         return None
     try:
         # GitHub emits "...Z"; fromisoformat only learned Z in 3.11.
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
         return None
+    # An offset-NAIVE timestamp parses fine and then raises TypeError on the
+    # first comparison against an aware `floor`. That exception would escape
+    # _resolve_run_id — which runs AFTER a successful 204 — and turn a deploy
+    # that already started into a 500. Unusable, same as unparseable.
+    return parsed if parsed.tzinfo is not None else None
 
 
 async def _resolve_run_id(
