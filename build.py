@@ -737,6 +737,9 @@ def create_jinja_env(
     env.filters["format_bytes"] = format_bytes_filter
     env.globals["site"] = site_config.get("site", {})
     env.globals["adsense"] = site_config.get("adsense", {})
+    # Precomputed so base.html's loader block and generate_headers()'s CSP branch
+    # cannot drift apart — they are the two halves of the §1.1 invariant.
+    env.globals["adsense_live"] = adsense_is_live(site_config)
     env.globals["ga4"] = site_config.get("ga4", {})
     env.globals["sentry"] = site_config.get("sentry", {})
     api_config = site_config.get("api", {})
@@ -914,9 +917,44 @@ def generate_robots(site_config: dict):
 # ---------------------------------------------------------------------------
 
 
+def adsense_is_live(site_config: dict) -> bool:
+    """True when AdSense is enabled AND configured well enough for at least one
+    unit to actually render.
+
+    🔴 This is the SINGLE source of truth for that question, deliberately. The
+    CSP branch below and the loader block in ``base.html`` (via the
+    ``adsense_live`` Jinja global) must agree on it, or enabling AdSense widens
+    the CSP for Google's origins while nothing renders — a real, if small,
+    attack-surface increase bought for zero inventory, with nothing erroring or
+    warning anywhere. That is the §1.1 failure this phase exists to close, and a
+    half-configured overlay (enabled, no publisher or no slot id) is exactly how
+    it happens.
+
+    ``ad_slot()`` narrows this further per slot: a slot whose own id is blank
+    renders nothing even when the other one does. That is a refinement, not a
+    disagreement — it can only ever render fewer units than this predicate
+    allows, never more.
+    """
+    ads = site_config.get("adsense", {}) or {}
+    slots = ads.get("slots", {}) or {}
+    return bool(
+        ads.get("enabled")
+        and ads.get("publisher_id")
+        and (slots.get("leaderboard") or slots.get("in_content"))
+    )
+
+
 def generate_headers(site_config: dict):
-    api_url = "https://api.filecast.io"
-    adsense_enabled = site_config.get("adsense", {}).get("enabled", False)
+    # Derived from site-config.yaml rather than hardcoded, so a new environment
+    # is a config edit rather than a code edit — and so connect-src can never
+    # name a different origin from the one the pages actually call. This runs
+    # AFTER create_jinja_env(), which is where an API_URL env override is folded
+    # into site_config["api"], so the override reaches the CSP too.
+    api_url = site_config.get("api", {}).get("base_url", "").rstrip("/")
+    # NOT `adsense.enabled` alone — see adsense_is_live()'s docstring. The
+    # templates render units only when a publisher id and a slot id are present,
+    # so gating the origins on anything weaker opens them with nothing to fill.
+    adsense_enabled = adsense_is_live(site_config)
     ga4_enabled = site_config.get("ga4", {}).get("enabled", False)
     sentry_enabled = site_config.get("sentry", {}).get("enabled", False)
 
@@ -925,14 +963,44 @@ def generate_headers(site_config: dict):
     # connect-src already allows the API origin (data API shares it, F15). Add the
     # Google OAuth token/authorize hosts for Phase 5. img-src gains Google avatars
     # (Phase 5); style-src/font-src gain Google Fonts for the Inter face (Phase 3).
-    connect_src = (
-        f"'self' {api_url} https://accounts.google.com https://oauth2.googleapis.com"
+    connect_src = " ".join(
+        # A config with no api.base_url must not emit a stray empty token.
+        p
+        for p in (
+            "'self'",
+            api_url,
+            "https://accounts.google.com",
+            "https://oauth2.googleapis.com",
+        )
+        if p
     )
     style_src = "'self' 'unsafe-inline' https://fonts.googleapis.com"
     font_src = "'self' https://fonts.gstatic.com"
     img_src = "'self' data: blob: https://lh3.googleusercontent.com"
     frame_src = "'none'"
 
+    # ⚠ UNVERIFIED — SPECULATIVE, NOT MEASURED (Phase 9 §3.3, still open).
+    #
+    # This branch was written in Phase 2 against Google's documentation and has
+    # never been exercised against a live ad serve. AdSense is not approved yet,
+    # so there is no real publisher id to measure with, and no CI job can do it:
+    # it needs a real ad response in a real browser with the CSP ENFORCED.
+    #
+    # It is very likely INSUFFICIENT. Ads render through frames and images from
+    # hosts not listed here (tpc.googlesyndication.com and www.google.com are the
+    # usual first two), and img-src/connect-src are untouched entirely. Do NOT
+    # add origins on the strength of what the docs imply — an origin allowlisted
+    # on a guess is a permanent widening bought with no evidence.
+    #
+    # Method when approval lands: deploy preview, real publisher id, toggle on,
+    # tool page, CSP enforced, drive the console to zero violations adding ONE
+    # origin at a time — then replace this comment with one saying it was
+    # measured, and on what date. See §7.2 item 1.
+    #
+    # Hard constraint regardless of what the measurement shows: script-src never
+    # gains 'unsafe-inline' and no inline <script> enters a built page. If ads
+    # cannot render without inline script, stop and escalate — ads.js and the
+    # external loader exist precisely to avoid that trade (P6/P7).
     if adsense_enabled:
         script_src += (
             " https://pagead2.googlesyndication.com https://www.googletagmanager.com"

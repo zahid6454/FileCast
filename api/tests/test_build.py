@@ -9,6 +9,7 @@ that also exercises StrictUndefined-safe rendering of admin/account.
 """
 
 import json
+import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -231,6 +232,23 @@ def test_full_build_no_db_emits_all_off(tmp_path, monkeypatch):
     assert "FileCast" in home  # YAML-seeded copy renders
 
 
+def test_headers_api_origin_follows_site_config(tmp_path, monkeypatch):
+    # §5 item 5: connect-src derives the API origin from site_config instead of
+    # a hardcoded literal, so a new environment is a config edit — and so the
+    # CSP can never name a different origin from the one the pages call.
+    # generate_headers() runs after create_jinja_env(), which folds the API_URL
+    # override into site_config, so the override reaches the CSP too.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    monkeypatch.setenv("API_URL", "https://api.staging.example/")
+    build.build()
+    csp = _csp_from_build(tmp_path)
+    assert "connect-src 'self' https://api.staging.example " in csp
+    assert "api.filecast.io" not in csp
+    # The pages must agree with the header — that is the whole point.
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "https://api.staging.example" in home
+
+
 def test_full_build_overlay_bakes_ga4(tmp_path, monkeypatch):
     # An all-off YAML + a DB row enabling GA4 ⇒ the CSP gains the GTM host and the
     # gtag script is baked. Proves the overlay reaches BOTH the CSP and templates.
@@ -282,6 +300,310 @@ def test_full_build_site_name_html_is_escaped(tmp_path, monkeypatch):
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert "<script>alert(1)</script>" not in home  # no live injected tag
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in home  # escaped instead
+
+
+# --------------------------------------------------------------------------- #
+# Ad slots — one page per ui_type (Phase 9 §2.1)
+#
+# The all-off build tests above assert only on the CSP and index.html and never
+# open a tool page, which is exactly how the §1.2 defect shipped: `tool.html`
+# guarded its slots and the other two templates did not, so 11 of 34 tool pages
+# rendered two permanently blank ~90px reservations with AdSense OFF. These
+# assert on a built page of EACH ui_type so divergence between the three
+# templates fails a test instead of shipping silently.
+# --------------------------------------------------------------------------- #
+
+# ui_type → a concrete built tool page. Keep one entry per template.
+TOOL_PAGES = {
+    "standard": "convert/pdf-to-jpg",  # tool.html
+    "text-input": "convert/csv-to-json",  # tool-text.html
+    "multi-file": "convert/pdf-merge",  # tool-multi.html
+}
+
+
+def _tool_page(built, slug: str) -> str:
+    return (built / slug / "index.html").read_text(encoding="utf-8")
+
+
+def test_full_build_all_off_row_renders_no_ad_slots(tmp_path, monkeypatch):
+    # §2: with the overlay row present and AdSense off, NO tool page of ANY
+    # ui_type may ship a reserved `.ad-slot` box. Asserting on all three
+    # templates is the point — testing only the 23 `standard` tools is what
+    # left the other 11 unverified.
+    _seed_site_settings(site_name="Present But Off")
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for ui_type, slug in TOOL_PAGES.items():
+        html = _tool_page(tmp_path, slug)
+        assert 'class="ad-slot' not in html, f"{ui_type} ({slug}) ships a blank ad slot"
+
+
+def test_full_build_no_db_renders_no_ad_slots(tmp_path, monkeypatch):
+    # Same invariant on the no-row (pure-YAML) path, where `adsense.enabled`
+    # comes from site-config.yaml rather than the overlay.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for ui_type, slug in TOOL_PAGES.items():
+        html = _tool_page(tmp_path, slug)
+        assert 'class="ad-slot' not in html, f"{ui_type} ({slug}) ships a blank ad slot"
+
+
+def test_full_build_all_off_row_renders_no_adsense(tmp_path, monkeypatch):
+    # §3.4: off means off end-to-end — no unit markup, no vendor loader, and a
+    # script-src that is literally 'self'.
+    _seed_site_settings(site_name="Present But Off")
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    assert "script-src 'self';" in _csp_from_build(tmp_path)
+    for slug in TOOL_PAGES.values():
+        html = _tool_page(tmp_path, slug)
+        assert "adsbygoogle" not in html
+        assert "googlesyndication" not in html
+
+
+# A publisher id / slot ids matching the validation in site_settings.py
+# (^ca-pub-\d{16}$ and ^\d+$). Anything outside those shapes is rejected by the
+# API, so the templates only ever see values of this form.
+_PUB = "ca-pub-1234567890123456"
+ADS_ON = dict(
+    adsense_enabled=True,
+    adsense_publisher_id=_PUB,
+    adsense_slot_leaderboard="1111111111",
+    adsense_slot_in_content="2222222222",
+)
+
+
+def test_full_build_ads_on_renders_units_on_all_three_templates(tmp_path, monkeypatch):
+    # §3.4, the ads-ON surface. This belongs in pytest and NOT in Playwright:
+    # the `test` job has Postgres, so a seeded overlay is real here, whereas the
+    # js-test dist has no database and is permanently ads-off — an ads-on
+    # Playwright assertion would pass vacuously (§1.4).
+    #
+    # Asserted on one page of EACH ui_type, per §8: covering only the 23
+    # `standard` tools is exactly how the §1.2 defect stayed invisible, and it
+    # would recur in the opposite direction (units on tool.html only).
+    _seed_site_settings(**ADS_ON)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+
+    for ui_type, slug in TOOL_PAGES.items():
+        html = _tool_page(tmp_path, slug)
+        ctx = f"{ui_type} ({slug})"
+        assert html.count('class="adsbygoogle"') == 2, ctx
+        assert html.count('data-ad-client="ca-pub-1234567890123456"') == 2, ctx
+        assert 'data-ad-slot="1111111111"' in html, ctx
+        assert 'data-ad-slot="2222222222"' in html, ctx
+        # §4.1: the modifier classes the scoped min-heights key off. Without
+        # them a 280px rectangle renders in a 90px reservation.
+        assert 'class="ad-slot ad-slot--leaderboard"' in html, ctx
+        assert 'class="ad-slot ad-slot--in-content"' in html, ctx
+        # The vendor loader + the self-hosted pusher, both external (P6/P7).
+        assert "pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" in html, ctx
+        # §8: ads.js MUST be deferred. Non-deferred it runs before the <ins>
+        # elements exist, finds zero units and silently pushes nothing — no
+        # error, no ads. SRI'd and crossorigin like every other module here.
+        loader = re.search(r"<script src=\"/js/ads\.[0-9a-f]+\.js\"[^>]*>", html)
+        assert loader, ctx
+        assert " defer" in loader.group(0), loader.group(0)
+        assert "integrity=" in loader.group(0), loader.group(0)
+
+    csp = _csp_from_build(tmp_path)
+    assert "https://pagead2.googlesyndication.com" in csp
+    assert "frame-src https://googleads.g.doubleclick.net" in csp
+    # The whole point of ads.js: enabling ads must never buy inline script.
+    assert "'unsafe-inline'" not in csp.split("script-src")[1].split(";")[0]
+
+
+def test_full_build_ads_on_leaves_adless_pages_alone(tmp_path, monkeypatch):
+    # All six slots live in the three tool templates. The homepage and static
+    # pages carry no inventory, so they must not contact Google's ad server
+    # either — §7.2 item 1's "confirm no leakage", pinned in CI.
+    _seed_site_settings(**ADS_ON)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for page in ("index.html", "about/index.html", "privacy/index.html"):
+        html = (tmp_path / page).read_text(encoding="utf-8")
+        assert "adsbygoogle" not in html, page
+
+
+def test_adsense_is_live_requires_enabled_publisher_and_a_slot():
+    # The single predicate both the CSP branch and base.html's loader read.
+    def cfg(**kw):
+        base = {"enabled": True, "publisher_id": "ca-pub-1", "slots": {}}
+        slots = kw.pop("slots", {"leaderboard": "1"})
+        base.update(kw)
+        base["slots"] = slots
+        return {"adsense": base}
+
+    assert build.adsense_is_live(cfg()) is True
+    assert build.adsense_is_live(cfg(slots={"in_content": "2"})) is True
+    assert build.adsense_is_live(cfg(enabled=False)) is False
+    assert build.adsense_is_live(cfg(publisher_id="")) is False
+    assert build.adsense_is_live(cfg(slots={})) is False
+    assert (
+        build.adsense_is_live(cfg(slots={"leaderboard": "", "in_content": ""})) is False
+    )
+    # Structurally absent config must not raise.
+    assert build.adsense_is_live({}) is False
+    assert build.adsense_is_live({"adsense": None}) is False
+    assert build.adsense_is_live({"adsense": {"enabled": True, "slots": None}}) is False
+
+
+@pytest.mark.parametrize(
+    "adsense",
+    [
+        None,
+        {},
+        {"enabled": True, "publisher_id": "ca-pub-1", "slots": None},
+        {"enabled": True, "publisher_id": "ca-pub-1"},
+        {"enabled": True, "publisher_id": None, "slots": {"leaderboard": "1"}},
+    ],
+    ids=["adsense-none", "empty", "slots-none", "slots-absent", "publisher-none"],
+)
+def test_ad_slot_macro_tolerates_what_the_predicate_tolerates(adsense):
+    # ad_slot() is called UNCONDITIONALLY from all three tool templates — the
+    # guard is inside it — so any shape it cannot render must yield "" rather
+    # than crash the build. adsense_is_live() returns False for all of these, so
+    # the macro disagreeing with it is a build failure on a config the rest of
+    # the system deliberately tolerates, and with ads OFF at that.
+    #
+    # `.get(k, default)` covers an ABSENT key, not a present-but-None value, and
+    # `adsense:` / `slots:` with no children is valid YAML that parses to None.
+    import jinja2
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(build.TEMPLATES_DIR)),
+        autoescape=True,
+        undefined=jinja2.StrictUndefined,
+    )
+    tpl = env.from_string(
+        "{% from '_macros.html' import ad_slot %}{{ ad_slot(ads, 'leaderboard') }}"
+    )
+    assert build.adsense_is_live({"adsense": adsense}) is False
+    assert tpl.render(ads=adsense).strip() == ""
+
+
+def test_half_configured_adsense_does_not_widen_the_csp(tmp_path, monkeypatch):
+    # 🔴 §8: "enabling AdSense must not widen the CSP without rendering ads."
+    # The template guard needs a publisher id AND a slot id; if the CSP branch
+    # asked only for `enabled`, this overlay would open Google's origins for
+    # inventory that never appears — an attack-surface increase bought for
+    # nothing, with no error anywhere. The two conditions must agree.
+    _seed_site_settings(
+        adsense_enabled=True,
+        adsense_publisher_id="ca-pub-1234567890123456",
+    )
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    csp = _csp_from_build(tmp_path)
+    assert "script-src 'self';" in csp
+    assert "googlesyndication" not in csp
+    assert "frame-src 'none'" in csp
+
+
+@pytest.mark.parametrize(
+    ("overlay", "expect_ads"),
+    [
+        ({}, False),  # all off
+        ({"adsense_enabled": True}, False),  # toggle only
+        ({"adsense_enabled": True, "adsense_publisher_id": _PUB}, False),  # no slot
+        ({"adsense_slot_leaderboard": "1111111111"}, False),  # slot, not enabled
+        ({"adsense_publisher_id": _PUB, "adsense_slot_leaderboard": "1"}, False),
+        (ADS_ON, True),  # fully configured
+    ],
+)
+def test_csp_ad_origins_appear_exactly_when_units_do(
+    tmp_path, monkeypatch, overlay, expect_ads
+):
+    # The §8 invariant stated as an EQUIVALENCE rather than a one-way check:
+    # across every overlay shape, ad origins are in the CSP if and only if a
+    # built tool page actually carries units. Either direction is a bug — a CSP
+    # opened for nothing (§1.1), or units whose origins are blocked.
+    _seed_site_settings(**overlay)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    has_origins = "googlesyndication" in _csp_from_build(tmp_path)
+    has_units = "adsbygoogle" in _tool_page(tmp_path, TOOL_PAGES["standard"])
+    assert has_origins == has_units, overlay
+    assert has_units is expect_ads, overlay
+
+
+def test_full_build_half_configured_adsense_renders_nothing(tmp_path, monkeypatch):
+    # §8: enabled with a publisher id but no slot ids must render ZERO units —
+    # an <ins data-ad-slot=""> fails opaquely at Google's end, with nothing in
+    # the build or the page to say so.
+    _seed_site_settings(
+        adsense_enabled=True,
+        adsense_publisher_id="ca-pub-1234567890123456",
+    )
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for ui_type, slug in TOOL_PAGES.items():
+        html = _tool_page(tmp_path, slug)
+        assert "adsbygoogle" not in html, f"{ui_type} ({slug})"
+        assert 'class="ad-slot' not in html, f"{ui_type} ({slug})"
+
+
+def test_full_build_one_slot_configured_renders_only_that_slot(tmp_path, monkeypatch):
+    # The guard is per-slot, not per-page: a leaderboard id with no in-content
+    # id yields exactly one unit, not two and not zero.
+    _seed_site_settings(
+        adsense_enabled=True,
+        adsense_publisher_id="ca-pub-1234567890123456",
+        adsense_slot_leaderboard="1111111111",
+    )
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for ui_type, slug in TOOL_PAGES.items():
+        html = _tool_page(tmp_path, slug)
+        assert html.count('class="adsbygoogle"') == 1, f"{ui_type} ({slug})"
+        assert "ad-slot--leaderboard" in html
+        assert "ad-slot--in-content" not in html
+
+
+def test_built_css_reserves_each_slot_at_its_own_height(tmp_path, monkeypatch):
+    # §4.1. Both units shared one 90px reservation, so the in-content rectangle
+    # (280px) would shift the page ~190px on fill. Asserted on the BUILT sheet
+    # on purpose: only static/css/style.css reaches dist, so a rule added to some
+    # other stylesheet produces a clean diff, a green build and no behaviour
+    # change (§8). Not hypothetical — a dead pre-Phase-3 `assets/style.css`
+    # carrying a near-identical rule shadowed this one in greps until §5 deleted
+    # it.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    sheets = list((tmp_path / "css").glob("style.*.css"))
+    assert len(sheets) == 1, sheets
+    # process_assets() minifies, so match the minified form.
+    css = sheets[0].read_text(encoding="utf-8")
+    assert ".ad-slot--leaderboard{min-height:var(--ad-leaderboard-h)}" in css
+    assert ".ad-slot--in-content{min-height:var(--ad-rectangle-h)}" in css
+    # The base rule must carry no height of its own, or the leaderboard value
+    # wins for both and the rectangle is back to under-reserving.
+    base = re.search(r"\.ad-slot\{([^}]*)\}", css)
+    assert base and "min-height" not in base.group(1), base
+
+
+def test_full_build_no_inline_script_anywhere(tmp_path, monkeypatch):
+    # P6/P7, with ads ON — the posture that most tempts an inline snippet, since
+    # Google's documented per-unit push IS inline. A single inline unit push
+    # would silently defeat `script-src 'self'` for the whole site.
+    #
+    # `<script type="application/json">` islands are data, not executable, and
+    # are explicitly the CSP-safe pattern this codebase uses (#tool-config,
+    # #filecast-config); JSON-LD likewise. Everything else must carry a src.
+    _seed_site_settings(**ADS_ON)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+
+    offenders = []
+    for path in tmp_path.rglob("*.html"):
+        for tag in re.findall(r"<script\b[^>]*>", path.read_text(encoding="utf-8")):
+            if " src=" in tag:
+                continue
+            if 'type="application/json"' in tag or 'type="application/ld+json"' in tag:
+                continue
+            offenders.append(f"{path.relative_to(tmp_path)}: {tag}")
+    assert not offenders, "inline <script> in built pages:\n" + "\n".join(offenders)
 
 
 # --------------------------------------------------------------------------- #
@@ -419,14 +741,28 @@ def _csp_line(tmp_path) -> str:
 
 def test_generate_headers_csp_additions(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    build.generate_headers({})  # no adsense/ga4/sentry
+    # no adsense/ga4/sentry; api.base_url is where connect-src's API origin now
+    # comes from (§5 item 5) instead of a literal in generate_headers().
+    build.generate_headers({"api": {"base_url": "https://api.filecast.io"}})
     csp = _csp_line(tmp_path)
     assert "font-src 'self' https://fonts.gstatic.com" in csp
     assert "https://fonts.googleapis.com" in csp  # style-src
     assert "https://lh3.googleusercontent.com" in csp  # img-src
     assert "https://accounts.google.com" in csp  # connect-src OAuth
     assert "https://oauth2.googleapis.com" in csp
-    assert "https://api.filecast.io" in csp  # already present, unchanged
+    assert "https://api.filecast.io" in csp  # from site_config
+
+
+def test_generate_headers_without_api_base_url_emits_no_empty_token(
+    tmp_path, monkeypatch
+):
+    # A config with no api section must not leave a stray double space (or worse,
+    # a malformed directive) in connect-src.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({})
+    csp = _csp_line(tmp_path)
+    assert "connect-src 'self' https://accounts.google.com" in csp
+    assert "  " not in csp.split("connect-src")[1]
 
 
 def test_generate_headers_script_src_untouched(tmp_path, monkeypatch):

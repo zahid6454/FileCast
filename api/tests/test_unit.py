@@ -297,3 +297,42 @@ def test_rate_limiter_sweep_evicts_idle_buckets():
     mw._sweep(now)
     assert "errors:1.1.1.1" not in mw.requests  # evicted → no unbounded growth
     assert "errors:2.2.2.2" in mw.requests  # active bucket retained
+
+
+# --------------------------------------------------------------------------- #
+# Settings env-var naming (Phase 9 §5 item 3)
+# --------------------------------------------------------------------------- #
+
+
+def test_github_workflow_ignores_the_reserved_actions_var(monkeypatch):
+    from data.config import Settings
+
+    # GitHub Actions RESERVES GITHUB_WORKFLOW=<name> as a built-in, and the
+    # empty-prefix Settings used to read it straight into github_workflow — so
+    # inside a runner it resolved to the CI job's name and would have dispatched
+    # to a workflow called "CI". Prod was never affected (docker-compose sets
+    # none of these), but the collision is gone rather than merely documented.
+    monkeypatch.setenv("GITHUB_WORKFLOW", "CI")
+    monkeypatch.delenv("FILECAST_GITHUB_WORKFLOW", raising=False)
+    assert Settings(_env_file=None).github_workflow == "deploy.yml"
+
+
+def test_github_workflow_reads_the_app_namespaced_var(monkeypatch):
+    from data.config import Settings
+
+    monkeypatch.setenv("FILECAST_GITHUB_WORKFLOW", "other.yml")
+    assert Settings(_env_file=None).github_workflow == "other.yml"
+
+
+def test_other_github_settings_keep_their_bare_names(monkeypatch):
+    from data.config import Settings
+
+    # Only github_workflow collides with a reserved var; the owner docs name
+    # GITHUB_PAT in the prod .env, so renaming these would break a live deploy.
+    monkeypatch.setenv("GITHUB_PAT", "pat-value")
+    monkeypatch.setenv("GITHUB_OWNER", "someone")
+    monkeypatch.setenv("GITHUB_REPO", "SomeRepo")
+    s = Settings(_env_file=None)
+    assert s.github_pat == "pat-value"
+    assert s.github_owner == "someone"
+    assert s.github_repo == "SomeRepo"

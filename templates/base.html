@@ -63,6 +63,35 @@
   <script src="/{{ analytics_js.path }}" integrity="{{ analytics_js.sri }}" crossorigin="anonymous"{% if ga4.enabled and ga4.measurement_id %} data-ga4-id="{{ ga4.measurement_id }}"{% endif %}{% if sentry.enabled and sentry.dsn %} data-sentry-dsn="{{ sentry.dsn }}"{% endif %}></script>
   {% endif %}
   {% endif %}
+
+  {# AdSense (Phase 9 §3.2). Same shape as the analytics block above: an
+     allowlisted vendor loader plus a self-hosted module, no inline script, so
+     `script-src 'self'` survives (P6/P7). ads.js does the per-unit push that
+     Google's documented snippet does inline.
+
+     `adsense_live` is build.py's adsense_is_live() — enabled AND a publisher id
+     AND at least one slot id, i.e. "at least one unit will actually render".
+     generate_headers() gates the CSP's ad origins on the SAME predicate, which
+     is what stops the toggle from widening the CSP for inventory that never
+     appears (§1.1). Do not re-derive that condition here; change the predicate.
+
+     `tool is defined` is the second half: all six slots live in the three tool
+     templates, so the homepage, category and static pages carry no inventory
+     and have no reason to contact Google's ad server. (Adding slots elsewhere
+     is a density decision, not a follow-up — §6.) It is deliberately NOT part
+     of adsense_is_live(), since the CSP is one document for the whole site.
+
+     ⚠ `defer` is load-bearing — ads.js must run AFTER the <ins> elements exist
+     or it finds zero units and silently pushes nothing. Do not copy
+     analytics.js's non-deferred loading here. #}
+  {% if adsense_live and tool is defined %}
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ adsense.publisher_id }}"
+          crossorigin="anonymous"></script>
+  {% set ads_js = assets.get('js/ads.js') %}
+  {% if ads_js %}
+  <script src="/{{ ads_js.path }}" integrity="{{ ads_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
+  {% endif %}
 </head>
 <body>
 

@@ -602,8 +602,30 @@ img { max-width: 100%; display: block; }
   font-size: var(--text-sm);
 }
 
-/* --- Ad Slots (fixed dimensions prevent CLS) --- */
-.ad-slot { min-height: var(--ad-leaderboard-h); display: flex; align-items: center; justify-content: center; margin: var(--space-6) 0; }
+/* --- Ad Slots (reserved to limit CLS) ---
+   ⚠ PROVISIONAL, NOT MEASURED — the same caveat as generate_headers()'s CSP
+   origins, and it belongs on the same §7.2 checklist. These two values are
+   pre-Phase-3 design tokens, but ad_slot() requests `data-ad-format="auto"`
+   with `data-full-width-responsive="true"`, so Google picks the size at request
+   time: a responsive unit on a narrow viewport commonly renders well over 90px.
+   The leaderboard sits above the converter UI on all three tool templates, so
+   under-reserving it shifts the primary CTA down on fill — the CLS regression
+   this rule exists to prevent, moved to the above-the-fold slot.
+   Resolve by measuring real rendered heights per breakpoint on a deploy preview
+   (or by dropping `auto` for fixed-size units), NOT by guessing a bigger
+   number. The build test pins these values; it cannot observe rendered height.
+
+   The reservation is per-slot, because the two units are different shapes. A
+   single 90px min-height on .ad-slot under-reserved the in-content rectangle by
+   ~190px, so it would shift the page on fill — the exact regression reserving
+   space exists to prevent. The modifier classes come from ad_slot() in
+   _macros.html; ads.js collapses a slot whose unit never fills, so a blocked ad
+   leaves no gap at all rather than an empty 90/280px box.
+   (A dead pre-Phase-3 assets/style.css used to shadow this one in greps, with a
+   near-identical `.ad-slot--rectangle` rule. Deleted in Phase 9 §5.) */
+.ad-slot { display: flex; align-items: center; justify-content: center; margin: var(--space-6) 0; }
+.ad-slot--leaderboard { min-height: var(--ad-leaderboard-h); }
+.ad-slot--in-content { min-height: var(--ad-rectangle-h); }
 
 /* --- Footer --- */
 .footer {

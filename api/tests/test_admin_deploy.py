@@ -6,6 +6,8 @@ never-501-for-a-real-failure contract (§5.3a), the ``run_id`` reply key app.js
 polls on, admin-only guards, and that the PAT never leaks into a response.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 import pytest
 from data.config import settings
@@ -46,9 +48,9 @@ def _use(monkeypatch, client):
 @pytest.fixture(autouse=True)
 def _configured_and_fast(monkeypatch):
     # Pin the deploy config so tests are deterministic regardless of ambient env.
-    # (This matters: GitHub Actions sets a reserved GITHUB_WORKFLOW=<name> var that
-    # pydantic's empty-prefix Settings would otherwise read into github_workflow —
-    # e.g. "CI" in this repo's own CI — so we pin all four here.)
+    # (github_workflow used to read the bare GITHUB_WORKFLOW, which GitHub Actions
+    # RESERVES — so in this repo's own CI it resolved to "CI". Phase 9 §5 moved it
+    # to FILECAST_GITHUB_WORKFLOW; pinning all four here stays correct either way.)
     monkeypatch.setattr(settings, "github_pat", PAT)
     monkeypatch.setattr(settings, "github_owner", "zahid6454")
     monkeypatch.setattr(settings, "github_repo", "FileCast")
@@ -108,11 +110,21 @@ async def test_dispatch_resolves_and_returns_run_id(admin_client, monkeypatch):
     assert client.post_headers.get("Authorization") == f"Bearer {PAT}"
 
 
+def _iso(offset_seconds: float) -> str:
+    """GitHub-shaped ``created_at``, offset from now."""
+    return (
+        (datetime.now(UTC) + timedelta(seconds=offset_seconds))
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
 class FallbackClient(FakeClient):
     """The runs list never contains the deploy_id → resolution falls back to the
-    newest run after exhausting attempts (and must not hang)."""
+    newest ELIGIBLE run after exhausting attempts (and must not hang)."""
 
-    def __init__(self):
+    def __init__(self, runs):
+        self.runs = runs
         self.get_calls = 0
 
     async def post(self, url, headers=None, json=None):  # noqa: A002
@@ -120,16 +132,190 @@ class FallbackClient(FakeClient):
 
     async def get(self, url, headers=None):
         self.get_calls += 1
-        return FakeResp(200, {"workflow_runs": [{"id": 777, "name": "unrelated"}]})
+        return FakeResp(200, {"workflow_runs": self.runs})
 
 
 async def test_run_id_resolution_falls_back_and_never_hangs(admin_client, monkeypatch):
-    client = FallbackClient()
+    # A run created after our dispatch, with a name we can't match, is still
+    # plausibly ours — that is what the fallback is for.
+    client = FallbackClient([{"id": 777, "name": "unrelated", "created_at": _iso(1)}])
     _use(monkeypatch, client)
     r = await admin_client.post("/api/v1/admin/deploy")
     assert r.status_code == 200
-    assert r.json()["run_id"] == 777  # newest, as a fallback
+    assert r.json()["run_id"] == 777  # newest eligible, as a fallback
     assert client.get_calls == 3  # polled every attempt, then returned — no hang
+
+
+async def test_fallback_ignores_runs_older_than_this_dispatch(
+    admin_client, monkeypatch
+):
+    # The bug this closes: with two Saves queued in the build window, our run may
+    # not have surfaced yet, and the old code took the newest run unconditionally
+    # — so the panel polled an UNRELATED run and reported ITS conclusion. A run
+    # that predates our dispatch cannot be ours; returning None only costs the
+    # terminal toast, whereas a wrong run reports a wrong outcome.
+    client = FallbackClient(
+        [{"id": 777, "name": "someone else", "created_at": _iso(-600)}]
+    )
+    _use(monkeypatch, client)
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200
+    assert r.json()["run_id"] is None
+
+
+async def test_fallback_ignores_runs_with_unusable_created_at(
+    admin_client, monkeypatch
+):
+    # Absent or unparseable timestamps are not eligible either — unverifiable is
+    # not the same as recent — and must not raise.
+    client = FallbackClient(
+        [
+            {"id": 1, "name": "no timestamp"},
+            {"id": 2, "name": "bad timestamp", "created_at": "not-a-date"},
+            {"id": 3, "name": "null timestamp", "created_at": None},
+            # Parses fine but has NO offset. Comparing it against the aware
+            # floor raises TypeError, which would escape _resolve_run_id — a
+            # function that runs AFTER a successful 204 — and turn a deploy that
+            # already started into a 500. Must be treated as unusable, not
+            # allowed to raise.
+            {"id": 4, "name": "naive timestamp", "created_at": "2099-01-01T00:00:00"},
+            {"id": 5, "name": "numeric timestamp", "created_at": 1234567890},
+        ]
+    )
+    _use(monkeypatch, client)
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200
+    assert r.json()["run_id"] is None
+
+
+class ArbitraryBodyClient(FakeClient):
+    """POST→204; the runs GET returns 200 with an arbitrary JSON body."""
+
+    def __init__(self, body):
+        self.body = body
+
+    async def post(self, url, headers=None, json=None):  # noqa: A002
+        return FakeResp(204)
+
+    async def get(self, url, headers=None):
+        return FakeResp(200, self.body)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        [1, 2],  # body is an array, not an object → .get AttributeError
+        "nope",  # body is a string → .get AttributeError
+        {"workflow_runs": "oops"},  # iterating a str yields chars → AttributeError
+        {"workflow_runs": [1, 2]},  # entries aren't run objects → AttributeError
+        {"workflow_runs": 5},  # not iterable → TypeError
+        {"workflow_runs": None},
+        {"workflow_runs": [{"id": 9, "name": 123}]},  # int + str → TypeError
+    ],
+    ids=[
+        "body-is-array",
+        "body-is-string",
+        "runs-is-string",
+        "runs-holds-ints",
+        "runs-is-number",
+        "runs-is-null",
+        "run-name-is-number",
+    ],
+)
+async def test_malformed_runs_body_never_fails_a_succeeded_dispatch(
+    admin_client, monkeypatch, body
+):
+    # Every one of these raised before _runs_from() existed — AttributeError or
+    # TypeError, depending on which layer was wrong — and NONE of them were
+    # caught: the inner except covered httpx.HTTPError/ValueError, the outer
+    # only httpx.HTTPError. So a body GitHub should never send would escape
+    # _resolve_run_id, which runs AFTER a successful 204, and turn a deploy that
+    # already started into a 500. Unresolvable is fine; raising is not.
+    _use(monkeypatch, ArbitraryBodyClient(body))
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200, r.text  # NOT 500
+    assert r.json()["run_id"] is None
+
+
+async def test_junk_entries_do_not_hide_a_real_run(admin_client, monkeypatch):
+    # Skipping malformed entries must not mean skipping the list. A real run
+    # sitting behind junk is still matched on its deploy_id — otherwise the
+    # hardening would have quietly cost the panel its polling.
+    class MixedClient(FakeClient):
+        def __init__(self):
+            self.deploy_id = None
+
+        async def post(self, url, headers=None, json=None):  # noqa: A002
+            self.deploy_id = json["inputs"]["deploy_id"]
+            return FakeResp(204)
+
+        async def get(self, url, headers=None):
+            return FakeResp(
+                200,
+                {
+                    "workflow_runs": [
+                        1,
+                        "junk",
+                        None,
+                        {
+                            "id": 7,
+                            "name": f"Deploy {self.deploy_id}",
+                            "created_at": _iso(1),
+                        },
+                    ]
+                },
+            )
+
+    _use(monkeypatch, MixedClient())
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.json()["run_id"] == 7
+
+
+async def test_non_200_runs_response_yields_no_candidates(admin_client, monkeypatch):
+    # A 404/500 body is not a runs list, and must not be read as one.
+    class NotOkClient(FakeClient):
+        async def post(self, url, headers=None, json=None):  # noqa: A002
+            return FakeResp(204)
+
+        async def get(self, url, headers=None):
+            return FakeResp(500, {"workflow_runs": [{"id": 1, "created_at": _iso(1)}]})
+
+    _use(monkeypatch, NotOkClient())
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200
+    assert r.json()["run_id"] is None
+
+
+async def test_deploy_id_match_wins_over_the_timestamp_filter(
+    admin_client, monkeypatch
+):
+    # An exact deploy_id match identifies OUR run, so it is returned even when
+    # its timestamp would have excluded it (clock skew, a slow GitHub clock).
+    class MatchingButOldClient(FakeClient):
+        def __init__(self):
+            self.deploy_id = None
+
+        async def post(self, url, headers=None, json=None):  # noqa: A002
+            self.deploy_id = json["inputs"]["deploy_id"]
+            return FakeResp(204)
+
+        async def get(self, url, headers=None):
+            return FakeResp(
+                200,
+                {
+                    "workflow_runs": [
+                        {
+                            "id": 909,
+                            "name": f"Deploy {self.deploy_id}",
+                            "created_at": _iso(-3600),
+                        }
+                    ]
+                },
+            )
+
+    _use(monkeypatch, MatchingButOldClient())
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.json()["run_id"] == 909
 
 
 class EmptyRunsClient(FakeClient):
@@ -268,6 +454,30 @@ class StatusFailClient(FakeClient):
 async def test_status_failure_is_502(admin_client, monkeypatch):
     _use(monkeypatch, StatusFailClient())
     r = await admin_client.get("/api/v1/admin/deploy/999")
+    assert r.status_code == 502
+
+
+async def test_status_unparseable_body_is_502_not_500(admin_client, monkeypatch):
+    # A bare resp.json() on a 200 raised ValueError → an opaque 500. Same class
+    # as the runs-body hardening; a 502 naming the cause is the right answer.
+    class BadJsonStatusClient(FakeClient):
+        async def get(self, url, headers=None):
+            return BadJsonResp()
+
+    _use(monkeypatch, BadJsonStatusClient())
+    r = await admin_client.get("/api/v1/admin/deploy/123")
+    assert r.status_code == 502
+    assert r.status_code != 500
+
+
+async def test_status_non_object_body_is_502_not_500(admin_client, monkeypatch):
+    # Parses fine, then .get would raise AttributeError.
+    class ArrayStatusClient(FakeClient):
+        async def get(self, url, headers=None):
+            return FakeResp(200, [1, 2, 3])
+
+    _use(monkeypatch, ArrayStatusClient())
+    r = await admin_client.get("/api/v1/admin/deploy/123")
     assert r.status_code == 502
 
 

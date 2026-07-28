@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import processing_pill %}
+{% from "_macros.html" import ad_slot, processing_pill %}
 
 {% block title %}{{ tool.meta.title }}{% endblock %}
 {% block meta_description %}{{ tool.meta.description }}{% endblock %}
@@ -76,10 +76,7 @@
   <p class="page__tagline">{{ tool.tagline_long or tool.tagline }}</p>
   {% endif %}
 
-  {% if adsense.enabled %}
-  {# Ad slot: leaderboard #}
-  <div class="ad-slot" id="ad-leaderboard"></div>
-  {% endif %}
+  {{ ad_slot(adsense, 'leaderboard') }}
 
   {# Privacy Badge. The same Local/Cloud pill the tool cards use, so the badge a
      reader is told to look for is named identically everywhere.
@@ -202,10 +199,7 @@
   </div>
   {% endif %}
 
-  {% if adsense.enabled %}
-  {# Ad slot: in-content #}
-  <div class="ad-slot" id="ad-in-content"></div>
-  {% endif %}
+  {{ ad_slot(adsense, 'in_content') }}
 
   {# Content Blocks #}
   {% if tool.content_html.get('what_is') %}

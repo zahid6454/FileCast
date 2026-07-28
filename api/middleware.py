@@ -3,6 +3,7 @@
 import time
 from collections import defaultdict
 
+from data.config import settings
 from data.netutil import get_client_ip
 from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,12 +14,30 @@ logger = get_logger("middleware")
 
 RATE_WINDOW = 3600  # 1 hour in seconds
 
-ALLOWED_ORIGINS = [
+PROD_ORIGINS = [
     "https://filecast.io",
     "https://www.filecast.io",
-    "http://localhost:8000",  # local dev
+]
+
+# Only outside production. Shipping these live was never an exploitable hole —
+# SameSite=Lax means a cross-site request originating at localhost carries no
+# fc_session, so CORS approval buys an attacker an unauthenticated response —
+# but "loose but mitigated" is not a property worth keeping when the fix is a
+# conditional. Gated on ``environment == "development"`` — the same var and the
+# same exact-match test dev-login uses (§16-R1) — so the two dev-only
+# affordances turn on and off together, and an unrecognised ENVIRONMENT value
+# fails closed rather than quietly re-allowing localhost.
+DEV_ORIGINS = [
+    "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
+
+
+def allowed_origins(environment: str) -> list[str]:
+    return PROD_ORIGINS + (DEV_ORIGINS if environment == "development" else [])
+
+
+ALLOWED_ORIGINS = allowed_origins(settings.environment)
 
 # Per-path request budgets per RATE_WINDOW (§10/§16-R3). The heavy server-side
 # /convert keeps the original 20/hr; the per-conversion tracking POST fires on

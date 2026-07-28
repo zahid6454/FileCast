@@ -1,6 +1,7 @@
 {# Reusable card/badge macros (§6.5). tool_card is imported by home/category/404;
    processing_pill additionally by tool/tool-multi/tool-text (the trust badge) and
-   by about/privacy (which describe the badge, and must not re-invent it).
+   by about/privacy (which describe the badge, and must not re-invent it);
+   ad_slot by those same three tool templates (Phase 9 §3.1).
    All StrictUndefined-safe: name/slug/type/input_format/output_format/category
    are guaranteed on every tool dict; `tagline` is guarded with dict .get so a
    future tagline-less tool can't crash the build. #}
@@ -27,6 +28,56 @@
 {%- else -%}
 <span class="badge--local" title="Runs entirely in your browser." aria-label="Local processing: runs entirely in your browser.">
   <svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Local</span>
+{%- endif -%}
+{%- endmacro %}
+
+{# ad_slot(adsense, slot) — ONE AdSense unit, or nothing at all. `slot` is a key
+   of adsense.slots ('leaderboard' | 'in_content'); the element id and the
+   modifier class are both derived from it, so the three tool templates cannot
+   drift apart the way they did before Phase 9 §2 (tool.html guarded its slots,
+   tool-multi/tool-text did not, and 11 of 34 pages shipped blank gaps). This is
+   the single source of truth for slot markup — do not inline it anywhere.
+
+   `adsense` is passed in rather than read as an env global on purpose: an
+   imported macro sees globals but not the caller's context, so reading it
+   implicitly would silently render nothing the day it moves into the render
+   context. Rendering nothing is exactly the failure this macro exists to
+   prevent, and it raises no error.
+
+   Renders nothing unless the toggle is on AND both ids are usable. A
+   half-configured overlay (enabled, publisher set, slot id blank) would
+   otherwise emit `<ins data-ad-slot="">`, which fails opaquely at Google's end.
+   This is a per-slot REFINEMENT of build.py's adsense_is_live(), which gates
+   both the CSP's ad origins and base.html's loader. That predicate asks "will
+   any unit render"; this asks "will THIS one". It can therefore render fewer
+   units than the CSP allows for — one slot configured, the other not — but
+   never more, and never any when the CSP has not opened. The direction matters:
+   the reverse (a unit whose origins are blocked) is a broken ad, and a CSP
+   opened for zero units is §1.1's fail-silently bug.
+
+   Both ids are attribute-injected, which is why site_settings.py validates
+   publisher_id as `^ca-pub-\d{16}$` and slot ids as `^\d+$` — neither can carry
+   a quote or an angle bracket, and Jinja autoescapes regardless. Never relax
+   those regexes to accommodate a "special" id; fix the id. #}
+{% macro ad_slot(adsense, slot) -%}
+{#- Mirror adsense_is_live()'s `or {}` rather than relying on .get's default,
+    which only covers an ABSENT key and not a present-but-None value. A
+    `site-config.yaml` with a childless `adsense:` or `slots:` key parses to
+    None, and this macro is called UNCONDITIONALLY from all three tool
+    templates — so without this the build crashes on a config the predicate
+    deliberately tolerates, even with ads off. -#}
+{%- set ads = adsense or {} -%}
+{%- set slot_id = (ads.get('slots') or {}).get(slot, '') -%}
+{%- if ads.get('enabled') and ads.get('publisher_id') and slot_id -%}
+{%- set name = slot|replace('_', '-') -%}
+<div class="ad-slot ad-slot--{{ name }}" id="ad-{{ name }}">
+  <ins class="adsbygoogle"
+       style="display:block"
+       data-ad-client="{{ ads.get('publisher_id') }}"
+       data-ad-slot="{{ slot_id }}"
+       data-ad-format="auto"
+       data-full-width-responsive="true"></ins>
+</div>
 {%- endif -%}
 {%- endmacro %}
 

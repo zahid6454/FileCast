@@ -345,7 +345,16 @@
   // terminal signal is the CONCLUSION: only 'success' means the site is actually
   // live; anything else was saved to the DB but never published, so say so rather
   // than showing a misleading green "Published".
-  function pollDeploy(runId) {
+  //
+  // A poll error retries a BOUNDED number of times before giving up. It used to
+  // stop on the first one, so a single blip mid-deploy cost the admin the
+  // terminal toast entirely. The bound is what matters: an invalid run_id 502s
+  // on every attempt, so an unbounded retry would poll forever.
+  var DEPLOY_POLL_INTERVAL_MS = 4000;
+  var DEPLOY_POLL_MAX_ERRORS = 3;
+
+  function pollDeploy(runId, errors) {
+    var failures = errors || 0;
     api
       .get('/api/v1/admin/deploy/' + encodeURIComponent(runId))
       .then(function (res) {
@@ -358,13 +367,20 @@
           }
           return;
         }
+        // A good response clears the error budget — a blip early in a long
+        // deploy must not count against one late in it.
         setTimeout(function () {
-          pollDeploy(runId);
-        }, 4000);
+          pollDeploy(runId, 0);
+        }, DEPLOY_POLL_INTERVAL_MS);
       })
       .catch(function () {
-        /* silent — a status-poll error ends polling (the deploy still runs; the
-           admin just won't get a terminal toast). Never masks the save. */
+        // Silent by design: the deploy itself is unaffected and the save
+        // already succeeded, so the only thing at stake is the terminal toast.
+        // Never masks the save.
+        if (failures + 1 >= DEPLOY_POLL_MAX_ERRORS) return;
+        setTimeout(function () {
+          pollDeploy(runId, failures + 1);
+        }, DEPLOY_POLL_INTERVAL_MS);
       });
   }
 

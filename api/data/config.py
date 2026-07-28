@@ -6,6 +6,7 @@ read the same var. CORS origins deliberately stay in ``middleware.ALLOWED_ORIGIN
 (single source, §16-R2) rather than being duplicated here.
 """
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,14 +51,23 @@ class Settings(BaseSettings):
     # real 5xx (NOT 501 — api.js swallows 501 into a calm "pending rebuild" banner).
     #
     # ⚠ These read the bare GITHUB_* env vars (env_prefix=""). Fine on the prod
-    # host (docker-compose sets none of them), but note ``github_workflow`` shadows
-    # GitHub Actions' RESERVED ``GITHUB_WORKFLOW=<name>`` var — so do NOT run this
-    # backend inside an Actions runner expecting the .env value to win (it wouldn't;
-    # you'd dispatch to a workflow named after the CI job). It never runs there.
+    # host — docker-compose sets none of them — and the owner docs name
+    # ``GITHUB_PAT`` in the prod .env, so those three keep their bare names.
+    #
+    # ``github_workflow`` is the exception: GitHub Actions RESERVES
+    # ``GITHUB_WORKFLOW=<name>`` as a built-in, so inside a runner the bare name
+    # silently won over the .env value and dispatched to a workflow named after
+    # the CI job (this bit CI in Phase 7). Reading an app-namespaced var instead
+    # removes the collision outright rather than relying on never running the
+    # backend in a runner. The default is already correct, and no environment
+    # sets this today, so nothing needs migrating — set
+    # ``FILECAST_GITHUB_WORKFLOW`` if you ever need to override it.
     github_pat: str = ""
     github_owner: str = "zahid6454"
     github_repo: str = "FileCast"
-    github_workflow: str = "deploy.yml"
+    github_workflow: str = Field(
+        default="deploy.yml", validation_alias="FILECAST_GITHUB_WORKFLOW"
+    )
 
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 
