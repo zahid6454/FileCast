@@ -6,6 +6,8 @@ never-501-for-a-real-failure contract (§5.3a), the ``run_id`` reply key app.js
 polls on, admin-only guards, and that the PAT never leaks into a response.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 import pytest
 from data.config import settings
@@ -46,9 +48,9 @@ def _use(monkeypatch, client):
 @pytest.fixture(autouse=True)
 def _configured_and_fast(monkeypatch):
     # Pin the deploy config so tests are deterministic regardless of ambient env.
-    # (This matters: GitHub Actions sets a reserved GITHUB_WORKFLOW=<name> var that
-    # pydantic's empty-prefix Settings would otherwise read into github_workflow —
-    # e.g. "CI" in this repo's own CI — so we pin all four here.)
+    # (github_workflow used to read the bare GITHUB_WORKFLOW, which GitHub Actions
+    # RESERVES — so in this repo's own CI it resolved to "CI". Phase 9 §5 moved it
+    # to FILECAST_GITHUB_WORKFLOW; pinning all four here stays correct either way.)
     monkeypatch.setattr(settings, "github_pat", PAT)
     monkeypatch.setattr(settings, "github_owner", "zahid6454")
     monkeypatch.setattr(settings, "github_repo", "FileCast")
@@ -108,11 +110,21 @@ async def test_dispatch_resolves_and_returns_run_id(admin_client, monkeypatch):
     assert client.post_headers.get("Authorization") == f"Bearer {PAT}"
 
 
+def _iso(offset_seconds: float) -> str:
+    """GitHub-shaped ``created_at``, offset from now."""
+    return (
+        (datetime.now(UTC) + timedelta(seconds=offset_seconds))
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
 class FallbackClient(FakeClient):
     """The runs list never contains the deploy_id → resolution falls back to the
-    newest run after exhausting attempts (and must not hang)."""
+    newest ELIGIBLE run after exhausting attempts (and must not hang)."""
 
-    def __init__(self):
+    def __init__(self, runs):
+        self.runs = runs
         self.get_calls = 0
 
     async def post(self, url, headers=None, json=None):  # noqa: A002
@@ -120,16 +132,85 @@ class FallbackClient(FakeClient):
 
     async def get(self, url, headers=None):
         self.get_calls += 1
-        return FakeResp(200, {"workflow_runs": [{"id": 777, "name": "unrelated"}]})
+        return FakeResp(200, {"workflow_runs": self.runs})
 
 
 async def test_run_id_resolution_falls_back_and_never_hangs(admin_client, monkeypatch):
-    client = FallbackClient()
+    # A run created after our dispatch, with a name we can't match, is still
+    # plausibly ours — that is what the fallback is for.
+    client = FallbackClient([{"id": 777, "name": "unrelated", "created_at": _iso(1)}])
     _use(monkeypatch, client)
     r = await admin_client.post("/api/v1/admin/deploy")
     assert r.status_code == 200
-    assert r.json()["run_id"] == 777  # newest, as a fallback
+    assert r.json()["run_id"] == 777  # newest eligible, as a fallback
     assert client.get_calls == 3  # polled every attempt, then returned — no hang
+
+
+async def test_fallback_ignores_runs_older_than_this_dispatch(
+    admin_client, monkeypatch
+):
+    # The bug this closes: with two Saves queued in the build window, our run may
+    # not have surfaced yet, and the old code took the newest run unconditionally
+    # — so the panel polled an UNRELATED run and reported ITS conclusion. A run
+    # that predates our dispatch cannot be ours; returning None only costs the
+    # terminal toast, whereas a wrong run reports a wrong outcome.
+    client = FallbackClient(
+        [{"id": 777, "name": "someone else", "created_at": _iso(-600)}]
+    )
+    _use(monkeypatch, client)
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200
+    assert r.json()["run_id"] is None
+
+
+async def test_fallback_ignores_runs_with_unusable_created_at(
+    admin_client, monkeypatch
+):
+    # Absent or unparseable timestamps are not eligible either — unverifiable is
+    # not the same as recent — and must not raise.
+    client = FallbackClient(
+        [
+            {"id": 1, "name": "no timestamp"},
+            {"id": 2, "name": "bad timestamp", "created_at": "not-a-date"},
+            {"id": 3, "name": "null timestamp", "created_at": None},
+        ]
+    )
+    _use(monkeypatch, client)
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200
+    assert r.json()["run_id"] is None
+
+
+async def test_deploy_id_match_wins_over_the_timestamp_filter(
+    admin_client, monkeypatch
+):
+    # An exact deploy_id match identifies OUR run, so it is returned even when
+    # its timestamp would have excluded it (clock skew, a slow GitHub clock).
+    class MatchingButOldClient(FakeClient):
+        def __init__(self):
+            self.deploy_id = None
+
+        async def post(self, url, headers=None, json=None):  # noqa: A002
+            self.deploy_id = json["inputs"]["deploy_id"]
+            return FakeResp(204)
+
+        async def get(self, url, headers=None):
+            return FakeResp(
+                200,
+                {
+                    "workflow_runs": [
+                        {
+                            "id": 909,
+                            "name": f"Deploy {self.deploy_id}",
+                            "created_at": _iso(-3600),
+                        }
+                    ]
+                },
+            )
+
+    _use(monkeypatch, MatchingButOldClient())
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.json()["run_id"] == 909
 
 
 class EmptyRunsClient(FakeClient):

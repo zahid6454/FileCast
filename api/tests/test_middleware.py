@@ -5,6 +5,8 @@ deterministic against the single in-process app instance.
 """
 
 import main
+import middleware
+from data.config import settings
 
 
 async def test_cors_credentials_on_normal_request(client):
@@ -63,3 +65,36 @@ async def test_docs_enabled_in_development():
     # ENVIRONMENT=development in tests → docs surface exposed (404 in prod, gated)
     assert main.app.openapi_url == "/openapi.json"
     assert main.app.docs_url == "/docs"
+
+
+# --------------------------------------------------------------------------- #
+# CORS origin gating (Phase 9 §5 item 4)
+# --------------------------------------------------------------------------- #
+
+
+def test_dev_origins_only_in_development():
+    # localhost was allow-listed in every environment. SameSite=Lax meant a
+    # cross-site request from localhost carried no fc_session, so it was never
+    # exploitable — but "loose but mitigated" isn't worth keeping.
+    prod = middleware.allowed_origins("production")
+    assert "https://filecast.io" in prod
+    assert "http://localhost:8000" not in prod
+    assert "http://127.0.0.1:8000" not in prod
+
+    dev = middleware.allowed_origins("development")
+    assert "http://localhost:8000" in dev
+    assert "http://127.0.0.1:8000" in dev
+
+
+def test_unrecognised_environment_fails_closed():
+    # Exact match on "development", same as dev-login (§16-R1) — a typo or a new
+    # environment name must not quietly re-allow localhost.
+    for env in ("staging", "prod", "Development", ""):
+        assert "http://localhost:8000" not in middleware.allowed_origins(env), env
+
+
+def test_live_origin_list_is_derived_from_the_configured_environment():
+    # Guards the wiring, not just the helper.
+    assert middleware.ALLOWED_ORIGINS == middleware.allowed_origins(
+        settings.environment
+    )

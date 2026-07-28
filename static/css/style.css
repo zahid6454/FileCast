@@ -609,7 +609,8 @@ img { max-width: 100%; display: block; }
    space exists to prevent. The modifier classes come from ad_slot() in
    _macros.html; ads.js collapses a slot whose unit never fills, so a blocked ad
    leaves no gap at all rather than an empty 90/280px box.
-   (Not to be confused with assets/style.css, which is dead — see Phase 9 §4.1.) */
+   (A dead pre-Phase-3 assets/style.css used to shadow this one in greps, with a
+   near-identical `.ad-slot--rectangle` rule. Deleted in Phase 9 §5.) */
 .ad-slot { display: flex; align-items: center; justify-content: center; margin: var(--space-6) 0; }
 .ad-slot--leaderboard { min-height: var(--ad-leaderboard-h); }
 .ad-slot--in-content { min-height: var(--ad-rectangle-h); }

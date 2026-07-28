@@ -232,6 +232,23 @@ def test_full_build_no_db_emits_all_off(tmp_path, monkeypatch):
     assert "FileCast" in home  # YAML-seeded copy renders
 
 
+def test_headers_api_origin_follows_site_config(tmp_path, monkeypatch):
+    # §5 item 5: connect-src derives the API origin from site_config instead of
+    # a hardcoded literal, so a new environment is a config edit — and so the
+    # CSP can never name a different origin from the one the pages call.
+    # generate_headers() runs after create_jinja_env(), which folds the API_URL
+    # override into site_config, so the override reaches the CSP too.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    monkeypatch.setenv("API_URL", "https://api.staging.example/")
+    build.build()
+    csp = _csp_from_build(tmp_path)
+    assert "connect-src 'self' https://api.staging.example " in csp
+    assert "api.filecast.io" not in csp
+    # The pages must agree with the header — that is the whole point.
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "https://api.staging.example" in home
+
+
 def test_full_build_overlay_bakes_ga4(tmp_path, monkeypatch):
     # An all-off YAML + a DB row enabling GA4 ⇒ the CSP gains the GTM host and the
     # gtag script is baked. Proves the overlay reaches BOTH the CSP and templates.
@@ -438,10 +455,11 @@ def test_full_build_one_slot_configured_renders_only_that_slot(tmp_path, monkeyp
 def test_built_css_reserves_each_slot_at_its_own_height(tmp_path, monkeypatch):
     # §4.1. Both units shared one 90px reservation, so the in-content rectangle
     # (280px) would shift the page ~190px on fill. Asserted on the BUILT sheet
-    # on purpose: `assets/style.css` is a dead pre-Phase-3 leftover that already
-    # contains a similar-looking rule and greps as if it were live, so editing
-    # it instead produces a clean diff, a green build and no behaviour change
-    # (§8). Only static/css/style.css reaches dist.
+    # on purpose: only static/css/style.css reaches dist, so a rule added to some
+    # other stylesheet produces a clean diff, a green build and no behaviour
+    # change (§8). Not hypothetical — a dead pre-Phase-3 `assets/style.css`
+    # carrying a near-identical rule shadowed this one in greps until §5 deleted
+    # it.
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     sheets = list((tmp_path / "css").glob("style.*.css"))
@@ -614,14 +632,28 @@ def _csp_line(tmp_path) -> str:
 
 def test_generate_headers_csp_additions(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    build.generate_headers({})  # no adsense/ga4/sentry
+    # no adsense/ga4/sentry; api.base_url is where connect-src's API origin now
+    # comes from (§5 item 5) instead of a literal in generate_headers().
+    build.generate_headers({"api": {"base_url": "https://api.filecast.io"}})
     csp = _csp_line(tmp_path)
     assert "font-src 'self' https://fonts.gstatic.com" in csp
     assert "https://fonts.googleapis.com" in csp  # style-src
     assert "https://lh3.googleusercontent.com" in csp  # img-src
     assert "https://accounts.google.com" in csp  # connect-src OAuth
     assert "https://oauth2.googleapis.com" in csp
-    assert "https://api.filecast.io" in csp  # already present, unchanged
+    assert "https://api.filecast.io" in csp  # from site_config
+
+
+def test_generate_headers_without_api_base_url_emits_no_empty_token(
+    tmp_path, monkeypatch
+):
+    # A config with no api section must not leave a stray double space (or worse,
+    # a malformed directive) in connect-src.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({})
+    csp = _csp_line(tmp_path)
+    assert "connect-src 'self' https://accounts.google.com" in csp
+    assert "  " not in csp.split("connect-src")[1]
 
 
 def test_generate_headers_script_src_untouched(tmp_path, monkeypatch):

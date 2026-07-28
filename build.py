@@ -915,7 +915,12 @@ def generate_robots(site_config: dict):
 
 
 def generate_headers(site_config: dict):
-    api_url = "https://api.filecast.io"
+    # Derived from site-config.yaml rather than hardcoded, so a new environment
+    # is a config edit rather than a code edit — and so connect-src can never
+    # name a different origin from the one the pages actually call. This runs
+    # AFTER create_jinja_env(), which is where an API_URL env override is folded
+    # into site_config["api"], so the override reaches the CSP too.
+    api_url = site_config.get("api", {}).get("base_url", "").rstrip("/")
     adsense_enabled = site_config.get("adsense", {}).get("enabled", False)
     ga4_enabled = site_config.get("ga4", {}).get("enabled", False)
     sentry_enabled = site_config.get("sentry", {}).get("enabled", False)
@@ -925,8 +930,16 @@ def generate_headers(site_config: dict):
     # connect-src already allows the API origin (data API shares it, F15). Add the
     # Google OAuth token/authorize hosts for Phase 5. img-src gains Google avatars
     # (Phase 5); style-src/font-src gain Google Fonts for the Inter face (Phase 3).
-    connect_src = (
-        f"'self' {api_url} https://accounts.google.com https://oauth2.googleapis.com"
+    connect_src = " ".join(
+        # A config with no api.base_url must not emit a stray empty token.
+        p
+        for p in (
+            "'self'",
+            api_url,
+            "https://accounts.google.com",
+            "https://oauth2.googleapis.com",
+        )
+        if p
     )
     style_src = "'self' 'unsafe-inline' https://fonts.googleapis.com"
     font_src = "'self' https://fonts.gstatic.com"
