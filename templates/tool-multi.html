@@ -65,7 +65,7 @@
     <h1 class="page__title page__title--tight">{{ tool.name }}</h1>
     {# Favorites heart — hidden until auth.js reveals it for a signed-in user (§10). #}
     <button class="tool-fav" id="tool-fav" type="button" hidden aria-pressed="false" aria-label="Save to favorites">
-      <svg class="tool-fav__icon" aria-hidden="true" focusable="false"><use href="#icon-heart"></use></svg>
+      <svg class="tool-fav__icon" aria-hidden="true" focusable="false"><use href="#icon-heart-toggle"></use></svg>
     </button>
   </div>
   {% if tool.tagline_long or tool.tagline %}
@@ -89,7 +89,7 @@
   {% if tool.get('options') %}
   <div class="tool-options" id="tool-options">
     {% for opt in tool.options %}
-    <div class="tool-options__row">
+    <div class="tool-options__row tool-options__row--{{ opt.type }}">
       <label class="tool-options__label" for="opt-{{ opt.id }}">{{ opt.label }}</label>
       {% if opt.type == 'range' %}
       <input class="tool-options__slider" type="range" id="opt-{{ opt.id }}"

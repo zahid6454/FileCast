@@ -101,41 +101,126 @@
     });
   }
 
-  function section(title) {
-    return el('section', { class: 'account-card' }, [
-      el('h2', { class: 'account-card__title', text: title })
-    ]);
+  // `count` renders a muted chip beside the heading (e.g. "Favorites  7") so the
+  // card says how much is in it without a second line of copy.
+  function section(title, count) {
+    var head = el('h2', { class: 'account-card__title', text: title });
+    if (count != null) {
+      head.appendChild(el('span', { class: 'account-card__count', text: String(count) }));
+    }
+    return el('section', { class: 'account-card' }, [head]);
   }
 
   function formatKb(kb) {
     if (kb == null) return '—';
+    // Rows written before FC.sizeKb floored sub-KB inputs at 1 stored a literal 0
+    // for small files (a 700-byte SVG). "0 KB" next to a success reads as a bug,
+    // so render the truth: it was smaller than the column can express.
+    if (kb <= 0) return '< 1 KB';
     if (kb >= 1024) return (kb / 1024).toFixed(1) + ' MB';
     return kb + ' KB';
   }
 
-  function formatDate(iso) {
+  // Full timestamp: "08:45 PM · 29 Jul 2026". Replaces the old relative label
+  // ("Yesterday", "2 days ago") — history is a record, and a record should say
+  // when something happened, not how long ago it was read.
+  //
+  // Built from toLocale* rather than hand-formatted, so the day/month order
+  // follows the reader's locale (29 Jul 2026 in en-GB, Jul 29 2026 in en-US) the
+  // same way every other date on this page does. That also rules out an English
+  // ordinal suffix ("29th"): Intl has no ordinal date format, and hardcoding one
+  // would be wrong for every non-English visitor.
+  // `short` drops the year — history is capped at 30 days, so the year is the
+  // same on every row and costs ~45px of a phone's ~250px of usable row width.
+  // Both variants are rendered and CSS picks one, so there is no resize listener
+  // and no reflow on rotate.
+  function formatTimestamp(iso, short) {
     if (!iso) return '';
     var d = new Date(iso);
-    return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+    if (isNaN(d.getTime())) return '';
+    // hour12 is pinned rather than left to the locale: en-GB and most of Europe
+    // default to a 24-hour clock, which would render "20:40" instead of the
+    // "08:45 PM" this column is specified in. The DATE half stays locale-ordered.
+    var time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    var opts = short
+      ? { day: 'numeric', month: 'short' }
+      : { day: 'numeric', month: 'short', year: 'numeric' };
+    return time + ' · ' + d.toLocaleDateString([], opts);
+  }
+
+  // Long form for the cell's tooltip — weekday included, nothing abbreviated.
+  function formatTimestampFull(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString([], {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  }
+
+  function formatMonthYear(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString([], { month: 'short', year: 'numeric' });
   }
 
   // --- 1. Profile ---------------------------------------------------------
 
-  function profileSection(user) {
-    var card = section('Profile');
-
-    // Meta on the left, avatar on the right — both Google-sourced and read-only
-    // (we never store an editable profile; the picture identifies the account).
-    var head = el('div', { class: 'account-profile' });
-    var meta = el('div', { class: 'account-profile__meta' }, [
-      el('div', { class: 'account-profile__name', text: user.name || '' }),
-      el('div', { class: 'account-profile__email', text: user.email || '' }),
-      el('div', {
-        class: 'account-profile__since',
-        text: user.created_at ? 'Member since ' + formatDate(user.created_at) : ''
-      })
+  // A single stat tile. Returns the node with a `.set()` so async numbers (the
+  // 30-day conversion count, which only the history fetch knows) can land later
+  // without the tile having to be rebuilt.
+  function statTile(value, label, hint) {
+    var val = el('div', { class: 'account-stat__value', text: value });
+    var tile = el('div', { class: 'account-stat', title: hint }, [
+      val,
+      el('div', { class: 'account-stat__label', text: label })
     ]);
-    head.appendChild(meta);
+    tile.set = function (v) {
+      val.textContent = v;
+    };
+    return tile;
+  }
+
+  // The largest file this account can upload, as a real number.
+  //
+  // Limits are PER TOOL (tools/*.yaml, 5MB–50MB) and auth.js doubles the baked
+  // limit for a signed-in user, so there is no single site-wide figure. We show
+  // the doubled MODAL limit — the value most tools use — because understating is
+  // the safe direction to be wrong in: a tool that allows more still accepts the
+  // file, whereas an overstated cap sends people to a rejection. An admin-set
+  // absolute override on the user wins outright, matching auth.js's precedence.
+  function maxUpload(user, tools) {
+    if (user.max_file_size) return String(user.max_file_size).replace(/(\d)([A-Za-z])/, '$1 $2');
+    var counts = {};
+    var best = null;
+    (tools || []).forEach(function (t) {
+      var b = t.max_file_size_bytes;
+      if (!b) return;
+      counts[b] = (counts[b] || 0) + 1;
+      if (best == null || counts[b] > counts[best]) best = b;
+    });
+    if (best == null) return '—';
+    return Math.round((best * 2) / (1024 * 1024)) + ' MB';
+  }
+
+  // Returns { card, setConversions } — the profile card plus a hook the history
+  // fetch calls with its `total`, so one request feeds both cards.
+  function profileSection(user, tools) {
+    // No heading: the name, email and avatar identify this card on sight, so a
+    // "Profile" label above them is pure repetition. The cards below it still
+    // carry headings because their contents don't announce themselves.
+    var card = el('section', { class: 'account-card account-card--profile' });
+
+    // Identity row: avatar left (it anchors the card), name/email beside it.
+    // Both are Google-sourced and read-only — we never store an editable profile.
+    var head = el('div', { class: 'account-profile' });
     if (user.avatar_url) {
       var img = el('img', {
         class: 'account-profile__avatar',
@@ -146,9 +231,40 @@
       // Brand-gradient ring around the (non-editable, Google-sourced) avatar.
       head.appendChild(el('div', { class: 'account-profile__avatar-ring' }, [img]));
     }
+    var meta = el('div', { class: 'account-profile__meta' }, [
+      el('div', { class: 'account-profile__name', text: user.name || '' }),
+      el('div', { class: 'account-profile__email', text: user.email || '' })
+    ]);
+    if (user.role === 'admin') {
+      meta.appendChild(el('div', {}, [el('span', { class: 'account-badge', text: 'Admin' })]));
+    }
+    head.appendChild(meta);
     card.appendChild(head);
 
-    return card;
+    // Stat strip — the card was mostly empty air with only name/email/join date
+    // in it. Everything here is already on /me except the conversion count.
+    var conversions = statTile('—', 'Conversions (30d)');
+    var favTile = statTile(String((user.favorites || []).length), 'Favorites');
+    favTile.classList.add('account-stat--fav'); // removals below update it in place
+    card.appendChild(
+      el('div', { class: 'account-stats' }, [
+        favTile,
+        conversions,
+        statTile(
+          maxUpload(user, tools),
+          'Max upload',
+          'Your signed-in limit on most tools (2× the anonymous limit). A few tools allow more.'
+        ),
+        statTile(formatMonthYear(user.created_at), 'Member since')
+      ])
+    );
+
+    return {
+      card: card,
+      setConversions: function (n) {
+        conversions.set(n == null ? '—' : String(n));
+      }
+    };
   }
 
   function field(labelText, control) {
@@ -161,15 +277,170 @@
   // --- 3. Conversion history ---------------------------------------------
 
   var HISTORY_PAGE = 10;
+  // Higher than the history page size: a favorite is now a small badge, so a
+  // page of 24 takes about the room 12 of the old tiles did.
+  var FAVORITES_PAGE = 24;
 
-  function historySection(toolsById) {
-    var card = section('Conversion history (last 30 days)');
+  // Shared Prev/Next pager for history (server-paged) and favorites (paged
+  // client-side from the ids /me already returned). `onGo(nextPage)` re-renders.
+  function pager(page, pageCount, onGo) {
+    var prev = el(
+      'button',
+      { type: 'button', class: 'btn btn--ghost btn--sm', 'aria-label': 'Previous page' },
+      [el('span', { text: 'Previous' })]
+    );
+    var next = el(
+      'button',
+      { type: 'button', class: 'btn btn--ghost btn--sm', 'aria-label': 'Next page' },
+      [el('span', { text: 'Next' })]
+    );
+    if (page === 0) prev.disabled = true;
+    if (pageCount != null && page >= pageCount - 1) next.disabled = true;
+    prev.addEventListener('click', function () {
+      if (page > 0) onGo(page - 1);
+    });
+    next.addEventListener('click', function () {
+      onGo(page + 1);
+    });
+    return {
+      node: el('div', { class: 'account-pager' }, [
+        prev,
+        el('span', {
+          class: 'account-pager__info',
+          text: 'Page ' + (page + 1) + (pageCount ? ' of ' + pageCount : '')
+        }),
+        next
+      ]),
+      next: next
+    };
+  }
+
+  // A green tick or a red cross — no label. The word "Success" repeated down
+  // every row was ink without information; the glyph carries it in a quarter of
+  // the width. The icon is aria-hidden and the meaning is exposed as text for
+  // assistive tech, since a bare ✓ announces as nothing useful.
+  function statusPill(status) {
+    var ok = status === 'success' || status === 'ok';
+    var known = ok || status === 'failed' || status === 'error';
+    var label = ok ? 'Success' : known ? 'Failed' : status || 'Unknown';
+    // role="img" + aria-label puts the accessible name on the element itself, so
+    // the visible word is free to be display:none on phones without costing the
+    // meaning. (Hiding it via a clip-path .sr-only instead left the absolutely
+    // positioned text still driving the cell's intrinsic width — the <td> came
+    // out 51px wide around an 18px glyph, which is what pushed the mobile row
+    // onto a second line.)
+    return el(
+      'span',
+      {
+        class: 'account-status ' + (ok ? 'account-status--ok' : 'account-status--bad'),
+        role: 'img',
+        'aria-label': label,
+        title: label
+      },
+      [
+        icon(ok ? 'icon-check' : 'icon-x', 'account-status__icon'),
+        el('span', { class: 'account-status__label', text: label })
+      ]
+    );
+  }
+
+  // The badge that identifies a tool everywhere on this page — "PNG → JPG" for a
+  // conversion, and the tool's own name for the seven tools whose input and
+  // output formats are the same (pdf-compress, image-resize, …), where a
+  // "PDF → PDF" badge would say nothing. Falls back to formats, then the raw id,
+  // so a tool that has since been removed from the catalogue still renders.
+  function toolBadgeChildren(input, output, name) {
+    if (input && output && input.toLowerCase() !== output.toLowerCase()) {
+      return [
+        el('span', { class: 'fc-badge__fmt', text: input.toUpperCase() }),
+        el('span', { class: 'fc-badge__arrow', 'aria-hidden': 'true', text: '→' }),
+        el('span', { class: 'fc-badge__fmt', text: output.toUpperCase() })
+      ];
+    }
+    return [el('span', { class: 'fc-badge__fmt', text: name || input || '—' })];
+  }
+
+  function toolBadge(input, output, name) {
+    return el('span', { class: 'fc-badge' }, toolBadgeChildren(input, output, name));
+  }
+
+  // One <tr>. `data-label` on each cell is what lets the same markup collapse to
+  // stacked label/value pairs on narrow screens (see .account-table in the CSS)
+  // instead of a table squeezed to unreadable columns.
+  // The badge is the row's identity and its only link. It is NOT stretched over
+  // the row: a whole-row hit target gave no clue where to click, and on touch a
+  // horizontal drag could resolve as a tap and navigate. Hovering the badge
+  // recolours it, which is the affordance.
+  function historyRow(row, toolsById) {
+    var tool = toolsById[row.tool_id];
+    var label = toolBadgeChildren(row.input_format, row.output_format, tool && tool.name);
+    var badge = tool
+      ? el(
+          'a',
+          // `title` matters on phones, where the badge column is a fixed slice of
+          // the row and a long tool name ellipsizes to fit.
+          {
+            class: 'fc-badge fc-badge--link',
+            href: tool.slug + '/',
+            'aria-label': tool.name,
+            title: tool.name
+          },
+          label
+        )
+      : el('span', { class: 'fc-badge fc-badge--gone', title: row.tool_id }, label);
+
+    var when = el('time', {}, [
+      el('span', { class: 'account-when__full', text: formatTimestamp(row.created_at) }),
+      el('span', { class: 'account-when__short', text: formatTimestamp(row.created_at, true) })
+    ]);
+    if (row.created_at) when.setAttribute('datetime', row.created_at);
+    // Unabbreviated, with the weekday, on hover.
+    when.setAttribute('title', formatTimestampFull(row.created_at));
+
+    return el('tr', {}, [
+      el('td', { 'data-label': 'Conversion' }, [badge]),
+      el('td', {
+        'data-label': 'Size',
+        class: 'account-table__num',
+        text: formatKb(row.file_size_kb)
+      }),
+      el('td', { 'data-label': 'Time' }, [when]),
+      el('td', { 'data-label': 'Status' }, [statusPill(row.status)])
+    ]);
+  }
+
+  function historyTable(rows, toolsById) {
+    var tbody = el('tbody');
+    rows.forEach(function (row) {
+      tbody.appendChild(historyRow(row, toolsById));
+    });
+    return el('div', { class: 'account-table-wrap' }, [
+      el('table', { class: 'account-table' }, [
+        el('thead', {}, [
+          el('tr', {}, [
+            el('th', { scope: 'col', text: 'Conversion' }),
+            el('th', { scope: 'col', class: 'account-table__num', text: 'Size' }),
+            el('th', { scope: 'col', text: 'Time' }),
+            el('th', { scope: 'col', class: 'account-table__status', text: 'Status' })
+          ])
+        ]),
+        tbody
+      ])
+    ]);
+  }
+
+  function historySection(toolsById, onTotal) {
+    var card = section('Conversion history', null);
+    card.appendChild(
+      el('p', { class: 'account-card__sub', text: 'Kept for 30 days, then deleted automatically.' })
+    );
     var body = el('div', { class: 'account-history' }, [
       el('p', { class: 'account-empty', text: 'Loading…' })
     ]);
     card.appendChild(body);
 
     var page = 0;
+    var reportedTotal = false;
 
     function load() {
       api('/api/v1/user/history?limit=' + HISTORY_PAGE + '&offset=' + page * HISTORY_PAGE)
@@ -184,6 +455,11 @@
 
     function renderPage(data) {
       var rows = data.history || [];
+      if (!reportedTotal && onTotal) {
+        reportedTotal = true;
+        // Older API builds have no `total`; fall back to what this page proves.
+        onTotal(data.total != null ? data.total : rows.length + (data.has_more ? '+' : ''));
+      }
       clear(body);
       if (rows.length === 0 && page === 0) {
         body.appendChild(
@@ -194,75 +470,19 @@
         );
         return;
       }
-      var table = el('table', { class: 'account-table' }, [
-        el('thead', {}, [
-          el('tr', {}, [
-            el('th', { text: 'Tool' }),
-            el('th', { text: 'Date' }),
-            el('th', { text: 'Size' }),
-            el('th', { text: 'Status' })
-          ])
-        ])
-      ]);
-      var tbody = el('tbody');
-      rows.forEach(function (row) {
-        var tool = toolsById[row.tool_id];
-        var toolCell = tool
-          ? el('td', {}, [el('a', { href: tool.slug + '/', text: tool.name })])
-          : el('td', { text: row.tool_id });
-        tbody.appendChild(
-          el('tr', {}, [
-            toolCell,
-            el('td', { text: formatDate(row.created_at) }),
-            el('td', { text: formatKb(row.file_size_kb) }),
-            el('td', { text: row.status || '—' })
-          ])
-        );
-      });
-      table.appendChild(tbody);
-      body.appendChild(table);
+      body.appendChild(historyTable(rows, toolsById));
 
       // Pager — only when there's more than one page's worth.
       if (page > 0 || data.has_more) {
-        var prev = el(
-          'button',
-          {
-            type: 'button',
-            class: 'btn btn--ghost btn--sm',
-            'aria-label': 'Previous page'
-          },
-          [el('span', { text: 'Previous' })]
-        );
-        var next = el(
-          'button',
-          {
-            type: 'button',
-            class: 'btn btn--ghost btn--sm',
-            'aria-label': 'Next page'
-          },
-          [el('span', { text: 'Next' })]
-        );
-        if (page === 0) prev.disabled = true;
-        if (!data.has_more) next.disabled = true;
-        prev.addEventListener('click', function () {
-          if (page > 0) {
-            page--;
-            load();
-          }
+        var pages = data.total != null ? Math.max(1, Math.ceil(data.total / HISTORY_PAGE)) : null;
+        var p = pager(page, pages, function (to) {
+          page = to;
+          load();
         });
-        next.addEventListener('click', function () {
-          if (data.has_more) {
-            page++;
-            load();
-          }
-        });
-        body.appendChild(
-          el('div', { class: 'account-pager' }, [
-            prev,
-            el('span', { class: 'account-pager__info', text: 'Page ' + (page + 1) }),
-            next
-          ])
-        );
+        // Without `total` we cannot compute a page count, so has_more is the only
+        // thing that can disable Next.
+        if (pages == null && !data.has_more) p.next.disabled = true;
+        body.appendChild(p.node);
       }
     }
 
@@ -509,58 +729,129 @@
           byId[t.id] = t;
         });
         clear(app);
-        app.appendChild(profileSection(user));
+        var profile = profileSection(user, tools);
+        app.appendChild(profile.card);
         app.appendChild(favoritesSectionResolved(user, byId));
-        app.appendChild(historySection(byId));
+        // The history fetch is the only source of the 30-day count, so it feeds
+        // the Profile stat tile rather than us issuing a second request.
+        app.appendChild(historySection(byId, profile.setConversions));
         app.appendChild(preferencesSection(prefs));
         app.appendChild(dataSection());
       });
   }
 
   // Favorites with tool map already resolved (avoids a second fetch).
+  //
+  // Paged client-side: /me already returns every favorite id, so unlike history
+  // there is nothing to fetch per page — but the list is unbounded and a heavy
+  // user would otherwise get a wall of tiles, so it uses the same pager.
   function favoritesSectionResolved(user, byId) {
-    var card = section('Favorites');
-    var grid = el('div', { class: 'account-fav-grid' });
-    card.appendChild(grid);
-    var ids = user.favorites || [];
-    if (ids.length === 0) {
-      grid.appendChild(
-        el('p', {
-          class: 'account-empty',
-          text: 'No favorites yet. Click the heart on any tool page to bookmark it.'
-        })
-      );
-      return card;
+    var ids = (user.favorites || []).slice();
+    var card = section('Favorites', ids.length || null);
+    var body = el('div', { class: 'account-fav-body' });
+    card.appendChild(body);
+    var page = 0;
+
+    function emptyState() {
+      return el('p', {
+        class: 'account-empty',
+        text: 'No favorites yet. Click the heart on any tool page to bookmark it.'
+      });
     }
-    ids.forEach(function (id) {
+
+    // Keep the heading chip and the Profile stat tile honest after a removal.
+    function syncCounts() {
+      var chip = card.querySelector('.account-card__count');
+      if (chip) {
+        if (ids.length === 0) chip.parentNode.removeChild(chip);
+        else chip.textContent = String(ids.length);
+      }
+      var favStat = document.querySelector('.account-stat--fav .account-stat__value');
+      if (favStat) favStat.textContent = String(ids.length);
+    }
+
+    // A favorite is the same conversion badge the history table uses — "PNG →
+    // JPG" instead of "PNG to JPG Converter" with a heart. Same vocabulary in
+    // both cards, and the whole list now fits where two rows of tiles did.
+    function tile(id) {
       var tool = byId[id];
       var remove = el(
         'button',
         {
           type: 'button',
           class: 'account-fav__remove',
-          'aria-label': 'Remove favorite'
+          'aria-label': 'Remove ' + (tool ? tool.name : id) + ' from favorites'
         },
         [el('span', { 'aria-hidden': 'true', text: '×' })]
       );
+      var label = tool
+        ? toolBadgeChildren(tool.input_format, tool.output_format, tool.name)
+        : [el('span', { class: 'fc-badge__fmt', text: id })];
+      // The badge is the link; the remove button sits on top of it, so its click
+      // must not follow the link.
       var favEl = tool
         ? el('div', { class: 'account-fav' }, [
-            el('a', { class: 'account-fav__link', href: tool.slug + '/', text: tool.name }),
+            el(
+              'a',
+              {
+                class: 'fc-badge fc-badge--link account-fav__link',
+                href: tool.slug + '/',
+                'aria-label': tool.name
+              },
+              label
+            ),
             remove
           ])
         : el('div', { class: 'account-fav account-fav--gone' }, [
-            el('span', { class: 'account-fav__link', text: id }),
+            el('span', { class: 'fc-badge fc-badge--gone account-fav__link' }, label),
             remove
           ]);
-      remove.addEventListener('click', function () {
+      remove.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        remove.disabled = true;
         api('/api/v1/favorites/' + encodeURIComponent(id), { method: 'DELETE' })
           .then(function (r) {
-            if (r.ok && favEl.parentNode) favEl.parentNode.removeChild(favEl);
+            if (!r.ok) throw new Error('remove-failed');
+            ids.splice(ids.indexOf(id), 1);
+            syncCounts();
+            // Re-render rather than detaching the tile: removing the last item on
+            // the final page has to fall back a page, not leave it blank.
+            var last = Math.max(0, Math.ceil(ids.length / FAVORITES_PAGE) - 1);
+            if (page > last) page = last;
+            renderPage();
           })
-          .catch(function () {});
+          .catch(function () {
+            remove.disabled = false;
+          });
       });
-      grid.appendChild(favEl);
-    });
+      return favEl;
+    }
+
+    function renderPage() {
+      clear(body);
+      if (ids.length === 0) {
+        body.appendChild(emptyState());
+        return;
+      }
+      var grid = el('div', { class: 'account-fav-grid' });
+      ids.slice(page * FAVORITES_PAGE, (page + 1) * FAVORITES_PAGE).forEach(function (id) {
+        grid.appendChild(tile(id));
+      });
+      body.appendChild(grid);
+
+      var pages = Math.ceil(ids.length / FAVORITES_PAGE);
+      if (pages > 1) {
+        body.appendChild(
+          pager(page, pages, function (to) {
+            page = to;
+            renderPage();
+          }).node
+        );
+      }
+    }
+
+    renderPage();
     return card;
   }
 

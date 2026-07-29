@@ -707,6 +707,7 @@ def test_write_tool_data_shape(tmp_path, monkeypatch):
         "output_format",
         "category",
         "tagline",
+        "max_file_size_bytes",
     }
 
 

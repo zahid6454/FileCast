@@ -1,6 +1,6 @@
 """Small serialization helpers shared by routers."""
 
-from data.models import Tool, User
+from data.models import MAX_FAVORITES, Tool, User
 
 
 def user_dict(
@@ -21,7 +21,13 @@ def user_dict(
         ),
     }
     if favorites is not None:
-        d["favorites"] = favorites
+        # Bounded on the way OUT as well as on the way in. The write-side cap
+        # only stops an account growing past the limit from now on; an account
+        # that got large before it existed would otherwise keep shipping every
+        # row in every /me response, which is the payload the cap exists to
+        # bound. Truncating is self-healing rather than lossy: the user still
+        # sees a full page of favorites, and removing one reveals the next.
+        d["favorites"] = favorites[:MAX_FAVORITES]
     if preferences is not None:
         d["preferences"] = preferences
     return d

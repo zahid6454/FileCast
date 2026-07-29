@@ -11,7 +11,13 @@
 
 {% block content %}
 <div class="container page">
-  <h1 class="page__title page__title--tight">Your Account</h1>
+  {# The <h1> is present but not painted. Visually it only repeated the menu item
+     the visitor just clicked, and every card carries its own heading — but
+     removing it outright left the page with no level-1 heading at all, so a
+     screen-reader user pressing H got "no headings" when signed out (the
+     fallback below is only paragraphs and a link) and a skipped level when
+     signed in, where the first heading is a card's <h2>. #}
+  <h1 class="sr-only">Your Account</h1>
 
   {# account.js replaces this mount with the signed-in sections. The default is a
      server-rendered sign-in prompt so the page works with NO JavaScript and for

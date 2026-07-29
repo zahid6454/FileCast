@@ -619,6 +619,10 @@ def write_tool_data(tools: list[dict]):
             "output_format": t.get("output_format"),
             "category": t.get("category"),
             "tagline": t.get("tagline", ""),
+            # Per-tool upload cap, already normalised (and admin-overridden) by
+            # this point. The account page derives its "Max upload" stat from
+            # these rather than hardcoding a number that drifts from the YAML.
+            "max_file_size_bytes": t.get("max_file_size_bytes"),
         }
         for t in tools
     ]

@@ -2,7 +2,14 @@
   "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["static/js/**/*.js", "e2e/**/*.js", "test/**/*.js", "*.json", "!package-lock.json"]
+    "includes": [
+      "static/js/**/*.js",
+      "static/css/**/*.css",
+      "e2e/**/*.js",
+      "test/**/*.js",
+      "*.json",
+      "!package-lock.json"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -12,6 +19,10 @@
   },
   "javascript": {
     "formatter": { "quoteStyle": "single", "trailingCommas": "none" }
+  },
+  "css": {
+    "formatter": { "enabled": false },
+    "linter": { "enabled": false }
   },
   "linter": {
     "enabled": true,

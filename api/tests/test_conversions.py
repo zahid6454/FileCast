@@ -74,3 +74,31 @@ async def test_history_failure_never_fails_counter(admin_client, db):
         )
     ).scalar_one()
     assert n == 0  # history rolled back
+
+
+async def test_favorites_cap_rejects_beyond_limit(admin_client, monkeypatch):
+    from data.routers import favorites as fav
+
+    monkeypatch.setattr(fav, "MAX_FAVORITES", 3)
+    for i in range(3):
+        r = await admin_client.post("/api/v1/favorites", json={"tool_id": f"t{i}"})
+        assert r.status_code == 200
+    over = await admin_client.post("/api/v1/favorites", json={"tool_id": "t3"})
+    assert over.status_code == 409
+    # Re-favoriting something already saved must stay a no-op, not hit the cap.
+    again = await admin_client.post("/api/v1/favorites", json={"tool_id": "t1"})
+    assert again.status_code == 200
+
+
+async def test_favorites_capped_on_read_not_only_on_write(admin_client, monkeypatch):
+    """A list that grew large BEFORE the write cap must not keep inflating /me."""
+    from data.routers import _serialize
+
+    for i in range(5):
+        r = await admin_client.post("/api/v1/favorites", json={"tool_id": f"r{i}"})
+        assert r.status_code == 200
+
+    # The write path allowed all five; the serializer still bounds the payload.
+    monkeypatch.setattr(_serialize, "MAX_FAVORITES", 3)
+    me = (await admin_client.get("/api/v1/auth/me")).json()
+    assert len(me["user"]["favorites"]) == 3
