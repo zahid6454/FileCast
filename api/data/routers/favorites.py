@@ -7,16 +7,10 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
-from data.models import UserFavorite
+from data.models import MAX_FAVORITES, UserFavorite
 from data.security import require_user
 
 router = APIRouter(prefix="/api/v1/favorites", tags=["favorites"])
-
-# The favorites list is user-writable, unbounded, and joined into EVERY /me
-# response — so without a cap one account can inflate the payload on every page
-# load site-wide. 100 is far above any genuine use (the catalogue is ~34 tools)
-# while still bounding the blast radius of a scripted client.
-MAX_FAVORITES = 100
 
 
 class FavoriteBody(BaseModel):

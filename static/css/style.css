@@ -239,9 +239,10 @@ a { color: var(--color-primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 img { max-width: 100%; display: block; }
 
-/* Visible to assistive tech, not on screen. Used where an icon carries the whole
-   meaning (the history status tick/cross) and a bare glyph would announce as
-   nothing. `clip-path` rather than `display: none`, which screen readers skip. */
+/* Visible to assistive tech, not on screen. Used for the /account/ <h1>, which
+   is redundant on screen (the cards name themselves) but is the page's only
+   level-1 heading. `clip-path` rather than `display: none`, which screen readers
+   skip entirely. */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1398,18 +1399,22 @@ img { max-width: 100%; display: block; }
    fits in the space two rows of "PNG to JPG Converter" tiles used to take. */
 .account-fav-grid { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .account-fav { position: relative; display: inline-flex; max-width: 100%; }
-.account-fav__link { padding-right: 24px; max-width: 100%; }
+/* Reserves the remove button's full 24px hit area, so the button never overlaps
+   the link's box — a mis-tap on the x used to land on the <a> underneath and
+   navigate away instead of removing the favorite. */
+.account-fav__link { padding-right: 28px; max-width: 100%; }
 .account-fav__remove {
   position: absolute;
   z-index: 1;
   top: 50%;
-  right: 2px;
+  right: 0;
   transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  /* 24x24 target (WCAG 2.2 SC 2.5.8) around an 18px glyph. */
+  width: 24px;
+  height: 24px;
   line-height: 1;
   background: none;
   border: none;
@@ -1417,10 +1422,14 @@ img { max-width: 100%; display: block; }
   color: var(--color-text-light);
   font-size: 1rem;
   cursor: pointer;
-  opacity: 0.5;
   transition: color var(--transition-base), opacity var(--transition-base);
 }
-.account-fav:hover .account-fav__remove, .account-fav__remove:focus-visible { opacity: 1; }
+/* Fade-in-on-hover only where hover exists. On touch :hover never fires, so the
+   resting 0.5 opacity made the control look permanently disabled. */
+@media (hover: hover) {
+  .account-fav__remove { opacity: 0.5; }
+  .account-fav:hover .account-fav__remove, .account-fav__remove:focus-visible { opacity: 1; }
+}
 .account-fav__remove:hover { color: var(--color-error); }
 
 .account-empty { color: var(--color-text-muted); font-size: var(--text-sm); margin: 0; }
@@ -1585,7 +1594,6 @@ img { max-width: 100%; display: block; }
   .account-table td:nth-child(2), .account-table td:nth-child(3) {
     font-size: var(--text-xs, 0.75rem);
   }
-}
 }
 
 /* --- Hamburger (mobile only) --- */

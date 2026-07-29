@@ -128,6 +128,16 @@ class Session(Base):
     )
 
 
+# The favorites list is user-writable, unbounded, and joined into EVERY /me
+# response, so without a ceiling one account can inflate the payload on every
+# page load site-wide. `tool_id` is not validated against the catalogue, so the
+# list is not naturally bounded by the ~34 real tools either. Lives here rather
+# than in the router because it is enforced on BOTH sides: the write path
+# refuses to grow past it, and the serializer refuses to return more than it
+# (which is what bounds an account that grew large before the cap existed).
+MAX_FAVORITES = 100
+
+
 class UserFavorite(Base):
     __tablename__ = "user_favorites"
 
