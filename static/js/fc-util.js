@@ -19,6 +19,15 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
+  // Input size in KB for the history row. `file_size_kb` is an integer column, so
+  // anything under 512 bytes used to round to 0 and the account page rendered a
+  // successful conversion as "0 KB" (a 700-byte SVG, say). Floor a non-empty file
+  // at 1 KB — "1 KB" is a rounding artefact, "0 KB" reads as a failed conversion.
+  FC.sizeKb = function (bytes) {
+    if (!bytes || bytes < 0) return 0;
+    return Math.max(1, Math.round(bytes / 1024));
+  };
+
   FC.trackEvent = function (name, params) {
     if (typeof gtag === 'function') {
       gtag('event', name, params);

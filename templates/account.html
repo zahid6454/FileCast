@@ -11,7 +11,9 @@
 
 {% block content %}
 <div class="container page">
-  <h1 class="page__title page__title--tight">Your Account</h1>
+  {# No page <h1>: every card carries its own heading, and on a page reached from
+     the "Your Account" menu item the title only repeated what the user just
+     clicked. The document <title> still says it for the tab and for search. #}
 
   {# account.js replaces this mount with the signed-in sections. The default is a
      server-rendered sign-in prompt so the page works with NO JavaScript and for

@@ -164,7 +164,10 @@
     --color-bg-sunken: #0F172A;
 
     --color-border: #334155;
-    --color-border-light: #1E293B;
+    /* NOT #1E293B — that is --color-bg-raised, so a "light" border drawn on a
+       card was invisible (history row separators simply vanished in dark mode).
+       Sits between the card and --color-border so it reads as a hairline. */
+    --color-border-light: #283548;
     --color-border-focus: #60A5FA;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -205,7 +208,8 @@
   --color-bg-sunken: #0F172A;
 
   --color-border: #334155;
-  --color-border-light: #1E293B;
+  /* See the note in the prefers-color-scheme block above. */
+  --color-border-light: #283548;
   --color-border-focus: #60A5FA;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -234,6 +238,21 @@ html { scroll-behavior: smooth; }
 a { color: var(--color-primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 img { max-width: 100%; display: block; }
+
+/* Visible to assistive tech, not on screen. Used where an icon carries the whole
+   meaning (the history status tick/cross) and a bare glyph would announce as
+   nothing. `clip-path` rather than `display: none`, which screen readers skip. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* --- Layout --- */
 .container { max-width: var(--max-width); margin: 0 auto; padding: 0 var(--space-4); }
@@ -805,9 +824,19 @@ img { max-width: 100%; display: block; }
   padding: var(--space-4) var(--space-5);
   margin: var(--space-4) 0;
 }
-.tool-options__row { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); }
-.tool-options__row:last-child { margin-bottom: 0; }
-.tool-options__label { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--color-text-secondary); min-width: 80px; }
+/* Compact controls (number/select) sit side by side instead of stacking — two
+   short fields like the resizer's Width and Height read as one dimension pair,
+   and stacking them left a card that was mostly empty to the right of a 100px
+   input. A slider needs the full width to be usable, so --range claims its own
+   row (flex-basis 100%) and the wrap does the rest. */
+.tool-options { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-5); }
+.tool-options__row { display: flex; align-items: center; gap: var(--space-3); }
+/* `min-width: 0` for the same reason it is on .tool-options__slider below: the
+   row is now a flex ITEM too, and its auto minimum floors at the slider's UA
+   intrinsic width — which pushed the read-out off-screen at 320px. */
+.tool-options__row--range { flex: 1 1 100%; min-width: 0; gap: var(--space-4); }
+.tool-options__label { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--color-text-secondary); }
+.tool-options__row--range .tool-options__label { min-width: 80px; }
 .tool-options__input {
   flex: 1;
   padding: var(--space-2) var(--space-3);
@@ -826,6 +855,13 @@ img { max-width: 100%; display: block; }
    value read-out is pushed off-screen, where the root clip hides it. */
 .tool-options__slider { flex: 1; min-width: 0; accent-color: var(--color-primary); }
 .tool-options__value { font-size: var(--text-sm); color: var(--color-text-muted); min-width: 40px; text-align: right; }
+/* In an inline row the suffix ("px") is a unit sitting against its field, not a
+   right-aligned read-out, so it drops the reserved 40px column. */
+.tool-options__row--number .tool-options__value { min-width: 0; text-align: left; }
+.tool-options__row--number .tool-options__input { flex: 0 0 auto; width: 96px; }
+@media (max-width: 480px) {
+  .tool-options__row--number { flex: 1 1 100%; }
+}
 
 /* --- Responsive grid ladder (§5b): 1 → 2 (480) → 3 (768) → 4 (1024) --- */
 @media (min-width: 480px) {
@@ -1073,11 +1109,11 @@ img { max-width: 100%; display: block; }
   height: 36px;
   flex-shrink: 0;
   background: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border: none;
+  padding: 0;
   color: var(--color-text-light);
   cursor: pointer;
-  transition: color var(--transition-base), border-color var(--transition-base);
+  transition: color var(--transition-base), transform var(--transition-base);
 }
 /* The `display` above beats the UA sheet's `[hidden] { display: none }` — author
    rules win over UA rules at any specificity — so this is what actually honours
@@ -1085,10 +1121,38 @@ img { max-width: 100%; display: block; }
    visitors, and since auth.js only attaches the click handler when signed in,
    it renders as a button that does nothing. */
 .tool-fav[hidden] { display: none; }
-.tool-fav:hover { color: var(--color-error); border-color: var(--color-border); }
-.tool-fav__icon { width: 24px; height: 24px; }
+/* No background or border on hover — the heart itself is the affordance, and a
+   grey rounded square around it read as a stray button. */
+.tool-fav:hover { color: var(--color-error); }
+.tool-fav:active { transform: scale(0.92); }
+/* `fill` is set here on the host <svg> and INHERITS into the <use> shadow tree —
+   see the #icon-heart-toggle comment in _sprite.html for why the symbol must not
+   declare one. transparent (not `none`) so the toggle can ease between states:
+   `none` is not an animatable value, so `fill: none` → red would snap. */
+.tool-fav__icon {
+  width: 24px;
+  height: 24px;
+  fill: transparent;
+  transition: fill var(--transition-base), transform var(--transition-base);
+}
+/* Hover reddens the outline only. Tinting the fill here made an unsaved heart
+   look nearly identical to a saved one at 24px — outline vs solid is the only
+   unambiguous way to read the two states apart. */
 .tool-fav.is-fav { color: var(--color-error); }
 .tool-fav.is-fav .tool-fav__icon { fill: var(--color-error); }
+/* One-shot pop when the heart is filled, so saving reads as a deliberate act.
+   Driven by .is-pop (set on click, cleared on animationend) rather than .is-fav,
+   which would also fire on page load for an already-favorited tool. */
+.tool-fav.is-pop .tool-fav__icon { animation: fav-pop 260ms ease-out; }
+@keyframes fav-pop {
+  0% { transform: scale(0.8); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-fav:active { transform: none; }
+  .tool-fav.is-pop .tool-fav__icon { animation: none; }
+}
 
 /* --- Post-conversion sign-in touchpoint / "Saved ✓" (#signin-slot) --- */
 .signin-slot { margin-top: var(--space-5); }
@@ -1152,35 +1216,105 @@ img { max-width: 100%; display: block; }
 .account-signin__benefits li { margin: var(--space-1) 0; }
 .account-signin__trust { color: var(--color-text-muted); font-size: var(--text-sm); margin-bottom: var(--space-4); }
 
+/* Compacted from space-5/space-5: the cards were carrying more padding than
+   their contents needed once the stat strip and badges shrank. */
 .account-card {
-  padding: var(--space-5);
-  margin-bottom: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-4);
   background: var(--color-bg-raised);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
 }
 .account-card__title {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-lg, 1.125rem);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
   color: var(--color-heading);
 }
+/* Count chip beside a heading ("Favorites 7"). */
+.account-card__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-sunken);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: var(--weight-semibold);
+}
+/* Pulled up under the heading (which owns the space-3 below it) so the subtitle
+   reads as part of the heading block rather than a floating first paragraph. */
+.account-card__sub {
+  margin: calc(var(--space-3) * -1 + 2px) 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
 
-.account-profile { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: 140px; }
+/* Identity row: avatar first, then name/email. The old layout pushed them to
+   opposite edges of a 140px-tall box, which read as an empty card. */
+.account-profile { display: flex; align-items: center; gap: var(--space-4); }
+.account-profile__meta { min-width: 0; }
+/* Headingless, so it needs no room reserved above the identity row. */
+.account-card--profile { padding-top: var(--space-4); }
 /* Brand-gradient ring: a gradient-filled circle with the avatar inset by a
    card-colored border, so the gradient reads as a ring around the photo. */
 .account-profile__avatar-ring {
-  order: 2;
-  align-self: center;
   flex-shrink: 0;
   padding: 3px;
   border-radius: var(--radius-full);
   background: linear-gradient(135deg, var(--brand-blue), var(--brand-green));
 }
-.account-profile__avatar { display: block; width: 120px; height: 120px; border-radius: var(--radius-full); object-fit: cover; border: 3px solid var(--color-bg-raised); }
-.account-profile__meta { order: 1; align-self: center; }
-.account-profile__name { font-weight: var(--weight-semibold); font-size: var(--text-base); color: var(--color-text); }
-.account-profile__email { color: var(--color-text-secondary); }
-.account-profile__since { color: var(--color-text-muted); font-size: var(--text-sm); }
+.account-profile__avatar { display: block; width: 64px; height: 64px; border-radius: var(--radius-full); object-fit: cover; border: 3px solid var(--color-bg-raised); }
+.account-profile__name { font-weight: var(--weight-semibold); font-size: var(--text-base); color: var(--color-heading); }
+.account-profile__email { color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.account-badge {
+  display: inline-block;
+  margin-top: var(--space-1);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-sunken);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+}
+
+/* Stat strip under the identity row — what fills the card. */
+.account-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3) 0; /* rows only — columns are separated by the hairlines */
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+/* No fill and no box. These are read-only figures sitting inside a card that
+   already provides containment, so what they need is SEPARATION, not another
+   border — four outlined boxes inside an outlined card reads as boxes-in-a-box.
+   A hairline between each pair does the job with a fraction of the ink and lets
+   the numbers be the loudest thing in the strip.
+   The rule uses --color-border, NOT --color-border-light: the light token is
+   #F1F5F9 in light mode (identical to --color-bg-sunken) and #1E293B in dark
+   (identical to --color-bg-raised), so it is invisible against a card in both
+   themes — which is exactly why the old tile "border" never showed. */
+.account-stat {
+  padding: var(--space-1) var(--space-3);
+  text-align: center;
+}
+.account-stat + .account-stat { border-left: 1px solid var(--color-border); }
+.account-stat__value {
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  color: var(--color-heading);
+  line-height: 1.3;
+}
+.account-stat__label { font-size: var(--text-xs, 0.75rem); color: var(--color-text-muted); }
 
 .account-field { display: block; margin-bottom: var(--space-3); }
 .account-field__label { display: block; margin-bottom: var(--space-1); font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--color-text-secondary); }
@@ -1214,37 +1348,144 @@ img { max-width: 100%; display: block; }
 .account-range-row { display: flex; align-items: center; gap: var(--space-3); }
 .account-range__val { font-size: var(--text-sm); color: var(--color-text-muted); min-width: 2ch; }
 
-.account-fav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3); }
-.account-fav {
+/* Chips, not a stretched grid: `auto-fill, minmax(220px, 1fr)` stretched four
+   tiles across the full card width, so "CSV to JSON Converter" sat in a box wide
+   enough for a paragraph. Flex-wrap sizes each tile to its label (capped), which
+   also means the row count follows the favorites, not the viewport. */
+/* --- Conversion badge (shared: favorites + history rows) --------------------
+   One vocabulary for "which conversion is this" everywhere on the account page.
+   `--link` is the interactive variant: a white surface that lifts on the brand
+   glow, same as .card. */
+.fc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-sunken);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.fc-badge__fmt { overflow: hidden; text-overflow: ellipsis; }
+.fc-badge__arrow { color: var(--color-text-light); }
+.fc-badge--gone { color: var(--color-text-muted); font-style: italic; }
+.fc-badge--link {
+  background: var(--color-bg-raised);
+  border-color: var(--color-border);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: box-shadow var(--transition-base), transform var(--transition-base),
+    border-color var(--transition-base), color var(--transition-base),
+    background-color var(--transition-base);
+}
+/* The badge is the only clickable thing in a history row, so its hover has to be
+   unmistakable: it takes the brand colour on text and border, plus the usual
+   lift and glow. All four eased on --transition-base. */
+.fc-badge--link:hover {
+  text-decoration: none;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-brand-hover);
+}
+
+/* --- Favorites -------------------------------------------------------------
+   Each favorite is just a badge plus its remove button, so the row of them now
+   fits in the space two rows of "PNG to JPG Converter" tiles used to take. */
+.account-fav-grid { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.account-fav { position: relative; display: inline-flex; max-width: 100%; }
+.account-fav__link { padding-right: 24px; max-width: 100%; }
+.account-fav__remove {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
-}
-.account-fav__link { font-weight: var(--weight-medium); color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.account-fav--gone .account-fav__link { color: var(--color-text-muted); font-style: italic; }
-.account-fav__remove {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
   line-height: 1;
   background: none;
   border: none;
+  border-radius: var(--radius-full);
   color: var(--color-text-light);
-  font-size: 1.1rem;
+  font-size: 1rem;
   cursor: pointer;
+  opacity: 0.5;
+  transition: color var(--transition-base), opacity var(--transition-base);
 }
+.account-fav:hover .account-fav__remove, .account-fav__remove:focus-visible { opacity: 1; }
 .account-fav__remove:hover { color: var(--color-error); }
 
 .account-empty { color: var(--color-text-muted); font-size: var(--text-sm); margin: 0; }
 
-.account-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
-.account-table th, .account-table td { padding: var(--space-2) var(--space-3); text-align: left; border-bottom: 1px solid var(--color-border-light); }
-.account-table th { color: var(--color-text-muted); font-weight: var(--weight-medium); }
+/* --- Conversion history table --- */
+.account-table-wrap { overflow-x: auto; }
+/* `border-collapse: separate` keeps a <tr> able to take `border-radius`; with
+   `collapse` it would be ignored. `table-layout: fixed` is what makes the four
+   column widths below authoritative. */
+.account-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--text-sm);
+}
+.account-table th {
+  padding: 0 var(--space-3) var(--space-2);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.account-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border-light);
+  vertical-align: middle;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account-table tbody tr:last-child td { border-bottom: none; }
+/* The ROW is deliberately inert — no hover wash, no cursor, no stretched link.
+   The badge alone is the target, and it alone reacts (see .fc-badge--link:hover),
+   so there is never any doubt about what is clickable. */
+.account-table__num { font-variant-numeric: tabular-nums; }
+/* Time carries a full "08:45 PM · Jul 29, 2026"; Size is four or five characters
+   and Status is a single glyph, so the slack goes where the content is.
+   Scoped to a min-width query on purpose: these are :nth-child rules, so they
+   outrank any plain `.account-table td { width: auto }` reset in the phone
+   block — a media query adds no specificity. Left unscoped, every phone cell
+   kept its desktop percentage (they total 100%), and the gaps then forced the
+   row to wrap no matter what else was trimmed. */
+@media (min-width: 641px) {
+  .account-table th:nth-child(1), .account-table td:nth-child(1) { width: 26%; }
+  .account-table th:nth-child(2), .account-table td:nth-child(2) { width: 16%; }
+  .account-table th:nth-child(3), .account-table td:nth-child(3) { width: 42%; }
+  .account-table th:nth-child(4), .account-table td:nth-child(4) { width: 16%; }
+}
+/* Exactly one of the two forms is ever shown: the word on wide screens, the
+   glyph on phones (see the 640px block). Showing both was belt-and-braces —
+   "✓ Success" says the same thing twice in a column that only ever holds two
+   values. */
+.account-status { display: inline-flex; align-items: center; gap: 6px; }
+.account-status__icon { display: none; width: 18px; height: 18px; flex-shrink: 0; }
+.account-status--ok { color: var(--color-success); }
+.account-status--bad { color: var(--color-error); }
+/* Two timestamp variants ship in the markup; CSS picks one, so there is no
+   resize listener and nothing reflows on rotate. */
+.account-when__short { display: none; }
 .account-pager { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-3); }
 .account-pager__info { font-size: var(--text-sm); color: var(--color-text-muted); }
 
@@ -1278,6 +1519,73 @@ img { max-width: 100%; display: block; }
 
 @media (max-width: 640px) {
   .account-data__cols { grid-template-columns: 1fr; }
+  .account-stats { grid-template-columns: 1fr 1fr; }
+  /* At two columns the 3rd tile starts a new row, so its inherited left-hand
+     hairline would hang off the strip's left edge. */
+  .account-stat:nth-child(odd) { border-left: none; }
+  .account-profile__avatar { width: 56px; height: 56px; }
+
+  /* One line per entry: badge · size · time · tick. It only fits because the
+     phone drops the two widest constants — the year from the timestamp (history
+     is 30 days, so it never varies) and the word beside the status glyph. The
+     row still wraps rather than overflowing on very narrow devices. */
+  .account-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .account-table, .account-table tbody { display: block; }
+  .account-table tr {
+    display: flex;
+    /* nowrap + a shrinkable badge: the row stays one line at every width, and
+       the only thing that gives is the badge label, which ellipsizes. Letting it
+       wrap instead stranded the status tick alone on a second line, because the
+       auto margin still pushed it right. */
+    flex-wrap: nowrap;
+    align-items: center;
+    /* 6px, not --space-2's 8px: at 320px the row came to 250px against 246px of
+       usable width, so the three gaps are exactly where the last 6px live. */
+    column-gap: 6px;
+    row-gap: 4px;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border-light);
+  }
+  .account-table tbody tr:last-child { border-bottom: none; }
+  .account-table td {
+    display: block;
+    width: auto; /* clears the desktop column percentages */
+    padding: 0;
+    border-bottom: none;
+    overflow: visible;
+  }
+  /* Proportional widths, not `space-between`: distributing free space per row
+     spread each row independently, so "9.7 MB", "87 KB" and "512 KB" all began
+     at a different x and nothing lined up down the page. Percentage bases make
+     these real columns — spread across the full width AND aligned row to row.
+     The badge takes whatever is left and is the only cell that may shrink. */
+  .account-table td:nth-child(1) { min-width: 0; flex: 1 1 auto; }
+  .account-table td:nth-child(2) { flex: 0 0 18%; }
+  .account-table td:nth-child(3) { flex: 0 0 38%; }
+  .account-table td:nth-child(4) { flex: 0 0 auto; }
+  .account-table td:nth-child(1) .fc-badge { max-width: 100%; overflow: hidden; }
+  .account-table td:nth-child(1) .fc-badge__fmt { min-width: 0; }
+  /* Only the OUTPUT format may ellipsize. Left to shrink freely both halves gave
+     way at once ("HT... -> MARKD..."), which destroys the pair; holding the input
+     and the arrow yields "HTML -> MARK..." — still legible as a conversion.
+     :not(:last-child) is load-bearing — a single-name badge ("PDF Compressor")
+     has one __fmt that is BOTH first and last, and pinning it stopped the label
+     shrinking, so the badge hard-clipped it with no ellipsis. */
+  .account-table td:nth-child(1) .fc-badge__fmt:first-child:not(:last-child),
+  .account-table td:nth-child(1) .fc-badge__arrow { flex-shrink: 0; }
+  .account-when__full { display: none; }
+  .account-when__short { display: inline; }
+  /* Swap the word for the glyph. Safe to drop the word outright: role="img" +
+     aria-label on .account-status carries the name, so nothing is lost to
+     assistive tech. */
+  .account-status__label { display: none; }
+  .account-status__icon { display: block; }
+  /* One step down for the two metadata values — the last ~26px needed to hold a
+     360px phone on a single line. */
+  .account-table td:nth-child(2), .account-table td:nth-child(3) {
+    font-size: var(--text-xs, 0.75rem);
+  }
+}
 }
 
 /* --- Hamburger (mobile only) --- */

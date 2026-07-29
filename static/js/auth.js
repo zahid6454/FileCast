@@ -405,7 +405,7 @@
     var btn = document.getElementById('tool-fav');
     if (!btn) return;
 
-    if (!btn.querySelector('svg')) btn.appendChild(icon('icon-heart', 'tool-fav__icon'));
+    if (!btn.querySelector('svg')) btn.appendChild(icon('icon-heart-toggle', 'tool-fav__icon'));
 
     var toolId = cfg.id;
     var fav = (user.favorites || []).indexOf(toolId) !== -1;
@@ -416,6 +416,12 @@
       var next = !fav;
       fav = next;
       setHeart(btn, next); // optimistic
+      if (next) {
+        // Restart the fill animation even on a rapid re-favorite.
+        btn.classList.remove('is-pop');
+        void btn.offsetWidth; // reflow: makes the class re-add restart the run
+        btn.classList.add('is-pop');
+      }
       var req = next
         ? fetch(API + '/api/v1/favorites', {
             method: 'POST',

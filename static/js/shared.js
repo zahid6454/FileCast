@@ -228,7 +228,7 @@
             tool_id: config.id,
             input_format: config.input_format,
             output_format: config.output_format,
-            file_size_kb: Math.round(currentFile.size / 1024),
+            file_size_kb: FC.sizeKb(currentFile.size),
             duration_ms: durationMs,
             status: 'success'
           },

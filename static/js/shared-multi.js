@@ -320,6 +320,11 @@
       success_count: successes.length
     });
     var cfg = window.TOOL_CONFIG;
+    // Batch tools posted no size at all, so every multi-file row in the account
+    // history read "—". Report the combined input size of the batch.
+    var totalBytes = selectedFiles.reduce(function (sum, f) {
+      return sum + (f.size || 0);
+    }, 0);
     postConversion(
       {
         tool_id: cfg.id,
@@ -327,6 +332,7 @@
         output_format: cfg.output_format,
         file_count: results.length,
         success_count: successes.length,
+        file_size_kb: FC.sizeKb(totalBytes),
         duration_ms: durationMs,
         status: 'success'
       },

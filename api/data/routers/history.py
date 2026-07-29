@@ -5,7 +5,7 @@ the admin ``/users`` prefix.
 """
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
@@ -40,8 +40,18 @@ async def my_history(
     )
     has_more = len(rows) > limit
     rows = rows[:limit]
+    # `total` powers "Page 2 of 5" and the account-page stat tile. has_more stays
+    # for existing callers; the COUNT is over one indexed user_id, not the rows.
+    total = (
+        await db.execute(
+            select(func.count())
+            .select_from(UserConversion)
+            .where(UserConversion.user_id == user.id)
+        )
+    ).scalar_one()
     return {
         "has_more": has_more,
+        "total": total,
         "history": [
             {
                 "id": r.id,
