@@ -56,7 +56,7 @@ A Python-based static site generator (`build.py`) compiles YAML definitions, Mar
 - **Zero JS Framework overhead:** Vanilla JS manages the files. Only the script/library relevant to the active tool is loaded.
 - **Performance Optimized:** Clean CSS variables, automatic system dark mode support, and zero external CDNs (all library JS is self-hosted with SRI hashes).
 
-### System 2: Backend API Server (Oracle Cloud Free Tier / Render)
+### System 2: Backend API Server (Oracle Cloud Free Tier)
 A FastAPI backend wraps Gotenberg (LibreOffice + Chromium headless) and Ghostscript for conversions that cannot be performed in the browser.
 - **No Persistence:** Files are received via HTTPS, converted in memory, returned to the client, and immediately purged from the container space.
 - **Decoupled Fallback:** If the API server experiences downtime, the frontend remains fully functional, and 28 of the 34 tools continue to operate.
@@ -229,15 +229,19 @@ FileCast/
    ```
 
 3. **Start with Docker Compose:**
-   Run the backend locally via Docker. This starts FastAPI on port `8000` and a sandboxed Gotenberg instance:
+   Run the backend locally via Docker. This starts FastAPI on port `8000`, a sandboxed
+   Gotenberg instance, and a local Postgres:
    ```bash
-   GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build
+   GIT_SHA=$(git rev-parse HEAD) docker compose --profile dev-only up -d --build
    ```
    `--build` matters: plain `docker compose up -d` reuses whatever image exists, so
    after a `git pull` the containers keep serving the old code while the static site
    is rebuilt fresh — the page then silently falls back for any API field the running
    container doesn't return yet. `GIT_SHA` stamps the image so `GET /` reports the
    commit it was built from, which is what makes that skew visible instead of silent.
+   `--profile dev-only` starts the bundled local `postgres` service — omitted in
+   production, where `api`/`purge` connect to Neon instead (see
+   `docker-compose.prod.yml`).
 
 4. **Verify Health Check:**
    Access the server health status:
@@ -322,10 +326,12 @@ Finally, run `python build.py` to compile the changes. The tool will automatical
 - **CI/CD:** Connecting the project repository to Cloudflare Pages triggers an automatic rebuild of `/dist/` using Python on every git branch merge.
 - **Sitemap Submission:** The `/sitemap.xml` is automatically generated and submitted to Google Search Console to speed up indexing.
 
-### API Server (Docker on Render / Oracle VPS)
-- **Deployment Script:** Run via docker-compose:
+### API Server (Docker on Oracle VPS)
+- **Deployment Script:** Run via docker-compose, layering the production overlay
+  (explicit env vars pointing at Neon + the Cloudflare Tunnel sidecar — no
+  `--profile dev-only`, so the bundled local Postgres never starts):
   ```bash
-  GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build
+  GIT_SHA=$(git rev-parse HEAD) docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
   ```
 - **Drift Check:** The API deploys separately from Cloudflare Pages, so the site can
   ship a commit the API hasn't. The `api-drift` job in `deploy.yml` reads the commit

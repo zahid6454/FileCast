@@ -1,0 +1,58 @@
+# Production overlay. Pass alongside the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# No --profile dev-only here, so the local `postgres` service in the base file
+# never starts — api/purge connect straight to Neon via PROD_DATABASE_URL.
+#
+# Every setting below is an explicit environment variable rather than relying
+# on `.env` surviving into the built image (it doesn't — see .dockerignore).
+# Compose still reads `api/.env` to resolve the ${...} interpolations here;
+# that's a separate mechanism from what gets COPY'd into the image.
+services:
+  api:
+    # Tunnel-only: cloudflared reaches `api` over the internal compose network
+    # by service name, so the public port mapping from the base file is not
+    # needed here — and must not survive into prod. Compose concatenates
+    # list-type `ports` across -f files rather than merging by key (unlike
+    # `environment`), so a plain override list would ADD to the base file's
+    # "8090:8090" rather than replace it (verified: without `!override`, both
+    # entries survive, still publishing to 0.0.0.0). The `!override` merge-
+    # control tag forces a full replace instead. Bound to loopback, not
+    # removed outright, so `curl localhost:8090` still works for on-box
+    # debugging over SSH without a second unauthenticated path alongside the
+    # tunnel that bypasses the CF-Connecting-IP trust boundary netutil.py
+    # depends on (see docker-compose.yml's api service and the go-live plan's
+    # §4.3).
+    ports: !override
+      - "127.0.0.1:8090:8090"
+    environment:
+      - DATABASE_URL=${PROD_DATABASE_URL}
+      - ENVIRONMENT=production
+      - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-30}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN}
+      - COOKIE_SECURE=true
+      - SITE_ORIGIN=${SITE_ORIGIN}
+      - FINGERPRINT_SALT=${FINGERPRINT_SALT}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
+      - RETENTION_DAYS=${RETENTION_DAYS:-30}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - INITIAL_ADMIN_EMAILS=${INITIAL_ADMIN_EMAILS}
+      - GITHUB_PAT=${GITHUB_PAT}
+      - GITHUB_OWNER=${GITHUB_OWNER:-zahid6454}
+      - GITHUB_REPO=${GITHUB_REPO:-FileCast}
+
+  purge:
+    environment:
+      - DATABASE_URL=${PROD_DATABASE_URL}
+      - ENVIRONMENT=production
+      - RETENTION_DAYS=${RETENTION_DAYS:-30}
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.7.3
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - api
+    restart: unless-stopped

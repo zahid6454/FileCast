@@ -25,6 +25,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+        required: false
     restart: unless-stopped
 
   # The 30-day retention purge (D5/F13). This is THE single purge trigger —
@@ -56,6 +57,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
     restart: unless-stopped
 
   gotenberg:
@@ -78,7 +80,12 @@ services:
       retries: 5
       start_period: 15s
 
+  # Local-only Postgres for dev. Not started by a bare `docker compose up` —
+  # requires `--profile dev-only` (see dev.bat/README.md). Prod points
+  # DATABASE_URL at Neon instead (docker-compose.prod.yml); this service
+  # never runs there.
   postgres:
+    profiles: ["dev-only"]
     image: postgres:16
     environment:
       POSTGRES_USER: filecast
