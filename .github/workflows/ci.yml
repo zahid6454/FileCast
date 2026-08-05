@@ -67,8 +67,15 @@ jobs:
       - name: Install build dependencies
         run: pip install -r requirements.txt
       # playwright.config.js serves dist/ via `python -m http.server`, so dist/
-      # must exist before the browser starts.
+      # must exist before the browser starts. API_URL is pinned to a guaranteed-
+      # non-resolving host (.invalid is IANA-reserved, RFC 2606/6761) rather than
+      # left to inherit site-config.yaml's real api.base_url — these E2E specs
+      # are written to exercise the "API unreachable" path hermetically (see
+      # rating.spec.js's "no console error" assertions), and must not depend on
+      # whether the production domain happens to resolve.
       - name: Build site
+        env:
+          API_URL: https://api.filecast.invalid
         run: python build.py
       - run: npx playwright install --with-deps chromium
       # --workers=2: the static preview server is single-threaded and the suite
