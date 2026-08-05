@@ -1,6 +1,19 @@
 services:
   api:
-    build: .
+    # An EXPLICIT shared tag, not compose's default per-service `<project>-<service>`
+    # name. `build: .` on both services does NOT share an image — compose built
+    # api-api and api-purge as separate images, and they drifted 12 days apart in
+    # practice, which is precisely the "second thing to keep in sync" the purge
+    # comment below says doesn't exist. One tag makes that true.
+    image: filecast-api:local
+    # Stamp the image with the commit it was built from. Empty when GIT_SHA is
+    # unset — the Dockerfile's own default ("unknown") then applies, so a plain
+    # `docker compose up -d --build` still works, it just cannot be verified.
+    # To stamp: GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     ports:
       - "8090:8090"
     environment:
@@ -25,7 +38,17 @@ services:
   # trigger (F13). Reuses the api image (`build: .`) so it shares the code and
   # DB config with no second thing to keep in sync. No ports, no inbound access.
   purge:
-    build: .
+    # Same tag, context and args as `api` — that is what actually makes this one
+    # image. The second build pass is a full cache hit, so it costs ~nothing and
+    # resolves to the identical image id. A stale purge is not cosmetic: this
+    # container IS the retention job, so an old image here means the "auto-deleted
+    # after 30 days" promise is kept by whatever code shipped whenever it was last
+    # built.
+    image: filecast-api:local
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     command: ["python", "-m", "data.tasks", "purge", "--loop"]
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-development}

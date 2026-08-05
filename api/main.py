@@ -20,6 +20,12 @@ from sqlalchemy import text
 setup_logging()
 logger = get_logger("app")
 
+VERSION = "1.0.0"
+# Baked into the image by the Dockerfile's GIT_SHA build arg. "unknown" means the
+# image was built without one — the drift check treats that as unverifiable, not
+# as up to date. Read once at import: it cannot change while the process lives.
+GIT_SHA = os.getenv("GIT_SHA") or "unknown"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,7 +58,8 @@ async def lifespan(app: FastAPI):
         extra={
             "data": {
                 "event": "startup",
-                "version": "1.0.0",
+                "version": VERSION,
+                "commit": GIT_SHA,
                 "gotenberg_url": GOTENBERG_URL,
                 "workers": os.getenv("WEB_CONCURRENCY", "4"),
                 "database": "ok" if db_ok else "unreachable",
@@ -72,7 +79,7 @@ _docs_enabled = ENVIRONMENT == "development"
 
 app = FastAPI(
     title="FileCast API",
-    version="1.0.0",
+    version=VERSION,
     docs_url="/docs" if _docs_enabled else None,
     redoc_url="/redoc" if _docs_enabled else None,
     openapi_url="/openapi.json" if _docs_enabled else None,
@@ -95,4 +102,12 @@ for data_router in all_routers:
 
 @app.get("/")
 async def root():
-    return {"service": SERVICE_NAME, "env": ENVIRONMENT, "version": "1.0.0"}
+    # `commit` is read unauthenticated by the deploy workflow's drift check, so it
+    # has to live on a public route. It leaks nothing: the repo is public (Apache
+    # 2.0), so the sha maps to a commit anyone can already read.
+    return {
+        "service": SERVICE_NAME,
+        "env": ENVIRONMENT,
+        "version": VERSION,
+        "commit": GIT_SHA,
+    }

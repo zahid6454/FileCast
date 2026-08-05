@@ -231,8 +231,13 @@ FileCast/
 3. **Start with Docker Compose:**
    Run the backend locally via Docker. This starts FastAPI on port `8000` and a sandboxed Gotenberg instance:
    ```bash
-   docker compose up -d --build
+   GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build
    ```
+   `--build` matters: plain `docker compose up -d` reuses whatever image exists, so
+   after a `git pull` the containers keep serving the old code while the static site
+   is rebuilt fresh — the page then silently falls back for any API field the running
+   container doesn't return yet. `GIT_SHA` stamps the image so `GET /` reports the
+   commit it was built from, which is what makes that skew visible instead of silent.
 
 4. **Verify Health Check:**
    Access the server health status:
@@ -320,8 +325,15 @@ Finally, run `python build.py` to compile the changes. The tool will automatical
 ### API Server (Docker on Render / Oracle VPS)
 - **Deployment Script:** Run via docker-compose:
   ```bash
-  docker compose up -d --build
+  GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build
   ```
+- **Drift Check:** The API deploys separately from Cloudflare Pages, so the site can
+  ship a commit the API hasn't. The `api-drift` job in `deploy.yml` reads the commit
+  from `GET /` and annotates the run when the live API is missing `api/**` changes.
+  It is deliberately `continue-on-error` — the admin panel reports this workflow's
+  conclusion, so failing the run would show "Publish failed" for a publish that
+  succeeded. An image built without `GIT_SHA` reports `unknown` and the check
+  reports that it cannot verify, rather than passing silently.
 - **Error Tracking & Logging:**
   - **Frontend / Backend Errors:** Monitored using Sentry's free tier.
   - **Uptime Monitoring:** UptimeRobot polls `/health` endpoints every 5 minutes.
