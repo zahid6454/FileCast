@@ -15,8 +15,8 @@ logger = get_logger("middleware")
 RATE_WINDOW = 3600  # 1 hour in seconds
 
 PROD_ORIGINS = [
-    "https://filecast.io",
-    "https://www.filecast.io",
+    "https://filecast.org",
+    "https://www.filecast.org",
 ]
 
 # Only outside production. Shipping these live was never an exploitable hole —

@@ -856,7 +856,7 @@ def render_all_pages(
 
 def generate_sitemap(site_config: dict, tools: list[dict], categories_with_tools: dict):
     base = (
-        site_config.get("site", {}).get("base_url", "https://filecast.io").rstrip("/")
+        site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
     )
     today = date.today().isoformat()
     urls = []
@@ -900,7 +900,7 @@ def generate_sitemap(site_config: dict, tools: list[dict], categories_with_tools
 
 def generate_robots(site_config: dict):
     base = (
-        site_config.get("site", {}).get("base_url", "https://filecast.io").rstrip("/")
+        site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
     )
     # Exclude the admin panel and account pages from crawling (Phase 2). The
     # sitemap already omits them (it only enumerates home/tools/categories/static

@@ -48,7 +48,7 @@ jobs:
       - name: Build site
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          API_URL: https://api.filecast.io
+          API_URL: https://api.filecast.org
         run: python build.py
 
       - uses: actions/setup-node@v4
@@ -90,7 +90,7 @@ jobs:
         env:
           # Same host the site was just built against, so the two agree by
           # construction rather than by a second place to remember.
-          API_URL: https://api.filecast.io
+          API_URL: https://api.filecast.org
         run: |
           set -uo pipefail
 

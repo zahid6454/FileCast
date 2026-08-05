@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     session_cookie_name: str = "fc_session"
     logged_in_cookie_name: str = "fc_logged_in"
     session_ttl_days: int = 30
-    cookie_domain: str | None = None  # ".filecast.io" in prod, None in dev
+    cookie_domain: str | None = None  # ".filecast.org" in prod, None in dev
     cookie_secure: bool = False  # True in prod (HTTPS), False on localhost
     site_origin: str = "http://localhost:8000"
 

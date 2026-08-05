@@ -1,6 +1,6 @@
 # FileCast
 
-FileCast (`filecast.io`) is a privacy-first, free, ad-supported file conversion platform built around a simple, powerful promise: **"Your Files Stay Yours."** 
+FileCast (`filecast.org`) is a privacy-first, free, ad-supported file conversion platform built around a simple, powerful promise: **"Your Files Stay Yours."** 
 
 Unlike traditional file converters that upload all files to remote servers, FileCast utilizes a dual-system architecture. It runs **28 client-side tools** directly inside the user's browser (meaning files never leave their device) and reserves a secure, ephemeral **FastAPI backend** for **6 server-side tools** (where files are processed in-memory and immediately deleted).
 
