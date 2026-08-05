@@ -172,7 +172,12 @@ export async function installApi(page, state) {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ service: 'filecast-api', env: 'development', version: '0.0.0', commit: 'test' })
+        body: JSON.stringify({
+          service: 'filecast-api',
+          env: 'development',
+          version: '0.0.0',
+          commit: 'test'
+        })
       })
   );
 

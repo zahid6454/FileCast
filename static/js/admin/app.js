@@ -491,33 +491,36 @@
         });
     }
 
-    api.get('/').then(function (data) {
-      if (!data || data.env !== 'development') return;
-      var adminBtn = h(
-        'button',
-        { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
-        'Dev login as admin'
-      );
-      var userBtn = h(
-        'button',
-        { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
-        'Dev login as user'
-      );
-      adminBtn.addEventListener('click', function () {
-        devLogin('admin');
-      });
-      userBtn.addEventListener('click', function () {
-        devLogin('user');
-      });
-      devSlot.appendChild(
-        h('div', { class: 'admin-signin__devblock' }, [
-          h('p', { class: 'admin-signin__note' }, 'Local development only — skips Google.'),
-          h('div', { class: 'admin-signin__dev' }, [adminBtn, userBtn])
-        ])
-      );
-    }, function () {
-      // Root unreachable — stay silent, same as any other prod visitor.
-    });
+    api.get('/').then(
+      function (data) {
+        if (!data || data.env !== 'development') return;
+        var adminBtn = h(
+          'button',
+          { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
+          'Dev login as admin'
+        );
+        var userBtn = h(
+          'button',
+          { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
+          'Dev login as user'
+        );
+        adminBtn.addEventListener('click', function () {
+          devLogin('admin');
+        });
+        userBtn.addEventListener('click', function () {
+          devLogin('user');
+        });
+        devSlot.appendChild(
+          h('div', { class: 'admin-signin__devblock' }, [
+            h('p', { class: 'admin-signin__note' }, 'Local development only — skips Google.'),
+            h('div', { class: 'admin-signin__dev' }, [adminBtn, userBtn])
+          ])
+        );
+      },
+      function () {
+        // Root unreachable — stay silent, same as any other prod visitor.
+      }
+    );
 
     mount.appendChild(
       h('div', { class: 'admin-gate' }, [
