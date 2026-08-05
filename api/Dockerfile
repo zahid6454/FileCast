@@ -11,6 +11,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# The commit this image was built from, surfaced at GET / so a running container
+# can be compared against a checkout. Declared AFTER the pip layers so re-stamping
+# an otherwise-identical build only rebuilds these two trivial layers.
+#
+# Defaults to "unknown" rather than failing the build: an image is still perfectly
+# runnable unstamped (that is what `docker build .` by hand produces), and the
+# drift check reads "unknown" as "cannot verify" instead of "up to date".
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
+
 EXPOSE 8090
 
 # Migrate then serve — in the api service COMMAND (not a shared ENTRYPOINT) so

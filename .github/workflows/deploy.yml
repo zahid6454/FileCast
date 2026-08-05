@@ -62,3 +62,118 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler@3 pages deploy dist/ --project-name=filecast --branch=master
+
+  # Pages and the API deploy independently, so the site can ship a commit the API
+  # has not. That is invisible until a page reads a field the running API does not
+  # return yet — the account page's conversion tile silently fell back to "10+"
+  # when `total` shipped in the same commit as the tile that reads it.
+  #
+  # This job cannot fix the skew (there is no deploy hook to call). It makes it
+  # LOUD, which is the part that was missing.
+  api-drift:
+    name: Check the API is not behind this commit
+    runs-on: ubuntu-latest
+    needs: deploy
+    # 🔴 NEVER fail the run. admin_deploy.py reports this run's `conclusion` to the
+    # admin panel, so a red job here renders "Publish failed" over a publish that
+    # succeeded — the same lie §5.3a forbids the 501 path from telling. The signal
+    # is the annotation and the job summary; the run stays green.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: step 4 diffs an ARBITRARY older sha against this one, and
+          # the default depth-1 checkout has neither that commit nor a merge base.
+          fetch-depth: 0
+
+      - name: Compare the live API's commit against this one
+        env:
+          # Same host the site was just built against, so the two agree by
+          # construction rather than by a second place to remember.
+          API_URL: https://api.filecast.io
+        run: |
+          set -uo pipefail
+
+          note() { echo "::notice::$1"; echo "- $1" >> "$GITHUB_STEP_SUMMARY"; }
+          warn() { echo "::warning::$1"; echo "- ⚠️ $1" >> "$GITHUB_STEP_SUMMARY"; }
+
+          echo "### API drift check" >> "$GITHUB_STEP_SUMMARY"
+
+          # 1. Reachable? An unreachable API is an uptime problem, not a drift
+          #    one, and UptimeRobot already owns that alert.
+          if ! body=$(curl -fsS --max-time 15 "$API_URL/"); then
+            warn "Could not reach $API_URL — skipping the drift check."
+            exit 0
+          fi
+
+          live=$(printf '%s' "$body" | jq -r '.commit // "unknown"')
+
+          # 2. Stamped? Images built without the GIT_SHA arg report "unknown".
+          #    Unverifiable is not the same as up to date, so say so and stop.
+          if [ "$live" = "unknown" ] || [ -z "$live" ] || [ "$live" = "null" ]; then
+            warn "The API reports no commit. Rebuild it with GIT_SHA=\$(git rev-parse HEAD) to enable this check."
+            exit 0
+          fi
+
+          # 3. Exactly current — the common case once a deploy hook exists.
+          if [ "$live" = "$GITHUB_SHA" ]; then
+            note "API is on this exact commit (${live:0:7})."
+            exit 0
+          fi
+
+          # 4. A sha we cannot resolve (force-pushed away, or built from a fork)
+          #    tells us nothing to act on.
+          if ! git cat-file -e "${live}^{commit}" 2>/dev/null; then
+            warn "The API reports commit $live, which is not in this repository's history."
+            exit 0
+          fi
+
+          # 5. Direction check. Case 4 only confirmed $live is *resolvable* —
+          #    not that it's an ancestor of this commit. GITHUB_SHA is fixed at
+          #    dispatch time and does not move if this run is later re-run, or if
+          #    it sits queued behind the pages-deploy concurrency group while the
+          #    API gets redeployed out-of-band for a newer commit — both leave
+          #    $live ahead of $GITHUB_SHA. Case 6's plain `git diff` can't tell
+          #    "behind" from "ahead" (a tree diff is symmetric), so without this
+          #    it reports the opposite of the truth: "API is missing changes"
+          #    with "commits behind: 0", backwards and self-contradictory.
+          if git merge-base --is-ancestor "$GITHUB_SHA" "$live" 2>/dev/null; then
+            note "API is already ahead of this commit (${live:0:7}) — nothing to do."
+            exit 0
+          fi
+          if ! git merge-base --is-ancestor "$live" "$GITHUB_SHA" 2>/dev/null; then
+            warn "API commit $live and this commit have diverged — cannot determine drift."
+            exit 0
+          fi
+
+          # 6. THE point of the whole job. A different sha is not automatically a
+          #    problem: most publishes are content or CSS, which the API neither
+          #    serves nor cares about. Failing on every sha mismatch would fire on
+          #    nearly every Save, and a check that cries wolf gets ignored — which
+          #    would cost exactly the bug this exists to catch. Only an actual
+          #    difference under api/ means the running API is missing code.
+          behind=$(git rev-list --count "$live..$GITHUB_SHA" 2>/dev/null || echo "?")
+          if git diff --quiet "$live" "$GITHUB_SHA" -- api/; then
+            note "API is $behind commit(s) behind (${live:0:7}), but nothing under api/ differs — no redeploy needed."
+            exit 0
+          fi
+
+          echo "::error::The live API is missing api/ changes from this commit. Redeploy it: GIT_SHA=\$(git rev-parse HEAD) docker compose up -d --build api purge"
+          {
+            echo ""
+            echo "**The live API is behind and it matters.**"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Live API | \`${live:0:7}\` |"
+            echo "| This commit | \`${GITHUB_SHA:0:7}\` |"
+            echo "| Commits behind | $behind |"
+            echo ""
+            echo "Commits touching \`api/\` that the live API does not have:"
+            echo ""
+            echo '```'
+            git log --oneline --no-decorate "$live..$GITHUB_SHA" -- api/
+            echo '```'
+            echo ""
+            echo "Redeploy: \`GIT_SHA=\$(git rev-parse HEAD) docker compose up -d --build api purge\`"
+          } >> "$GITHUB_STEP_SUMMARY"

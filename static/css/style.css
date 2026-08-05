@@ -452,9 +452,8 @@ img { max-width: 100%; display: block; }
 
 /* Tool-page header: title, tagline and badge centre together, matching the
    converter controls below them. Scoped to `.tool-title-row` (present in
-   tool/tool-text/tool-multi) rather than to `.tool-panel` — only tool.html has
-   a panel, so the old `.tool-panel`-scoped rules left the text and multi
-   templates with a left-aligned header under a centred badge. Not scoped to
+   tool/tool-text/tool-multi) rather than to `.tool-panel`, so it still works
+   if a template ever renders the header outside the panel. Not scoped to
    `.page__title` alone: privacy/terms/about reuse that class and stay left. */
 .tool-title-row .page__title { text-align: center; }
 .tool-title-row ~ .page__tagline { text-align: center; margin-bottom: var(--space-5); }
