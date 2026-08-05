@@ -162,6 +162,20 @@ export function makeState(overrides = {}) {
 }
 
 export async function installApi(page, state) {
+  // Root env probe (app.js's renderSignIn) — dev-login buttons only render when
+  // this reports 'development', mirroring the server-side gate. Scoped to the
+  // API's own origin (not 127.0.0.1, where the built site itself is served) so
+  // this can never shadow a same-origin page navigation.
+  await page.route(
+    (url) => url.pathname === '/' && url.hostname !== '127.0.0.1',
+    async (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ service: 'filecast-api', env: 'development', version: '0.0.0', commit: 'test' })
+      })
+  );
+
   await page.route('**/api/v1/**', async (route) => {
     const req = route.request();
     const method = req.method();

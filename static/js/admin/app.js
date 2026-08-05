@@ -13,8 +13,8 @@
 //     conclusion (success → "Published", else a failure toast); a 501 reply (deploy
 //     not configured) still degrades to the info "pending rebuild" banner (§7).
 //   - Any AuthError from api.js (mid-session 401/403) re-invokes the gate (R8).
-//   - Dev-login buttons that self-hide in prod on first click (dev-login 404s
-//     unless ENVIRONMENT=development — R11).
+//   - Dev-login buttons only render at all when GET / reports env:'development',
+//     matching the server-side gate on the dev-login endpoint itself (R11).
 (function () {
   'use strict';
   var ADMIN = (window.ADMIN = window.ADMIN || {});
@@ -476,20 +476,9 @@
 
     // Dev-login: a local-only shortcut that skips Google and mints a session for a
     // synthetic admin/user account. Gated server-side (404 unless ENVIRONMENT=
-    // development), so in prod the first click hides these honestly.
-    var adminBtn = h(
-      'button',
-      { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
-      'Dev login as admin'
-    );
-    var userBtn = h(
-      'button',
-      { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
-      'Dev login as user'
-    );
-    var devRow = h('div', { class: 'admin-signin__dev' }, [adminBtn, userBtn]);
-    var devNote = h('p', { class: 'admin-signin__note' }, 'Local development only — skips Google.');
-    var devBlock = h('div', { class: 'admin-signin__devblock' }, [devNote, devRow]);
+    // development) — mirror that here by asking the API's env before rendering
+    // the buttons at all, so prod visitors never see a dead-end control.
+    var devSlot = h('div', {});
 
     function devLogin(role) {
       api
@@ -497,21 +486,37 @@
         .then(function () {
           window.location.reload();
         })
-        .catch(function (err) {
-          if (err && err.status === 404) {
-            // Prod: dev-login is disabled — hide the buttons honestly.
-            dom.clear(devRow);
-            devNote.textContent = 'Dev login is disabled on this server.';
-          } else {
-            ADMIN.toast('Dev login failed', 'error');
-          }
+        .catch(function () {
+          ADMIN.toast('Dev login failed', 'error');
         });
     }
-    adminBtn.addEventListener('click', function () {
-      devLogin('admin');
-    });
-    userBtn.addEventListener('click', function () {
-      devLogin('user');
+
+    api.get('/').then(function (data) {
+      if (!data || data.env !== 'development') return;
+      var adminBtn = h(
+        'button',
+        { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
+        'Dev login as admin'
+      );
+      var userBtn = h(
+        'button',
+        { type: 'button', class: 'admin-btn admin-btn--ghost admin-btn--sm' },
+        'Dev login as user'
+      );
+      adminBtn.addEventListener('click', function () {
+        devLogin('admin');
+      });
+      userBtn.addEventListener('click', function () {
+        devLogin('user');
+      });
+      devSlot.appendChild(
+        h('div', { class: 'admin-signin__devblock' }, [
+          h('p', { class: 'admin-signin__note' }, 'Local development only — skips Google.'),
+          h('div', { class: 'admin-signin__dev' }, [adminBtn, userBtn])
+        ])
+      );
+    }, function () {
+      // Root unreachable — stay silent, same as any other prod visitor.
     });
 
     mount.appendChild(
@@ -529,7 +534,7 @@
             { class: 'admin-btn admin-btn--ghost admin-gate__site', href: '/' },
             'Go to the main site'
           ),
-          devBlock
+          devSlot
         ])
       ])
     );
