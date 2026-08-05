@@ -176,8 +176,14 @@ test.describe('tools', () => {
 
     // Server state actually mutated.
     expect(state.tools.find((t) => t.id === 'img-a').enabled).toBe(false);
-    // A deploy was fired (→ 501 → banner), and the save banner is visible.
+    // The save is immediate, but publishing is NOT — the banner appears with an
+    // explicit Publish button and no deploy fires until it's clicked (a save
+    // must never auto-trigger a rebuild on its own; see the reorder test below
+    // for why that matters with several spaced-out edits).
     await expect(page.locator('.admin-banner--info')).toBeVisible();
+    expect(state.deployCalls).toBe(0);
+    await page.getByRole('button', { name: 'Publish' }).click();
+    await expect.poll(() => state.deployCalls).toBe(1);
 
     // Reload → the disabled state persists (came back from GET /tools).
     await page.reload();
@@ -204,6 +210,33 @@ test.describe('tools', () => {
     // Full global order (all 5 ids), image-a and image-b swapped, categories intact.
     expect(order).toEqual(['img-b', 'img-a', 'img-c', 'doc-a', 'doc-b']);
     await expect(page.locator('.admin-banner--info')).toBeVisible();
+    expect(state.deployCalls).toBe(0);
+  });
+
+  test('several spaced-out reorders fire ZERO deploys until Publish is clicked, then exactly one', async ({
+    page
+  }) => {
+    // Regression test: reordering used to auto-fire a debounced deploy per save,
+    // so a leisurely drag-a-few-tools session (each move looked at before the
+    // next) triggered a separate GitHub Actions run per move instead of one for
+    // the whole session. Publish is now a deliberate, explicit action.
+    const state = makeState();
+    await installApi(page, state);
+    await page.goto('/admin/#tools');
+
+    const firstRow = page.locator('.admin-toollist[data-category="image"] .admin-tool').first();
+    await firstRow.locator('.admin-tool__down').click();
+    // A real editing session has gaps between moves — long enough that the old
+    // 700ms debounce would have already fired its own deploy for the first move.
+    await page.waitForTimeout(900);
+    await firstRow.locator('.admin-tool__down').click();
+    await page.waitForTimeout(900);
+
+    await expect.poll(() => state.reorderCalls.length).toBe(2);
+    expect(state.deployCalls).toBe(0);
+
+    await page.getByRole('button', { name: 'Publish' }).click();
+    await expect.poll(() => state.deployCalls).toBe(1);
   });
 
   test('reorder to a category boundary keeps focus on a move button (not <body>)', async ({
@@ -393,8 +426,7 @@ test.describe('announcements', () => {
     await expect(page.locator('.admin-annc')).toHaveCount(1);
 
     // Announcements are fetched live by nav.js → no static rebuild needed, so no
-    // deploy is fired and the "pending rebuild" banner must NOT appear.
-    await page.waitForTimeout(900); // clear the 700ms deploy-debounce window
+    // publish banner appears and no deploy is ever fired for them.
     await expect(page.locator('.admin-banner--info')).toHaveCount(0);
     expect(state.deployCalls).toBe(0);
   });
@@ -566,7 +598,7 @@ test('fresh/empty DB renders placeholders with no throw (§8.5)', async ({ page 
 });
 
 test.describe('settings (Phase 7)', () => {
-  test('renders the form, saves via PUT, and fires a rebuild (settings bake at build time)', async ({
+  test('renders the form, saves via PUT, and Publish fires the rebuild (settings bake at build time)', async ({
     page
   }) => {
     const state = makeState();
@@ -585,9 +617,12 @@ test.describe('settings (Phase 7)', () => {
       .toBe('New tagline');
 
     // Unlike announcements, settings bake into static HTML → notifySaved() (no
-    // { live:true }) fires the deploy, so the pending-rebuild banner appears (§5.3b).
+    // { live:true }) raises the publish banner (§5.3b) — but the deploy itself
+    // is a deliberate follow-up click, not automatic.
     await expect(page.locator('.admin-banner--info')).toBeVisible();
-    expect(state.deployCalls).toBeGreaterThan(0);
+    expect(state.deployCalls).toBe(0);
+    await page.getByRole('button', { name: 'Publish' }).click();
+    await expect.poll(() => state.deployCalls).toBeGreaterThan(0);
   });
 
   test('client-validates a bad GA4 id before any PUT (422 guard, no rebuild)', async ({ page }) => {
@@ -617,8 +652,11 @@ test.describe('deploy terminal state (Phase 7)', () => {
     await page.goto('/admin/#settings');
     await page.locator('input[name="site_tagline"]').fill('Deployed tagline');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('button', { name: 'Publish' }).click();
 
     await expect(page.locator('.admin-toast--success', { hasText: 'Published' })).toBeVisible();
+    // A successful publish clears the "unpublished changes" banner entirely.
+    await expect(page.locator('.admin-banner--info')).toHaveCount(0);
   });
 
   test('a completed run with conclusion failure reports a failure, never "Published"', async ({
@@ -631,10 +669,14 @@ test.describe('deploy terminal state (Phase 7)', () => {
     await page.goto('/admin/#settings');
     await page.locator('input[name="site_tagline"]').fill('Broken publish');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('button', { name: 'Publish' }).click();
 
     await expect(page.locator('.admin-toast--error', { hasText: 'Publish failed' })).toBeVisible();
     // The misleading green toast must never appear for a failed conclusion.
     await expect(page.locator('.admin-toast--success', { hasText: 'Published' })).toHaveCount(0);
+    // A failed publish leaves the changes unpublished — the banner (and a
+    // retryable Publish button) must still be there, not silently dropped.
+    await expect(page.getByRole('button', { name: 'Publish' })).toBeVisible();
   });
 });
 

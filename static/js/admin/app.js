@@ -8,10 +8,17 @@
 //     tool fetches, no N+1.
 //   - Hash router (#dashboard default) over the four tabs.
 //   - Toast + the honest save→publish flow: each successful mutation calls
-//     ADMIN.notifySaved() → success toast + a debounced POST /admin/deploy. With
+//     ADMIN.notifySaved() → success toast + a persistent "unpublished changes"
+//     banner with an explicit Publish button (an auto-firing deploy per save used
+//     to mean a spaced-out editing session — a few tools reordered a couple
+//     seconds apart — fired a separate GitHub Actions run per edit instead of one
+//     for the whole session). Clicking Publish fires POST /admin/deploy; with
 //     deploy wired (Phase 7) the reply carries a run_id we poll to a terminal
-//     conclusion (success → "Published", else a failure toast); a 501 reply (deploy
-//     not configured) still degrades to the info "pending rebuild" banner (§7).
+//     conclusion (success → "Published", else a failure toast, banner stays up
+//     for a retry); a 501 reply (deploy not configured) degrades the banner to an
+//     info "pending rebuild" message (§7). The pending-publish flag is in-memory
+//     only — a page reload before clicking Publish loses the indicator (changes
+//     stay saved in the DB either way; only the client-side reminder resets).
 //   - Any AuthError from api.js (mid-session 401/403) re-invokes the gate (R8).
 //   - Dev-login buttons only render at all when GET / reports env:'development',
 //     matching the server-side gate on the dev-login endpoint itself (R11).
@@ -224,7 +231,14 @@
   var mount = null; // #admin-app
   var tabHost = null; // <main> where tabs render
   var toastHost = null;
-  var bannerShown = false;
+  var publishPending = false; // an unpublished save is sitting in the DB
+  var publishInFlight = false; // a deploy triggered by Publish is running
+  // Bumped on every non-live save. fireDeploy() snapshots the current value; if
+  // another save lands while that deploy is still running, the snapshot goes
+  // stale and a later success must NOT clear publishPending — the newer edit
+  // was never part of that build (a real GitHub Actions run commonly takes
+  // 1-3+ minutes, plenty of time for a second edit to land mid-run).
+  var saveGeneration = 0;
   var routerBound = false;
   var drawerBound = false; // Esc/outside-click listeners bound once (module-wide)
   var booting = false; // guards against re-entrant gate re-checks
@@ -301,42 +315,88 @@
 
   // --- save → publish flow (§7) ------------------------------------------
 
-  var deployTimer = null;
-
   // opts.live: the change is served live from the API (the announcement bar is
-  // fetched at runtime by nav.js), so it needs NO static rebuild — don't fire
-  // the deploy flow and don't show the "pending rebuild" banner. Tool changes
-  // (enable/disable, reorder, overlay edits) DO bake into static pages, so they
-  // keep the deploy → 501 → banner path.
+  // fetched at runtime by nav.js), so it needs NO static rebuild — don't touch
+  // the publish banner. Tool changes (enable/disable, reorder, overlay edits)
+  // and site settings DO bake into static pages, so they raise the banner.
   ADMIN.notifySaved = function (opts) {
     if (opts && opts.live) {
       ADMIN.toast('Saved — live now', 'success');
       return;
     }
     ADMIN.toast('Saved', 'success');
-    // Debounce/coalesce a burst of edits into one deploy call.
-    if (deployTimer) clearTimeout(deployTimer);
-    deployTimer = setTimeout(fireDeploy, 700);
+    publishPending = true;
+    saveGeneration += 1;
+    renderBanner();
   };
 
+  // Renders (or clears) the persistent banner from current state. Called after
+  // every state transition instead of composing markup inline at each call site,
+  // so the banner slot never ends up with two conflicting messages.
+  function renderBanner() {
+    var slot = document.getElementById('admin-banner-slot');
+    if (!slot) return;
+    dom.clear(slot);
+    if (!publishPending) return;
+
+    var publishBtn = h(
+      'button',
+      {
+        type: 'button',
+        class: 'admin-btn admin-btn--primary admin-btn--sm',
+        disabled: publishInFlight === true ? true : null
+      },
+      publishInFlight ? 'Publishing…' : 'Publish'
+    );
+    publishBtn.addEventListener('click', function () {
+      if (!publishInFlight) fireDeploy();
+    });
+    slot.appendChild(
+      h('div', { class: 'admin-banner admin-banner--info', role: 'status' }, [
+        h(
+          'span',
+          { class: 'admin-banner__text' },
+          'You have unpublished changes — the live site still shows the old version.'
+        ),
+        publishBtn
+      ])
+    );
+  }
+
   function fireDeploy() {
-    deployTimer = null;
+    publishInFlight = true;
+    // Snapshot what's being published. The build reads the DB at dispatch time
+    // (roughly), so any save that lands AFTER this point was not part of it —
+    // pollDeploy's success branch only clears publishPending if this is still
+    // the newest generation when the run finishes.
+    var dispatchedGen = saveGeneration;
+    renderBanner();
     api
       .post('/api/v1/admin/deploy', {})
       .then(function (res) {
         if (res && res.notImplemented) {
+          publishInFlight = false;
           showPendingRebuildBanner();
           return;
         }
         // Phase 7 dormant path: a real 2xx with a run_id → poll to completion.
+        // publishInFlight stays true (banner keeps showing "Publishing…") for
+        // the whole poll, not just this initial POST.
         if (res && res.run_id) {
-          pollDeploy(res.run_id);
+          pollDeploy(res.run_id, dispatchedGen);
+        } else {
+          publishInFlight = false;
+          renderBanner();
         }
       })
       .catch(function (err) {
+        publishInFlight = false;
         if (err && err.isAuthError) return ADMIN.onAuthError(err);
         // A deploy error must never mask the save success — surface calmly.
+        // publishPending stays true so the banner (and Publish button) remain
+        // for a retry.
         ADMIN.toast('Publish could not start (saved to the database).', 'info');
+        renderBanner();
       });
   }
 
@@ -353,42 +413,60 @@
   var DEPLOY_POLL_INTERVAL_MS = 4000;
   var DEPLOY_POLL_MAX_ERRORS = 3;
 
-  function pollDeploy(runId, errors) {
+  function pollDeploy(runId, dispatchedGen, errors) {
     var failures = errors || 0;
     api
       .get('/api/v1/admin/deploy/' + encodeURIComponent(runId))
       .then(function (res) {
-        if (res && res.notImplemented) return;
+        if (res && res.notImplemented) {
+          publishInFlight = false;
+          renderBanner();
+          return;
+        }
         if (res && res.status === 'completed') {
+          publishInFlight = false;
           if (res.conclusion === 'success') {
+            // Only clear publishPending if no OTHER save landed since this
+            // deploy was dispatched — otherwise that newer edit would be
+            // marked "published" when it was never part of this build.
+            if (dispatchedGen === saveGeneration) {
+              publishPending = false; // the live site now matches the DB
+            }
             ADMIN.toast('Published', 'success');
           } else {
+            // Still unpublished — leave the banner up (Publish button) for a retry.
             ADMIN.toast('Publish failed — changes are saved but not live.', 'error');
           }
+          renderBanner();
           return;
         }
         // A good response clears the error budget — a blip early in a long
         // deploy must not count against one late in it.
         setTimeout(function () {
-          pollDeploy(runId, 0);
+          pollDeploy(runId, dispatchedGen, 0);
         }, DEPLOY_POLL_INTERVAL_MS);
       })
       .catch(function () {
-        // Silent by design: the deploy itself is unaffected and the save
-        // already succeeded, so the only thing at stake is the terminal toast.
-        // Never masks the save.
-        if (failures + 1 >= DEPLOY_POLL_MAX_ERRORS) return;
+        // The deploy itself is unaffected and the save already succeeded, so a
+        // blip here never masks the save — but once the error budget is spent we
+        // do stop the "Publishing…" spinner and hand the button back so the admin
+        // can retry, rather than leaving it disabled with no terminal toast ever
+        // arriving.
+        if (failures + 1 >= DEPLOY_POLL_MAX_ERRORS) {
+          publishInFlight = false;
+          renderBanner();
+          return;
+        }
         setTimeout(function () {
-          pollDeploy(runId, failures + 1);
+          pollDeploy(runId, dispatchedGen, failures + 1);
         }, DEPLOY_POLL_INTERVAL_MS);
       });
   }
 
   function showPendingRebuildBanner() {
-    if (bannerShown) return;
     var slot = document.getElementById('admin-banner-slot');
     if (!slot) return;
-    bannerShown = true;
+    dom.clear(slot);
     var dismiss = h(
       'button',
       { type: 'button', class: 'admin-iconbtn', 'aria-label': 'Dismiss' },
@@ -396,7 +474,7 @@
     );
     dismiss.addEventListener('click', function () {
       dom.clear(slot);
-      bannerShown = false;
+      publishPending = false;
     });
     slot.appendChild(
       h('div', { class: 'admin-banner admin-banner--info', role: 'status' }, [
@@ -425,7 +503,8 @@
     // flag clears once a terminal screen has rendered.
     if (booting) return;
     booting = true;
-    bannerShown = false;
+    publishPending = false;
+    publishInFlight = false;
     api
       .get('/api/v1/auth/me')
       .then(function (data) {
