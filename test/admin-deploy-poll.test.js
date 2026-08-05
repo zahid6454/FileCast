@@ -148,6 +148,33 @@ describe('admin/app.js — deploy status polling', () => {
     expect(ctx.dom.window.document.body.textContent).toContain('Published');
   });
 
+  it('a save that lands mid-publish is NOT marked published by that deploy finishing', async () => {
+    // Regression for the PR #27 review: a generation counter must stop a
+    // deploy's success from clearing publishPending if a newer, uncaptured
+    // save happened after it was dispatched — otherwise that edit is silently
+    // reported live when it was never part of the build that just succeeded.
+    const fetchImpl = deployFetch([
+      () => makeResponse(200, '{"status":"in_progress"}'),
+      () => makeResponse(200, '{"status":"completed","conclusion":"success"}')
+    ]);
+    const ctx = load(fetchImpl);
+    await startDeploy(ctx);
+
+    // A second, independent edit lands WHILE the first deploy is still running.
+    ctx.ADMIN.notifySaved({});
+
+    await ctx.run(POLL_MS);
+    expect(ctx.dom.window.document.body.textContent).toContain('Published');
+
+    // The first deploy's success must not have cleared the banner for the
+    // second, un-published edit — Publish must still be there, enabled, for
+    // the admin to click again.
+    const publishBtn = ctx.dom.window.document.querySelector('#admin-banner-slot button');
+    expect(publishBtn).toBeTruthy();
+    expect(publishBtn.disabled).toBe(false);
+    expect(publishBtn.textContent).toBe('Publish');
+  });
+
   it('never polls when the deploy endpoint reports notImplemented', async () => {
     const fetchImpl = deployFetch([() => makeResponse(200, '{}')]);
     const ctx = load((url, opts) => {

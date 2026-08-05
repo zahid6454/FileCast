@@ -233,6 +233,12 @@
   var toastHost = null;
   var publishPending = false; // an unpublished save is sitting in the DB
   var publishInFlight = false; // a deploy triggered by Publish is running
+  // Bumped on every non-live save. fireDeploy() snapshots the current value; if
+  // another save lands while that deploy is still running, the snapshot goes
+  // stale and a later success must NOT clear publishPending — the newer edit
+  // was never part of that build (a real GitHub Actions run commonly takes
+  // 1-3+ minutes, plenty of time for a second edit to land mid-run).
+  var saveGeneration = 0;
   var routerBound = false;
   var drawerBound = false; // Esc/outside-click listeners bound once (module-wide)
   var booting = false; // guards against re-entrant gate re-checks
@@ -320,6 +326,7 @@
     }
     ADMIN.toast('Saved', 'success');
     publishPending = true;
+    saveGeneration += 1;
     renderBanner();
   };
 
@@ -358,6 +365,11 @@
 
   function fireDeploy() {
     publishInFlight = true;
+    // Snapshot what's being published. The build reads the DB at dispatch time
+    // (roughly), so any save that lands AFTER this point was not part of it —
+    // pollDeploy's success branch only clears publishPending if this is still
+    // the newest generation when the run finishes.
+    var dispatchedGen = saveGeneration;
     renderBanner();
     api
       .post('/api/v1/admin/deploy', {})
@@ -371,7 +383,7 @@
         // publishInFlight stays true (banner keeps showing "Publishing…") for
         // the whole poll, not just this initial POST.
         if (res && res.run_id) {
-          pollDeploy(res.run_id);
+          pollDeploy(res.run_id, dispatchedGen);
         } else {
           publishInFlight = false;
           renderBanner();
@@ -401,7 +413,7 @@
   var DEPLOY_POLL_INTERVAL_MS = 4000;
   var DEPLOY_POLL_MAX_ERRORS = 3;
 
-  function pollDeploy(runId, errors) {
+  function pollDeploy(runId, dispatchedGen, errors) {
     var failures = errors || 0;
     api
       .get('/api/v1/admin/deploy/' + encodeURIComponent(runId))
@@ -414,7 +426,12 @@
         if (res && res.status === 'completed') {
           publishInFlight = false;
           if (res.conclusion === 'success') {
-            publishPending = false; // the live site now matches the DB
+            // Only clear publishPending if no OTHER save landed since this
+            // deploy was dispatched — otherwise that newer edit would be
+            // marked "published" when it was never part of this build.
+            if (dispatchedGen === saveGeneration) {
+              publishPending = false; // the live site now matches the DB
+            }
             ADMIN.toast('Published', 'success');
           } else {
             // Still unpublished — leave the banner up (Publish button) for a retry.
@@ -426,7 +443,7 @@
         // A good response clears the error budget — a blip early in a long
         // deploy must not count against one late in it.
         setTimeout(function () {
-          pollDeploy(runId, 0);
+          pollDeploy(runId, dispatchedGen, 0);
         }, DEPLOY_POLL_INTERVAL_MS);
       })
       .catch(function () {
@@ -441,7 +458,7 @@
           return;
         }
         setTimeout(function () {
-          pollDeploy(runId, failures + 1);
+          pollDeploy(runId, dispatchedGen, failures + 1);
         }, DEPLOY_POLL_INTERVAL_MS);
       });
   }
