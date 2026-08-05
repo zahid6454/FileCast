@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createDom, evalScript, flush } from './helpers.js';
 
-// app.js's save → publish flow: notifySaved() debounces a POST /admin/deploy,
-// then polls GET /admin/deploy/{run_id} to a terminal conclusion. Phase 9 §5
-// item 2 made a poll ERROR retry a bounded number of times instead of ending
-// polling on the first blip — bounded because an invalid run_id 502s forever.
+// app.js's save → publish flow: notifySaved() raises a banner with an explicit
+// Publish button; clicking it fires POST /admin/deploy, then polls GET
+// /admin/deploy/{run_id} to a terminal conclusion. Phase 9 §5 item 2 made a
+// poll ERROR retry a bounded number of times instead of ending polling on the
+// first blip — bounded because an invalid run_id 502s forever.
 
 function makeResponse(status, bodyText) {
   return Promise.resolve({
@@ -14,9 +15,9 @@ function makeResponse(status, bodyText) {
   });
 }
 
-// Replace the window's timers with a queue we can step by delay, so the 700ms
-// debounce and the 4000ms poll interval can be driven independently of the
-// toast timers sharing the same queue.
+// Replace the window's timers with a queue we can step by delay, so the
+// 4000ms poll interval can be driven independently of the toast timers
+// sharing the same queue.
 function installTimers(dom) {
   const queue = [];
   dom.window.setTimeout = (fn, ms) => {
@@ -32,11 +33,13 @@ function installTimers(dom) {
   };
 }
 
-const DEBOUNCE_MS = 700;
 const POLL_MS = 4000;
 
 function load(fetchImpl) {
-  const dom = createDom('<div id="admin-app"></div>');
+  // admin-banner-slot mimics the persistent slot renderPanel() creates — this
+  // is where notifySaved() renders the "unpublished changes" banner + Publish
+  // button that startDeploy() below clicks.
+  const dom = createDom('<div id="admin-app"></div><div id="admin-banner-slot"></div>');
   dom.window.FILECAST = { apiBase: 'https://api.test' };
   dom.window.fetch = fetchImpl;
   const run = installTimers(dom);
@@ -63,8 +66,10 @@ function deployFetch(statusResponses) {
 }
 
 async function startDeploy(ctx) {
-  ctx.ADMIN.notifySaved({});
-  await ctx.run(DEBOUNCE_MS); // debounce → POST /admin/deploy → first poll
+  ctx.ADMIN.notifySaved({}); // raises the banner with a Publish button
+  const publishBtn = ctx.dom.window.document.querySelector('#admin-banner-slot button');
+  publishBtn.click(); // → POST /admin/deploy → first poll
+  await flush();
 }
 
 describe('admin/app.js — deploy status polling', () => {

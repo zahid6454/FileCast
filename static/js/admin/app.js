@@ -337,7 +337,7 @@
       {
         type: 'button',
         class: 'admin-btn admin-btn--primary admin-btn--sm',
-        disabled: publishInFlight ? 'disabled' : null
+        disabled: publishInFlight === true ? true : null
       },
       publishInFlight ? 'Publishing…' : 'Publish'
     );
