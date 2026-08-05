@@ -128,7 +128,25 @@ jobs:
             exit 0
           fi
 
-          # 5. THE point of the whole job. A different sha is not automatically a
+          # 5. Direction check. Case 4 only confirmed $live is *resolvable* —
+          #    not that it's an ancestor of this commit. GITHUB_SHA is fixed at
+          #    dispatch time and does not move if this run is later re-run, or if
+          #    it sits queued behind the pages-deploy concurrency group while the
+          #    API gets redeployed out-of-band for a newer commit — both leave
+          #    $live ahead of $GITHUB_SHA. Case 6's plain `git diff` can't tell
+          #    "behind" from "ahead" (a tree diff is symmetric), so without this
+          #    it reports the opposite of the truth: "API is missing changes"
+          #    with "commits behind: 0", backwards and self-contradictory.
+          if git merge-base --is-ancestor "$GITHUB_SHA" "$live" 2>/dev/null; then
+            note "API is already ahead of this commit (${live:0:7}) — nothing to do."
+            exit 0
+          fi
+          if ! git merge-base --is-ancestor "$live" "$GITHUB_SHA" 2>/dev/null; then
+            warn "API commit $live and this commit have diverged — cannot determine drift."
+            exit 0
+          fi
+
+          # 6. THE point of the whole job. A different sha is not automatically a
           #    problem: most publishes are content or CSS, which the API neither
           #    serves nor cares about. Failing on every sha mismatch would fire on
           #    nearly every Save, and a check that cries wolf gets ignored — which
