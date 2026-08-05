@@ -77,7 +77,7 @@ def test_dev_origins_only_in_development():
     # cross-site request from localhost carried no fc_session, so it was never
     # exploitable — but "loose but mitigated" isn't worth keeping.
     prod = middleware.allowed_origins("production")
-    assert "https://filecast.io" in prod
+    assert "https://filecast.org" in prod
     assert "http://localhost:8000" not in prod
     assert "http://127.0.0.1:8000" not in prod
 

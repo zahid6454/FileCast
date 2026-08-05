@@ -6,7 +6,7 @@
 
   // Normalize once (strip any trailing slash) so `apiBase + '/api/…'` never
   // produces a double slash if the configured base_url ever gains one.
-  var apiBase = (config.api_base_url || 'https://api.filecast.io').replace(/\/$/, '');
+  var apiBase = (config.api_base_url || 'https://api.filecast.org').replace(/\/$/, '');
   var endpoint = config.api_endpoint || '/api/v1/convert/' + config.id;
 
   // Check API health before enabling uploads

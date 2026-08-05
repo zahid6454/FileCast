@@ -171,16 +171,16 @@ def test_fetch_site_settings_graceful_when_db_down(monkeypatch):
 
 
 def test_apply_site_settings_empty_overlay_is_noop():
-    cfg = {"site": {"name": "FileCast", "base_url": "https://filecast.io"}}
+    cfg = {"site": {"name": "FileCast", "base_url": "https://filecast.org"}}
     out = build.apply_site_settings(cfg, {})
-    assert out == {"site": {"name": "FileCast", "base_url": "https://filecast.io"}}
+    assert out == {"site": {"name": "FileCast", "base_url": "https://filecast.org"}}
 
 
 def test_apply_site_settings_preserves_structural_fields():
     # The overlay carries only display/integration keys; base_url and the unused
     # footer slot are YAML-only and must survive the merge.
     cfg = {
-        "site": {"name": "FileCast", "base_url": "https://filecast.io"},
+        "site": {"name": "FileCast", "base_url": "https://filecast.org"},
         "adsense": {"enabled": False, "slots": {"in_content": "", "footer": ""}},
     }
     overlay = build.apply_site_settings(
@@ -191,7 +191,7 @@ def test_apply_site_settings_preserves_structural_fields():
         },
     )
     assert overlay["site"]["name"] == "Renamed"
-    assert overlay["site"]["base_url"] == "https://filecast.io"  # preserved
+    assert overlay["site"]["base_url"] == "https://filecast.org"  # preserved
     assert overlay["adsense"]["enabled"] is True
     assert overlay["adsense"]["slots"]["in_content"] == "999"
     assert overlay["adsense"]["slots"]["footer"] == ""  # structural, preserved
@@ -243,7 +243,7 @@ def test_headers_api_origin_follows_site_config(tmp_path, monkeypatch):
     build.build()
     csp = _csp_from_build(tmp_path)
     assert "connect-src 'self' https://api.staging.example " in csp
-    assert "api.filecast.io" not in csp
+    assert "api.filecast.org" not in csp
     # The pages must agree with the header — that is the whole point.
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert "https://api.staging.example" in home
@@ -744,14 +744,14 @@ def test_generate_headers_csp_additions(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     # no adsense/ga4/sentry; api.base_url is where connect-src's API origin now
     # comes from (§5 item 5) instead of a literal in generate_headers().
-    build.generate_headers({"api": {"base_url": "https://api.filecast.io"}})
+    build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
     csp = _csp_line(tmp_path)
     assert "font-src 'self' https://fonts.gstatic.com" in csp
     assert "https://fonts.googleapis.com" in csp  # style-src
     assert "https://lh3.googleusercontent.com" in csp  # img-src
     assert "https://accounts.google.com" in csp  # connect-src OAuth
     assert "https://oauth2.googleapis.com" in csp
-    assert "https://api.filecast.io" in csp  # from site_config
+    assert "https://api.filecast.org" in csp  # from site_config
 
 
 def test_generate_headers_without_api_base_url_emits_no_empty_token(
@@ -775,7 +775,7 @@ def test_generate_headers_script_src_untouched(tmp_path, monkeypatch):
 
 def test_generate_robots_excludes_admin_account(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    build.generate_robots({"site": {"base_url": "https://filecast.io"}})
+    build.generate_robots({"site": {"base_url": "https://filecast.org"}})
     robots = (tmp_path / "robots.txt").read_text(encoding="utf-8")
     assert "Disallow: /admin/" in robots
     assert "Disallow: /account/" in robots
@@ -784,7 +784,7 @@ def test_generate_robots_excludes_admin_account(tmp_path, monkeypatch):
 def test_generate_sitemap_excludes_admin_account(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_sitemap(
-        {"site": {"base_url": "https://filecast.io"}}, [_tool(id="a")], {}
+        {"site": {"base_url": "https://filecast.org"}}, [_tool(id="a")], {}
     )
     sitemap = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
     assert "/admin/" not in sitemap

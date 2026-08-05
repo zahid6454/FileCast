@@ -1,7 +1,7 @@
 site:
   name: FileCast
   tagline: "Free File Conversion — Your Files Stay Yours"
-  base_url: https://filecast.io
+  base_url: https://filecast.org
   # P15 honest framing (ledger §9, applied verbatim). The old text — "…your
   # files never leave your device" — is false for the 6 server-side tools.
   # NOTE: since Phase 7 this field is also stored in site_settings (id=1) and
@@ -26,7 +26,7 @@ sentry:
   dsn: ""
 
 api:
-  base_url: https://api.filecast.io
+  base_url: https://api.filecast.org
 
 categories:
   - id: document-tools
