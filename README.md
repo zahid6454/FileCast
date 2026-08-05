@@ -56,7 +56,7 @@ A Python-based static site generator (`build.py`) compiles YAML definitions, Mar
 - **Zero JS Framework overhead:** Vanilla JS manages the files. Only the script/library relevant to the active tool is loaded.
 - **Performance Optimized:** Clean CSS variables, automatic system dark mode support, and zero external CDNs (all library JS is self-hosted with SRI hashes).
 
-### System 2: Backend API Server (Oracle Cloud Free Tier / Render)
+### System 2: Backend API Server (Oracle Cloud Free Tier)
 A FastAPI backend wraps Gotenberg (LibreOffice + Chromium headless) and Ghostscript for conversions that cannot be performed in the browser.
 - **No Persistence:** Files are received via HTTPS, converted in memory, returned to the client, and immediately purged from the container space.
 - **Decoupled Fallback:** If the API server experiences downtime, the frontend remains fully functional, and 28 of the 34 tools continue to operate.

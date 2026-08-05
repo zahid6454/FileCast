@@ -9,6 +9,21 @@
 # that's a separate mechanism from what gets COPY'd into the image.
 services:
   api:
+    # Tunnel-only: cloudflared reaches `api` over the internal compose network
+    # by service name, so the public port mapping from the base file is not
+    # needed here — and must not survive into prod. Compose concatenates
+    # list-type `ports` across -f files rather than merging by key (unlike
+    # `environment`), so a plain override list would ADD to the base file's
+    # "8090:8090" rather than replace it (verified: without `!override`, both
+    # entries survive, still publishing to 0.0.0.0). The `!override` merge-
+    # control tag forces a full replace instead. Bound to loopback, not
+    # removed outright, so `curl localhost:8090` still works for on-box
+    # debugging over SSH without a second unauthenticated path alongside the
+    # tunnel that bypasses the CF-Connecting-IP trust boundary netutil.py
+    # depends on (see docker-compose.yml's api service and the go-live plan's
+    # §4.3).
+    ports: !override
+      - "127.0.0.1:8090:8090"
     environment:
       - DATABASE_URL=${PROD_DATABASE_URL}
       - ENVIRONMENT=production
