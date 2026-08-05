@@ -1,7 +1,9 @@
 // The one fetch seam for the admin SPA (Phase 4 §4.3).
 //
 // Every call:
-//   - URL = window.FILECAST.apiBase + path (path always begins '/api/v1/…').
+//   - URL = window.FILECAST.apiBase + path (path always begins '/api/v1/…',
+//     except the unauthenticated root-env probe api.get('/') in app.js's
+//     renderSignIn(), which deliberately hits the bare API root instead).
 //   - credentials:'include' (cookie-based sessions; CORS allows credentials).
 //   - JSON bodies set Content-Type: application/json (the only header Phase 1's
 //     CORS allows — F5/R2).

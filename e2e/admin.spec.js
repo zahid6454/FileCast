@@ -53,6 +53,15 @@ test.describe('auth gate (D6)', () => {
     await expect(page.getByText('Dev login as admin')).toBeVisible();
   });
 
+  test('dev-login buttons never render when env is not development', async ({ page }) => {
+    const state = makeState({ me: { status: 401 }, env: 'production' });
+    await installApi(page, state);
+    await page.goto('/admin/');
+    await expect(page.locator('.admin-gate__title')).toHaveText('FileCast Admin');
+    await expect(page.getByText('Dev login as admin')).toHaveCount(0);
+    await expect(page.locator('.admin-signin__devblock')).toHaveCount(0);
+  });
+
   test('admin → full panel with all six tabs', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);

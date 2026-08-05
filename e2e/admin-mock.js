@@ -7,6 +7,7 @@
 
 export function makeState(overrides = {}) {
   return {
+    env: overrides.env || 'development',
     me: overrides.me || {
       status: 200,
       body: { user: { id: 'u1', email: 'admin@dev.local', role: 'admin' } }
@@ -174,7 +175,7 @@ export async function installApi(page, state) {
         contentType: 'application/json',
         body: JSON.stringify({
           service: 'filecast-api',
-          env: 'development',
+          env: state.env,
           version: '0.0.0',
           commit: 'test'
         })
