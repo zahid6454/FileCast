@@ -92,7 +92,9 @@
       h('strong', 'Drag ≡ or use ▲ ▼'),
       ' to set the order within a category. Tools above the ',
       h('strong', '“Shown on the homepage”'),
-      ' line appear on the homepage (up to four per category); the rest live on the category page. Disabled tools keep their slot. Changes publish on the next rebuild.'
+      ' line appear on the homepage (up to four per category); the rest live on the category page. Disabled tools keep their slot. Changes save immediately — click ',
+      h('strong', 'Publish'),
+      ' in the banner above to make them live.'
     ]);
     return h('div', { class: 'admin-callout' }, [
       icon ? h('span', { class: 'admin-callout__icon' }, [icon]) : null,
