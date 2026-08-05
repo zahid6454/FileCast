@@ -1,0 +1,8 @@
+# Defense in depth: production env vars are passed explicitly via
+# docker-compose.prod.yml, not read from a baked-in .env, but this stops
+# secrets from ever landing in an image layer via `COPY . .` regardless.
+.env
+.env.*
+__pycache__/
+.pytest_cache/
+test-files/

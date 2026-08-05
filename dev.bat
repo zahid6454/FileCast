@@ -13,7 +13,7 @@ REM exists, while build.py --watch below rebuilds the static site from the worki
 REM tree every time. That asymmetry is silent: the page ships code calling an API
 REM field the running container was built too early to return, and the JS quietly
 REM takes its fallback branch. Rebuilding is a cache hit when nothing changed.
-docker compose -f api/docker-compose.yml up -d --build
+docker compose -f api/docker-compose.yml --profile dev-only up -d --build
 
 echo Waiting for Gotenberg health...
 :healthcheck
@@ -36,4 +36,4 @@ python build.py --watch
 
 echo.
 echo Stopping API server...
-docker compose -f api/docker-compose.yml down
+docker compose -f api/docker-compose.yml --profile dev-only down
