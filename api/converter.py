@@ -448,7 +448,7 @@ async def pdf_to_docx(
     )
 
 
-@router.get("/health")
+@router.api_route("/health", methods=["GET", "HEAD"])
 async def health():
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
