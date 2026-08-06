@@ -21,6 +21,7 @@ import shutil
 import sys
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlparse
 
 import csscompressor
 import jinja2
@@ -1016,7 +1017,17 @@ def generate_headers(site_config: dict):
         connect_src += " https://www.google-analytics.com https://analytics.google.com"
     if sentry_enabled:
         script_src += " https://browser.sentry-cdn.com"
-        connect_src += " https://*.ingest.sentry.io"
+        # Derived from the actual DSN host rather than a hardcoded
+        # "*.ingest.sentry.io" guess: Sentry's regional orgs (e.g. data
+        # storage in the US) get DSNs on "*.ingest.us.sentry.io", a
+        # different suffix a wildcard on the legacy non-regional domain
+        # does not match — the browser silently drops every event with no
+        # visible error, only a CSP violation in devtools. Matching the
+        # real host, whatever region it is, avoids guessing at the pattern.
+        sentry_dsn = site_config.get("sentry", {}).get("dsn", "")
+        ingest_host = urlparse(sentry_dsn).hostname if sentry_dsn else None
+        if ingest_host:
+            connect_src += f" https://{ingest_host}"
 
     csp = (
         f"default-src 'self'; "
