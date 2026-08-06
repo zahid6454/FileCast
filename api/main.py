@@ -33,8 +33,22 @@ GIT_SHA = os.getenv("GIT_SHA") or "unknown"
 # same posture as GOOGLE_CLIENT_ID/GITHUB_PAT being optional above. FastAPI's
 # integration auto-enables from the installed `sentry-sdk[fastapi]` extra; no
 # explicit integrations=[...] needed.
+#
+# include_local_variables=False: the SDK default (True) attaches every stack
+# frame's local variables to captured events via LoggingIntegration, independent
+# of send_default_pii (that flag only gates request-body capture). Every convert
+# route funnels errors through converter.py's `except Exception: logger.error(...,
+# exc_info=True)`, whose frame holds the raw uploaded file bytes as a local —
+# with the default on, that content ships to Sentry verbatim on any conversion
+# failure, straight against log.py's own "never logs file content" privacy
+# guarantee. Still get exception type/message/full stack trace without it.
 if settings.sentry_dsn:
-    sentry_sdk.init(dsn=settings.sentry_dsn, environment=ENVIRONMENT, release=GIT_SHA)
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=ENVIRONMENT,
+        release=GIT_SHA,
+        include_local_variables=False,
+    )
 
 
 @asynccontextmanager
