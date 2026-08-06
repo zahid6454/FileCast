@@ -55,7 +55,15 @@
   <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga4.measurement_id }}"></script>
   {% endif %}
   {% if sentry.enabled and sentry.dsn %}
-  <script src="https://browser.sentry-cdn.com/8.x/bundle.min.js" crossorigin="anonymous"></script>
+  {# Pinned to an exact version — floating major-version aliases
+     ("8.x"/"9.x"/"latest") started 403ing on Sentry's CDN at some point after
+     this was first wired up (verified live: 8.x/9.x/latest all 403, an exact
+     version like 8.40.0 or 10.69.0 200s). Silent failure mode: the script tag
+     just never loads, window.Sentry stays undefined, analytics.js's guard
+     (`window.Sentry && typeof window.Sentry.init === 'function'`) quietly
+     no-ops — no console error pointing at CSP or config, only a 403 on this
+     one request. Bump deliberately; there is no floating tag to fall back on. #}
+  <script src="https://browser.sentry-cdn.com/10.69.0/bundle.min.js" crossorigin="anonymous"></script>
   {% endif %}
   {% if (ga4.enabled and ga4.measurement_id) or (sentry.enabled and sentry.dsn) %}
   {% set analytics_js = assets.get('js/analytics.js') %}
