@@ -8,8 +8,10 @@ counters/ratings, error logs, announcements, sessions, and admin stats.
 import os
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from converter import GOTENBERG_URL
 from converter import router as converter_router
+from data.config import settings
 from data.db import async_engine
 from data.routers import all_routers
 from fastapi import FastAPI
@@ -25,6 +27,28 @@ VERSION = "1.0.0"
 # image was built without one — the drift check treats that as unverifiable, not
 # as up to date. Read once at import: it cannot change while the process lives.
 GIT_SHA = os.getenv("GIT_SHA") or "unknown"
+
+# Phase 9 §9.2: backend error tracking. Empty DSN ⇒ never calls sentry_sdk.init()
+# at all, so the SDK stays fully inert (no network calls, no monkeypatching) —
+# same posture as GOOGLE_CLIENT_ID/GITHUB_PAT being optional above. FastAPI's
+# integration auto-enables from the installed `sentry-sdk[fastapi]` extra; no
+# explicit integrations=[...] needed.
+#
+# include_local_variables=False: the SDK default (True) attaches every stack
+# frame's local variables to captured events via LoggingIntegration, independent
+# of send_default_pii (that flag only gates request-body capture). Every convert
+# route funnels errors through converter.py's `except Exception: logger.error(...,
+# exc_info=True)`, whose frame holds the raw uploaded file bytes as a local —
+# with the default on, that content ships to Sentry verbatim on any conversion
+# failure, straight against log.py's own "never logs file content" privacy
+# guarantee. Still get exception type/message/full stack trace without it.
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=ENVIRONMENT,
+        release=GIT_SHA,
+        include_local_variables=False,
+    )
 
 
 @asynccontextmanager
@@ -44,8 +68,6 @@ async def lifespan(app: FastAPI):
 
     # Phase 5.5: an empty owner allow-list in prod means no path to a first admin
     # (dev-login is 404, DB surgery is gone, POST /admin/staff needs an admin).
-    from data.config import settings
-
     if ENVIRONMENT != "development" and not settings.initial_admin_email_set:
         logger.warning(
             "INITIAL_ADMIN_EMAILS is empty in a non-development environment — no "

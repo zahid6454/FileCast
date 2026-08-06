@@ -69,6 +69,12 @@ class Settings(BaseSettings):
         default="deploy.yml", validation_alias="FILECAST_GITHUB_WORKFLOW"
     )
 
+    # Phase 9 §9.2: backend error tracking, separate Sentry project from the
+    # frontend one (different platform, own DSN). Empty ⇒ sentry_sdk.init() is
+    # never called at all (main.py checks before calling it) — same
+    # guarded-if-configured shape as the Google OAuth / GitHub PAT settings above.
+    sentry_dsn: str = ""
+
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 
     @property

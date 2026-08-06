@@ -336,3 +336,18 @@ def test_other_github_settings_keep_their_bare_names(monkeypatch):
     assert s.github_pat == "pat-value"
     assert s.github_owner == "someone"
     assert s.github_repo == "SomeRepo"
+
+
+def test_sentry_dsn_defaults_empty_and_reads_from_env(monkeypatch):
+    from data.config import Settings
+
+    # Empty by default ⇒ main.py never calls sentry_sdk.init() (Phase 9 §9.2),
+    # same guarded-if-configured posture as google_client_id/github_pat.
+    monkeypatch.delenv("SENTRY_DSN", raising=False)
+    assert Settings(_env_file=None).sentry_dsn == ""
+
+    monkeypatch.setenv("SENTRY_DSN", "https://abc@o123.ingest.us.sentry.io/456")
+    assert (
+        Settings(_env_file=None).sentry_dsn
+        == "https://abc@o123.ingest.us.sentry.io/456"
+    )
