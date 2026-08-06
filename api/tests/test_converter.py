@@ -60,3 +60,10 @@ async def test_health_endpoint_responds(client):
     r = await client.get("/api/v1/health")
     assert r.status_code == 200
     assert r.json()["status"] in ("healthy", "degraded")
+
+
+async def test_health_endpoint_accepts_head(client):
+    # Uptime monitors default to HEAD requests; must not 405.
+    r = await client.head("/api/v1/health")
+    assert r.status_code == 200
+    assert r.content == b""
