@@ -261,6 +261,26 @@ def test_full_build_overlay_bakes_ga4(tmp_path, monkeypatch):
     assert "G-TESTBUILD" in home
 
 
+def test_full_build_overlay_bakes_sentry_with_pinned_cdn_version(tmp_path, monkeypatch):
+    # Sentry's CDN 403s on floating major-version aliases ("8.x"/"9.x"/"latest")
+    # — verified live, an exact version like the one baked in base.html 200s
+    # while those aliases don't. The failure mode is silent (script tag just
+    # never loads, no console error naming CSP or config), so this asserts the
+    # baked tag names a real dotted version, not a bare-major alias, to catch a
+    # regression back to a floating tag before it ships.
+    _seed_site_settings(
+        sentry_enabled=True,
+        sentry_dsn="https://abc123@o4511862654894081.ingest.us.sentry.io/456",
+    )
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert re.search(r"browser\.sentry-cdn\.com/\d+\.\d+\.\d+/bundle\.min\.js", home)
+    assert "sentry-cdn.com/8.x/" not in home
+    assert "sentry-cdn.com/9.x/" not in home
+    assert "sentry-cdn.com/latest/" not in home
+
+
 def test_full_build_all_off_row_keeps_script_src(tmp_path, monkeypatch):
     # §3.6: with the overlay row PRESENT but all integrations off, the CSP must be
     # untouched — script-src stays literally 'self', no vendor host leaks in. This
