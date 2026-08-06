@@ -773,6 +773,26 @@ def test_generate_headers_script_src_untouched(tmp_path, monkeypatch):
     assert "script-src 'self';" in csp  # exactly 'self', no new hosts
 
 
+def test_generate_headers_sentry_connect_src_matches_dsn_host(tmp_path, monkeypatch):
+    # Regional Sentry orgs (e.g. US data storage) issue DSNs on
+    # "*.ingest.us.sentry.io" — a wildcard on the legacy non-regional
+    # "*.ingest.sentry.io" domain does not match that suffix, so the browser
+    # silently drops every event via CSP with no application-visible error.
+    # connect-src must derive the real host from the DSN, whatever region.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers(
+        {
+            "sentry": {
+                "enabled": True,
+                "dsn": "https://abc123@o4511862654894081.ingest.us.sentry.io/456",
+            }
+        }
+    )
+    csp = _csp_line(tmp_path)
+    assert "https://o4511862654894081.ingest.us.sentry.io" in csp
+    assert "*.ingest.sentry.io" not in csp
+
+
 def test_generate_robots_excludes_admin_account(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_robots({"site": {"base_url": "https://filecast.org"}})
