@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Deploys whatever tag currently sorts newest by creation date — not
+# necessarily the tag that triggered this run. Never push a tag without
+# publishing a GitHub Release for it: an orphaned tag sits dormant (nothing
+# triggers on a bare tag push) until the next real release, at which point
+# it could out-sort the intended tag and deploy instead.
 set -euo pipefail
 cd ~/FileCast
 git fetch --tags origin --force
