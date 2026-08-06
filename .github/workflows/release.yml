@@ -1,0 +1,89 @@
+name: Release
+
+# Fires on a published GitHub Release (a deliberate, versioned checkpoint —
+# not every merge to master). Republishes the frontend AND, for the first
+# time, automatically redeploys the backend. Deliberately a SEPARATE workflow
+# from deploy.yml rather than a new trigger bolted onto it — deploy.yml is
+# load-bearing for the admin panel's Publish-button run-id resolution
+# (`_resolve_run_id` in admin_deploy.py keys off `event=workflow_dispatch`),
+# and this file being separate means that interaction never has to be
+# reasoned about at all. See §12.1 of project-docs/GO_LIVE_PLAN.md.
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  frontend:
+    name: Build and publish to Cloudflare Pages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install build dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build site
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          API_URL: https://api.filecast.org
+        run: python build.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # --branch=master MUST match the Pages project's production branch — a
+      # mismatch publishes a *preview* that looks like a successful deploy.
+      - name: Publish to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler@3 pages deploy dist/ --project-name=filecast --branch=master
+
+  backend:
+    name: Redeploy the API on the Oracle VM
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      # Only needed for the known_hosts file below.
+      - uses: actions/checkout@v4
+
+      - name: Write the deploy key
+        run: |
+          install -m 600 /dev/null /tmp/ci_deploy_key
+          printf '%s\n' "${{ secrets.ORACLE_DEPLOY_SSH_KEY }}" > /tmp/ci_deploy_key
+
+      # The forced command in the VM's authorized_keys runs regardless of
+      # what's requested over this connection — `exit` is enough to trigger
+      # scripts/ci-deploy.sh, which always deploys the latest tag rather than
+      # anything client-supplied (no ref-injection surface). See §12.2.
+      - name: Trigger the deploy
+        run: |
+          ssh -i /tmp/ci_deploy_key \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=.github/ci-deploy-known-hosts \
+            ubuntu@${{ vars.ORACLE_VM_HOST }} exit
+
+      # Bounded retries — docker build+restart takes time. Mirrors deploy.yml's
+      # api-drift job's posture: warn, never fail the run for an external
+      # system's timing.
+      - name: Confirm the deployed commit
+        run: |
+          set -uo pipefail
+          expected="${{ github.sha }}"
+          for i in $(seq 1 20); do
+            live=$(curl -fsS --max-time 10 "https://api.filecast.org/" | jq -r '.commit // "unknown"' 2>/dev/null || echo "unreachable")
+            if [ "$live" = "$expected" ]; then
+              echo "::notice::API is live on this release's commit (${live:0:7})."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::warning::API did not report commit $expected after 5 minutes (last saw: ${live:-unknown}). Check the VM manually."
