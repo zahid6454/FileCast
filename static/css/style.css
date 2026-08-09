@@ -667,7 +667,7 @@ img { max-width: 100%; display: block; }
 }
 .result__title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--color-success); margin-bottom: var(--space-3); }
 .result__info { font-size: var(--text-sm); color: var(--color-text-secondary); line-height: var(--leading-relaxed); }
-.result__actions { margin-top: var(--space-4); display: flex; gap: var(--space-3); align-items: center; }
+.result__actions { margin-top: var(--space-4); display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
 
 /* --- Convert Action --- */
 .convert-action { text-align: center; margin: var(--space-10) 0; }
