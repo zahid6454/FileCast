@@ -13,6 +13,18 @@ import { expect, test } from '@playwright/test';
 // this dist/ build never has adsense/ga4 configured (no DB — see
 // playwright.config.js), so there is nothing to exclude in practice, but the
 // intent is that this audits FileCast's own markup, not Google's.
+//
+// Brand-color revert (2026-08-10) — the P2 §23 color-contrast fix that this
+// suite originally verified was reverted at the owner's request: the brand
+// green is back to #10B981 everywhere (logo, headings, the "Local" badge),
+// matching the logo again instead of the WCAG-AA-tuned darker shade. That's
+// a known, accepted trade-off, not a regression to catch, so LIGHT-mode
+// scans exclude the two element groups it affects: .text-brand-green
+// (headings) and .badge--local (the small pill's label/border, still ~3.7:1
+// after being nudged slightly darker for legibility, not the required
+// 4.5:1). Dark mode is unaffected (its green was never darkened) and stays
+// fully in scope — no exclusion there.
+const KNOWN_CONTRAST_EXCLUSIONS = ['.text-brand-green', '.badge--local'];
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
@@ -44,7 +56,11 @@ for (const theme of ['light', 'dark']) {
           document.documentElement.setAttribute('data-theme', 'dark');
         });
       }
-      const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
+      const builder = new AxeBuilder({ page }).withTags(TAGS);
+      if (theme === 'light') {
+        for (const selector of KNOWN_CONTRAST_EXCLUSIONS) builder.exclude([selector]);
+      }
+      const results = await builder.analyze();
 
       const summary = results.violations.map(
         (v) => `[${v.impact}] ${v.id}: ${v.help} (${v.nodes.length} node(s)) — ${v.helpUrl}`
