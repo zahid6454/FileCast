@@ -855,7 +855,69 @@
     return card;
   }
 
+  // Email/password sign-in/register (P4 §37). Wired unconditionally — the
+  // form only exists inside .account-signin, which CSS already hides for a
+  // signed-in visitor (data-auth="in"), so there's nothing to gate here.
+  function initPasswordForm() {
+    var form = document.getElementById('password-auth-form');
+    if (!form) return;
+    var emailEl = document.getElementById('pw-email');
+    var pwEl = document.getElementById('pw-password');
+    var errorEl = document.getElementById('pw-error');
+    var submitBtn = document.getElementById('pw-submit');
+    var toggleBtn = document.getElementById('pw-toggle-mode');
+    var mode = 'login';
+
+    function setMode(next) {
+      mode = next;
+      if (mode === 'login') {
+        submitBtn.textContent = 'Sign In';
+        toggleBtn.textContent = 'Need an account? Create one';
+        pwEl.setAttribute('autocomplete', 'current-password');
+      } else {
+        submitBtn.textContent = 'Create Account';
+        toggleBtn.textContent = 'Already have an account? Sign in';
+        pwEl.setAttribute('autocomplete', 'new-password');
+      }
+      errorEl.classList.add('hidden');
+    }
+
+    toggleBtn.addEventListener('click', function () {
+      setMode(mode === 'login' ? 'register' : 'login');
+    });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      errorEl.classList.add('hidden');
+      submitBtn.disabled = true;
+
+      var endpoint = mode === 'login' ? '/api/v1/auth/login' : '/api/v1/auth/register';
+      api(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailEl.value, password: pwEl.value })
+      })
+        .then(function (r) {
+          return r.json().then(function (data) {
+            if (!r.ok) throw new Error(data.detail || 'Something went wrong. Please try again.');
+            return data;
+          });
+        })
+        .then(function () {
+          // A fresh session cookie was just set — reload so the header/account
+          // page pick it up the same way the Google redirect flow already does.
+          window.location.reload();
+        })
+        .catch(function (err) {
+          submitBtn.disabled = false;
+          errorEl.textContent = err.message;
+          errorEl.classList.remove('hidden');
+        });
+    });
+  }
+
   function boot() {
+    initPasswordForm();
     if (!hasLoggedIn()) return; // leave the server-rendered sign-in prompt
     // theme-init set <html data-auth="in"> pre-paint, so CSS has already hidden
     // the signed-out prompt — no flash. Show a placeholder until /me resolves.

@@ -9,7 +9,8 @@ output_format: JPG
 accept_extensions: [.tiff, .tif]
 output_extension: .jpg
 js_module: converters/tiff-to-jpg.js
-js_libs: [utif.min.js]
+# UTIF decode runs inside a dedicated Worker (P4 §36) — see static/js/workers/tiff-worker.js.
+worker_libs: [utif.min.js]
 max_file_size: 20MB
 bulk_support: false
 ui_type: standard

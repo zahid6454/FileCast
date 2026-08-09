@@ -8,6 +8,11 @@
   var currentFile = null;
   var convertedBlob = null;
   var convertedFilename = '';
+  // Set right before a user-initiated cancel (P4 §35) so a convertFile promise
+  // that was already in flight — the abort/terminate is best-effort and its
+  // settlement is racy — can't sneak a showResult/showError in after the UI
+  // has already moved back to 'selected'.
+  var cancelledThisRun = false;
 
   // DOM refs (populated in init)
   var els = {};
@@ -94,6 +99,9 @@
     }
     els.result.classList.toggle('hidden', newState !== 'complete');
     els.errorMsg.classList.add('hidden');
+    // Re-shown by startConversion() itself (only when the converter supports
+    // it) the moment 'converting' starts — every other state hides it.
+    if (els.cancelBtn) els.cancelBtn.classList.add('hidden');
     announceState(newState);
 
     if (newState === 'empty') {
@@ -180,6 +188,50 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Paste-from-clipboard (P4 §34) — screenshots (Ctrl+V / Cmd+V) straight into
+  // an image tool's upload zone, skipping the save-to-disk-then-browse step.
+  // ---------------------------------------------------------------------------
+  var CLIPBOARD_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'];
+
+  function initClipboardPaste() {
+    var config = window.TOOL_CONFIG;
+    if (!config || !config.accept_extensions) return;
+    // Only wire up for tools that actually take a raster image as input — a
+    // clipboard image paste is never useful on a PDF/JSON/text tool page, and
+    // this must not intercept paste there (§34 is scoped to image tools).
+    var acceptsImage = config.accept_extensions.some(function (ext) {
+      return CLIPBOARD_IMAGE_EXTENSIONS.indexOf(ext) !== -1;
+    });
+    if (!acceptsImage) return;
+
+    document.addEventListener('paste', function (e) {
+      if (state !== 'empty' && state !== 'selected') return; // not mid-conversion/result
+
+      // Don't hijack a normal text paste into a real input (e.g. the feedback
+      // textarea, or a tool option field) — only an editable target with no
+      // pasted image should keep its native paste behavior.
+      var active = document.activeElement;
+      var isEditable =
+        active &&
+        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+
+      var items = (e.clipboardData && e.clipboardData.items) || [];
+      var imageFile = null;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file' && items[i].type && items[i].type.indexOf('image/') === 0) {
+          imageFile = items[i].getAsFile();
+          break;
+        }
+      }
+      if (!imageFile) return;
+      if (isEditable) return;
+
+      e.preventDefault();
+      onFileSelected(imageFile);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Conversion
   // ---------------------------------------------------------------------------
   function startConversion() {
@@ -190,6 +242,16 @@
     }
 
     setState('converting');
+    cancelledThisRun = false;
+
+    // Only shown when the active converter actually exposes a way to abort
+    // (server-upload.js's XHR, or a converter that owns a terminable Worker —
+    // P4 §36). Converters with no cancel handle (canvas ops, library-internal
+    // workers we don't hold a reference to) get no button rather than one that
+    // silently does nothing.
+    if (els.cancelBtn) {
+      els.cancelBtn.classList.toggle('hidden', typeof window.cancelConversion !== 'function');
+    }
 
     // A converter that renders its own multi-output result UI (e.g. per-page
     // downloads for a multi-page PDF) sets this so the single-file result panel
@@ -237,6 +299,7 @@
         return window.convertFile(currentFile);
       })
       .then(function (blob) {
+        if (cancelledThisRun) return;
         var durationMs = Date.now() - startTime;
         var savingsPct =
           currentFile.size > 0 ? Math.round((1 - blob.size / currentFile.size) * 100) : 0;
@@ -270,6 +333,7 @@
         );
       })
       .catch(function (err) {
+        if (cancelledThisRun) return;
         var msg = err && err.message ? err.message : 'Conversion failed. Please try again.';
         showError(msg);
         trackEvent('conversion_failed', {
@@ -286,6 +350,18 @@
           false
         );
       });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cancel (P4 §35) — only reachable while the button is visible, which
+  // startConversion() only shows when window.cancelConversion exists.
+  // ---------------------------------------------------------------------------
+  function onCancelClick() {
+    if (state !== 'converting' || typeof window.cancelConversion !== 'function') return;
+    cancelledThisRun = true;
+    window.cancelConversion();
+    trackEvent('conversion_cancelled', { tool_id: window.TOOL_CONFIG.id });
+    setState('selected');
   }
 
   // ---------------------------------------------------------------------------
@@ -725,14 +801,17 @@
     els.resultInfo = document.getElementById('result-info');
     els.downloadBtn = document.getElementById('download-btn');
     els.resetBtn = document.getElementById('reset-btn');
+    els.cancelBtn = document.getElementById('cancel-btn');
     els.errorMsg = document.getElementById('error-msg');
     els.status = document.getElementById('a11y-status');
 
     initUploadZone();
+    initClipboardPaste();
 
     els.convertBtn.addEventListener('click', startConversion);
     els.downloadBtn.addEventListener('click', downloadFile);
     els.resetBtn.addEventListener('click', resetUI);
+    if (els.cancelBtn) els.cancelBtn.addEventListener('click', onCancelClick);
 
     // Fire tool_view event
     trackEvent('tool_view', {

@@ -43,6 +43,28 @@
         </svg>
         <span>Sign in with Google</span>
       </a>
+
+      {# Email/password (P4 §37) — a genuinely independent second path, not a
+         Google fallback UI; see api/data/routers/auth.py's module docstring.
+         Needs JS (fetch to a JSON API) — the rest of the page already
+         requires it for the signed-in sections, and the site's <noscript>
+         banner (P1) already covers "JavaScript is required" site-wide. #}
+      <div class="account-divider"><span>or</span></div>
+      <form class="account-password-form" id="password-auth-form" novalidate>
+        <div class="account-password-form__row">
+          <label for="pw-email">Email</label>
+          <input type="email" id="pw-email" name="email" autocomplete="email" required>
+        </div>
+        <div class="account-password-form__row">
+          <label for="pw-password">Password</label>
+          <input type="password" id="pw-password" name="password" autocomplete="current-password" required minlength="8">
+        </div>
+        <div class="error-msg hidden" id="pw-error" role="alert"></div>
+        <div class="account-password-form__actions">
+          <button type="submit" class="btn btn--primary btn--sm" id="pw-submit">Sign In</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="pw-toggle-mode">Need an account? Create one</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>

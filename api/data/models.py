@@ -65,6 +65,19 @@ class User(Base):
     avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
     role: Mapped[str] = mapped_column(String, nullable=False, default="user")
     max_file_size: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Email/password auth (P4 §37) — an alternative to Google OAuth, not a
+    # replacement. NULL for a Google-only account (there is deliberately no
+    # account-linking UI; the two paths stay independent — see auth.py).
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Google's own verified-email check already proves ownership for an OAuth
+    # account (upsert_google_user sets this True on creation); a password
+    # account starts False and is flipped by /auth/verify-email. Not currently
+    # enforced as a login gate — see auth.py's register() docstring for why.
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    email_verify_token_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    email_verify_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

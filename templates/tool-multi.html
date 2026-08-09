@@ -148,6 +148,14 @@
     <div class="progress__fill" id="progress-fill"></div>
   </div>
 
+  {# Cancel (hidden until shared-multi.js confirms the active converter
+     actually supports it — window.cancelConversion — P4 §35). Terminates the
+     Worker for the local tools that own one (P4 §36); see tool.html for the
+     single-file version of this same block. #}
+  <div class="cancel-action">
+    <button class="btn btn--danger btn--sm hidden" id="cancel-btn" type="button">Cancel</button>
+  </div>
+
   {# Multi Result #}
   <div class="multi-result hidden" id="multi-result">
     <div class="multi-result__title">Processing Complete</div>
@@ -226,7 +234,9 @@
   "max_file_size": {{ tool.max_file_size|tojson }},
   "max_file_size_bytes": {{ tool.max_file_size_bytes|tojson }},
   "max_files": {{ tool.get('max_files', 10)|tojson }},
-  "category": {{ tool.category|tojson }}
+  "category": {{ tool.category|tojson }}{% if tool.worker_libs is defined and 'pdf-lib.min.js' in tool.worker_libs %}{% set pdf_lib_asset = assets.get('lib/pdf-lib.min.js') %}{% set pdf_lib_worker_asset = assets.get('js/workers/pdf-lib-worker.js') %}{% if pdf_lib_asset and pdf_lib_worker_asset %},
+  "pdf_lib_src": {{ ("/" + pdf_lib_asset.path)|tojson }},
+  "pdf_lib_worker_src": {{ ("/" + pdf_lib_worker_asset.path)|tojson }}{% endif %}{% endif %}
 }
 </script>
 
