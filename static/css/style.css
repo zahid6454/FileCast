@@ -667,7 +667,21 @@ img { max-width: 100%; display: block; }
 }
 .result__title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--color-success); margin-bottom: var(--space-3); }
 .result__info { font-size: var(--text-sm); color: var(--color-text-secondary); line-height: var(--leading-relaxed); }
-.result__actions { margin-top: var(--space-4); display: flex; gap: var(--space-3); align-items: center; }
+.result__actions { margin-top: var(--space-4); display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
+/* Below 480px the two buttons no longer fit their natural content width side
+   by side (nested container/panel/result padding eats most of the viewport),
+   so force them to stack full-width and equal-size instead of letting flex-
+   wrap size each to its own label (Download JPG ending up visibly narrower
+   than Convert Another). Left as natural content-sized buttons above that —
+   stretching them to fill the whole row on desktop, where they already fit
+   comfortably, looked oversized for no reason. Scoped to these two rows only
+   — multi-result__actions renders a variable, JS-built list of per-file
+   download buttons where forcing equal widths would squash long filenames
+   instead of helping. */
+@media (max-width: 480px) {
+  .result__actions .btn,
+  .text-result__actions .btn { flex: 1 1 100%; }
+}
 
 /* --- Convert Action --- */
 .convert-action { text-align: center; margin: var(--space-10) 0; }
@@ -736,6 +750,10 @@ img { max-width: 100%; display: block; }
   color: var(--color-text-muted);
 }
 .feedback .btn { font-size: var(--text-sm); padding: var(--space-1) var(--space-4); }
+/* Groups Yes/No as one flex item so they wrap onto their own line together
+   under the prompt, instead of Yes clinging to the prompt's line while only
+   No drops down. */
+.feedback__buttons { display: flex; gap: var(--space-3); }
 /* Baked/resolved rating line — wraps to its own row under the prompt + buttons. */
 .feedback__score {
   flex-basis: 100%;
@@ -770,6 +788,10 @@ img { max-width: 100%; display: block; }
   overflow-y: auto;
 }
 .feedback-text:focus { outline: none; border-color: var(--color-border-focus); }
+/* .feedback__detail's column flex defaults every child's cross-axis size to
+   stretch — right for the textarea (wants width: 100% anyway) but it also
+   stretches this button to the full row width with no sibling to justify it. */
+#feedback-submit { align-self: flex-start; }
 .feedback__detail-thanks { margin: 0; color: var(--color-text-muted); font-size: var(--text-sm); }
 
 /* Google's documented AdSense snippet always carries a literal
@@ -832,7 +854,17 @@ img { max-width: 100%; display: block; }
   margin-top: var(--space-4);
   font-size: var(--text-sm);
 }
-.file-info__name { font-weight: var(--weight-semibold); color: var(--color-text); }
+/* Without min-width: 0 this flex child refuses to shrink below its text's
+   intrinsic width, pushing long filenames past the card's border instead of
+   truncating (default flex-item min-width is auto, i.e. content-based). */
+.file-info__meta { min-width: 0; }
+.file-info__name {
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .file-info__size { color: var(--color-text-muted); }
 
 /* --- Image Preview Thumbnail --- */

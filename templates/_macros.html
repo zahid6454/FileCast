@@ -98,8 +98,10 @@
 {% macro feedback_widget() -%}
 <div class="feedback" id="feedback">
   <span class="feedback__prompt" id="feedback-prompt">Was this tool helpful?</span>
-  <button class="btn btn--primary" type="button" data-feedback="yes">Yes</button>
-  <button class="btn btn--primary" type="button" data-feedback="no">No</button>
+  <div class="feedback__buttons">
+    <button class="btn btn--primary" type="button" data-feedback="yes">Yes</button>
+    <button class="btn btn--primary" type="button" data-feedback="no">No</button>
+  </div>
   <p class="feedback__score hidden" id="feedback-baked"></p>
   <p class="feedback__score hidden" id="feedback-score" role="status" aria-live="polite"></p>
   <div class="feedback__detail hidden" id="feedback-detail">
