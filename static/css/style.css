@@ -2104,7 +2104,7 @@ img { max-width: 100%; display: block; }
   .nav-dropdown__menu { position: static; box-shadow: none; padding-left: var(--space-3); }
   /* The drawer is a FIXED dark surface (bg-dark-raised) in both themes, so its
      links need light text — the default nav tokens are dark-on-light and turn
-     unreadable here (dark-on-dark). Hover keeps the gradient + white text. */
+     unreadable here (dark-on-dark). See below for the hover treatment. */
   .header__nav a,
   .nav-dropdown__toggle,
   .nav-dropdown__all { color: #e2e8f0; }
