@@ -3,6 +3,17 @@
 
   var activeWorker = null;
 
+  // Local PDF-lib work runs off the main thread (P4 §36) — terminate() gives
+  // the Cancel button (P4 §35) a real abort path, same as pdf-split.js/
+  // pdf-rotate.js. Reachable from shared-multi.js's own onCancelClick, not
+  // shared.js — this tool is ui_type: multi-file (tool-multi.html).
+  window.cancelConversion = function () {
+    if (activeWorker) {
+      activeWorker.terminate();
+      activeWorker = null;
+    }
+  };
+
   function runWorker(config, message, transferables) {
     return new Promise(function (resolve, reject) {
       if (!config.pdf_lib_worker_src || !config.pdf_lib_src) {

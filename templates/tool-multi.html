@@ -148,6 +148,14 @@
     <div class="progress__fill" id="progress-fill"></div>
   </div>
 
+  {# Cancel (hidden until shared-multi.js confirms the active converter
+     actually supports it — window.cancelConversion — P4 §35). Terminates the
+     Worker for the local tools that own one (P4 §36); see tool.html for the
+     single-file version of this same block. #}
+  <div class="cancel-action">
+    <button class="btn btn--danger btn--sm hidden" id="cancel-btn" type="button">Cancel</button>
+  </div>
+
   {# Multi Result #}
   <div class="multi-result hidden" id="multi-result">
     <div class="multi-result__title">Processing Complete</div>

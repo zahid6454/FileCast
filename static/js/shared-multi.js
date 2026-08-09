@@ -5,6 +5,11 @@
   var selectedFiles = [];
   var results = [];
   var els = {};
+  // Mirrors shared.js's cancelledThisRun (P4 §35) — set right before a
+  // user-initiated cancel so a batch convertFiles promise already in flight
+  // (abort/terminate is best-effort) can't sneak a showResults/showError in
+  // after the UI has already moved back to 'selected'.
+  var cancelledThisRun = false;
 
   // Shared helpers live in fc-util.js (loaded before this file). A batch is ONE
   // summary postConversion POST (never one per file); see fc-util.js/shared.js
@@ -37,6 +42,9 @@
     els.progress.classList.toggle('hidden', newState !== 'converting');
     els.multiResult.classList.toggle('hidden', newState !== 'complete');
     els.errorMsg.classList.add('hidden');
+    // Re-shown by startConversion() itself (only when the converter supports
+    // it) the moment 'converting' starts — every other state hides it.
+    if (els.cancelBtn) els.cancelBtn.classList.add('hidden');
     announceState(newState);
 
     if (newState === 'empty') {
@@ -180,9 +188,18 @@
     }
 
     setState('converting');
+    cancelledThisRun = false;
     results = [];
     var config = window.TOOL_CONFIG;
     var startTime = Date.now();
+
+    // Only shown when the active converter actually exposes a way to abort
+    // (a converter that owns a terminable Worker — P4 §35/§36). Converters
+    // with no cancel handle get no button rather than one that silently does
+    // nothing.
+    if (els.cancelBtn) {
+      els.cancelBtn.classList.toggle('hidden', typeof window.cancelConversion !== 'function');
+    }
 
     trackEvent('conversion_started', {
       tool_id: config.id,
@@ -209,6 +226,7 @@
           return window.convertFiles(selectedFiles.slice());
         })
         .then(function (batchResult) {
+          if (cancelledThisRun) return;
           var durationMs = Date.now() - startTime;
           var totalIn = 0;
           selectedFiles.forEach(function (f) {
@@ -227,6 +245,7 @@
           showResults(durationMs);
         })
         .catch(function (err) {
+          if (cancelledThisRun) return;
           showError(err.message || 'Processing failed. One or more files may be corrupted.');
           setState('selected');
           trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
@@ -246,6 +265,7 @@
     els.progress.classList.remove('progress--indeterminate');
     var current = 0;
     function processNext() {
+      if (cancelledThisRun) return;
       if (current >= selectedFiles.length) {
         var durationMs = Date.now() - startTime;
         showResults(durationMs);
@@ -288,6 +308,18 @@
     }
 
     processNext();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cancel (P4 §35) — only reachable while the button is visible, which
+  // startConversion() only shows when window.cancelConversion exists.
+  // ---------------------------------------------------------------------------
+  function onCancelClick() {
+    if (state !== 'converting' || typeof window.cancelConversion !== 'function') return;
+    cancelledThisRun = true;
+    window.cancelConversion();
+    trackEvent('conversion_cancelled', { tool_id: window.TOOL_CONFIG.id });
+    setState('selected');
   }
 
   function showResults(durationMs) {
@@ -444,9 +476,11 @@
     els.resultActions = document.getElementById('result-actions');
     els.errorMsg = document.getElementById('error-msg');
     els.status = document.getElementById('a11y-status');
+    els.cancelBtn = document.getElementById('cancel-btn');
 
     initUploadZone();
     els.convertBtn.addEventListener('click', startConversion);
+    if (els.cancelBtn) els.cancelBtn.addEventListener('click', onCancelClick);
 
     trackEvent('tool_view', {
       tool_id: config.id,
