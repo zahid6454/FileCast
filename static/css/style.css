@@ -124,14 +124,15 @@
 }
 
 /* --- Inter (self-hosted, P1 §5) ---
-   Only weight 600/700/800 are declared because --font-heading is the only
-   consumer and every rule that uses it sets a semibold/bold/extrabold weight
-   (grep font-heading — none is 400). Body text uses --font-sans (system
-   stack), so there is no weight-400 fallback to source.
-   One woff2 for all three @font-face blocks is intentional, not a mistake:
-   Google's own /css2 response resolves ":wght@600;700;800" to the SAME
-   variable-font URL for all three weights (verified — it's a single variable
-   file, not three static instances), so declaring three static faces against
+   Only weight 600/700 are declared because --font-heading is the only
+   consumer and grepping every rule that uses it turns up just
+   --weight-semibold (600) and --weight-bold (700) — no --weight-extrabold,
+   no literal 800, anywhere. Body text uses --font-sans (system stack), so
+   there is no weight-400 fallback to source either.
+   One woff2 for both @font-face blocks is intentional, not a mistake:
+   Google's own /css2 response resolves ":wght@600;700" to the SAME
+   variable-font URL for both weights (verified — it's a single variable
+   file, not two static instances), so declaring two static faces against
    one file matches upstream and the browser renders each at its pinned
    weight. Latin-only subset (no unicode-range) — FileCast's UI and content
    are English-only, so the other Google-served subsets (cyrillic, greek,
@@ -150,13 +151,6 @@
   font-family: 'Inter';
   font-style: normal;
   font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/inter-latin.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 800;
   font-display: swap;
   src: url('/fonts/inter-latin.woff2') format('woff2');
 }
