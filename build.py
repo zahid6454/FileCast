@@ -1075,10 +1075,14 @@ def generate_redirects(site_config: dict):
     same Pages project and currently serve identical content — this is what
     makes one of them canonical instead of two indexable copies of every page.
     """
-    base = site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
+    base = (
+        site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
+    )
     host = urlparse(base).netloc
     lines = [f"https://www.{host}/* {base}/:splat 301"] if host else []
-    (DIST / "_redirects").write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    (DIST / "_redirects").write_text(
+        "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8"
+    )
     print("  [ok] _redirects")
 
 

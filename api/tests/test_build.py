@@ -898,10 +898,14 @@ def test_full_build_ads_on_gates_adsbygoogle_behind_consent(tmp_path, monkeypatc
             "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"
             "?client=ca-pub-1234567890123456"
         ), slug
-        assert '<script async src="https://pagead2.googlesyndication.com' not in html, slug
+        assert (
+            '<script async src="https://pagead2.googlesyndication.com' not in html
+        ), slug
 
 
-def test_full_build_ads_on_leaves_adless_pages_without_a_consent_gate(tmp_path, monkeypatch):
+def test_full_build_ads_on_leaves_adless_pages_without_a_consent_gate(
+    tmp_path, monkeypatch
+):
     # AdSense inventory lives only on tool pages, and GA4 is off in this test,
     # so the homepage/static pages have nothing to gate consent for either.
     _seed_site_settings(**ADS_ON)
@@ -926,7 +930,10 @@ def test_generate_redirects_www_to_apex(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_redirects({"site": {"base_url": "https://filecast.org"}})
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
-    assert redirects.strip() == "https://www.filecast.org/* https://filecast.org/:splat 301"
+    assert (
+        redirects.strip()
+        == "https://www.filecast.org/* https://filecast.org/:splat 301"
+    )
 
 
 def test_generate_redirects_default_base_url(tmp_path, monkeypatch):
