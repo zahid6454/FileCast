@@ -1954,9 +1954,10 @@ img { max-width: 100%; display: block; }
    :not(:last-child) so pill-less cards (about/contact) don't get trailing space. */
 .card__tagline:not(:last-child), .card__desc:not(:last-child) { margin-bottom: var(--space-3); }
 .card--lg .badge--local, .card--lg .badge--cloud { align-self: flex-start; }
-/* text color is --color-success-text (P2 §23), not --color-success — border
-   stays the original brand green (non-text; not a WCAG text-contrast case). */
-.badge--local { background: var(--color-success-subtle); color: var(--color-success-text); border-color: var(--color-success); }
+/* border matches the text color so the badge isn't two-tone; --color-success-text
+   stays a light-mode-only variant (dark mode already has them equal — see
+   :root[data-theme="dark"]). */
+.badge--local { background: var(--color-success-subtle); color: var(--color-success-text); border-color: var(--color-success-text); }
 .badge--cloud { background: var(--color-primary-subtle); color: var(--color-primary); border-color: var(--color-primary); }
 .badge__icon { width: 12px; height: 12px; }
 
