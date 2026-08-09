@@ -668,14 +668,20 @@ img { max-width: 100%; display: block; }
 .result__title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--color-success); margin-bottom: var(--space-3); }
 .result__info { font-size: var(--text-sm); color: var(--color-text-secondary); line-height: var(--leading-relaxed); }
 .result__actions { margin-top: var(--space-4); display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
-/* Equal-width buttons: side by side they split the row evenly instead of
-   sizing to their own label (Download JPG ending up narrower than Convert
-   Another); wrapped to their own line each still grows to fill it. Scoped to
-   these two rows only — multi-result__actions renders a variable, JS-built
-   list of per-file download buttons where forcing equal widths would squash
-   long filenames instead of helping. */
-.result__actions .btn,
-.text-result__actions .btn { flex: 1 1 0; }
+/* Below 480px the two buttons no longer fit their natural content width side
+   by side (nested container/panel/result padding eats most of the viewport),
+   so force them to stack full-width and equal-size instead of letting flex-
+   wrap size each to its own label (Download JPG ending up visibly narrower
+   than Convert Another). Left as natural content-sized buttons above that —
+   stretching them to fill the whole row on desktop, where they already fit
+   comfortably, looked oversized for no reason. Scoped to these two rows only
+   — multi-result__actions renders a variable, JS-built list of per-file
+   download buttons where forcing equal widths would squash long filenames
+   instead of helping. */
+@media (max-width: 480px) {
+  .result__actions .btn,
+  .text-result__actions .btn { flex: 1 1 100%; }
+}
 
 /* --- Convert Action --- */
 .convert-action { text-align: center; margin: var(--space-10) 0; }
@@ -782,6 +788,10 @@ img { max-width: 100%; display: block; }
   overflow-y: auto;
 }
 .feedback-text:focus { outline: none; border-color: var(--color-border-focus); }
+/* .feedback__detail's column flex defaults every child's cross-axis size to
+   stretch — right for the textarea (wants width: 100% anyway) but it also
+   stretches this button to the full row width with no sibling to justify it. */
+#feedback-submit { align-self: flex-start; }
 .feedback__detail-thanks { margin: 0; color: var(--color-text-muted); font-size: var(--text-sm); }
 
 /* Google's documented AdSense snippet always carries a literal
