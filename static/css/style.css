@@ -668,6 +668,14 @@ img { max-width: 100%; display: block; }
 .result__title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--color-success); margin-bottom: var(--space-3); }
 .result__info { font-size: var(--text-sm); color: var(--color-text-secondary); line-height: var(--leading-relaxed); }
 .result__actions { margin-top: var(--space-4); display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
+/* Equal-width buttons: side by side they split the row evenly instead of
+   sizing to their own label (Download JPG ending up narrower than Convert
+   Another); wrapped to their own line each still grows to fill it. Scoped to
+   these two rows only — multi-result__actions renders a variable, JS-built
+   list of per-file download buttons where forcing equal widths would squash
+   long filenames instead of helping. */
+.result__actions .btn,
+.text-result__actions .btn { flex: 1 1 0; }
 
 /* --- Convert Action --- */
 .convert-action { text-align: center; margin: var(--space-10) 0; }
@@ -736,6 +744,10 @@ img { max-width: 100%; display: block; }
   color: var(--color-text-muted);
 }
 .feedback .btn { font-size: var(--text-sm); padding: var(--space-1) var(--space-4); }
+/* Groups Yes/No as one flex item so they wrap onto their own line together
+   under the prompt, instead of Yes clinging to the prompt's line while only
+   No drops down. */
+.feedback__buttons { display: flex; gap: var(--space-3); }
 /* Baked/resolved rating line — wraps to its own row under the prompt + buttons. */
 .feedback__score {
   flex-basis: 100%;
@@ -832,7 +844,17 @@ img { max-width: 100%; display: block; }
   margin-top: var(--space-4);
   font-size: var(--text-sm);
 }
-.file-info__name { font-weight: var(--weight-semibold); color: var(--color-text); }
+/* Without min-width: 0 this flex child refuses to shrink below its text's
+   intrinsic width, pushing long filenames past the card's border instead of
+   truncating (default flex-item min-width is auto, i.e. content-based). */
+.file-info__meta { min-width: 0; }
+.file-info__name {
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .file-info__size { color: var(--color-text-muted); }
 
 /* --- Image Preview Thumbnail --- */
