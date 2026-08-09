@@ -284,6 +284,48 @@ def test_full_build_overlay_bakes_sentry_with_pinned_cdn_version(tmp_path, monke
     assert "sentry-cdn.com/latest/" not in home
 
 
+def test_sentry_and_analytics_load_via_defer_in_document_order(tmp_path, monkeypatch):
+    # P1 §6, entangled with P3 §26 — `defer` (not `async`) on BOTH tags is
+    # load-bearing, not a style choice. analytics.js's `Sentry.init()` call is
+    # guarded (`window.Sentry && typeof window.Sentry.init === 'function'`)
+    # and no-ops silently if the SDK isn't ready yet — the exact failure mode
+    # PR #32 spent real debugging time diagnosing. `defer` scripts run in
+    # DOCUMENT ORDER after parsing regardless of download speed; `async`
+    # scripts run in download-finish order. Verified empirically (outside this
+    # suite, via Playwright against artificially-delayed responses) that
+    # `async` on both tags lets the small, same-origin analytics.js execute
+    # BEFORE Sentry's third-party bundle finishes loading — this test pins the
+    # static contract (defer, not async, in document order) so a future
+    # "simplification" back to async is caught here instead of live in
+    # production with zero error output.
+    _seed_site_settings(
+        ga4_enabled=True,
+        ga4_measurement_id="G-TESTBUILD",
+        sentry_enabled=True,
+        sentry_dsn="https://abc123@o4511862654894081.ingest.us.sentry.io/456",
+    )
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+
+    sentry_tag = re.search(r'<script src="https://browser\.sentry-cdn\.com[^>]*></script>', home)
+    analytics_tag = re.search(r'<script src="/js/analytics\.[^>]*></script>', home)
+    assert sentry_tag, home
+    assert analytics_tag, home
+
+    for tag, label in ((sentry_tag, "sentry"), (analytics_tag, "analytics.js")):
+        assert re.search(r"\bdefer\b", tag.group(0)), f"{label} tag missing defer: {tag.group(0)}"
+        assert not re.search(r"\basync\b", tag.group(0)), f"{label} tag must not be async: {tag.group(0)}"
+
+    # defer preserves document order — the SDK tag must appear first, or the
+    # guard in analytics.js has nothing to depend on.
+    assert sentry_tag.start() < analytics_tag.start()
+    # Both data attributes land on the SAME (analytics.js) tag, confirming this
+    # isn't accidentally matching some other script.
+    assert 'data-ga4-id="G-TESTBUILD"' in analytics_tag.group(0)
+    assert "data-sentry-dsn=" in analytics_tag.group(0)
+
+
 def test_full_build_all_off_row_keeps_script_src(tmp_path, monkeypatch):
     # §3.6: with the overlay row PRESENT but all integrations off, the CSP must be
     # untouched — script-src stays literally 'self', no vendor host leaks in. This
