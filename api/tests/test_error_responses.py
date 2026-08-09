@@ -134,18 +134,24 @@ async def test_wrong_field_types_returns_structured_422(client):
 async def test_gotenberg_non_200_does_not_leak_upstream_body(client, monkeypatch):
     """Gotenberg's raw error body is logged server-side (converter.py) but must
     never reach the client — the client only ever sees the fixed generic
-    message from `_handle_conversion`'s broad except-clause."""
-    import httpx
+    message from `_handle_conversion`'s broad except-clause.
 
-    class _FakeResp:
-        status_code = 500
-        text = "LibreOffice crashed: /root/.config/libreoffice corrupted profile at /tmp/xyz123"
-        content = b""
+    Raises the exact RuntimeError shape `_gotenberg_request` itself raises on
+    a non-200 response (`Gotenberg {endpoint} returned {status}: {body}`) from
+    `_convert_libreoffice` directly, rather than mocking `httpx.AsyncClient`
+    globally — a class-level httpx mock would also hijack the test `client`
+    fixture's own request to the app (same class, same patched method),
+    making the assertion check the mock's own text instead of a real
+    response.
+    """
 
-    async def fake_post(self, url, files=None, headers=None):
-        return _FakeResp()
+    async def boom(content, filename, extra_form=None):
+        raise RuntimeError(
+            "Gotenberg /forms/libreoffice/convert returned 500: "
+            "LibreOffice crashed: /root/.config/libreoffice corrupted profile at /tmp/xyz123"
+        )
 
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    monkeypatch.setattr(converter, "_convert_libreoffice", boom)
     valid_docx = b"PK\x03\x04" + b"\x00" * 200
     r = await client.post(
         "/api/v1/convert/docx-to-pdf",
