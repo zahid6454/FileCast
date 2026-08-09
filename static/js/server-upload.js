@@ -106,13 +106,22 @@
       // Upload progress — drive the progress bar directly
       var progressFill = document.getElementById('progress-fill');
       var progressEl = document.getElementById('progress');
+      var progressLabel = document.getElementById('progress-label');
       if (xhr.upload && progressFill && progressEl) {
         progressEl.classList.remove('progress--indeterminate');
+        if (progressLabel) progressLabel.textContent = 'Uploading…';
         xhr.upload.addEventListener('progress', function (e) {
           if (e.lengthComputable) {
             var pct = Math.round((e.loaded / e.total) * 90);
             progressFill.style.width = pct + '%';
           }
+        });
+        // Upload finished (all bytes sent); what's pending now is Gotenberg/
+        // Ghostscript actually converting the file, not more network I/O
+        // (P3 §27 — the "Processing..." spinner state the report asked for).
+        xhr.upload.addEventListener('load', function () {
+          progressFill.style.width = '90%';
+          if (progressLabel) progressLabel.textContent = 'Processing…';
         });
       }
 

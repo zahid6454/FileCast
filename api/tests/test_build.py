@@ -932,6 +932,96 @@ def test_generate_robots_excludes_admin_account(tmp_path, monkeypatch):
     robots = (tmp_path / "robots.txt").read_text(encoding="utf-8")
     assert "Disallow: /admin/" in robots
     assert "Disallow: /account/" in robots
+    # P3 §25 — offline.html is sw.js's fallback target only, never linked to.
+    assert "Disallow: /offline.html" in robots
+
+
+# --------------------------------------------------------------------------- #
+# generate_service_worker — P3 §25 (offline support)
+# --------------------------------------------------------------------------- #
+
+
+def test_generate_service_worker_writes_unhashed_root_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_service_worker("2026-08-09")
+    sw_path = tmp_path / "sw.js"
+    assert sw_path.exists()
+    content = sw_path.read_text(encoding="utf-8")
+    assert "__CACHE_VERSION__" not in content  # placeholder must be substituted
+    assert "'2026-08-09'" in content
+    assert "addEventListener('fetch'" in content
+    assert "addEventListener('install'" in content
+    assert "addEventListener('activate'" in content
+
+
+def test_generate_service_worker_never_intercepts_cross_origin(tmp_path, monkeypatch):
+    # The API (api.filecast.org), Sentry's CDN, GTM, and AdSense must never be
+    # cached or proxied by this worker.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_service_worker("2026-08-09")
+    content = (tmp_path / "sw.js").read_text(encoding="utf-8")
+    assert "url.origin !== self.location.origin" in content
+
+
+def test_generate_service_worker_only_handles_get(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_service_worker("2026-08-09")
+    content = (tmp_path / "sw.js").read_text(encoding="utf-8")
+    assert "request.method !== 'GET'" in content
+
+
+def test_generate_service_worker_cache_writes_use_wait_until(tmp_path, monkeypatch):
+    # PR #36 review — a cache.put() not kept alive by event.waitUntil is a
+    # detached promise the browser can abandon the moment respondWith's own
+    # promise settles (right after `return response`), silently dropping the
+    # write on memory-pressured (mobile) browsers. Both the navigate and the
+    # static-asset path must thread their cache write through waitUntil.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_service_worker("2026-08-09")
+    content = (tmp_path / "sw.js").read_text(encoding="utf-8")
+    # install + activate each have one waitUntil; the fetch handler must add
+    # two more (navigate path, static-asset path) — four total, not two.
+    assert content.count("event.waitUntil(") == 4
+
+
+def test_generate_service_worker_only_caches_ok_responses(tmp_path, monkeypatch):
+    # PR #36 review — neither cache path checked response.ok, so a transient
+    # same-origin 4xx/5xx (edge blip, deploy race) would get cached as if it
+    # were the real content and keep being served until CACHE_VERSION next
+    # rotates.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_service_worker("2026-08-09")
+    content = (tmp_path / "sw.js").read_text(encoding="utf-8")
+    assert content.count("if (response.ok)") == 2
+
+
+def test_generate_headers_worker_src(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({})
+    csp = _csp_line(tmp_path)
+    assert "worker-src 'self';" in csp
+
+
+def test_full_build_404_links_all_categories(tmp_path, monkeypatch):
+    # P3 §29 — the 404 page must link every live category, not just show a
+    # tool search. Sourced from nav_categories (a Jinja global), so this can
+    # never drift out of sync with the site's actual category list.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    not_found = (tmp_path / "404.html").read_text(encoding="utf-8")
+    assert 'href="/document-tools/"' in not_found
+    assert 'href="/image-conversion/"' in not_found
+    assert 'href="/data-conversion/"' in not_found
+    assert 'id="hero-search"' in not_found  # search stays alongside the links
+
+
+def test_full_build_renders_offline_page_and_sw(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    assert (tmp_path / "offline.html").exists()
+    assert (tmp_path / "sw.js").exists()
+    # sw.js must not be hashed the way css/js assets are.
+    assert not list(tmp_path.glob("sw.*.js"))
 
 
 def test_generate_sitemap_excludes_admin_account(tmp_path, monkeypatch):

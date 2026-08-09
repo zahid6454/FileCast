@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}You're Offline — {{ site.name }}{% endblock %}
+{% block meta_description %}You're offline. Local tools you've already visited still work.{% endblock %}
+
+{% block content %}
+<div class="container">
+
+  {# Service-worker fallback (P3 §25) — served from cache when a navigation
+     to an uncached page fails with no network. Never linked to from
+     anywhere and excluded from the sitemap/robots (build.py); it exists
+     purely as sw.js's offline fallback target. #}
+  <div class="not-found">
+    <div class="not-found__code">Offline</div>
+    <h1 class="not-found__title">You're Offline</h1>
+    <p class="not-found__text">
+      This page hasn't been saved for offline use. Local tools you've already
+      opened while online will still work &mdash; try one from your browser's
+      history, or reconnect and try again.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

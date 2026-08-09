@@ -164,10 +164,15 @@
     </button>
   </div>
 
-  {# Progress Bar (hidden until converting) #}
+  {# Progress Bar (hidden until converting). #progress-label (P3 §27) gives
+     cloud tools a visible "Uploading…" → "Processing…" state between the
+     upload finishing and the converted file coming back — shared.js sets it
+     at conversion start, server-upload.js flips it once the upload itself
+     completes. #}
   <div class="progress hidden" id="progress">
     <div class="progress__fill" id="progress-fill"></div>
   </div>
+  <div class="progress__label hidden" id="progress-label" aria-hidden="true"></div>
 
   {# Result Area (hidden until complete) #}
   <div class="result hidden" id="result">

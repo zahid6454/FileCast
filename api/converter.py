@@ -35,6 +35,35 @@ REQUEST_TIMEOUT = 60.0
 # waiting out a multi-second timeout to prove the bound works.
 HEALTH_DB_TIMEOUT_SECONDS = 5.0
 
+# Request queue for Gotenberg conversions (P3 §31). Gotenberg's container is
+# memory-capped at 1g (docker-compose.yml, P3 §30) on a shared 12GB VM that
+# also runs the API, Postgres-adjacent services, and cloudflared — a burst of
+# concurrent LibreOffice/Chromium conversions can each spike well past a
+# couple hundred MB, so an unbounded number of in-flight requests can OOM the
+# container under load. The report's own suggestion (BullMQ + Redis) doesn't
+# fit: this is a FastAPI/asyncio codebase with no Node runtime and no Redis
+# anywhere else in the stack (rate limiting in middleware.py is already a
+# plain in-process structure for the same reason). An ``asyncio.Semaphore``
+# is the equivalent in-process primitive — same "acceptable per-worker, not
+# cross-worker" caveat as the rate limiter (uvicorn runs 4 workers, so the
+# real ceiling is up to ~4x this per instance), which is fine here for the
+# same reason: this is defense against a single worker's own burst, not a
+# hard global cap.
+GOTENBERG_MAX_CONCURRENT = int(os.getenv("GOTENBERG_MAX_CONCURRENT", "2"))
+# How long a request waits in queue for a free slot before giving up. Bounded
+# so a pile-up of requests behind two slow conversions fails fast with a
+# retryable error instead of each queuing request holding its connection open
+# indefinitely (and, upstream, holding open the client's XHR).
+GOTENBERG_QUEUE_TIMEOUT_SECONDS = 30.0
+
+_gotenberg_semaphore = asyncio.Semaphore(GOTENBERG_MAX_CONCURRENT)
+
+
+class ConversionQueueTimeout(Exception):
+    """Raised when a request waited GOTENBERG_QUEUE_TIMEOUT_SECONDS for a free
+    Gotenberg slot and none opened up."""
+
+
 metrics = {
     "conversions": defaultdict(int),
     "failures": defaultdict(int),
@@ -42,11 +71,14 @@ metrics = {
 }
 
 
-def _error_response(msg: str, error_type: str, status: int = 400) -> Response:
+def _error_response(
+    msg: str, error_type: str, status: int = 400, headers: dict | None = None
+) -> Response:
     return Response(
         content=json.dumps({"error": msg, "error_type": error_type}),
         status_code=status,
         media_type="application/json",
+        headers=headers,
     )
 
 
@@ -63,10 +95,60 @@ async def _gotenberg_request(endpoint: str, files: dict, tool_id: str) -> bytes:
     rid = request_id_var.get("-")
     headers = {"X-Request-Id": rid}
 
-    start = time.time()
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-        resp = await client.post(url, files=files, headers=headers)
-    gotenberg_ms = round((time.time() - start) * 1000, 1)
+    # Queue behind GOTENBERG_MAX_CONCURRENT other in-flight Gotenberg calls
+    # (P3 §31) rather than firing straight through — see the module-level
+    # comment on _gotenberg_semaphore for why this exists and why it's a
+    # semaphore rather than an external queue.
+    queue_start = time.time()
+    try:
+        await asyncio.wait_for(
+            _gotenberg_semaphore.acquire(), timeout=GOTENBERG_QUEUE_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        queue_ms = round((time.time() - queue_start) * 1000, 1)
+        logger.warning(
+            "Gotenberg queue timeout: %s waited %sms for a free slot",
+            tool_id,
+            queue_ms,
+            extra={
+                "data": {
+                    "event": "gotenberg_queue_timeout",
+                    "tool_id": tool_id,
+                    "gotenberg_endpoint": endpoint,
+                    "queue_ms": queue_ms,
+                }
+            },
+        )
+        raise ConversionQueueTimeout(
+            "The conversion service is busy right now. Please try again in a moment."
+        ) from None
+
+    queue_ms = round((time.time() - queue_start) * 1000, 1)
+    try:
+        start = time.time()
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            resp = await client.post(url, files=files, headers=headers)
+        gotenberg_ms = round((time.time() - start) * 1000, 1)
+    finally:
+        _gotenberg_semaphore.release()
+
+    if queue_ms > 50:
+        # Only log queueing that actually happened — most requests acquire
+        # the semaphore immediately and this would otherwise fire on every
+        # single conversion.
+        logger.info(
+            "Gotenberg request queued %sms before starting: %s",
+            queue_ms,
+            tool_id,
+            extra={
+                "data": {
+                    "event": "gotenberg_queued",
+                    "tool_id": tool_id,
+                    "gotenberg_endpoint": endpoint,
+                    "queue_ms": queue_ms,
+                }
+            },
+        )
 
     if resp.status_code != 200:
         error_body = resp.text[:500]
@@ -334,6 +416,26 @@ async def _handle_conversion(
             },
         )
         return _error_response(e.message, e.error_type, 400)
+    except ConversionQueueTimeout as e:
+        duration_ms = round((time.time() - start) * 1000, 1)
+        _record_metric(tool_id, False, duration_ms)
+        logger.warning(
+            "Conversion queue timeout: %s",
+            tool_id,
+            extra={
+                "data": {
+                    "event": "queue_timeout",
+                    "tool_id": tool_id,
+                    "input_bytes": input_size,
+                    "duration_ms": duration_ms,
+                }
+            },
+        )
+        # Retryable, so callers get a Retry-After the same way the rate
+        # limiter's 429 does (middleware.py) rather than a bare 503.
+        return _error_response(
+            str(e), "queue_timeout", 503, headers={"Retry-After": "10"}
+        )
     except subprocess.TimeoutExpired:
         duration_ms = round((time.time() - start) * 1000, 1)
         _record_metric(tool_id, False, duration_ms)

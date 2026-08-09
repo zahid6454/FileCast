@@ -88,6 +88,10 @@
     els.fileInfo.classList.toggle('hidden', newState === 'empty');
     els.convertBtn.classList.toggle('hidden', newState === 'converting' || newState === 'complete');
     els.progress.classList.toggle('hidden', newState !== 'converting');
+    if (els.progressLabel) {
+      els.progressLabel.classList.toggle('hidden', newState !== 'converting');
+      if (newState !== 'converting') els.progressLabel.textContent = '';
+    }
     els.result.classList.toggle('hidden', newState !== 'complete');
     els.errorMsg.classList.add('hidden');
     announceState(newState);
@@ -209,8 +213,15 @@
       mode: config.type === 'server-side' ? 'Cloud' : 'Local'
     });
 
-    // Progress: if converter provides a progress callback, use real progress
+    // Progress: if converter provides a progress callback, use real progress.
+    // Default label is 'Processing…' — right for both the indeterminate case
+    // below and local converters with real progress (there's no separate
+    // upload phase to name). server-upload.js overrides this to 'Uploading…'
+    // for cloud tools the moment it wires up real upload-progress tracking,
+    // then flips it back to 'Processing…' once the upload itself finishes
+    // and the response is what's pending (P3 §27).
     var hasProgress = typeof window.convertProgress === 'function';
+    if (els.progressLabel) els.progressLabel.textContent = 'Processing…';
     if (hasProgress) {
       els.progress.classList.remove('progress--indeterminate');
       window.convertProgress(function (pct) {
@@ -709,6 +720,7 @@
     els.convertBtn = document.getElementById('convert-btn');
     els.progress = document.getElementById('progress');
     els.progressFill = document.getElementById('progress-fill');
+    els.progressLabel = document.getElementById('progress-label');
     els.result = document.getElementById('result');
     els.resultInfo = document.getElementById('result-info');
     els.downloadBtn = document.getElementById('download-btn');
