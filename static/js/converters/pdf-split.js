@@ -1,49 +1,58 @@
 (function () {
   'use strict';
 
+  var activeWorker = null;
+
+  // Local PDF-lib work runs off the main thread now (P4 §36) — terminate()
+  // gives the Cancel button (P4 §35) a real abort path, unlike the previous
+  // main-thread promise chain which had nothing to cancel.
+  window.cancelConversion = function () {
+    if (activeWorker) {
+      activeWorker.terminate();
+      activeWorker = null;
+    }
+  };
+
   window.convertFile = function (file) {
-    return file
-      .arrayBuffer()
-      .then(function (bytes) {
-        return PDFLib.PDFDocument.load(bytes);
-      })
-      .then(function (srcDoc) {
-        var pageCount = srcDoc.getPageCount();
-        if (pageCount < 2) {
-          return Promise.reject(
-            new Error('This PDF has only one page. There is nothing to split.')
-          );
-        }
+    var config = window.TOOL_CONFIG || {};
+    if (!config.pdf_lib_worker_src || !config.pdf_lib_src) {
+      return Promise.reject(new Error('Split is unavailable right now. Please refresh the page.'));
+    }
 
-        var chain = Promise.resolve();
-        var blobs = [];
+    return file.arrayBuffer().then(function (bytes) {
+      return new Promise(function (resolve, reject) {
+        var worker = new Worker(
+          config.pdf_lib_worker_src + '?lib=' + encodeURIComponent(config.pdf_lib_src)
+        );
+        activeWorker = worker;
 
-        for (var i = 0; i < pageCount; i++) {
-          (function (pageIdx) {
-            chain = chain
-              .then(function () {
-                return PDFLib.PDFDocument.create();
-              })
-              .then(function (newDoc) {
-                return newDoc.copyPages(srcDoc, [pageIdx]).then(function (pages) {
-                  newDoc.addPage(pages[0]);
-                  return newDoc.save();
-                });
-              })
-              .then(function (pdfBytes) {
-                blobs.push({
-                  blob: new Blob([pdfBytes], { type: 'application/pdf' }),
-                  pageNum: pageIdx + 1
-                });
-              });
-          })(i);
-        }
-
-        return chain.then(function () {
+        worker.onmessage = function (e) {
+          activeWorker = null;
+          worker.terminate();
+          var data = e.data || {};
+          if (!data.ok) {
+            reject(new Error(data.error || 'This PDF could not be split.'));
+            return;
+          }
+          var blobs = data.result.parts.map(function (part) {
+            return {
+              blob: new Blob([part.bytes], { type: 'application/pdf' }),
+              pageNum: part.pageNum
+            };
+          });
           showSplitResults(blobs, file.name);
-          return blobs[0].blob;
-        });
+          resolve(blobs[0].blob);
+        };
+
+        worker.onerror = function (err) {
+          activeWorker = null;
+          worker.terminate();
+          reject(new Error((err && err.message) || 'This PDF could not be split.'));
+        };
+
+        worker.postMessage({ op: 'split', file: bytes }, [bytes]);
       });
+    });
   };
 
   function showSplitResults(blobs, originalName) {

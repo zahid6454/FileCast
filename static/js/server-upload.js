@@ -82,6 +82,16 @@
     });
   }
 
+  // Active upload, so Cancel (P4 §35) has something real to abort.
+  var activeXhr = null;
+
+  window.cancelConversion = function () {
+    if (activeXhr) {
+      activeXhr.abort();
+      activeXhr = null;
+    }
+  };
+
   // Server upload as the conversion function
   window.convertFile = function (file) {
     return new Promise(function (resolve, reject) {
@@ -95,6 +105,7 @@
       }
 
       var xhr = new XMLHttpRequest();
+      activeXhr = xhr;
       xhr.open('POST', apiBase + endpoint, true);
       // Send the session cookie so the server can grant a signed-in user the
       // doubled size limit (§6.3). FormData keeps this a "simple" CORS request,
@@ -126,6 +137,7 @@
       }
 
       xhr.onload = function () {
+        activeXhr = null;
         if (progressFill) progressFill.style.width = '100%';
 
         if (xhr.status === 200) {
@@ -151,11 +163,18 @@
       };
 
       xhr.onerror = function () {
+        activeXhr = null;
         reject(new Error('Network error. Check your connection and try again.'));
       };
 
       xhr.ontimeout = function () {
+        activeXhr = null;
         reject(new Error('Conversion timed out. Try a simpler or smaller file.'));
+      };
+
+      xhr.onabort = function () {
+        activeXhr = null;
+        reject(new Error('Cancelled.'));
       };
 
       xhr.send(formData);

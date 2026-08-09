@@ -15,6 +15,8 @@ def user_dict(
         "avatar_url": user.avatar_url,
         "role": user.role,
         "max_file_size": user.max_file_size,
+        "email_verified": user.email_verified,
+        "has_password": user.password_hash is not None,
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login_at": (
             user.last_login_at.isoformat() if user.last_login_at else None

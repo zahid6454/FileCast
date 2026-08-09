@@ -10,7 +10,8 @@ output_format: PDF
 accept_extensions: [.pdf]
 output_extension: .pdf
 js_module: converters/pdf-rotate.js
-js_libs: [pdf-lib.min.js]
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
 max_file_size: 50MB
 bulk_support: false
 ui_type: standard
