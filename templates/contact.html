@@ -18,14 +18,16 @@
 
   <nav class="breadcrumb"><a href="/">Home</a> <span>&rsaquo;</span> Contact</nav>
 
+  {# GitHub Issues card removed (P1 §13) — it pointed at
+     github.com/zahid6454/FileCast/issues, but the repo is private, so every
+     visitor hit a 404. Email is the only public contact channel until there's
+     a reason to open the repo (or build an in-app feedback form — see the
+     P2 §18 feedback-widget redesign, which covers per-tool feedback; this
+     page is general contact and doesn't need to wait on that). #}
   <div class="card-grid card-grid--lg" style="margin-bottom: var(--space-8);">
     <a class="card card--lg" href="mailto:support@filecast.org">
       <strong>Email</strong>
-      <div class="card__desc">support@filecast.org &mdash; general questions, feedback, or support requests</div>
-    </a>
-    <a class="card card--lg" href="https://github.com/zahid6454/FileCast/issues" target="_blank" rel="noopener">
-      <strong>GitHub Issues</strong>
-      <div class="card__desc">Report bugs, broken conversions, or unexpected behavior</div>
+      <div class="card__desc">support@filecast.org &mdash; general questions, feedback, bug reports, or anything else</div>
     </a>
   </div>
 

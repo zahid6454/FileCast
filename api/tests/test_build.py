@@ -769,12 +769,54 @@ def test_generate_headers_csp_additions(tmp_path, monkeypatch):
     # comes from (§5 item 5) instead of a literal in generate_headers().
     build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
     csp = _csp_line(tmp_path)
-    assert "font-src 'self' https://fonts.gstatic.com" in csp
-    assert "https://fonts.googleapis.com" in csp  # style-src
+    # Inter is self-hosted (P1 §5) — Google Fonts is no longer an allowed
+    # style-src/font-src origin.
+    assert "font-src 'self'" in csp
+    assert "fonts.gstatic.com" not in csp
+    assert "fonts.googleapis.com" not in csp
     assert "https://lh3.googleusercontent.com" in csp  # img-src
     assert "https://accounts.google.com" in csp  # connect-src OAuth
     assert "https://oauth2.googleapis.com" in csp
     assert "https://api.filecast.org" in csp  # from site_config
+
+
+def test_generate_headers_permissions_policy_and_cors(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
+    text = (tmp_path / "_headers").read_text(encoding="utf-8")
+    assert (
+        "Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        in text
+    )
+    # P1 §8 — Cloudflare Pages injects `Access-Control-Allow-Origin: *` on
+    # every response by default; `!` is Pages' syntax to detach a header it
+    # would otherwise add. Nothing in this codebase should set the header
+    # directly (that would just be a second thing to keep in sync).
+    assert "! Access-Control-Allow-Origin" in text
+    assert re.search(r"^  Access-Control-Allow-Origin:", text, re.MULTILINE) is None
+
+
+def test_generate_headers_fonts_cache_rule(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
+    text = (tmp_path / "_headers").read_text(encoding="utf-8")
+    assert "/fonts/*" in text
+    fonts_block = text.split("/fonts/*")[1].split("\n\n")[0]
+    assert "Cache-Control: public, max-age=31536000, immutable" in fonts_block
+
+
+def test_process_assets_hashes_font_and_rewrites_css(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    asset_map = build.process_assets()
+    font_entry = asset_map.get("fonts/inter-latin.woff2")
+    assert font_entry is not None
+    assert re.match(r"fonts/inter-latin\.[0-9a-f]{8}\.woff2", font_entry["path"])
+    hashed_font_file = tmp_path / font_entry["path"]
+    assert hashed_font_file.exists()
+    css_entry = asset_map["css/style.css"]
+    css_text = (tmp_path / css_entry["path"]).read_text(encoding="utf-8")
+    assert "/fonts/inter-latin.woff2" not in css_text  # placeholder must be rewritten
+    assert font_entry["path"] in css_text
 
 
 def test_generate_headers_without_api_base_url_emits_no_empty_token(

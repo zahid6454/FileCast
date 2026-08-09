@@ -123,6 +123,44 @@
   --ad-rectangle-h: 280px;
 }
 
+/* --- Inter (self-hosted, P1 §5) ---
+   Only weight 600/700/800 are declared because --font-heading is the only
+   consumer and every rule that uses it sets a semibold/bold/extrabold weight
+   (grep font-heading — none is 400). Body text uses --font-sans (system
+   stack), so there is no weight-400 fallback to source.
+   One woff2 for all three @font-face blocks is intentional, not a mistake:
+   Google's own /css2 response resolves ":wght@600;700;800" to the SAME
+   variable-font URL for all three weights (verified — it's a single variable
+   file, not three static instances), so declaring three static faces against
+   one file matches upstream and the browser renders each at its pinned
+   weight. Latin-only subset (no unicode-range) — FileCast's UI and content
+   are English-only, so the other Google-served subsets (cyrillic, greek,
+   vietnamese, latin-ext) would be dead weight.
+   Path below is a placeholder build.py's process_assets() rewrites to the
+   content-hashed /fonts/... output before the CSS is minified — do not point
+   this at a real static/fonts file some other way, the build won't find it. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/inter-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/inter-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/inter-latin.woff2') format('woff2');
+}
+
 /* --- Dark Mode (P20) ---
    Two selectors at the TOKEN level (every component reads tokens, so no
    per-component dark rule is needed). The dark token list is duplicated once

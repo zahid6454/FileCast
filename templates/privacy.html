@@ -16,6 +16,7 @@
 
   <h1 class="page__title"><span class="text-brand-blue">Your Files</span> <span class="text-brand-green">Stay Yours</span></h1>
   <p class="page__desc">Everything we do is built around one idea: your files belong to you, not us.</p>
+  <p class="page__desc">Effective date: {{ build_date }}.</p>
 
   <div class="privacy-section">
     <h2>We never look at your files</h2>
@@ -91,12 +92,100 @@
   </div>
 
   <div class="privacy-section">
+    <h2>Cookies We Use</h2>
+    <p>
+      A cookie banner appears on your first visit if any cookie-setting feature below is active. Nothing non-essential is set until you click <strong>Accept</strong> &mdash; your choice is remembered in your browser's local storage, not a cookie, so declining doesn't itself set anything.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Cookie</th><th>Set by</th><th>Purpose</th><th>Duration</th><th>Requires consent?</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>fc_session</code></td><td>FileCast</td><td>Keeps you signed in (httpOnly &mdash; not readable by any script)</td><td>Session / until sign-out</td><td>No &mdash; strictly necessary</td></tr>
+        <tr><td><code>fc_logged_in</code></td><td>FileCast</td><td>Lets the page know you're signed in without an extra request</td><td>Session / until sign-out</td><td>No &mdash; strictly necessary</td></tr>
+        <tr><td><code>fc_oauth_state</code></td><td>FileCast</td><td>Prevents cross-site request forgery during Google sign-in</td><td>A few minutes</td><td>No &mdash; strictly necessary</td></tr>
+        <tr><td><code>_ga</code>, <code>_gid</code></td><td>Google Analytics (GA4)</td><td>Anonymous usage analytics &mdash; which tools are used, how often</td><td>Up to 2 years</td><td>Yes</td></tr>
+        <tr><td>DoubleClick / AdSense cookies</td><td>Google AdSense</td><td>Ad delivery and measurement, once ads are enabled on the site</td><td>Varies by cookie (Google-controlled)</td><td>Yes</td></tr>
+      </tbody>
+    </table>
+    <p>
+      You can withdraw consent at any time by clearing your browser's local storage for this site, which brings the banner back on your next visit. Declining still lets every tool work &mdash; cookies here are for analytics and ads, never for the conversion itself.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Your Privacy Rights</h2>
+    <p>
+      If you're in the EU, UK, or a similar jurisdiction, GDPR gives you rights over your personal data. If you're a California resident, CCPA gives you comparable rights. Either way, you can:
+    </p>
+    <ul>
+      <li><strong>Access</strong> the data we hold about you (see "Your Account Data" above &mdash; there isn't much else).</li>
+      <li><strong>Correct</strong> inaccurate data, directly from your account page for most fields.</li>
+      <li><strong>Delete</strong> your data ("right to erasure") &mdash; the account page's delete option removes everything immediately and permanently.</li>
+      <li><strong>Export</strong> your data ("data portability") &mdash; email us and we'll send what we hold.</li>
+      <li><strong>Object to or opt out of</strong> analytics and ad cookies, via the consent banner or by declining it.</li>
+      <li><strong>Lodge a complaint</strong> with your local data protection supervisory authority if you believe we've mishandled your data.</li>
+    </ul>
+    <p>
+      <strong>Lawful basis:</strong> account data is processed on the basis of your consent (signing in is opt-in) and to perform the service you asked for (converting files, keeping your history). Anonymous usage analytics and, once enabled, ad personalization run only after you consent via the cookie banner.
+    </p>
+    <p>
+      <strong>Do Not Sell or Share My Personal Information (CCPA):</strong> we don't sell or share personal information with third parties for money or other value, and never have. There's nothing to opt out of on that front &mdash; it simply doesn't happen.
+    </p>
+    <p>
+      <strong>International data transfers:</strong> Google (Sign-in, Analytics, and AdSense) and Sentry (error monitoring) are US-based processors. Where data crosses into the US, it does so under those providers' own standard contractual safeguards (e.g. Google's and Sentry's respective data processing terms) &mdash; we don't operate any infrastructure of our own outside the region our server is hosted in.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Children's Privacy</h2>
+    <p>
+      <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span> isn't directed at children and isn't intended for use by anyone under 13. We don't knowingly collect personal data from children under 13. If you believe a child has created an account or otherwise provided us personal data, contact us and we'll delete it.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Third-Party Services</h2>
+    <p>
+      We use a small number of third-party services, each limited to a specific job. None of them ever receives your file content.
+    </p>
+    <ul>
+      <li><strong>Google Sign-In</strong> &mdash; optional authentication. See <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>.</li>
+      <li><strong>Google Analytics (GA4)</strong> &mdash; anonymous usage analytics, only after cookie consent. See <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>.</li>
+      <li><strong>Google AdSense</strong> &mdash; advertising, once enabled on the site, only after cookie consent. Ads may be personalized based on your activity across the web; see <a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener">how Google uses information from sites that use its services</a> and <a href="https://adssettings.google.com/" target="_blank" rel="noopener">your Google Ads Settings</a> to control ad personalization.</li>
+      <li><strong>Sentry</strong> &mdash; error monitoring, so we notice and fix bugs. Captures things like error messages, browser/device info, and the tool you were using &mdash; never file names or file content. See <a href="https://sentry.io/privacy/" target="_blank" rel="noopener">Sentry's Privacy Policy</a>.</li>
+      <li><strong>Gotenberg / Ghostscript</strong> &mdash; run on our own server for server-side conversions. Not third-party services; nothing you send them leaves our infrastructure, and files are deleted immediately after conversion.</li>
+    </ul>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Security Measures</h2>
+    <p>
+      All traffic to and from <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span> is encrypted (HTTPS). Server-side conversions run in isolated containers and are deleted immediately afterward. Sign-in cookies are httpOnly and marked Secure in production, so they're inaccessible to page scripts and never sent over an unencrypted connection. Account deletion is immediate and permanent, not a soft-delete.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Data Controller &amp; Contact</h2>
+    <p>
+      <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span> is operated by an individual, not a registered company. For any privacy question, data request, or complaint, contact <a href="mailto:support@filecast.org">support@filecast.org</a> &mdash; that inbox is the single point of contact for all data controller responsibilities under GDPR and CCPA.
+    </p>
+  </div>
+
+  <div class="privacy-section">
     <h2>How we keep <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span> free</h2>
     <p>
       <span class="text-brand-blue">File</span><span class="text-brand-green">Cast</span> is free because we show (or will show) ads. We also use basic analytics to understand which tools people find useful, so we can make them better. None of this is connected to your files in any way.
     </p>
     <p>
       If you use an ad blocker, everything still works exactly the same. We'll never restrict features because of it.
+    </p>
+  </div>
+
+  <div class="privacy-section">
+    <h2>Changes to This Policy</h2>
+    <p>
+      If we materially change how we handle your data, we'll update this page and the effective date above. Continued use of the service after a change means you accept the update.
     </p>
   </div>
 

@@ -28,12 +28,12 @@
   <script src="/{{ theme_init_js.path }}" integrity="{{ theme_init_js.sri }}" crossorigin="anonymous"></script>
   {% endif %}
 
-  {# Inter (headings only, weights 600/700/800, display=swap). Site-wide-mandatory
-     → fixed part of <head>, NOT head_extra (R13). CSP style-src/font-src for
-     Google Fonts already shipped in Phase 2. #}
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=swap">
+  {# Inter (headings only, weights 600/700/800) is self-hosted as of P1 §5 —
+     the @font-face rules live in style.css, loaded below, so there is nothing
+     to declare in <head>. Removed: the fonts.googleapis.com/fonts.gstatic.com
+     preconnects + stylesheet link (render-blocking third-party request, GDPR
+     IP-to-Google exposure) and the CSP style-src/font-src grants that existed
+     only for those two origins (build.py generate_headers()). #}
 
   {# CSS (cache-busted) #}
   {% set css_asset = assets.get('css/style.css') %}
@@ -61,8 +61,24 @@
   {# Analytics / error tracking (conditional). Sentry's SDK loads from its
      allowlisted CDN; initialization is handled by self-hosted analytics.js
      (no inline script) so a strict `script-src 'self'` CSP is preserved.
-     analytics.js is non-deferred and placed after the SDK tag so Sentry.init
-     runs as soon as the SDK is available. #}
+
+     Both tags below are `defer`, NOT `async` (P1 §6 + P3 §26) — that
+     distinction is load-bearing, not a style choice. `defer` scripts run in
+     DOCUMENT ORDER after parsing; `async` scripts run in DOWNLOAD-FINISH
+     order, whichever arrives first. analytics.js's Sentry branch is guarded
+     (`window.Sentry && typeof window.Sentry.init === 'function'`) and
+     no-ops silently if the guard fails — the exact failure mode PR #32 spent
+     real debugging time diagnosing (a 403 on a floating CDN alias, caught
+     only via the Network tab, since nothing here throws or logs). Two
+     `defer` tags preserve the "SDK before analytics.js" ordering this guard
+     depends on, the same way the old blocking pair did, while no longer
+     blocking first paint. Swapping either one to `async` (or dropping
+     `defer` from analytics.js alone) reopens that race: analytics.js is
+     small and same-origin, so it would very likely finish downloading and
+     run BEFORE Sentry's third-party bundle, hit the guard, and silently
+     never call Sentry.init — indistinguishable from #32 except there'd be no
+     403 in the Network tab to spot it by. Do not "simplify" this back to one
+     deferred + one plain/async tag. #}
   {% if sentry.enabled and sentry.dsn %}
   {# Pinned to an exact version — floating major-version aliases
      ("8.x"/"9.x"/"latest") started 403ing on Sentry's CDN at some point after
@@ -72,12 +88,12 @@
      (`window.Sentry && typeof window.Sentry.init === 'function'`) quietly
      no-ops — no console error pointing at CSP or config, only a 403 on this
      one request. Bump deliberately; there is no floating tag to fall back on. #}
-  <script src="https://browser.sentry-cdn.com/10.69.0/bundle.min.js" crossorigin="anonymous"></script>
+  <script src="https://browser.sentry-cdn.com/10.69.0/bundle.min.js" crossorigin="anonymous" defer></script>
   {% endif %}
   {% if ga4_src or (sentry.enabled and sentry.dsn) %}
   {% set analytics_js = assets.get('js/analytics.js') %}
   {% if analytics_js %}
-  <script src="/{{ analytics_js.path }}" integrity="{{ analytics_js.sri }}" crossorigin="anonymous"{% if ga4.enabled and ga4.measurement_id %} data-ga4-id="{{ ga4.measurement_id }}"{% endif %}{% if sentry.enabled and sentry.dsn %} data-sentry-dsn="{{ sentry.dsn }}"{% endif %}></script>
+  <script src="/{{ analytics_js.path }}" integrity="{{ analytics_js.sri }}" crossorigin="anonymous" defer{% if ga4.enabled and ga4.measurement_id %} data-ga4-id="{{ ga4.measurement_id }}"{% endif %}{% if sentry.enabled and sentry.dsn %} data-sentry-dsn="{{ sentry.dsn }}"{% endif %}></script>
   {% endif %}
   {% endif %}
 
@@ -124,6 +140,17 @@
   {% endif %}
 </head>
 <body>
+
+  {# P1 §9 — every tool on the site needs JS to convert anything; without it
+     the upload zone just sits there with no explanation. Inline style is
+     deliberate here (matches the §5.5 spec, not an oversight): this is the
+     one message that must still render if CSS itself fails to load
+     alongside JS, so it can't depend on style.css. #}
+  <noscript>
+    <div style="background:#fef2f2;color:#991b1b;padding:1rem;text-align:center;font-family:system-ui">
+      FileCast tools require JavaScript to convert files. Please enable JavaScript in your browser.
+    </div>
+  </noscript>
 
   {# Inline SVG icon sprite (§6.10) — included ONCE, referenced via <use>. #}
   {% include "_sprite.html" %}

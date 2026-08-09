@@ -648,11 +648,32 @@ def process_assets() -> dict:
     """
     asset_map = {}
 
+    # --- Fonts (self-hosted Inter, P1 §5) --- must run before CSS: style.css
+    # references the placeholder path below, and we rewrite it to the
+    # content-hashed output before compressing.
+    font_placeholder_map: dict[str, str] = {}
+    fonts_src = STATIC_DIR / "fonts"
+    if fonts_src.exists():
+        for font_file in fonts_src.glob("*.woff2"):
+            content_bytes = font_file.read_bytes()
+            h = file_hash(content_bytes)
+            hashed_name = f"{font_file.stem}.{h}{font_file.suffix}"
+            out_path = DIST / "fonts" / hashed_name
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_bytes(content_bytes)
+            rel_key = f"fonts/{font_file.name}"
+            asset_map[rel_key] = {"path": f"fonts/{hashed_name}", "sri": sri_hash(content_bytes)}
+            # No SRI attribute exists for @font-face — sri is computed for
+            # asset_map consistency only, nothing consumes it for fonts.
+            font_placeholder_map[f"/{rel_key}"] = f"/fonts/{hashed_name}"
+
     # --- CSS ---
     css_src = STATIC_DIR / "css"
     if css_src.exists():
         for css_file in css_src.glob("*.css"):
             raw = css_file.read_text(encoding="utf-8")
+            for placeholder, hashed_url in font_placeholder_map.items():
+                raw = raw.replace(placeholder, hashed_url)
             minified = csscompressor.compress(raw)
             content_bytes = minified.encode("utf-8")
             h = file_hash(content_bytes)
@@ -979,8 +1000,10 @@ def generate_headers(site_config: dict):
         )
         if p
     )
-    style_src = "'self' 'unsafe-inline' https://fonts.googleapis.com"
-    font_src = "'self' https://fonts.gstatic.com"
+    # Inter is self-hosted (P1 §5) — no fonts.googleapis.com/fonts.gstatic.com
+    # origin is loaded anymore, so neither belongs here.
+    style_src = "'self' 'unsafe-inline'"
+    font_src = "'self'"
     img_src = "'self' data: blob: https://lh3.googleusercontent.com"
     frame_src = "'none'"
 
@@ -1049,6 +1072,17 @@ def generate_headers(site_config: dict):
         # over plain HTTP before the redirect fires. `includeSubDomains` is
         # needed for `preload` eligibility; both domains are already HTTPS-only.
         "  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
+        # A file converter has no reason to touch any of these browser APIs.
+        "  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+        # Cloudflare Pages adds `Access-Control-Allow-Origin: *` to every response
+        # by default (undocumented in most places, confirmed on the Pages
+        # community forum) — nothing in this codebase ever set it. `!` is Pages'
+        # own syntax for detaching a header it would otherwise inject; a normal
+        # `Access-Control-Allow-Origin: <value>` line here would just be a second
+        # thing overriding the same default, not a removal of it. Static HTML has
+        # no reason to be fetchable cross-origin at all; the API's own CORS policy
+        # (api/middleware.py, origin-restricted) is unrelated and unaffected.
+        "  ! Access-Control-Allow-Origin",
         "",
         "/css/*",
         "  Cache-Control: public, max-age=31536000, immutable",
@@ -1057,6 +1091,12 @@ def generate_headers(site_config: dict):
         "  Cache-Control: public, max-age=31536000, immutable",
         "",
         "/lib/*",
+        "  Cache-Control: public, max-age=31536000, immutable",
+        "",
+        # Self-hosted Inter (P1 §5) — filenames are content-hashed the same way
+        # css/js are, so immutable + a 1-year max-age is safe: a font update
+        # ships under a new filename, never reuses this one.
+        "/fonts/*",
         "  Cache-Control: public, max-age=31536000, immutable",
         "",
         "/images/*",

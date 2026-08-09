@@ -4,9 +4,10 @@
 // scripts are self-hosted (this file) or the vendor CDNs already allowlisted
 // in generate_headers() when the feature is enabled.
 //
-// Loaded synchronously (no async/defer) immediately after the vendor SDK
-// tags so Sentry.init runs as soon as the SDK is available — matching the
-// original inline timing and capturing early errors.
+// Loaded with `defer`, immediately after the (also deferred) vendor SDK tag.
+// `defer` scripts execute in document order, so this still runs right after
+// Sentry's bundle regardless of which one finishes downloading first — see
+// the loader comment in base.html for why that ordering is load-bearing.
 (function () {
   'use strict';
   var self = document.currentScript;
