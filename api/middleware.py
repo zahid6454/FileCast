@@ -220,13 +220,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         self.requests[key].append(now)
+        # Snapshot BEFORE awaiting call_next — post-merge audit fix. `await
+        # call_next()` suspends this coroutine, and `self.requests` is a
+        # single dict shared by every in-flight request on this worker;
+        # concurrent requests on the SAME bucket (a shared IP, or just this
+        # client's own overlapping requests) can append to `key` while this
+        # one is suspended. Reading `len(self.requests[key])` only after the
+        # await reports whatever the bucket grew to by the time THIS request
+        # happened to finish, not the count that was actually true for it —
+        # under load, near the limit, that under-reports remaining budget and
+        # can disagree between two responses that should have matched. The
+        # actual 429 gate above is unaffected (it's synchronous, no await
+        # between the check and the append), only this advisory header was
+        # racy.
+        remaining = max(0, limit - len(self.requests[key]))
+        reset_in = self._reset_seconds(key, now)
         response = await call_next(request)
         # Rate-limit headers on the allowed path too (P2 §22) — not just the
         # 429, so a well-behaved client can see it's approaching the limit
         # before it gets cut off.
         response.headers["X-RateLimit-Limit"] = str(limit)
-        response.headers["X-RateLimit-Remaining"] = str(
-            max(0, limit - len(self.requests[key]))
-        )
-        response.headers["X-RateLimit-Reset"] = str(self._reset_seconds(key, now))
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(reset_in)
         return response

@@ -81,6 +81,50 @@ async def test_health_endpoint_reports_db_down(client, monkeypatch):
     assert body["status"] == "degraded"
 
 
+async def test_health_endpoint_bounds_a_hanging_db_connect(client, monkeypatch):
+    # Post-merge audit fix. `async_engine` sets no connect_timeout (only the
+    # sync engine does — data/db.py), so an unbounded `.connect()` could hang
+    # past an uptime monitor's polling interval on a network partition that
+    # drops packets rather than refusing outright — and unlike the one-time
+    # startup check this mirrors, /health is now re-triggered by every poll,
+    # so a hang here accumulates a stuck task per poll for as long as the
+    # partition lasts. Proves the bound actually applies: a connect that
+    # never completes still returns within the (shrunk, for a fast test)
+    # timeout, degraded rather than hung.
+    import asyncio
+
+    import converter
+
+    class _HangingConnectCM:
+        async def __aenter__(self):
+            await asyncio.sleep(10)  # would hang the request without the bound
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    class _HangingEngine:
+        def connect(self):
+            return _HangingConnectCM()
+
+    monkeypatch.setattr(converter, "async_engine", _HangingEngine())
+    monkeypatch.setattr(converter, "HEALTH_DB_TIMEOUT_SECONDS", 0.05)
+
+    # wait_for is the assertion, not just a safety net: if the internal bound
+    # didn't apply, the hanging connect (sleep(10)) would blow past this and
+    # fail loudly with TimeoutError instead of silently passing. 8s, not
+    # ~0.05s, because the Gotenberg check runs first and unrelatedly — its
+    # httpx timeout only bounds the CONNECT phase, and a DNS failure for the
+    # unresolvable test-env hostname can itself take a couple of seconds; the
+    # margin absorbs that without weakening what this test actually proves
+    # (nowhere near the 10s the hanging connect would take unbounded).
+    r = await asyncio.wait_for(client.get("/api/v1/health"), timeout=8.0)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["database"] == "down"
+    assert body["status"] == "degraded"
+
+
 async def test_health_endpoint_accepts_head(client):
     # Uptime monitors default to HEAD requests; must not 405.
     r = await client.head("/api/v1/health")

@@ -1059,8 +1059,9 @@ def generate_headers(site_config: dict):
     # injection vector: an attacker who can inject markup can no longer smuggle
     # in a <style> block or a static style="" attribute for a selector-based
     # exfiltration trick). Every REMAINING inline style in the codebase is a
-    # dynamic one shared*.js/server-upload.js/ads.js/admin/dashboard.js drive
-    # via `element.style.x = …` (progress bar width, an admin stat-bar fill) —
+    # dynamic one shared*.js/server-upload.js/admin/dashboard.js drive via
+    # `element.style.x = …` (progress bar width, an admin stat-bar fill) —
+    # ads.js's own show/hide switched to classList and needs no exception —
     # style-src-attr is the CSP3 sub-directive that governs JS-driven style
     # ATTRIBUTE mutations specifically (both `style=""` in markup and the CSSOM
     # `.style` API), separate from style-src's own element/`<style>`-block

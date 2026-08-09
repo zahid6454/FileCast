@@ -4,6 +4,8 @@ The limiter is reset per test (conftest ``_reset_rate_limiter``), so counts are
 deterministic against the single in-process app instance.
 """
 
+import asyncio
+
 import main
 import middleware
 from data.config import settings
@@ -101,6 +103,32 @@ async def test_no_rate_limit_headers_on_an_unmatched_path(client):
     assert "x-ratelimit-limit" not in r.headers
     assert "x-ratelimit-remaining" not in r.headers
     assert "x-ratelimit-reset" not in r.headers
+
+
+async def test_rate_limit_remaining_is_race_free_under_concurrency(client):
+    # Post-merge audit fix. RateLimitMiddleware.dispatch() used to compute
+    # X-RateLimit-Remaining from `len(self.requests[key])` AFTER `await
+    # call_next(request)` — but that await suspends the coroutine, and
+    # `self.requests` is one dict shared by every in-flight request on this
+    # worker. N concurrent requests on the SAME bucket (same IP/path — here,
+    # one test client hitting one endpoint) can all append to `key` while
+    # each other's `call_next()` is still pending, so reading the length back
+    # afterward reports whatever the bucket grew to by then, not the slot
+    # this particular request actually claimed.
+    #
+    # Correct behaviour: N concurrent, all-successful requests each claim a
+    # DISTINCT slot, so their reported `remaining` values are N distinct
+    # numbers with no duplicates. The buggy version tends to report the same
+    # (larger) length to several responses that raced past the read at
+    # similar times, producing duplicates instead of a clean 1:1 mapping.
+    n = 10
+    responses = await asyncio.gather(
+        *(client.post("/api/v1/errors", json={"error_type": "x"}) for _ in range(n))
+    )
+    assert all(r.status_code == 200 for r in responses)
+    remaining = [int(r.headers["x-ratelimit-remaining"]) for r in responses]
+    assert len(set(remaining)) == n, remaining  # no two requests reported the same slot
+    assert set(remaining) == set(range(60 - n, 60))  # exactly slots 50..59, no gaps
 
 
 async def test_docs_enabled_in_development():

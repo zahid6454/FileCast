@@ -29,6 +29,11 @@ router = APIRouter(prefix="/api/v1")
 
 GOTENBERG_URL = os.getenv("GOTENBERG_URL", "http://gotenberg:3000")
 REQUEST_TIMEOUT = 60.0
+# /health's DB connectivity check (P2 §20) — bounds the same way the
+# Gotenberg check's httpx timeout does. A module-level constant (not an
+# inline literal) so a test can monkeypatch it down instead of actually
+# waiting out a multi-second timeout to prove the bound works.
+HEALTH_DB_TIMEOUT_SECONDS = 5.0
 
 metrics = {
     "conversions": defaultdict(int),
@@ -464,9 +469,20 @@ async def health():
     # ratings/history/auth/admin all go through it, same connectivity check
     # main.py's startup lifespan already does, just per-request instead of
     # once at boot.
+    #
+    # Post-merge audit fix: bounded with the same 5s budget as the Gotenberg
+    # check above. `async_engine` (data/db.py) sets no `connect_timeout` —
+    # only the sync engine does — so an unbounded `.connect()` here could hang
+    # past a monitor's polling interval on a network partition that drops
+    # packets instead of refusing the connection outright. Unlike the
+    # lifespan's ONE-TIME startup check this pattern mirrors, this one is now
+    # re-triggered by every external poll, so a hang here is no longer a
+    # one-off — it accumulates a stuck task (and a held pool connection) per
+    # poll for as long as the partition lasts.
     try:
-        async with async_engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
+        async with asyncio.timeout(HEALTH_DB_TIMEOUT_SECONDS):
+            async with async_engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
         db_ok = True
     except Exception:
         db_ok = False

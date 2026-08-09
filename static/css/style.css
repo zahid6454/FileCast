@@ -182,6 +182,10 @@
     --color-success-hover: #6EE7B7;
     --color-success-light: #064E3B;
     --color-success-subtle: #022C22;
+    /* Post-merge audit fix — same as the explicit [data-theme="dark"] block
+       below; see the comment there. Duplicated because this OS-preference
+       block and that explicit-toggle block don't share scope. */
+    --color-success-text: #34D399;
 
     --color-error: #FCA5A5;
     --color-error-hover: #F87171;
@@ -227,6 +231,15 @@
   --color-success-hover: #6EE7B7;
   --color-success-light: #064E3B;
   --color-success-subtle: #022C22;
+  /* Post-merge audit fix — the light-mode-only --color-success-text (:root,
+     above) has no effect here (custom properties don't cross a re-declared
+     scope), so .text-brand-green/.badge--local silently fell back to that
+     LIGHT-tuned dark green (#047857) against dark-mode's near-black
+     backgrounds: 2.8-3.7:1, failing the exact same way the pre-fix light-mode
+     bug did. Dark mode's own --color-success (#34D399) was already
+     correctly tuned for dark backgrounds (7.6-10.5:1 across all of them) —
+     it was never the problem, so this is just that value, not a new one. */
+  --color-success-text: #34D399;
 
   --color-error: #FCA5A5;
   --color-error-hover: #F87171;
@@ -1039,11 +1052,20 @@ img { max-width: 100%; display: block; }
   background: none;
   border: none;
   cursor: pointer;
-  /* --color-text-muted on the dark header is 3.75:1 (fails 4.5:1 — P2 §23,
-     axe-core). --color-text-light is, despite the name, the HIGHER-luminance
-     of the two grays (6.96:1 here) — it was tuned for light backgrounds
-     elsewhere, but reads correctly against a dark one too. */
-  color: var(--color-text-light);
+  /* Post-merge audit fix — the header's dark background (--color-bg-dark) is
+     CONSTANT across both site themes (never redefined under
+     [data-theme="dark"] or prefers-color-scheme), but --color-text-muted and
+     --color-text-light SWAP values between them (by design, for the many
+     places that DO sit on a theme-aware background). That mismatch is why
+     the original P2 §23 fix regressed: switching --color-text-muted (3.75:1
+     here in light mode, the axe-core finding) to --color-text-light "fixed"
+     light mode (6.96:1) by landing on the exact value dark mode's
+     --color-text-light is swapped TO — reintroducing the identical 3.75:1
+     failure, just in the other theme. A fixed, non-variable color is the
+     correct fit for an always-dark surface: #94A3B8 clears 4.5:1 here
+     (6.96:1) regardless of which theme is active, because it isn't tied to
+     either theme's swap. */
+  color: #94A3B8;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
