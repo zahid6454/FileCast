@@ -565,8 +565,12 @@ img { max-width: 100%; display: block; }
   background: var(--color-primary-subtle);
 }
 /* Cloud-tool health check failed (server-upload.js) — was two inline
-   `.style.pointerEvents`/`.style.opacity` sets (P2 §14). */
-.upload-zone--disabled { pointer-events: none; opacity: 0.6; }
+   `.style.pointerEvents`/`.style.opacity` sets (P2 §14). No opacity dimming:
+   it visually reduces --color-text-secondary/--color-text-muted below 4.5:1
+   (axe-core caught this in CI, where the health check actually fails).
+   pointer-events: none plus the "temporarily unavailable" copy already
+   communicate the disabled state. */
+.upload-zone--disabled { pointer-events: none; }
 .upload-zone__text { font-size: var(--text-lg); color: var(--color-text-secondary); margin-bottom: var(--space-2); }
 /* --color-text-light on the page background was 2.45:1 (P2 §23, axe-core).
    --color-text-muted clears 4.5:1 there (4.55:1). */
