@@ -117,7 +117,7 @@ async def test_unexpected_conversion_exception_returns_generic_500(client, monke
 
 async def test_malformed_json_body_returns_structured_422_not_a_trace(client):
     r = await client.post(
-        "/api/v1/auth/login",
+        "/api/v1/ratings",
         content=b"{not valid json",
         headers={"Content-Type": "application/json"},
     )
@@ -126,7 +126,7 @@ async def test_malformed_json_body_returns_structured_422_not_a_trace(client):
 
 
 async def test_wrong_field_types_returns_structured_422(client):
-    r = await client.post("/api/v1/auth/login", json={"email": 12345, "password": None})
+    r = await client.post("/api/v1/ratings", json={"tool_id": 12345, "vote": None})
     assert r.status_code == 422
     _assert_no_leak(r.text)
 
