@@ -59,7 +59,26 @@ async def test_health_endpoint_responds(client):
     # endpoint must still respond 200 with a status.
     r = await client.get("/api/v1/health")
     assert r.status_code == 200
-    assert r.json()["status"] in ("healthy", "degraded")
+    body = r.json()
+    assert body["status"] in ("healthy", "degraded")
+    # P2 §20 — the DB check runs against the same test DB conftest wires every
+    # other test to, so it's genuinely reachable here.
+    assert body["database"] == "up"
+
+
+async def test_health_endpoint_reports_db_down(client, monkeypatch):
+    import converter
+
+    class _BoomEngine:
+        def connect(self):
+            raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(converter, "async_engine", _BoomEngine())
+    r = await client.get("/api/v1/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["database"] == "down"
+    assert body["status"] == "degraded"
 
 
 async def test_health_endpoint_accepts_head(client):

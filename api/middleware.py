@@ -155,6 +155,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         cutoff = now - RATE_WINDOW
         self.requests[key] = [t for t in self.requests[key] if t > cutoff]
 
+    def _reset_seconds(self, key: str, now: float) -> int:
+        """Seconds until the bucket's oldest request ages out of RATE_WINDOW —
+        i.e. until at least one more request is allowed again. An empty bucket
+        (nothing recorded yet this window) resets in a full RATE_WINDOW."""
+        bucket = self.requests.get(key)
+        if not bucket:
+            return RATE_WINDOW
+        return max(0, round(RATE_WINDOW - (now - min(bucket))))
+
     def _sweep(self, now: float):
         """Drop stale/empty buckets so idle IPs don't accumulate unboundedly."""
         cutoff = now - RATE_WINDOW
@@ -180,6 +189,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._clean_old(key, now)
 
         if len(self.requests[key]) >= limit:
+            reset_in = self._reset_seconds(key, now)
             logger.warning(
                 "Rate limited %s on %s",
                 ip,
@@ -197,8 +207,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content='{"error":"Rate limit exceeded. Try again later.","error_type":"rate_limited"}',
                 status_code=429,
                 media_type="application/json",
-                headers={"Retry-After": str(RATE_WINDOW)},
+                # Retry-After and X-RateLimit-Reset (§10/P2 §22) agree on the
+                # same number — the seconds until the oldest request in THIS
+                # bucket ages out and one more is allowed, not a blanket
+                # RATE_WINDOW every time.
+                headers={
+                    "Retry-After": str(reset_in),
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_in),
+                },
             )
 
         self.requests[key].append(now)
-        return await call_next(request)
+        response = await call_next(request)
+        # Rate-limit headers on the allowed path too (P2 §22) — not just the
+        # 429, so a well-behaved client can see it's approaching the limit
+        # before it gets cut off.
+        response.headers["X-RateLimit-Limit"] = str(limit)
+        response.headers["X-RateLimit-Remaining"] = str(
+            max(0, limit - len(self.requests[key]))
+        )
+        response.headers["X-RateLimit-Reset"] = str(self._reset_seconds(key, now))
+        return response

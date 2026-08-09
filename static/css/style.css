@@ -20,6 +20,15 @@
   --color-success-hover: #059669;
   --color-success-light: #D1FAE5;
   --color-success-subtle: #ECFDF5;
+  /* P2 §23 — --color-success as TEXT on a light background (white/page/
+     sunken/success-subtle) fails WCAG AA color-contrast (axe-core measured
+     2.3-2.5:1 against 4.5:1 required, even at large/bold sizes where the
+     threshold drops to 3:1 — it still didn't clear that). This is the same
+     hue darkened until it passes (~5.0-5.5:1 across all four), for TEXT use
+     only — .text-brand-green and .badge--local's label. --color-success
+     itself is untouched: as a BACKGROUND fill (buttons, the success border)
+     or on the dark footer (7.0:1, already passes) it was never the problem. */
+  --color-success-text: #047857;
 
   /* Error */
   --color-error: #EF4444;
@@ -287,6 +296,42 @@ img { max-width: 100%; display: block; }
   border: 0;
 }
 
+/* Skip-to-content link (§6, P2 #16). Off-screen until focused, so it costs
+   sighted mouse users nothing but lets keyboard users jump the 34-item
+   mega-menu on every page load. z-index above .header (100) so it isn't
+   clipped by the sticky header on focus. */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: var(--space-4);
+  z-index: 200;
+  background: var(--color-bg-dark);
+  color: var(--color-text-inverse);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.skip-link:focus {
+  top: var(--space-2);
+}
+
+/* Spacing utilities (§6, P2 #14) — replace the handful of one-off
+   `style="margin-*: var(--space-N)"` attributes that used to live in
+   about/contact/terms/category.html. Only the two values those pages
+   actually needed; not a general-purpose spacing scale. */
+.u-mt-3 { margin-top: var(--space-3); }
+.u-mt-8 { margin-top: var(--space-8); }
+.u-mb-8 { margin-bottom: var(--space-8); }
+
+/* Inline SVG icon sprite (_sprite.html) — 0x0 and position:absolute so the
+   <symbol> definitions never affect layout or paint (§6, P2 #14: was a
+   `style="position:absolute"` attribute). */
+.sprite-hidden { position: absolute; }
+
+/* <noscript> fallback banner (base.html, P1 §9 / P2 §14) */
+.noscript-banner { background: #fef2f2; color: #991b1b; padding: 1rem; text-align: center; font-family: system-ui; }
+
 /* --- Layout --- */
 .container { max-width: var(--max-width); margin: 0 auto; padding: 0 var(--space-4); }
 /* Content pages keep the current 800px width. Defined AFTER .container so, at
@@ -506,8 +551,13 @@ img { max-width: 100%; display: block; }
   border-color: var(--color-primary);
   background: var(--color-primary-subtle);
 }
+/* Cloud-tool health check failed (server-upload.js) — was two inline
+   `.style.pointerEvents`/`.style.opacity` sets (P2 §14). */
+.upload-zone--disabled { pointer-events: none; opacity: 0.6; }
 .upload-zone__text { font-size: var(--text-lg); color: var(--color-text-secondary); margin-bottom: var(--space-2); }
-.upload-zone__hint { font-size: var(--text-sm); color: var(--color-text-light); }
+/* --color-text-light on the page background was 2.45:1 (P2 §23, axe-core).
+   --color-text-muted clears 4.5:1 there (4.55:1). */
+.upload-zone__hint { font-size: var(--text-sm); color: var(--color-text-muted); }
 
 /* --- Buttons --- */
 .btn {
@@ -568,7 +618,11 @@ img { max-width: 100%; display: block; }
 
 /* --- Progress Bar --- */
 .progress { height: 8px; background: var(--color-bg-sunken); border-radius: var(--radius-full); overflow: hidden; margin: var(--space-4) 0; }
-.progress__fill { height: 100%; background: linear-gradient(to right, var(--brand-blue), var(--brand-green)); border-radius: var(--radius-full); transition: width 300ms ease; }
+/* width starts at 0 via this default rather than a `style="width: 0%"`
+   attribute (P2 §14) — shared*.js still drives it with `.style.width = X%`
+   at runtime, which the CSP's `style-src-attr` exception (build.py
+   generate_headers()) covers separately from the element-level style-src. */
+.progress__fill { width: 0; height: 100%; background: linear-gradient(to right, var(--brand-blue), var(--brand-green)); border-radius: var(--radius-full); transition: width 300ms ease; }
 
 /* --- Progress Bar: Indeterminate --- */
 .progress--indeterminate .progress__fill {
@@ -605,6 +659,13 @@ img { max-width: 100%; display: block; }
   font-size: var(--text-sm);
   margin-top: var(--space-4);
 }
+/* html-to-pdf external-reference warning (server-upload.js) — a non-error
+   variant of .error-msg, was three inline `.style.*` sets (P2 §14). */
+.error-msg--warning {
+  border-color: var(--color-warning);
+  background: var(--color-warning-light);
+  color: var(--color-text);
+}
 
 /* --- Content Blocks (SEO sections below tool) --- */
 .content-block {
@@ -634,13 +695,19 @@ img { max-width: 100%; display: block; }
 .related-tools { margin: var(--space-8) 0; }
 .related-tools__title { font-size: var(--text-xl); font-weight: var(--weight-bold); margin-bottom: var(--space-4); }
 
-/* --- Feedback Widget --- */
+/* --- Feedback Widget ---
+   Lives inside .result/.multi-result/.text-result now (P2 §18) — the
+   top border + margin-top separate it from the Download/Convert Another row
+   above rather than relying on page-level spacing, since it's no longer a
+   standalone section with the page around it for breathing room. */
 .feedback {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-3);
-  padding: var(--space-4) 0;
+  margin-top: var(--space-4);
+  padding: var(--space-4) 0 0;
+  border-top: 1px solid var(--color-border);
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
@@ -652,6 +719,42 @@ img { max-width: 100%; display: block; }
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
+
+/* "No" follow-up (report §11.5) — hidden until shared.js reveals it post-vote. */
+.feedback__detail {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.feedback__detail-label { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--color-text); }
+/* Report §11.5's exact spec: starts single-line, auto-grows via JS (shared.js
+   input listener sets .style.height — the same style-src-attr exception the
+   progress bar uses, P2 §14), caps at ~5 lines, no manual resize handle. */
+.feedback-text {
+  width: 100%;
+  min-height: 2.25rem;
+  max-height: 7.5rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  background: var(--color-bg);
+  resize: none;
+  overflow-y: auto;
+}
+.feedback-text:focus { outline: none; border-color: var(--color-border-focus); }
+.feedback__detail-thanks { margin: 0; color: var(--color-text-muted); font-size: var(--text-sm); }
+
+/* Google's documented AdSense snippet always carries a literal
+   `style="display:block"` on the <ins> tag; ad_slot() (P2 §14) applies the
+   same rule via the existing .adsbygoogle class instead so the CSP's
+   style-src needs no 'unsafe-inline' exception for it — functionally
+   identical, and test_build.py's `class="adsbygoogle"` assertions (the
+   snippet Google's docs show) still match verbatim. */
+.adsbygoogle { display: block; }
 
 /* --- Ad Slots (reserved to limit CLS) ---
    ⚠ PROVISIONAL, NOT MEASURED — the same caveat as generate_headers()'s CSP
@@ -735,7 +838,16 @@ img { max-width: 100%; display: block; }
 
 /* --- Brand Text Colors --- */
 .text-brand-blue { color: var(--color-primary); }
-.text-brand-green { color: var(--color-success); }
+.text-brand-green { color: var(--color-success-text); } /* P2 §23 — see --color-success-text */
+/* Both brand-text colors above are tuned for a LIGHT background (the vast
+   majority of usage — headings, body copy). The footer is a fixed dark
+   section regardless of site theme, where the light-bg tuning inverts:
+   --color-primary drops to 3.45:1 there (fails; #60A5FA — the same light
+   blue already used for the header logo mark, base.html — clears 7.0:1) and
+   --color-success-text drops to 3.25:1 (fails; the ORIGINAL, brighter
+   --color-success clears 7.0:1, so it's restored rather than re-darkened). */
+.footer .text-brand-blue { color: #60A5FA; }
+.footer .text-brand-green { color: var(--color-success); }
 
 /* --- Blue-Green Split Shadow (brand hover effect) --- */
 .hero__search, .category__search, .card, .upload-zone, .text-input-area, .text-output-area {
@@ -927,7 +1039,11 @@ img { max-width: 100%; display: block; }
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--color-text-muted);
+  /* --color-text-muted on the dark header is 3.75:1 (fails 4.5:1 — P2 §23,
+     axe-core). --color-text-light is, despite the name, the HIGHER-luminance
+     of the two grays (6.96:1 here) — it was tuned for light backgrounds
+     elsewhere, but reads correctly against a dark one too. */
+  color: var(--color-text-light);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
@@ -1774,7 +1890,9 @@ img { max-width: 100%; display: block; }
   margin: 0 auto var(--space-3);
 }
 .how-it-works__step-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); margin-bottom: var(--space-1); }
-.how-it-works__step-text { font-size: var(--text-sm); color: var(--color-text-muted); }
+/* --color-text-muted on the sunken step background was 4.34:1 — just under
+   4.5:1 (P2 §23, axe-core). --color-text-secondary clears it at 6.92:1. */
+.how-it-works__step-text { font-size: var(--text-sm); color: var(--color-text-secondary); }
 @media (min-width: 768px) {
   .how-it-works__grid { grid-template-columns: repeat(3, 1fr); }
 }
@@ -1814,7 +1932,9 @@ img { max-width: 100%; display: block; }
    :not(:last-child) so pill-less cards (about/contact) don't get trailing space. */
 .card__tagline:not(:last-child), .card__desc:not(:last-child) { margin-bottom: var(--space-3); }
 .card--lg .badge--local, .card--lg .badge--cloud { align-self: flex-start; }
-.badge--local { background: var(--color-success-subtle); color: var(--color-success); border-color: var(--color-success); }
+/* text color is --color-success-text (P2 §23), not --color-success — border
+   stays the original brand green (non-text; not a WCAG text-contrast case). */
+.badge--local { background: var(--color-success-subtle); color: var(--color-success-text); border-color: var(--color-success); }
 .badge--cloud { background: var(--color-primary-subtle); color: var(--color-primary); border-color: var(--color-primary); }
 .badge__icon { width: 12px; height: 12px; }
 

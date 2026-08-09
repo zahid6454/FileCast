@@ -282,6 +282,11 @@ def test_full_build_overlay_bakes_sentry_with_pinned_cdn_version(tmp_path, monke
     assert "sentry-cdn.com/8.x/" not in home
     assert "sentry-cdn.com/9.x/" not in home
     assert "sentry-cdn.com/latest/" not in home
+    # P2 §15 — SRI on the pinned Sentry bundle (only self-hosted assets carried
+    # `integrity` before this; the exact-version pin above is what makes a
+    # stable hash possible for a third-party script at all).
+    sentry_tag = re.search(r'<script src="https://browser\.sentry-cdn\.com[^>]*>', home)
+    assert sentry_tag and 'integrity="sha384-' in sentry_tag.group(0)
 
 
 def test_sentry_and_analytics_load_via_defer_in_document_order(tmp_path, monkeypatch):

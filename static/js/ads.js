@@ -57,11 +57,11 @@
     if (!slot) return;
     var status = ins.getAttribute('data-ad-status');
     if (status === 'unfilled') {
-      slot.style.display = 'none'; // no layout reserved for nothing
+      slot.classList.add('hidden'); // no layout reserved for nothing
     } else if (status === 'filled') {
       // Restore: a late fill must survive the silent-unit timeout having
       // already hidden the slot. This is what makes the timeout safe.
-      slot.style.display = '';
+      slot.classList.remove('hidden');
     }
   }
 
@@ -92,7 +92,7 @@
       var ins = units[j];
       if (ins.getAttribute('data-ad-status') || ins.offsetHeight !== 0) continue;
       var slot = slotOf(ins);
-      if (slot) slot.style.display = 'none';
+      if (slot) slot.classList.add('hidden');
     }
   }, SILENT_UNIT_TIMEOUT_MS);
 })();

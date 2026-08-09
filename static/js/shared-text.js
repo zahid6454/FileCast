@@ -11,11 +11,26 @@
   var trackEvent = FC.trackEvent;
   var postConversion = FC.postConversion;
 
+  // Conversion status live region (§6, P2 #17) — see shared.js's announceState
+  // for the full rationale; same pattern, mirrored per-file (no shared module
+  // seam between these three converter scripts).
+  function announceState(newState) {
+    if (!els.status) return;
+    if (newState === 'converting') {
+      els.status.textContent = 'Converting…';
+    } else if (newState === 'complete') {
+      els.status.textContent = 'Conversion complete. Result ready.';
+    } else {
+      els.status.textContent = '';
+    }
+  }
+
   function setState(newState) {
     state = newState;
     els.convertBtn.disabled = newState === 'converting';
     els.progress.classList.toggle('hidden', newState !== 'converting');
     els.errorMsg.classList.add('hidden');
+    announceState(newState);
     if (newState === 'complete') {
       els.textResult.classList.remove('hidden');
     } else if (newState === 'empty') {
@@ -55,6 +70,7 @@
     els.errorMsg.textContent = message;
     els.errorMsg.classList.remove('hidden');
     if (state === 'converting') setState('empty');
+    if (els.status) els.status.textContent = message;
   }
 
   function startConversion() {
@@ -83,6 +99,13 @@
       input_format: config.input_format,
       output_format: config.output_format,
       file_size_bytes: new Blob([text]).size
+    });
+    FC.setSentryContext({
+      tool_id: config.id,
+      input_format: config.input_format,
+      output_format: config.output_format,
+      file_size_bytes: new Blob([text]).size,
+      mode: config.type === 'server-side' ? 'Cloud' : 'Local'
     });
 
     els.progress.classList.remove('hidden');
@@ -235,6 +258,7 @@
     els.resetBtn = document.getElementById('reset-btn');
     els.errorMsg = document.getElementById('error-msg');
     els.formatBtn = document.getElementById('format-btn');
+    els.status = document.getElementById('a11y-status');
 
     els.convertBtn.disabled = true;
 

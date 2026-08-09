@@ -63,6 +63,21 @@
   // ---------------------------------------------------------------------------
   // State transitions
   // ---------------------------------------------------------------------------
+  // Conversion status live region (§6, P2 #17) — a screen reader announces
+  // these without the user needing to navigate to the progress/result area.
+  // #a11y-status is permanently in the DOM (never itself hidden), so writing
+  // its text is what triggers the announcement, not a visibility change.
+  function announceState(newState) {
+    if (!els.status) return;
+    if (newState === 'converting') {
+      els.status.textContent = 'Converting your file…';
+    } else if (newState === 'complete') {
+      els.status.textContent = 'Conversion complete. Download ready.';
+    } else {
+      els.status.textContent = '';
+    }
+  }
+
   function setState(newState) {
     state = newState;
 
@@ -75,6 +90,7 @@
     els.progress.classList.toggle('hidden', newState !== 'converting');
     els.result.classList.toggle('hidden', newState !== 'complete');
     els.errorMsg.classList.add('hidden');
+    announceState(newState);
 
     if (newState === 'empty') {
       els.convertBtn.disabled = true;
@@ -184,6 +200,13 @@
       input_format: config.input_format,
       output_format: config.output_format,
       file_size_bytes: currentFile.size
+    });
+    FC.setSentryContext({
+      tool_id: config.id,
+      input_format: config.input_format,
+      output_format: config.output_format,
+      file_size_bytes: currentFile.size,
+      mode: config.type === 'server-side' ? 'Cloud' : 'Local'
     });
 
     // Progress: if converter provides a progress callback, use real progress
@@ -336,6 +359,7 @@
     }
     els.errorMsg.textContent = message;
     els.errorMsg.classList.remove('hidden');
+    if (els.status) els.status.textContent = message;
   }
 
   // ---------------------------------------------------------------------------
@@ -473,6 +497,55 @@
     // and a vote that never reached the server simply stays retryable.
     if (els.baked) els.baked.classList.add('hidden');
     resolveWidget(withVote(baked, vote), els.prompt, els.buttons, els.score);
+
+    // "No" follow-up (report §11.5, P2 §18) — reveal AFTER resolveWidget, not
+    // instead of it: the yes/no state transition is unchanged (buttons hide,
+    // score/thanks shows), this is purely additive. Focus moves into the
+    // textarea so a keyboard user lands straight in it rather than needing to
+    // tab past the now-hidden buttons to find it.
+    if (vote === 'no' && els.detail) {
+      els.detail.classList.remove('hidden');
+      if (els.detailText) els.detailText.focus();
+    }
+  }
+
+  // Auto-grow the "what went wrong?" textarea (report §11.5's exact spec) and
+  // wire its Submit button. `.style.height` is a JS-driven inline style
+  // attribute — CSP-allowed via style-src-attr 'unsafe-inline' (P2 §14), NOT
+  // the element-level style-src (which is what closed the actual CSS
+  // injection vector this same effort fixed).
+  function initFeedbackDetail(els) {
+    if (!els.detailText || !els.detailSubmit) return;
+
+    els.detailText.addEventListener('input', function () {
+      els.detailText.style.height = 'auto';
+      els.detailText.style.height = els.detailText.scrollHeight + 'px';
+    });
+
+    els.detailSubmit.addEventListener('click', function () {
+      var config = window.TOOL_CONFIG;
+      var text = els.detailText.value.trim();
+      if (!text || !config) return; // nothing typed — silently no-op
+
+      var apiBase = window.FILECAST && window.FILECAST.apiBase;
+      if (apiBase) {
+        fetch(apiBase.replace(/\/$/, '') + '/api/v1/ratings/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tool_id: config.id, feedback_text: text })
+        }).catch(function () {
+          /* silent — same progressive-enhancement posture as the vote POST */
+        });
+      }
+
+      // Resolve optimistically regardless of network outcome, same rationale
+      // as the vote itself (§6/onVote): the textarea+button are replaced with
+      // a thank-you whether or not the request actually lands.
+      els.detailText.classList.add('hidden');
+      els.detailSubmit.classList.add('hidden');
+      if (els.detailLabel) els.detailLabel.classList.add('hidden');
+      if (els.detailThanks) els.detailThanks.classList.remove('hidden');
+    });
   }
 
   // Wire the Yes/No buttons via delegation — no inline on* handlers, so the site
@@ -484,12 +557,19 @@
       buttons: feedback.querySelectorAll('[data-feedback]'),
       prompt: document.getElementById('feedback-prompt'),
       score: document.getElementById('feedback-score'), // live: vote confirmation
-      baked: document.getElementById('feedback-baked') // inert: page-load text
+      baked: document.getElementById('feedback-baked'), // inert: page-load text
+      detail: document.getElementById('feedback-detail'),
+      detailLabel: feedback.querySelector('.feedback__detail-label'),
+      detailText: document.getElementById('feedback-text'),
+      detailSubmit: document.getElementById('feedback-submit'),
+      detailThanks: document.getElementById('feedback-detail-thanks')
     };
     // Both score elements are part of the markup contract. Requiring them keeps
     // a partial template inert (obvious in testing) rather than quietly routing
     // load-time text through the live region (invisible to everyone sighted).
     if (!els.buttons.length || !els.score || !els.baked) return;
+
+    initFeedbackDetail(els);
 
     var baked = parseBakedRating();
 
@@ -634,6 +714,7 @@
     els.downloadBtn = document.getElementById('download-btn');
     els.resetBtn = document.getElementById('reset-btn');
     els.errorMsg = document.getElementById('error-msg');
+    els.status = document.getElementById('a11y-status');
 
     initUploadZone();
 

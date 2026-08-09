@@ -9,11 +9,13 @@ import time
 from collections import defaultdict
 
 import httpx
+from data.db import async_engine
 from data.models import User
 from data.security import current_user_for_convert
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
 from log import get_logger, request_id_var
+from sqlalchemy import text
 from validation import (
     MAX_FILE_SIZE,
     ValidationError,
@@ -457,7 +459,19 @@ async def health():
     except Exception:
         gotenberg_ok = False
 
-    status = "healthy" if gotenberg_ok else "degraded"
+    # P2 §20 — an uptime monitor hitting this endpoint should see the DB as
+    # part of "is the API actually usable", not just the Gotenberg dependency:
+    # ratings/history/auth/admin all go through it, same connectivity check
+    # main.py's startup lifespan already does, just per-request instead of
+    # once at boot.
+    try:
+        async with async_engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    status = "healthy" if (gotenberg_ok and db_ok) else "degraded"
     if not gotenberg_ok:
         logger.warning(
             "Health check: Gotenberg unreachable",
@@ -468,9 +482,20 @@ async def health():
                 }
             },
         )
+    if not db_ok:
+        logger.warning(
+            "Health check: database unreachable",
+            extra={
+                "data": {
+                    "event": "health_degraded",
+                    "database": "down",
+                }
+            },
+        )
     return {
         "status": status,
         "gotenberg": "up" if gotenberg_ok else "down",
+        "database": "up" if db_ok else "down",
     }
 
 

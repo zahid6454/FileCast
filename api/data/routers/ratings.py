@@ -19,10 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
 from data.fingerprint import compute_fingerprint
-from data.models import Rating
+from data.models import Rating, RatingFeedback
 from data.security import current_user, require_admin
 
 router = APIRouter(prefix="/api/v1/ratings", tags=["ratings"])
+
+# Matches errors.py's _MAX_MESSAGE precedent — a free-text field with no
+# client-side length enforcement needs a server-side ceiling regardless.
+_MAX_FEEDBACK = 2000
 
 
 class RatingBody(BaseModel):
@@ -52,6 +56,37 @@ async def submit_rating(
         set_={"vote": body.vote},
     )
     await db.execute(stmt)
+    await db.commit()
+    return {"ok": True}
+
+
+class FeedbackBody(BaseModel):
+    tool_id: str
+    feedback_text: str
+
+
+@router.post("/feedback")
+async def submit_feedback(
+    body: FeedbackBody,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+):
+    """Free-text "what went wrong?" follow-up on a "No" vote (P2 §18).
+
+    Deliberately its own table (RatingFeedback), not a column on Rating — see
+    the model's docstring. No fingerprint/dedup: unlike a vote, there is no
+    "already answered" state to protect, so every submission is just appended.
+    """
+    text = body.feedback_text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="feedback_text must not be empty")
+    db.add(
+        RatingFeedback(
+            tool_id=body.tool_id,
+            feedback_text=text[:_MAX_FEEDBACK],
+            user_agent=(request.headers.get("user-agent") or "")[:512] or None,
+        )
+    )
     await db.commit()
     return {"ok": True}
 

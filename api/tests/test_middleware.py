@@ -61,6 +61,48 @@ async def test_conversions_higher_budget_than_errors(client):
     assert all(c == 200 for c in codes)
 
 
+# --------------------------------------------------------------------------- #
+# X-RateLimit-* headers (P2 §22)
+# --------------------------------------------------------------------------- #
+
+
+async def test_rate_limit_headers_on_allowed_response(client):
+    r = await client.post("/api/v1/errors", json={"error_type": "x"})
+    assert r.status_code == 200
+    assert r.headers["x-ratelimit-limit"] == "60"
+    assert r.headers["x-ratelimit-remaining"] == "59"  # one request just spent
+    assert 0 < int(r.headers["x-ratelimit-reset"]) <= middleware.RATE_WINDOW
+
+
+async def test_rate_limit_headers_count_down(client):
+    remaining = []
+    for _ in range(3):
+        r = await client.post("/api/v1/errors", json={"error_type": "x"})
+        remaining.append(int(r.headers["x-ratelimit-remaining"]))
+    assert remaining == [59, 58, 57]
+
+
+async def test_rate_limit_headers_on_429(client):
+    codes_and_headers = [
+        await client.post("/api/v1/errors", json={"error_type": "x"}) for _ in range(61)
+    ]
+    last = codes_and_headers[-1]
+    assert last.status_code == 429
+    assert last.headers["x-ratelimit-limit"] == "60"
+    assert last.headers["x-ratelimit-remaining"] == "0"
+    # Retry-After and X-RateLimit-Reset agree — both describe the same "wait
+    # this long" number, not an independent hardcoded value.
+    assert last.headers["retry-after"] == last.headers["x-ratelimit-reset"]
+
+
+async def test_no_rate_limit_headers_on_an_unmatched_path(client):
+    # /api/v1/tools carries no PATH_LIMITS entry — nothing to report.
+    r = await client.get("/api/v1/tools")
+    assert "x-ratelimit-limit" not in r.headers
+    assert "x-ratelimit-remaining" not in r.headers
+    assert "x-ratelimit-reset" not in r.headers
+
+
 async def test_docs_enabled_in_development():
     # ENVIRONMENT=development in tests → docs surface exposed (404 in prod, gated)
     assert main.app.openapi_url == "/openapi.json"

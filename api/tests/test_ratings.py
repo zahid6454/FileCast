@@ -1,7 +1,7 @@
 """Integration — rating dedup + pinned Phase 6 response shapes."""
 
 from data.db import sync_session
-from data.models import Rating
+from data.models import Rating, RatingFeedback
 
 
 def _seed_votes(tool_id: str, yes: int, no: int) -> None:
@@ -94,3 +94,80 @@ async def test_unrated_tool_reports_zeroes(client):
         "yes": 0,
         "no": 0,
     }
+
+
+# --------------------------------------------------------------------------- #
+# POST /api/v1/ratings/feedback — free-text "No" follow-up (P2 §18)
+# --------------------------------------------------------------------------- #
+
+
+async def test_feedback_stores_text_tool_and_user_agent(client):
+    r = await client.post(
+        "/api/v1/ratings/feedback",
+        json={"tool_id": "jpg-to-png", "feedback_text": "the output was blank"},
+        headers={"User-Agent": "TestAgent/1.0"},
+    )
+    assert r.status_code == 200
+    with sync_session() as s:
+        rows = s.query(RatingFeedback).filter_by(tool_id="jpg-to-png").all()
+    assert len(rows) == 1
+    assert rows[0].feedback_text == "the output was blank"
+    assert rows[0].user_agent == "TestAgent/1.0"
+
+
+async def test_feedback_is_anonymous_no_fingerprint_or_user_field():
+    # The model itself carries no fingerprint/user_id column — the anonymity
+    # guarantee is structural, not just "the router doesn't ask for one".
+    assert not hasattr(RatingFeedback, "fingerprint")
+    assert not hasattr(RatingFeedback, "user_id")
+
+
+async def test_feedback_does_not_dedup_multiple_submissions_same_tool(client):
+    # Unlike a vote, feedback has no UNIQUE constraint to collapse into — two
+    # different complaints about the same tool are two different rows.
+    await client.post(
+        "/api/v1/ratings/feedback",
+        json={"tool_id": "jpg-to-png", "feedback_text": "first complaint"},
+    )
+    await client.post(
+        "/api/v1/ratings/feedback",
+        json={"tool_id": "jpg-to-png", "feedback_text": "second, different complaint"},
+    )
+    with sync_session() as s:
+        rows = s.query(RatingFeedback).filter_by(tool_id="jpg-to-png").all()
+    assert sorted(r.feedback_text for r in rows) == [
+        "first complaint",
+        "second, different complaint",
+    ]
+
+
+async def test_feedback_rejects_empty_or_whitespace_only_text(client):
+    for text in ("", "   ", "\n\t"):
+        r = await client.post(
+            "/api/v1/ratings/feedback",
+            json={"tool_id": "jpg-to-png", "feedback_text": text},
+        )
+        assert r.status_code == 400, text
+
+
+async def test_feedback_text_truncated_at_server_ceiling(client):
+    long_text = "x" * 5000
+    await client.post(
+        "/api/v1/ratings/feedback",
+        json={"tool_id": "jpg-to-png", "feedback_text": long_text},
+    )
+    with sync_session() as s:
+        row = s.query(RatingFeedback).filter_by(tool_id="jpg-to-png").one()
+    assert len(row.feedback_text) == 2000
+
+
+async def test_feedback_missing_user_agent_header_stores_null(client):
+    r = await client.post(
+        "/api/v1/ratings/feedback",
+        json={"tool_id": "jpg-to-png", "feedback_text": "no UA sent"},
+        headers={"User-Agent": ""},
+    )
+    assert r.status_code == 200
+    with sync_session() as s:
+        row = s.query(RatingFeedback).filter_by(tool_id="jpg-to-png").one()
+    assert row.user_agent is None
