@@ -455,27 +455,28 @@ async def pdf_to_docx(
     )
 
 
-@router.api_route("/health", methods=["GET", "HEAD"])
-async def health():
+async def _check_gotenberg() -> bool:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{GOTENBERG_URL}/health")
-        gotenberg_ok = resp.status_code == 200
+        return resp.status_code == 200
     except Exception:
-        gotenberg_ok = False
+        return False
 
-    # P2 §20 — an uptime monitor hitting this endpoint should see the DB as
-    # part of "is the API actually usable", not just the Gotenberg dependency:
+
+async def _check_db() -> bool:
+    # P2 §20 — an uptime monitor hitting /health should see the DB as part of
+    # "is the API actually usable", not just the Gotenberg dependency:
     # ratings/history/auth/admin all go through it, same connectivity check
     # main.py's startup lifespan already does, just per-request instead of
     # once at boot.
     #
     # Post-merge audit fix: bounded with the same 5s budget as the Gotenberg
-    # check above. `async_engine` (data/db.py) sets no `connect_timeout` —
-    # only the sync engine does — so an unbounded `.connect()` here could hang
-    # past a monitor's polling interval on a network partition that drops
-    # packets instead of refusing the connection outright. Unlike the
-    # lifespan's ONE-TIME startup check this pattern mirrors, this one is now
+    # check. `async_engine` (data/db.py) sets no `connect_timeout` — only the
+    # sync engine does — so an unbounded `.connect()` here could hang past a
+    # monitor's polling interval on a network partition that drops packets
+    # instead of refusing the connection outright. Unlike the lifespan's
+    # ONE-TIME startup check this pattern mirrors, this one is now
     # re-triggered by every external poll, so a hang here is no longer a
     # one-off — it accumulates a stuck task (and a held pool connection) per
     # poll for as long as the partition lasts.
@@ -483,9 +484,19 @@ async def health():
         async with asyncio.timeout(HEALTH_DB_TIMEOUT_SECONDS):
             async with async_engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
-        db_ok = True
+        return True
     except Exception:
-        db_ok = False
+        return False
+
+
+@router.api_route("/health", methods=["GET", "HEAD"])
+async def health():
+    # Run concurrently, not sequentially — both checks are independently
+    # bounded at 5s, but running them one after another let a partial outage
+    # (both dependencies slow-but-not-instantly-refused) push total latency to
+    # ~10s, right when a monitor most needs a fast "degraded" signal instead
+    # of a bare timeout. gather() bounds total latency at max(5s, 5s).
+    gotenberg_ok, db_ok = await asyncio.gather(_check_gotenberg(), _check_db())
 
     status = "healthy" if (gotenberg_ok and db_ok) else "degraded"
     if not gotenberg_ok:

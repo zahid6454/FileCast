@@ -891,6 +891,21 @@ def test_generate_headers_script_src_untouched(tmp_path, monkeypatch):
     assert "script-src 'self';" in csp  # exactly 'self', no new hosts
 
 
+def test_generate_headers_csp_tightened_directives(tmp_path, monkeypatch):
+    # P2 §14 — style-src drops 'unsafe-inline' (moved to style-src-attr only),
+    # and base-uri/form-action/object-src are added. Regression coverage for
+    # the PR's highest-blast-radius change, which had none before this test.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({})
+    csp = _csp_line(tmp_path)
+    assert "style-src 'self';" in csp
+    assert "'unsafe-inline'" not in csp.split("style-src-attr")[0]
+    assert "style-src-attr 'unsafe-inline';" in csp
+    assert "base-uri 'self';" in csp
+    assert "form-action 'self';" in csp
+    assert "object-src 'none'" in csp
+
+
 def test_generate_headers_sentry_connect_src_matches_dsn_host(tmp_path, monkeypatch):
     # Regional Sentry orgs (e.g. US data storage) issue DSNs on
     # "*.ingest.us.sentry.io" — a wildcard on the legacy non-regional

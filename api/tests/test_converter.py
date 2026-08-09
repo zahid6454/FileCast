@@ -113,11 +113,12 @@ async def test_health_endpoint_bounds_a_hanging_db_connect(client, monkeypatch):
     # wait_for is the assertion, not just a safety net: if the internal bound
     # didn't apply, the hanging connect (sleep(10)) would blow past this and
     # fail loudly with TimeoutError instead of silently passing. 8s, not
-    # ~0.05s, because the Gotenberg check runs first and unrelatedly — its
-    # httpx timeout only bounds the CONNECT phase, and a DNS failure for the
-    # unresolvable test-env hostname can itself take a couple of seconds; the
-    # margin absorbs that without weakening what this test actually proves
-    # (nowhere near the 10s the hanging connect would take unbounded).
+    # ~0.05s, because the Gotenberg check runs concurrently (asyncio.gather)
+    # and unrelatedly — its httpx timeout only bounds the CONNECT phase, and a
+    # DNS failure for the unresolvable test-env hostname can itself take a
+    # couple of seconds; the margin absorbs that without weakening what this
+    # test actually proves (nowhere near the 10s the hanging connect would
+    # take unbounded).
     r = await asyncio.wait_for(client.get("/api/v1/health"), timeout=8.0)
     assert r.status_code == 200
     body = r.json()
