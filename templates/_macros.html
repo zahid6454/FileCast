@@ -72,13 +72,46 @@
 {%- set name = slot|replace('_', '-') -%}
 <div class="ad-slot ad-slot--{{ name }}" id="ad-{{ name }}">
   <ins class="adsbygoogle"
-       style="display:block"
        data-ad-client="{{ ads.get('publisher_id') }}"
        data-ad-slot="{{ slot_id }}"
        data-ad-format="auto"
        data-full-width-responsive="true"></ins>
 </div>
 {%- endif -%}
+{%- endmacro %}
+
+{# feedback_widget() — Yes/No + free-text "what went wrong?" follow-up (P2 §18,
+   report §11.5). Identical markup on all three tool templates (was already
+   triplicated verbatim before this widget grew a second interactive piece;
+   extracting it here is what keeps them from drifting apart the way
+   ad_slot()'s docstring warns about). Lives INSIDE the result panel now (was
+   below the SEO content blocks) — .result/.multi-result/.text-result start
+   `hidden` and shared.js's setState() only removes that class on
+   newState==='complete', so this widget is invisible until a conversion
+   actually finishes, exactly like the Download button next to it.
+
+   #feedback-baked / #feedback-score keep the P6 a11y contract (shared.js
+   initFeedback()): baked is inert (page-load / already-voted text, never
+   announced), score is the live region for a vote just cast. #feedback-detail
+   is the "No" follow-up — hidden until shared.js reveals it post-vote; never
+   rendered eagerly, so a "Yes" voter never sees an empty textarea flash by. #}
+{% macro feedback_widget() -%}
+<div class="feedback" id="feedback">
+  <span class="feedback__prompt" id="feedback-prompt">Was this tool helpful?</span>
+  <button class="btn btn--primary" type="button" data-feedback="yes">Yes</button>
+  <button class="btn btn--primary" type="button" data-feedback="no">No</button>
+  <p class="feedback__score hidden" id="feedback-baked"></p>
+  <p class="feedback__score hidden" id="feedback-score" role="status" aria-live="polite"></p>
+  <div class="feedback__detail hidden" id="feedback-detail">
+    <label class="feedback__detail-label" for="feedback-text">What went wrong?</label>
+    {#- Auto-grows via JS (shared.js), min-height ~1 line / max ~5 (style.css
+        .feedback-text) — report §11.5's exact spec. rows="1" is the no-JS/
+        pre-JS floor CSS's min-height already matches. -#}
+    <textarea class="feedback-text" id="feedback-text" rows="1" placeholder="What went wrong?"></textarea>
+    <button class="btn btn--primary btn--sm" type="button" id="feedback-submit">Submit</button>
+    <p class="feedback__detail-thanks hidden" id="feedback-detail-thanks" role="status" aria-live="polite">Thanks — that helps.</p>
+  </div>
+</div>
 {%- endmacro %}
 
 {# tool_card(tool, cat_id) — the SMALL card used on home + 404. All new inner

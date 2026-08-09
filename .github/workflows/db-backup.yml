@@ -1,0 +1,63 @@
+name: Database backup
+
+# P2 §21 (technical audit report) — daily backup of the production Neon
+# Postgres database. Scoped differently from the report's literal suggestion
+# ("store on the same server or Oracle Object Storage"): production runs on
+# Neon (managed Postgres, see project-docs/GO_LIVE_PLAN.md §3), not a
+# self-hosted instance, so there is no "same server" disk to write to, and
+# Neon's own point-in-time-restore already covers short-window recovery. This
+# is a second, independent copy for the "irreplaceable" case the report is
+# actually worried about (user account data) — a platform-side incident or an
+# operator mistake that PITR doesn't help with — using infrastructure this
+# repo already has: GitHub Actions artifact storage, at the report's own
+# suggested "$0 philosophy", with a built-in 7-day retention that matches the
+# report's "rotate and keep 7 days" ask exactly.
+#
+# Uses `secrets.DATABASE_URL` — the same read-only Neon connection string
+# deploy.yml already reads at build time (see its comment: "the read-only
+# Neon DATABASE_URL"). pg_dump only needs SELECT, which that role already has.
+
+on:
+  schedule:
+    # 07:00 UTC daily — outside both the US and EU business day, so a slow
+    # dump never competes with a Save-triggered deploy.yml run for attention.
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    name: pg_dump Neon -> artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump the database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::DATABASE_URL secret is not set — nothing to back up."
+            exit 1
+          fi
+          mkdir -p backup
+          # Pinned to Postgres 18 to match Neon (project-docs/GO_LIVE_PLAN.md §3:
+          # "Neon Postgres 18") — pg_dump should not be older than the server
+          # it's dumping. --no-owner/--no-privileges: the read-only role dumping
+          # this isn't the role that would ever restore it, so role-specific
+          # GRANT/OWNER statements in the dump would just fail on restore.
+          docker run --rm -e PGCONNECT_TIMEOUT=30 \
+            -v "$PWD/backup:/backup" \
+            postgres:18 \
+            pg_dump --no-owner --no-privileges --format=plain \
+              --file=/backup/filecast.sql "$DATABASE_URL"
+          gzip backup/filecast.sql
+          ls -la backup/
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backup/filecast.sql.gz
+          # "Rotate and keep 7 days" (report P2 §21) — GitHub deletes the
+          # artifact itself once this elapses; no separate cleanup job needed.
+          retention-days: 7
+          if-no-files-found: error

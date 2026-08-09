@@ -65,6 +65,20 @@
       });
   };
 
+  // Custom Sentry context for the conversion in flight (P2 §24). Called at
+  // conversion_started from shared.js/shared-multi.js/shared-text.js, so an
+  // uncaught error during THIS conversion (Sentry auto-captures those; nothing
+  // here calls captureException directly) carries tool/file/mode alongside the
+  // stack trace instead of triage starting from a bare exception. Browser
+  // name/version needs no help — Sentry's own default integrations already
+  // attach that. Guarded the same way analytics.js guards Sentry.init: a
+  // blocked/failed CDN load must not throw here either.
+  FC.setSentryContext = function (data) {
+    if (window.Sentry && typeof window.Sentry.setContext === 'function') {
+      window.Sentry.setContext('conversion', data);
+    }
+  };
+
   FC.getExtension = function (filename) {
     var parts = filename.split('.');
     return parts.length > 1 ? '.' + parts.pop().toLowerCase() : '';

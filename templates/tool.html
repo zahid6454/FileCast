@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import ad_slot, processing_pill %}
+{% from "_macros.html" import ad_slot, processing_pill, feedback_widget %}
 
 {% block title %}{{ tool.meta.title }}{% endblock %}
 {% block meta_description %}{{ tool.meta.description }}{% endblock %}
@@ -63,6 +63,13 @@
   {# Converter panel — the whole tool area on one raised surface: title/tagline,
      leaderboard ad, the privacy trust badge, and the controls, all in one card. #}
   <div class="tool-panel">
+
+  {# Conversion status live region (§6, P2 #17). Permanently in the DOM (never
+     hidden) so a screen reader announces state changes — "Converting…",
+     "Conversion complete. Download ready." — without the user needing to find
+     and re-navigate to the progress/result area. setState() in shared.js is the
+     single choke point that writes to it. #}
+  <div class="sr-only" id="a11y-status" role="status" aria-live="polite"></div>
 
   {# Title + Tagline #}
   <div class="tool-title-row">
@@ -159,7 +166,7 @@
 
   {# Progress Bar (hidden until converting) #}
   <div class="progress hidden" id="progress">
-    <div class="progress__fill" id="progress-fill" style="width: 0%;"></div>
+    <div class="progress__fill" id="progress-fill"></div>
   </div>
 
   {# Result Area (hidden until complete) #}
@@ -170,6 +177,7 @@
       <button class="btn btn--success" id="download-btn">Download {{ tool.output_format }}</button>
       <button class="btn btn--primary" id="reset-btn">Convert Another</button>
     </div>
+    {{ feedback_widget() }}
   </div>
 
   {# Error Message (hidden until error) #}
@@ -226,19 +234,6 @@
   </div>
   {% endif %}
 
-  {# Feedback Widget #}
-  <div class="feedback" id="feedback">
-    <span class="feedback__prompt" id="feedback-prompt">Was this tool helpful?</span>
-    <button class="btn btn--primary" type="button" data-feedback="yes">Yes</button>
-    <button class="btn btn--primary" type="button" data-feedback="no">No</button>
-    {# Two score elements with different a11y roles: #feedback-baked carries
-       page-load text (baked social proof, or the resolved state after a prior
-       vote) and must NOT be a live region, or a screen reader announces it
-       unprompted on every load; #feedback-score is the live region for the
-       confirmation of a vote the user just cast. #}
-    <p class="feedback__score hidden" id="feedback-baked"></p>
-    <p class="feedback__score hidden" id="feedback-score" role="status" aria-live="polite"></p>
-  </div>
 
 </div>
 

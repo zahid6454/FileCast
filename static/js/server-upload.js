@@ -41,8 +41,7 @@
       zone.innerHTML =
         '<div class="upload-zone__text">Conversion service is temporarily unavailable.</div>' +
         '<div class="upload-zone__hint">Please try again in a few minutes.</div>';
-      zone.style.pointerEvents = 'none';
-      zone.style.opacity = '0.6';
+      zone.classList.add('upload-zone--disabled');
     }
     if (convertBtn) convertBtn.disabled = true;
   }
@@ -69,10 +68,7 @@
           if (hasExternal) {
             var warning = document.createElement('div');
             warning.id = 'external-ref-warning';
-            warning.className = 'error-msg';
-            warning.style.borderColor = 'var(--color-warning)';
-            warning.style.background = 'var(--color-warning-light)';
-            warning.style.color = 'var(--color-text)';
+            warning.className = 'error-msg error-msg--warning';
             warning.innerHTML =
               'This file references external stylesheets, scripts, or images that ' +
               'won’t be available during conversion. The PDF may look unstyled. ' +

@@ -155,6 +155,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         cutoff = now - RATE_WINDOW
         self.requests[key] = [t for t in self.requests[key] if t > cutoff]
 
+    def _reset_seconds(self, key: str, now: float) -> int:
+        """Seconds until the bucket's oldest request ages out of RATE_WINDOW —
+        i.e. until at least one more request is allowed again. An empty bucket
+        (nothing recorded yet this window) resets in a full RATE_WINDOW."""
+        bucket = self.requests.get(key)
+        if not bucket:
+            return RATE_WINDOW
+        return max(0, round(RATE_WINDOW - (now - min(bucket))))
+
     def _sweep(self, now: float):
         """Drop stale/empty buckets so idle IPs don't accumulate unboundedly."""
         cutoff = now - RATE_WINDOW
@@ -180,6 +189,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._clean_old(key, now)
 
         if len(self.requests[key]) >= limit:
+            reset_in = self._reset_seconds(key, now)
             logger.warning(
                 "Rate limited %s on %s",
                 ip,
@@ -197,8 +207,39 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content='{"error":"Rate limit exceeded. Try again later.","error_type":"rate_limited"}',
                 status_code=429,
                 media_type="application/json",
-                headers={"Retry-After": str(RATE_WINDOW)},
+                # Retry-After and X-RateLimit-Reset (§10/P2 §22) agree on the
+                # same number — the seconds until the oldest request in THIS
+                # bucket ages out and one more is allowed, not a blanket
+                # RATE_WINDOW every time.
+                headers={
+                    "Retry-After": str(reset_in),
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_in),
+                },
             )
 
         self.requests[key].append(now)
-        return await call_next(request)
+        # Snapshot BEFORE awaiting call_next — post-merge audit fix. `await
+        # call_next()` suspends this coroutine, and `self.requests` is a
+        # single dict shared by every in-flight request on this worker;
+        # concurrent requests on the SAME bucket (a shared IP, or just this
+        # client's own overlapping requests) can append to `key` while this
+        # one is suspended. Reading `len(self.requests[key])` only after the
+        # await reports whatever the bucket grew to by the time THIS request
+        # happened to finish, not the count that was actually true for it —
+        # under load, near the limit, that under-reports remaining budget and
+        # can disagree between two responses that should have matched. The
+        # actual 429 gate above is unaffected (it's synchronous, no await
+        # between the check and the append), only this advisory header was
+        # racy.
+        remaining = max(0, limit - len(self.requests[key]))
+        reset_in = self._reset_seconds(key, now)
+        response = await call_next(request)
+        # Rate-limit headers on the allowed path too (P2 §22) — not just the
+        # 429, so a well-behaved client can see it's approaching the limit
+        # before it gets cut off.
+        response.headers["X-RateLimit-Limit"] = str(limit)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(reset_in)
+        return response

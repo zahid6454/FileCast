@@ -207,6 +207,36 @@ class Rating(Base):
     )
 
 
+class RatingFeedback(Base):
+    """Free-text "what went wrong?" follow-up on a "No" vote (P2 §18 —
+    technical audit report §11.5). Anonymous; retained (never purged), same
+    posture as Rating.
+
+    Deliberately a SEPARATE table from Rating, not a nullable column on it.
+    Rating's ``UNIQUE(tool_id, fingerprint)`` dedups to exactly one row per
+    tool per fingerprint (a vote you can *change* — a second "no" from the
+    same fingerprint upserts over the first). That is correct for a vote and
+    wrong for free text: a second "no" days later with a different complaint
+    would silently overwrite the first comment instead of adding to it. This
+    table is append-only instead, the same shape as ``Error`` — every
+    submission is its own row, keyed by nothing but its own id, with no
+    fingerprint/dedup at all (submitting feedback isn't rate-limited to one
+    opinion the way a vote is).
+    """
+
+    __tablename__ = "rating_feedback"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tool_id: Mapped[str] = mapped_column(String, nullable=False)
+    feedback_text: Mapped[str] = mapped_column(Text, nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (Index("ix_rating_feedback_tool_id", "tool_id"),)
+
+
 class Conversion(Base):
     """Anonymous per-tool-per-day aggregate counter. Never purged (D5)."""
 

@@ -11,7 +11,7 @@ import { createDom, evalScript, flush } from './helpers.js';
 // a template change that breaks the selectors shows up here as a failure.
 function slotMarkup(modifier) {
   return `<div class="ad-slot ad-slot--${modifier}" id="ad-${modifier}">
-    <ins class="adsbygoogle" style="display:block"
+    <ins class="adsbygoogle"
          data-ad-client="ca-pub-1234567890123456"
          data-ad-slot="1111111111"
          data-ad-format="auto"
@@ -96,7 +96,7 @@ describe('ads.js — collapsing slots that never fill', () => {
     captureTimers(dom); // no timer involved in this path
     evalScript(dom, 'ads.js');
     await setStatus(dom.window.document.querySelector('ins.adsbygoogle'), 'unfilled');
-    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('none');
+    expect(dom.window.document.querySelector('.ad-slot').classList.contains('hidden')).toBe(true);
   });
 
   it('leaves a slot alone when Google reports it filled', async () => {
@@ -104,7 +104,7 @@ describe('ads.js — collapsing slots that never fill', () => {
     captureTimers(dom);
     evalScript(dom, 'ads.js');
     await setStatus(dom.window.document.querySelector('ins.adsbygoogle'), 'filled');
-    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('');
+    expect(dom.window.document.querySelector('.ad-slot').classList.contains('hidden')).toBe(false);
   });
 
   it('does NOT collapse a unit that has simply not responded yet', async () => {
@@ -112,7 +112,7 @@ describe('ads.js — collapsing slots that never fill', () => {
     captureTimers(dom); // fallback deliberately never fired
     evalScript(dom, 'ads.js');
     await flush();
-    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('');
+    expect(dom.window.document.querySelector('.ad-slot').classList.contains('hidden')).toBe(false);
   });
 
   it('arms the fallback far beyond one ad round-trip, not on a 2s timer', () => {
@@ -137,10 +137,10 @@ describe('ads.js — collapsing slots that never fill', () => {
     evalScript(dom, 'ads.js');
     runTimers(); // still silent at the timeout → collapsed
     const slot = dom.window.document.querySelector('.ad-slot');
-    expect(slot.style.display).toBe('none');
+    expect(slot.classList.contains('hidden')).toBe(true);
 
     await setStatus(dom.window.document.querySelector('ins.adsbygoogle'), 'filled');
-    expect(slot.style.display).toBe('');
+    expect(slot.classList.contains('hidden')).toBe(false);
   });
 
   it('collapses a permanently silent unit once the fallback fires (blocked)', () => {
@@ -148,7 +148,7 @@ describe('ads.js — collapsing slots that never fill', () => {
     const runTimers = captureTimers(dom);
     evalScript(dom, 'ads.js');
     runTimers();
-    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('none');
+    expect(dom.window.document.querySelector('.ad-slot').classList.contains('hidden')).toBe(true);
   });
 
   it('the fallback spares a unit that rendered without reporting a status', () => {
@@ -159,7 +159,7 @@ describe('ads.js — collapsing slots that never fill', () => {
     evalScript(dom, 'ads.js');
     setRendered(dom.window.document.querySelector('ins.adsbygoogle'), 280);
     runTimers();
-    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('');
+    expect(dom.window.document.querySelector('.ad-slot').classList.contains('hidden')).toBe(false);
   });
 
   it('collapses only the slot that failed, not its neighbour', async () => {
@@ -170,8 +170,8 @@ describe('ads.js — collapsing slots that never fill', () => {
     await setStatus(filled, 'filled');
     await setStatus(unfilled, 'unfilled');
     const slots = dom.window.document.querySelectorAll('.ad-slot');
-    expect(slots[0].style.display).toBe('');
-    expect(slots[1].style.display).toBe('none');
+    expect(slots[0].classList.contains('hidden')).toBe(false);
+    expect(slots[1].classList.contains('hidden')).toBe(true);
   });
 
   it('honours a status already set before ads.js ran', () => {
@@ -179,7 +179,7 @@ describe('ads.js — collapsing slots that never fill', () => {
     captureTimers(dom);
     dom.window.document.querySelector('ins.adsbygoogle').setAttribute('data-ad-status', 'unfilled');
     evalScript(dom, 'ads.js');
-    expect(dom.window.document.querySelector('.ad-slot').style.display).toBe('none');
+    expect(dom.window.document.querySelector('.ad-slot').classList.contains('hidden')).toBe(true);
   });
 
   it('ignores an <ins> that is not inside a .ad-slot', async () => {

@@ -9,11 +9,13 @@ import time
 from collections import defaultdict
 
 import httpx
+from data.db import async_engine
 from data.models import User
 from data.security import current_user_for_convert
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
 from log import get_logger, request_id_var
+from sqlalchemy import text
 from validation import (
     MAX_FILE_SIZE,
     ValidationError,
@@ -27,6 +29,11 @@ router = APIRouter(prefix="/api/v1")
 
 GOTENBERG_URL = os.getenv("GOTENBERG_URL", "http://gotenberg:3000")
 REQUEST_TIMEOUT = 60.0
+# /health's DB connectivity check (P2 §20) — bounds the same way the
+# Gotenberg check's httpx timeout does. A module-level constant (not an
+# inline literal) so a test can monkeypatch it down instead of actually
+# waiting out a multi-second timeout to prove the bound works.
+HEALTH_DB_TIMEOUT_SECONDS = 5.0
 
 metrics = {
     "conversions": defaultdict(int),
@@ -448,16 +455,50 @@ async def pdf_to_docx(
     )
 
 
-@router.api_route("/health", methods=["GET", "HEAD"])
-async def health():
+async def _check_gotenberg() -> bool:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{GOTENBERG_URL}/health")
-        gotenberg_ok = resp.status_code == 200
+        return resp.status_code == 200
     except Exception:
-        gotenberg_ok = False
+        return False
 
-    status = "healthy" if gotenberg_ok else "degraded"
+
+async def _check_db() -> bool:
+    # P2 §20 — an uptime monitor hitting /health should see the DB as part of
+    # "is the API actually usable", not just the Gotenberg dependency:
+    # ratings/history/auth/admin all go through it, same connectivity check
+    # main.py's startup lifespan already does, just per-request instead of
+    # once at boot.
+    #
+    # Post-merge audit fix: bounded with the same 5s budget as the Gotenberg
+    # check. `async_engine` (data/db.py) sets no `connect_timeout` — only the
+    # sync engine does — so an unbounded `.connect()` here could hang past a
+    # monitor's polling interval on a network partition that drops packets
+    # instead of refusing the connection outright. Unlike the lifespan's
+    # ONE-TIME startup check this pattern mirrors, this one is now
+    # re-triggered by every external poll, so a hang here is no longer a
+    # one-off — it accumulates a stuck task (and a held pool connection) per
+    # poll for as long as the partition lasts.
+    try:
+        async with asyncio.timeout(HEALTH_DB_TIMEOUT_SECONDS):
+            async with async_engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
+
+
+@router.api_route("/health", methods=["GET", "HEAD"])
+async def health():
+    # Run concurrently, not sequentially — both checks are independently
+    # bounded at 5s, but running them one after another let a partial outage
+    # (both dependencies slow-but-not-instantly-refused) push total latency to
+    # ~10s, right when a monitor most needs a fast "degraded" signal instead
+    # of a bare timeout. gather() bounds total latency at max(5s, 5s).
+    gotenberg_ok, db_ok = await asyncio.gather(_check_gotenberg(), _check_db())
+
+    status = "healthy" if (gotenberg_ok and db_ok) else "degraded"
     if not gotenberg_ok:
         logger.warning(
             "Health check: Gotenberg unreachable",
@@ -468,9 +509,20 @@ async def health():
                 }
             },
         )
+    if not db_ok:
+        logger.warning(
+            "Health check: database unreachable",
+            extra={
+                "data": {
+                    "event": "health_degraded",
+                    "database": "down",
+                }
+            },
+        )
     return {
         "status": status,
         "gotenberg": "up" if gotenberg_ok else "down",
+        "database": "up" if db_ok else "down",
     }
 
 

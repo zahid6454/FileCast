@@ -16,6 +16,20 @@
   var getExtension = FC.getExtension;
   var generateOutputFilename = FC.generateOutputFilename;
 
+  // Conversion status live region (§6, P2 #17) — see shared.js's announceState
+  // for the full rationale; same pattern, mirrored per-file (no shared module
+  // seam between these three converter scripts).
+  function announceState(newState) {
+    if (!els.status) return;
+    if (newState === 'converting') {
+      els.status.textContent = 'Converting your files…';
+    } else if (newState === 'complete') {
+      els.status.textContent = 'Conversion complete. Files ready to download.';
+    } else {
+      els.status.textContent = '';
+    }
+  }
+
   function setState(newState) {
     state = newState;
     els.uploadZone.classList.toggle('hidden', newState !== 'empty' && newState !== 'selected');
@@ -23,6 +37,7 @@
     els.progress.classList.toggle('hidden', newState !== 'converting');
     els.multiResult.classList.toggle('hidden', newState !== 'complete');
     els.errorMsg.classList.add('hidden');
+    announceState(newState);
 
     if (newState === 'empty') {
       els.convertBtn.disabled = true;
@@ -130,6 +145,7 @@
     els.progress.classList.add('hidden');
     els.errorMsg.textContent = message;
     els.errorMsg.classList.remove('hidden');
+    if (els.status) els.status.textContent = message;
   }
 
   function updateFileItem(index, statusClass, statusText) {
@@ -173,6 +189,13 @@
       input_format: config.input_format,
       output_format: config.output_format,
       file_count: selectedFiles.length
+    });
+    FC.setSentryContext({
+      tool_id: config.id,
+      input_format: config.input_format,
+      output_format: config.output_format,
+      file_count: selectedFiles.length,
+      mode: config.type === 'server-side' ? 'Cloud' : 'Local'
     });
 
     els.progress.classList.remove('hidden');
@@ -420,6 +443,7 @@
     els.resultSummary = document.getElementById('result-summary');
     els.resultActions = document.getElementById('result-actions');
     els.errorMsg = document.getElementById('error-msg');
+    els.status = document.getElementById('a11y-status');
 
     initUploadZone();
     els.convertBtn.addEventListener('click', startConversion);

@@ -282,6 +282,11 @@ def test_full_build_overlay_bakes_sentry_with_pinned_cdn_version(tmp_path, monke
     assert "sentry-cdn.com/8.x/" not in home
     assert "sentry-cdn.com/9.x/" not in home
     assert "sentry-cdn.com/latest/" not in home
+    # P2 §15 — SRI on the pinned Sentry bundle (only self-hosted assets carried
+    # `integrity` before this; the exact-version pin above is what makes a
+    # stable hash possible for a third-party script at all).
+    sentry_tag = re.search(r'<script src="https://browser\.sentry-cdn\.com[^>]*>', home)
+    assert sentry_tag and 'integrity="sha384-' in sentry_tag.group(0)
 
 
 def test_sentry_and_analytics_load_via_defer_in_document_order(tmp_path, monkeypatch):
@@ -884,6 +889,21 @@ def test_generate_headers_script_src_untouched(tmp_path, monkeypatch):
     build.generate_headers({})
     csp = _csp_line(tmp_path)
     assert "script-src 'self';" in csp  # exactly 'self', no new hosts
+
+
+def test_generate_headers_csp_tightened_directives(tmp_path, monkeypatch):
+    # P2 §14 — style-src drops 'unsafe-inline' (moved to style-src-attr only),
+    # and base-uri/form-action/object-src are added. Regression coverage for
+    # the PR's highest-blast-radius change, which had none before this test.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({})
+    csp = _csp_line(tmp_path)
+    assert "style-src 'self';" in csp
+    assert "'unsafe-inline'" not in csp.split("style-src-attr")[0]
+    assert "style-src-attr 'unsafe-inline';" in csp
+    assert "base-uri 'self';" in csp
+    assert "form-action 'self';" in csp
+    assert "object-src 'none'" in csp
 
 
 def test_generate_headers_sentry_connect_src_matches_dsn_host(tmp_path, monkeypatch):

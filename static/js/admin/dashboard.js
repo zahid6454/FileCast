@@ -301,7 +301,7 @@
       var total = r.yes + r.no;
       var ratio = total ? Math.round((r.yes / total) * 100) : 0;
       var fill = h('div', { class: 'admin-meter__fill' });
-      fill.style.width = ratio + '%'; // inline style is CSP-allowed (style-src 'unsafe-inline')
+      fill.style.width = ratio + '%'; // JS-driven inline style attribute — CSP-allowed via style-src-attr 'unsafe-inline' (P2 §14), NOT the element-level style-src
       tbody.appendChild(
         h('tr', [
           h('td', labelFor(r.tool_id)),

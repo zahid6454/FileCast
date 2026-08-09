@@ -14,6 +14,12 @@ const WIDGET = `
     <button class="btn" type="button" data-feedback="no">No</button>
     <p class="feedback__score hidden" id="feedback-baked"></p>
     <p class="feedback__score hidden" id="feedback-score" role="status" aria-live="polite"></p>
+    <div class="feedback__detail hidden" id="feedback-detail">
+      <label class="feedback__detail-label" for="feedback-text">What went wrong?</label>
+      <textarea class="feedback-text" id="feedback-text" rows="1" placeholder="What went wrong?"></textarea>
+      <button class="btn btn--sm" type="button" id="feedback-submit">Submit</button>
+      <p class="feedback__detail-thanks hidden" id="feedback-detail-thanks" role="status" aria-live="polite">Thanks — that helps.</p>
+    </div>
   </div>`;
 
 // `island` may be an object (serialized), a raw string (to test malformed JSON),
@@ -370,5 +376,127 @@ describe('shared.js rating — vote resolve', () => {
       String(c[0]).includes('/ratings')
     );
     expect(ratingCalls).toHaveLength(0);
+  });
+});
+
+describe('shared.js rating — "No" follow-up textarea (P2 §18)', () => {
+  const detailOf = (dom) => dom.window.document.getElementById('feedback-detail');
+  const textOf = (dom) => dom.window.document.getElementById('feedback-text');
+  const submitOf = (dom) => dom.window.document.getElementById('feedback-submit');
+  const thanksOf = (dom) => dom.window.document.getElementById('feedback-detail-thanks');
+
+  it('stays hidden on a "yes" vote', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="yes"]').click();
+    await flush();
+    expect(isHidden(detailOf(dom))).toBe(true);
+  });
+
+  it('reveals and focuses the textarea on a "no" vote, additively (buttons/score still resolve)', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="no"]').click();
+    await flush();
+
+    expect(isHidden(detailOf(dom))).toBe(false);
+    expect(dom.window.document.activeElement).toBe(textOf(dom));
+    // The existing yes/no resolve is untouched — this is purely additive.
+    expect(isHidden(liveOf(dom))).toBe(false);
+    const buttons = dom.window.document.querySelectorAll('[data-feedback]');
+    expect([...buttons].every((b) => isHidden(b))).toBe(true);
+  });
+
+  it('auto-grows the textarea height on input', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="no"]').click();
+    await flush();
+
+    const textarea = textOf(dom);
+    textarea.value = 'the output was blank';
+    textarea.dispatchEvent(new dom.window.Event('input'));
+    // jsdom has no real layout (scrollHeight is always 0), so this pins the
+    // MECHANISM (height reset then set from scrollHeight) rather than a real
+    // pixel value — real auto-grow is a browser-only concern (report §11.5).
+    expect(textarea.style.height).toBe('0px');
+  });
+
+  it('submitting empty/whitespace text is a silent no-op — stays visible, no POST', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    dom.window.FILECAST = { apiBase: 'https://api.example.test' };
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="no"]').click();
+    await flush();
+
+    textOf(dom).value = '   ';
+    submitOf(dom).click();
+    await flush();
+
+    expect(isHidden(detailOf(dom))).toBe(false);
+    expect(isHidden(textOf(dom))).toBe(false);
+    const feedbackCalls = dom.window.fetch.mock.calls.filter((c) =>
+      String(c[0]).includes('/ratings/feedback')
+    );
+    expect(feedbackCalls).toHaveLength(0);
+  });
+
+  it('submits {tool_id, feedback_text} to /ratings/feedback and resolves to thanks', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    dom.window.FILECAST = { apiBase: 'https://api.example.test' };
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="no"]').click();
+    await flush();
+
+    textOf(dom).value = 'the output was blank';
+    submitOf(dom).click();
+    await flush();
+
+    const [url, opts] = dom.window.fetch.mock.calls.at(-1);
+    expect(String(url)).toBe('https://api.example.test/api/v1/ratings/feedback');
+    expect(JSON.parse(opts.body)).toEqual({
+      tool_id: 'pdf-to-png',
+      feedback_text: 'the output was blank'
+    });
+    // No client fingerprint/credentials on this one — anonymous, no dedup key
+    // (D4/P3's rationale for the vote applies here too; RatingFeedback has no
+    // fingerprint column at all — see api/data/models.py).
+    expect(opts.credentials).toBeUndefined();
+
+    expect(isHidden(textOf(dom))).toBe(true);
+    expect(isHidden(submitOf(dom))).toBe(true);
+    expect(isHidden(thanksOf(dom))).toBe(false);
+  });
+
+  it('still resolves to thanks when the feedback POST fails (progressive enhancement)', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    dom.window.FILECAST = { apiBase: 'https://api.example.test' };
+    dom.window.fetch = vi.fn(() => Promise.reject(new Error('network down')));
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="no"]').click();
+    await flush();
+
+    textOf(dom).value = 'broken';
+    submitOf(dom).click();
+    await flush();
+
+    expect(isHidden(thanksOf(dom))).toBe(false);
+  });
+
+  it('does not POST when no apiBase is configured, but still resolves locally', async () => {
+    const dom = ratingDom({ yes: 5, no: 1 });
+    await boot(dom, 'shared.js');
+    dom.window.document.querySelector('[data-feedback="no"]').click();
+    await flush();
+
+    textOf(dom).value = 'broken';
+    submitOf(dom).click();
+    await flush();
+
+    const feedbackCalls = dom.window.fetch.mock.calls.filter((c) =>
+      String(c[0]).includes('/ratings/feedback')
+    );
+    expect(feedbackCalls).toHaveLength(0);
+    expect(isHidden(thanksOf(dom))).toBe(false);
   });
 });

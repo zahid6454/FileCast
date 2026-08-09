@@ -747,6 +747,17 @@ def process_assets() -> dict:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
 
+    # --- PWA/apple-touch icons (P2 §19) — rendered once from assets/icon.svg,
+    # committed as static PNGs (no SVG rasterizer as a build dependency), same
+    # pattern as the logo SVGs just above. manifest.json (generate_manifest())
+    # references the two PWA sizes by this same /images/ path.
+    for icon in ["icon-192.png", "icon-512.png", "apple-touch-icon.png"]:
+        src = ASSETS_DIR / icon
+        if src.exists():
+            dst = DIST / "images" / icon
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+
     return asset_map
 
 
@@ -942,6 +953,44 @@ def generate_robots(site_config: dict):
 
 
 # ---------------------------------------------------------------------------
+# Step 16b: Generate manifest.json (P2 §19 — PWA basics)
+# ---------------------------------------------------------------------------
+
+
+def generate_manifest(site_config: dict):
+    """Write dist/manifest.json. Icons themselves are static PNGs copied to
+    dist/images/ by process_assets() (rendered once from assets/icon.svg,
+    committed rather than rasterized at build time — no SVG rasterizer is a
+    build dependency here, matching favicon.svg/logo-*.svg's existing pattern
+    of committed, build-time-copied static assets).
+    """
+    site = site_config.get("site", {}) or {}
+    manifest = {
+        "name": f"{site.get('name', 'FileCast')} — {site.get('tagline', '')}".rstrip(
+            " —"
+        ),
+        "short_name": site.get("name", "FileCast"),
+        "description": site.get("description", ""),
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        # Matches --brand-blue / the icon's white background (style.css,
+        # assets/icon.svg) — not independently themeable via site_settings,
+        # same as the other structural/brand fields build.py owns directly.
+        "theme_color": "#2563EB",
+        "background_color": "#FFFFFF",
+        "icons": [
+            {"src": "/images/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/images/icon-512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+    }
+    (DIST / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    print("  [ok] manifest.json")
+
+
+# ---------------------------------------------------------------------------
 # Step 17: Generate _headers (Cloudflare Pages)
 # ---------------------------------------------------------------------------
 
@@ -1005,7 +1054,32 @@ def generate_headers(site_config: dict):
     )
     # Inter is self-hosted (P1 §5) — no fonts.googleapis.com/fonts.gstatic.com
     # origin is loaded anymore, so neither belongs here.
-    style_src = "'self' 'unsafe-inline'"
+    #
+    # 'unsafe-inline' dropped from style-src itself (P2 §14 — closes the CSS
+    # injection vector: an attacker who can inject markup can no longer smuggle
+    # in a <style> block or a static style="" attribute for a selector-based
+    # exfiltration trick). Every REMAINING inline style in the codebase is a
+    # dynamic one shared*.js/server-upload.js/admin/dashboard.js drive via
+    # `element.style.x = …` (progress bar width, an admin stat-bar fill) —
+    # ads.js's own show/hide switched to classList and needs no exception —
+    # style-src-attr is the CSP3 sub-directive that governs JS-driven style
+    # ATTRIBUTE mutations specifically (both `style=""` in markup and the CSSOM
+    # `.style` API), separate from style-src's own element/`<style>`-block
+    # scope. Granting 'unsafe-inline' there only, instead of on style-src
+    # itself, still blocks the actual named vector.
+    #
+    # ⚠ CAVEAT, not fully verified cross-browser: Chrome and Firefox support
+    # style-src-attr; WebKit/Safari (as of this writing) does not and falls
+    # back to enforcing style-src for attribute styles too — on Safari this
+    # style-src (without 'unsafe-inline') would block the progress-bar/ad-slot/
+    # admin-meter style mutations above. No live Safari CSP-violation check has
+    # been run against a deploy preview (same caveat class as the AdSense CSP
+    # branch below — §7.2). If that turns out to matter in practice, the actual
+    # fix is moving the progress bar to a native <progress> element (its `value`
+    # attribute isn't a style mutation at all, so no CSP directive applies) —
+    # not re-adding 'unsafe-inline' to style-src.
+    style_src = "'self'"
+    style_src_attr = "'unsafe-inline'"
     font_src = "'self'"
     img_src = "'self' data: blob: https://lh3.googleusercontent.com"
     frame_src = "'none'"
@@ -1059,10 +1133,22 @@ def generate_headers(site_config: dict):
         f"default-src 'self'; "
         f"script-src {script_src}; "
         f"style-src {style_src}; "
+        f"style-src-attr {style_src_attr}; "
         f"font-src {font_src}; "
         f"img-src {img_src}; "
         f"connect-src {connect_src}; "
-        f"frame-src {frame_src}"
+        f"frame-src {frame_src}; "
+        # No <base> tag anywhere in the codebase; pins it to 'self' regardless
+        # so an injected one can never retarget every relative URL on the page
+        # (script/link/form srcs included) to an attacker's origin.
+        f"base-uri 'self'; "
+        # No <form> tag anywhere in the codebase either (every submission is a
+        # fetch/XHR, already governed by connect-src) — 'self' is defense in
+        # depth against an injected form, not a grant any real form needs.
+        f"form-action 'self'; "
+        # Never legitimately loaded (no Flash/Java/etc. anywhere here); the
+        # explicit 'none' is cheap insurance against a plugin-based vector.
+        f"object-src 'none'"
     )
 
     lines = [
@@ -1375,10 +1461,11 @@ def build():
     print("[9/10] Rendering pages")
     render_all_pages(env, tools, categories_with_tools)
 
-    # 15-18. Generate support files
-    print("[10/10] Generating sitemap, robots.txt, _headers, _redirects")
+    # 15-19. Generate support files
+    print("[10/10] Generating sitemap, robots.txt, manifest.json, _headers, _redirects")
     generate_sitemap(site_config, tools, categories_with_tools)
     generate_robots(site_config)
+    generate_manifest(site_config)
     generate_headers(site_config)
     generate_redirects(site_config)
 

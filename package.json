@@ -13,6 +13,7 @@
     "check:fix": "biome check --write ."
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@biomejs/biome": "2.5.4",
     "@playwright/test": "^1.48.0",
     "jsdom": "^25.0.1",
