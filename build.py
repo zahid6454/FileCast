@@ -19,7 +19,7 @@ import os
 import re
 import shutil
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -1101,10 +1101,22 @@ self.addEventListener('fetch', function (event) {
     event.respondWith(
       fetch(request)
         .then(function (response) {
-          var copy = response.clone();
-          caches.open(PAGE_CACHE).then(function (cache) {
-            cache.put(request, copy);
-          });
+          // Never cache an error response as if it were the real page — a
+          // transient 5xx would otherwise get served from cache on every
+          // subsequent visit until CACHE_VERSION next rotates.
+          if (response.ok) {
+            var copy = response.clone();
+            // Tied to the worker's lifetime via waitUntil — without this the
+            // write is a detached promise the browser is free to abandon the
+            // moment respondWith's own promise settles (right after `return
+            // response` below), which on a memory-pressured mobile browser
+            // can mean the page silently never gets cached at all.
+            event.waitUntil(
+              caches.open(PAGE_CACHE).then(function (cache) {
+                return cache.put(request, copy);
+              })
+            );
+          }
           return response;
         })
         .catch(function () {
@@ -1121,10 +1133,14 @@ self.addEventListener('fetch', function (event) {
       caches.match(request).then(function (cached) {
         if (cached) return cached;
         return fetch(request).then(function (response) {
-          var copy = response.clone();
-          caches.open(STATIC_CACHE).then(function (cache) {
-            cache.put(request, copy);
-          });
+          if (response.ok) {
+            var copy = response.clone();
+            event.waitUntil(
+              caches.open(STATIC_CACHE).then(function (cache) {
+                return cache.put(request, copy);
+              })
+            );
+          }
           return response;
         });
       })
@@ -1628,7 +1644,12 @@ def build():
     generate_sitemap(site_config, tools, categories_with_tools)
     generate_robots(site_config)
     generate_manifest(site_config)
-    generate_service_worker(date.today().isoformat())
+    # Second-resolution, not date.today() — CACHE_VERSION must actually change
+    # on every build (see generate_service_worker()'s docstring), and two
+    # deploys on the same calendar day would otherwise produce byte-identical
+    # sw.js, which the browser's update check treats as "nothing changed" and
+    # never re-activates.
+    generate_service_worker(datetime.now().strftime("%Y-%m-%dT%H-%M-%S"))
     generate_headers(site_config)
     generate_redirects(site_config)
 

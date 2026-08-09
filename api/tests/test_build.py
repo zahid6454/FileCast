@@ -970,6 +970,31 @@ def test_generate_service_worker_only_handles_get(tmp_path, monkeypatch):
     assert "request.method !== 'GET'" in content
 
 
+def test_generate_service_worker_cache_writes_use_wait_until(tmp_path, monkeypatch):
+    # PR #36 review — a cache.put() not kept alive by event.waitUntil is a
+    # detached promise the browser can abandon the moment respondWith's own
+    # promise settles (right after `return response`), silently dropping the
+    # write on memory-pressured (mobile) browsers. Both the navigate and the
+    # static-asset path must thread their cache write through waitUntil.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_service_worker("2026-08-09")
+    content = (tmp_path / "sw.js").read_text(encoding="utf-8")
+    # install + activate each have one waitUntil; the fetch handler must add
+    # two more (navigate path, static-asset path) — four total, not two.
+    assert content.count("event.waitUntil(") == 4
+
+
+def test_generate_service_worker_only_caches_ok_responses(tmp_path, monkeypatch):
+    # PR #36 review — neither cache path checked response.ok, so a transient
+    # same-origin 4xx/5xx (edge blip, deploy race) would get cached as if it
+    # were the real content and keep being served until CACHE_VERSION next
+    # rotates.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_service_worker("2026-08-09")
+    content = (tmp_path / "sw.js").read_text(encoding="utf-8")
+    assert content.count("if (response.ok)") == 2
+
+
 def test_generate_headers_worker_src(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_headers({})

@@ -63,6 +63,7 @@ class ConversionQueueTimeout(Exception):
     """Raised when a request waited GOTENBERG_QUEUE_TIMEOUT_SECONDS for a free
     Gotenberg slot and none opened up."""
 
+
 metrics = {
     "conversions": defaultdict(int),
     "failures": defaultdict(int),

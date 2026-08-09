@@ -182,9 +182,7 @@ async def test_gotenberg_semaphore_caps_concurrency(monkeypatch):
         in_flight -= 1
         return _FakeResponse()
 
-    monkeypatch.setattr(
-        converter.httpx, "AsyncClient", _fake_async_client(post_impl)
-    )
+    monkeypatch.setattr(converter.httpx, "AsyncClient", _fake_async_client(post_impl))
 
     # Three "requests" sharing a single-slot semaphore must never overlap,
     # even though they're all launched at once.
@@ -209,9 +207,7 @@ async def test_gotenberg_queue_timeout_returns_503_with_retry_after(
         await asyncio.sleep(1.0)
         return _FakeResponse()
 
-    monkeypatch.setattr(
-        converter.httpx, "AsyncClient", _fake_async_client(post_impl)
-    )
+    monkeypatch.setattr(converter.httpx, "AsyncClient", _fake_async_client(post_impl))
 
     valid_docx = b"PK\x03\x04" + b"\x00" * 200
 
