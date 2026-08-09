@@ -662,7 +662,10 @@ def process_assets() -> dict:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_bytes(content_bytes)
             rel_key = f"fonts/{font_file.name}"
-            asset_map[rel_key] = {"path": f"fonts/{hashed_name}", "sri": sri_hash(content_bytes)}
+            asset_map[rel_key] = {
+                "path": f"fonts/{hashed_name}",
+                "sri": sri_hash(content_bytes),
+            }
             # No SRI attribute exists for @font-face — sri is computed for
             # asset_map consistency only, nothing consumes it for fonts.
             font_placeholder_map[f"/{rel_key}"] = f"/fonts/{hashed_name}"

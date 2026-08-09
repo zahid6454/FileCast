@@ -308,14 +308,20 @@ def test_sentry_and_analytics_load_via_defer_in_document_order(tmp_path, monkeyp
     build.build()
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
 
-    sentry_tag = re.search(r'<script src="https://browser\.sentry-cdn\.com[^>]*></script>', home)
+    sentry_tag = re.search(
+        r'<script src="https://browser\.sentry-cdn\.com[^>]*></script>', home
+    )
     analytics_tag = re.search(r'<script src="/js/analytics\.[^>]*></script>', home)
     assert sentry_tag, home
     assert analytics_tag, home
 
     for tag, label in ((sentry_tag, "sentry"), (analytics_tag, "analytics.js")):
-        assert re.search(r"\bdefer\b", tag.group(0)), f"{label} tag missing defer: {tag.group(0)}"
-        assert not re.search(r"\basync\b", tag.group(0)), f"{label} tag must not be async: {tag.group(0)}"
+        assert re.search(
+            r"\bdefer\b", tag.group(0)
+        ), f"{label} tag missing defer: {tag.group(0)}"
+        assert not re.search(
+            r"\basync\b", tag.group(0)
+        ), f"{label} tag must not be async: {tag.group(0)}"
 
     # defer preserves document order — the SDK tag must appear first, or the
     # guard in analytics.js has nothing to depend on.
