@@ -47,7 +47,9 @@ async def test_oversized_file_rejected_without_leaking_path(client):
 async def test_unsupported_extension_rejected(client):
     r = await client.post(
         "/api/v1/convert/docx-to-pdf",
-        files={"file": ("virus.exe", b"MZ" + b"\x00" * 100, "application/octet-stream")},
+        files={
+            "file": ("virus.exe", b"MZ" + b"\x00" * 100, "application/octet-stream")
+        },
     )
     assert r.status_code == 400
     assert r.json()["error_type"] == "wrong_format"
@@ -58,7 +60,13 @@ async def test_bad_magic_bytes_rejected_generically(client):
     # Right extension, wrong content — validate_upload's magic-byte check.
     r = await client.post(
         "/api/v1/convert/docx-to-pdf",
-        files={"file": ("fake.docx", b"this is not a real docx file at all", "application/octet-stream")},
+        files={
+            "file": (
+                "fake.docx",
+                b"this is not a real docx file at all",
+                "application/octet-stream",
+            )
+        },
     )
     assert r.status_code == 400
     body = r.json()
@@ -118,9 +126,7 @@ async def test_malformed_json_body_returns_structured_422_not_a_trace(client):
 
 
 async def test_wrong_field_types_returns_structured_422(client):
-    r = await client.post(
-        "/api/v1/auth/login", json={"email": 12345, "password": None}
-    )
+    r = await client.post("/api/v1/auth/login", json={"email": 12345, "password": None})
     assert r.status_code == 422
     _assert_no_leak(r.text)
 

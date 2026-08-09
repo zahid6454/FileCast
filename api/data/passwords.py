@@ -47,7 +47,9 @@ def validate_password_strength(password: str) -> None:
     if not _PASSWORD_HAS_LETTER.search(password) or not _PASSWORD_HAS_DIGIT.search(
         password
     ):
-        raise WeakPasswordError("Password must contain at least one letter and one number.")
+        raise WeakPasswordError(
+            "Password must contain at least one letter and one number."
+        )
 
 
 def hash_password(password: str) -> str:

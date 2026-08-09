@@ -7,7 +7,11 @@ from sqlalchemy import select
 async def test_register_creates_account_and_signs_in(client):
     r = await client.post(
         "/api/v1/auth/register",
-        json={"email": "New.User@Example.com", "password": "correcthorse1", "name": "New User"},
+        json={
+            "email": "New.User@Example.com",
+            "password": "correcthorse1",
+            "name": "New User",
+        },
     )
     assert r.status_code == 200, r.text
     body = r.json()["user"]
@@ -56,7 +60,9 @@ async def test_register_duplicate_email_409(client):
 async def test_register_existing_google_account_gets_a_distinct_message(client, db):
     # Simulate a Google-only account (no password_hash) — same shape
     # upsert_google_user produces.
-    db.add(User(id="g1", email="googleuser@example.com", role="user", email_verified=True))
+    db.add(
+        User(id="g1", email="googleuser@example.com", role="user", email_verified=True)
+    )
     await db.commit()
 
     r = await client.post(
@@ -75,7 +81,8 @@ async def test_login_success(client):
     await client.post("/api/v1/auth/logout")
 
     r = await client.post(
-        "/api/v1/auth/login", json={"email": "Login@Example.com", "password": "correcthorse1"}
+        "/api/v1/auth/login",
+        json={"email": "Login@Example.com", "password": "correcthorse1"},
     )
     assert r.status_code == 200, r.text
     assert r.json()["user"]["email"] == "login@example.com"
@@ -89,14 +96,16 @@ async def test_login_wrong_password_401(client):
     await client.post("/api/v1/auth/logout")
 
     r = await client.post(
-        "/api/v1/auth/login", json={"email": "wrongpw@example.com", "password": "nope12345"}
+        "/api/v1/auth/login",
+        json={"email": "wrongpw@example.com", "password": "nope12345"},
     )
     assert r.status_code == 401
 
 
 async def test_login_nonexistent_email_401_generic(client):
     r = await client.post(
-        "/api/v1/auth/login", json={"email": "ghost@example.com", "password": "whatever1"}
+        "/api/v1/auth/login",
+        json={"email": "ghost@example.com", "password": "whatever1"},
     )
     assert r.status_code == 401
     # Must not leak whether the email exists — same message either way.
@@ -104,7 +113,9 @@ async def test_login_nonexistent_email_401_generic(client):
 
 
 async def test_login_against_google_only_account_401(client, db):
-    db.add(User(id="g2", email="googleonly@example.com", role="user", email_verified=True))
+    db.add(
+        User(id="g2", email="googleonly@example.com", role="user", email_verified=True)
+    )
     await db.commit()
 
     r = await client.post(
@@ -140,7 +151,9 @@ async def test_verify_email_flow(client, db):
     raw_token = _new_email_verify_token(user)
     await db.commit()
 
-    ok = await client.get(f"/api/v1/auth/verify-email?token={raw_token}", follow_redirects=False)
+    ok = await client.get(
+        f"/api/v1/auth/verify-email?token={raw_token}", follow_redirects=False
+    )
     assert ok.status_code == 302
     assert "email_verified=1" in ok.headers["location"]
 
@@ -150,7 +163,9 @@ async def test_verify_email_flow(client, db):
 
 
 async def test_verify_email_bad_token_redirects_failed(client):
-    r = await client.get("/api/v1/auth/verify-email?token=not-a-real-token", follow_redirects=False)
+    r = await client.get(
+        "/api/v1/auth/verify-email?token=not-a-real-token", follow_redirects=False
+    )
     assert r.status_code == 302
     assert "email_verified=failed" in r.headers["location"]
 
