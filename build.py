@@ -1045,6 +1045,10 @@ def generate_headers(site_config: dict):
         "  X-Content-Type-Options: nosniff",
         "  X-Frame-Options: DENY",
         "  Referrer-Policy: strict-origin-when-cross-origin",
+        # Without this, the first request to either domain can be intercepted
+        # over plain HTTP before the redirect fires. `includeSubDomains` is
+        # needed for `preload` eligibility; both domains are already HTTPS-only.
+        "  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
         "",
         "/css/*",
         "  Cache-Control: public, max-age=31536000, immutable",
@@ -1061,6 +1065,21 @@ def generate_headers(site_config: dict):
     ]
     (DIST / "_headers").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("  [ok] _headers")
+
+
+def generate_redirects(site_config: dict):
+    """Write dist/_redirects: www.<domain> -> the apex, 301, every path.
+
+    Cloudflare Pages reads this file the same way it reads _headers. Both
+    filecast.org and www.filecast.org are attached as custom domains on the
+    same Pages project and currently serve identical content — this is what
+    makes one of them canonical instead of two indexable copies of every page.
+    """
+    base = site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
+    host = urlparse(base).netloc
+    lines = [f"https://www.{host}/* {base}/:splat 301"] if host else []
+    (DIST / "_redirects").write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    print("  [ok] _redirects")
 
 
 # ---------------------------------------------------------------------------
@@ -1307,11 +1326,12 @@ def build():
     print("[9/10] Rendering pages")
     render_all_pages(env, tools, categories_with_tools)
 
-    # 15-17. Generate support files
-    print("[10/10] Generating sitemap, robots.txt, _headers")
+    # 15-18. Generate support files
+    print("[10/10] Generating sitemap, robots.txt, _headers, _redirects")
     generate_sitemap(site_config, tools, categories_with_tools)
     generate_robots(site_config)
     generate_headers(site_config)
+    generate_redirects(site_config)
 
     print(f"\nBuild complete. Output: {DIST}/")
 

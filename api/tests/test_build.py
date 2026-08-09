@@ -251,7 +251,7 @@ def test_headers_api_origin_follows_site_config(tmp_path, monkeypatch):
 
 def test_full_build_overlay_bakes_ga4(tmp_path, monkeypatch):
     # An all-off YAML + a DB row enabling GA4 ⇒ the CSP gains the GTM host and the
-    # gtag script is baked. Proves the overlay reaches BOTH the CSP and templates.
+    # gtag URL is baked. Proves the overlay reaches BOTH the CSP and templates.
     _seed_site_settings(ga4_enabled=True, ga4_measurement_id="G-TESTBUILD")
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
@@ -259,6 +259,9 @@ def test_full_build_overlay_bakes_ga4(tmp_path, monkeypatch):
     assert "https://www.googletagmanager.com" in csp
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert "G-TESTBUILD" in home
+    # gtag.js must never be an eager <script src> — only consent.js may request
+    # it, and only once a visitor has consented (see the consent-gate tests).
+    assert '<script async src="https://www.googletagmanager.com/gtag/js' not in home
 
 
 def test_full_build_overlay_bakes_sentry_with_pinned_cdn_version(tmp_path, monkeypatch):
@@ -829,6 +832,110 @@ def test_generate_sitemap_excludes_admin_account(tmp_path, monkeypatch):
     sitemap = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
     assert "/admin/" not in sitemap
     assert "/account/" not in sitemap
+
+
+# --------------------------------------------------------------------------- #
+# Cookie consent gate — GA4/AdSense vendor loaders are consent-gated rather
+# than eagerly loaded (technical report §13, P0 item 2)
+# --------------------------------------------------------------------------- #
+
+
+def _consent_config(html):
+    m = re.search(
+        r'<script type="application/json" id="cookie-consent-config">\s*(\{.*?\})\s*</script>',
+        html,
+        re.S,
+    )
+    return json.loads(m.group(1)) if m else None
+
+
+def test_full_build_all_off_renders_no_consent_gate(tmp_path, monkeypatch):
+    # Nothing on the page could set a tracking cookie ⇒ no banner, no config
+    # island, no consent.js — same "off means off end-to-end" posture as the
+    # AdSense-off tests above.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert 'id="cookie-consent"' not in home
+    assert 'id="cookie-consent-config"' not in home
+    assert "js/consent." not in home
+
+
+def test_full_build_ga4_on_renders_consent_gate_sitewide(tmp_path, monkeypatch):
+    # GA4 loads on every page, so the banner and gate must too — checked on a
+    # tool-less page (privacy) as well as the homepage/about, none of which
+    # carry AdSense inventory.
+    _seed_site_settings(ga4_enabled=True, ga4_measurement_id="G-CONSENT")
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for page in ("index.html", "about/index.html", "privacy/index.html"):
+        html = (tmp_path / page).read_text(encoding="utf-8")
+        assert 'id="cookie-consent"' in html, page
+        assert 'id="cookie-consent__accept"' in html, page
+        assert 'id="cookie-consent__reject"' in html, page
+        data = _consent_config(html)
+        assert data == {
+            "ga4_src": "https://www.googletagmanager.com/gtag/js?id=G-CONSENT",
+            "adsense_src": None,
+        }, page
+        loader = re.search(r'<script src="/js/consent\.[0-9a-f]+\.js"[^>]*>', html)
+        assert loader, page
+        assert " defer" in loader.group(0), loader.group(0)
+        assert "integrity=" in loader.group(0), loader.group(0)
+
+
+def test_full_build_ads_on_gates_adsbygoogle_behind_consent(tmp_path, monkeypatch):
+    # AdSense is scoped in too (not just GA4): the vendor URL rides in the
+    # config island for consent.js to fetch later, never as a live <script src>.
+    _seed_site_settings(**ADS_ON)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for slug in TOOL_PAGES.values():
+        html = _tool_page(tmp_path, slug)
+        data = _consent_config(html)
+        assert data["ga4_src"] is None, slug
+        assert data["adsense_src"] == (
+            "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"
+            "?client=ca-pub-1234567890123456"
+        ), slug
+        assert '<script async src="https://pagead2.googlesyndication.com' not in html, slug
+
+
+def test_full_build_ads_on_leaves_adless_pages_without_a_consent_gate(tmp_path, monkeypatch):
+    # AdSense inventory lives only on tool pages, and GA4 is off in this test,
+    # so the homepage/static pages have nothing to gate consent for either.
+    _seed_site_settings(**ADS_ON)
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    for page in ("index.html", "about/index.html"):
+        html = (tmp_path / page).read_text(encoding="utf-8")
+        assert 'id="cookie-consent"' not in html, page
+
+
+def test_generate_headers_includes_hsts(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({})
+    headers = (tmp_path / "_headers").read_text(encoding="utf-8")
+    assert (
+        "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload"
+        in headers
+    )
+
+
+def test_generate_redirects_www_to_apex(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_redirects({"site": {"base_url": "https://filecast.org"}})
+    redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
+    assert redirects.strip() == "https://www.filecast.org/* https://filecast.org/:splat 301"
+
+
+def test_generate_redirects_default_base_url(tmp_path, monkeypatch):
+    # No site.base_url in config ⇒ falls back to the same default the rest of
+    # build.py uses, never a crash or an empty file.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_redirects({})
+    redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
+    assert "www.filecast.org" in redirects
 
 
 # --------------------------------------------------------------------------- #
