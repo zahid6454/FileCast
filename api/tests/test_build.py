@@ -284,6 +284,54 @@ def test_full_build_overlay_bakes_sentry_with_pinned_cdn_version(tmp_path, monke
     assert "sentry-cdn.com/latest/" not in home
 
 
+def test_sentry_and_analytics_load_via_defer_in_document_order(tmp_path, monkeypatch):
+    # P1 §6, entangled with P3 §26 — `defer` (not `async`) on BOTH tags is
+    # load-bearing, not a style choice. analytics.js's `Sentry.init()` call is
+    # guarded (`window.Sentry && typeof window.Sentry.init === 'function'`)
+    # and no-ops silently if the SDK isn't ready yet — the exact failure mode
+    # PR #32 spent real debugging time diagnosing. `defer` scripts run in
+    # DOCUMENT ORDER after parsing regardless of download speed; `async`
+    # scripts run in download-finish order. Verified empirically (outside this
+    # suite, via Playwright against artificially-delayed responses) that
+    # `async` on both tags lets the small, same-origin analytics.js execute
+    # BEFORE Sentry's third-party bundle finishes loading — this test pins the
+    # static contract (defer, not async, in document order) so a future
+    # "simplification" back to async is caught here instead of live in
+    # production with zero error output.
+    _seed_site_settings(
+        ga4_enabled=True,
+        ga4_measurement_id="G-TESTBUILD",
+        sentry_enabled=True,
+        sentry_dsn="https://abc123@o4511862654894081.ingest.us.sentry.io/456",
+    )
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+
+    sentry_tag = re.search(
+        r'<script src="https://browser\.sentry-cdn\.com[^>]*></script>', home
+    )
+    analytics_tag = re.search(r'<script src="/js/analytics\.[^>]*></script>', home)
+    assert sentry_tag, home
+    assert analytics_tag, home
+
+    for tag, label in ((sentry_tag, "sentry"), (analytics_tag, "analytics.js")):
+        assert re.search(
+            r"\bdefer\b", tag.group(0)
+        ), f"{label} tag missing defer: {tag.group(0)}"
+        assert not re.search(
+            r"\basync\b", tag.group(0)
+        ), f"{label} tag must not be async: {tag.group(0)}"
+
+    # defer preserves document order — the SDK tag must appear first, or the
+    # guard in analytics.js has nothing to depend on.
+    assert sentry_tag.start() < analytics_tag.start()
+    # Both data attributes land on the SAME (analytics.js) tag, confirming this
+    # isn't accidentally matching some other script.
+    assert 'data-ga4-id="G-TESTBUILD"' in analytics_tag.group(0)
+    assert "data-sentry-dsn=" in analytics_tag.group(0)
+
+
 def test_full_build_all_off_row_keeps_script_src(tmp_path, monkeypatch):
     # §3.6: with the overlay row PRESENT but all integrations off, the CSP must be
     # untouched — script-src stays literally 'self', no vendor host leaks in. This
@@ -769,12 +817,54 @@ def test_generate_headers_csp_additions(tmp_path, monkeypatch):
     # comes from (§5 item 5) instead of a literal in generate_headers().
     build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
     csp = _csp_line(tmp_path)
-    assert "font-src 'self' https://fonts.gstatic.com" in csp
-    assert "https://fonts.googleapis.com" in csp  # style-src
+    # Inter is self-hosted (P1 §5) — Google Fonts is no longer an allowed
+    # style-src/font-src origin.
+    assert "font-src 'self'" in csp
+    assert "fonts.gstatic.com" not in csp
+    assert "fonts.googleapis.com" not in csp
     assert "https://lh3.googleusercontent.com" in csp  # img-src
     assert "https://accounts.google.com" in csp  # connect-src OAuth
     assert "https://oauth2.googleapis.com" in csp
     assert "https://api.filecast.org" in csp  # from site_config
+
+
+def test_generate_headers_permissions_policy_and_cors(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
+    text = (tmp_path / "_headers").read_text(encoding="utf-8")
+    assert (
+        "Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        in text
+    )
+    # P1 §8 — Cloudflare Pages injects `Access-Control-Allow-Origin: *` on
+    # every response by default; `!` is Pages' syntax to detach a header it
+    # would otherwise add. Nothing in this codebase should set the header
+    # directly (that would just be a second thing to keep in sync).
+    assert "! Access-Control-Allow-Origin" in text
+    assert re.search(r"^  Access-Control-Allow-Origin:", text, re.MULTILINE) is None
+
+
+def test_generate_headers_fonts_cache_rule(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
+    text = (tmp_path / "_headers").read_text(encoding="utf-8")
+    assert "/fonts/*" in text
+    fonts_block = text.split("/fonts/*")[1].split("\n\n")[0]
+    assert "Cache-Control: public, max-age=31536000, immutable" in fonts_block
+
+
+def test_process_assets_hashes_font_and_rewrites_css(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    asset_map = build.process_assets()
+    font_entry = asset_map.get("fonts/inter-latin.woff2")
+    assert font_entry is not None
+    assert re.match(r"fonts/inter-latin\.[0-9a-f]{8}\.woff2", font_entry["path"])
+    hashed_font_file = tmp_path / font_entry["path"]
+    assert hashed_font_file.exists()
+    css_entry = asset_map["css/style.css"]
+    css_text = (tmp_path / css_entry["path"]).read_text(encoding="utf-8")
+    assert "/fonts/inter-latin.woff2" not in css_text  # placeholder must be rewritten
+    assert font_entry["path"] in css_text
 
 
 def test_generate_headers_without_api_base_url_emits_no_empty_token(
