@@ -201,9 +201,6 @@ async def upsert_google_user(
                 name=name,
                 avatar_url=avatar_url,
                 role="user",
-                # Google's own email_verified check (auth.py's _email_verified)
-                # already gated this call, so there's nothing left to verify.
-                email_verified=True,
             )
             .on_conflict_do_nothing(index_elements=[User.email])
         )
