@@ -230,7 +230,7 @@
      and/or AdSense could actually set a cookie on this page (consent_needed,
      computed in <head>) — nothing to ask consent for otherwise. #}
   {% if consent_needed %}
-  <div class="cookie-consent hidden" id="cookie-consent" role="region" aria-label="Cookie consent">
+  <div class="cookie-consent hidden" id="cookie-consent" role="region" aria-label="Cookie consent" aria-live="polite">
     <p class="cookie-consent__text">
       FileCast uses cookies for analytics{% if adsense_src %} and ads{% endif %}. See our
       <a href="/privacy/">Privacy Policy</a> for details.

@@ -1079,6 +1079,8 @@ def generate_redirects(site_config: dict):
         site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
     )
     host = urlparse(base).netloc
+    if not host:
+        print(f"  [warn] site.base_url {base!r} has no host; _redirects will be empty")
     lines = [f"https://www.{host}/* {base}/:splat 301"] if host else []
     (DIST / "_redirects").write_text(
         "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8"

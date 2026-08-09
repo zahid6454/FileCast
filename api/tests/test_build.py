@@ -945,6 +945,19 @@ def test_generate_redirects_default_base_url(tmp_path, monkeypatch):
     assert "www.filecast.org" in redirects
 
 
+def test_generate_redirects_schemeless_base_url_warns_and_writes_nothing(
+    tmp_path, monkeypatch, capsys
+):
+    # A base_url with no scheme (e.g. "filecast.org" instead of
+    # "https://filecast.org") makes urlparse().netloc empty — must not crash
+    # or silently ship an empty file with no explanation.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_redirects({"site": {"base_url": "filecast.org"}})
+    redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
+    assert redirects == ""
+    assert "no host" in capsys.readouterr().out
+
+
 # --------------------------------------------------------------------------- #
 # Full build — snapshot + end-to-end overlay (also StrictUndefined-safe render)
 # --------------------------------------------------------------------------- #
