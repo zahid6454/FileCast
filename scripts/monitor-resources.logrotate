@@ -1,0 +1,27 @@
+# logrotate config for scripts/monitor-resources.sh's log (P4 §39 follow-up).
+#
+# Not auto-installed by anything — logrotate only reads configs from
+# /etc/logrotate.d/, so this has to be copied there by hand, once, on the VM:
+#   sudo cp ~/FileCast/scripts/monitor-resources.logrotate /etc/logrotate.d/monitor-resources
+# logrotate itself already runs daily via the standard Ubuntu cron.daily job
+# (verified present: /etc/logrotate.d/ already has rsyslog/apt/dpkg/etc. using
+# the same mechanism), so nothing else needs installing for this to take effect.
+/home/ubuntu/monitor.log {
+    daily
+    # 30, matching api/data/config.py's RETENTION_DAYS (30) — not because the
+    # same reasoning applies (that's a GDPR purge for user data; this log has
+    # no personal data in it at all), but for one less number to remember.
+    # Daily rather than weekly rotation makes this an exact 30-day match
+    # instead of an approximate one.
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    # No copytruncate: nothing holds this file open long-term (each cron
+    # invocation is a short-lived `>>` append that opens fresh), unlike a
+    # daemon (nginx, rsyslogd) that needs a signal to reopen its log after a
+    # rename. Plain rename+recreate is both simpler and avoids
+    # copytruncate's small lost-writes race window between its copy and
+    # truncate steps.
+}
