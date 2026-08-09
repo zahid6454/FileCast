@@ -27,6 +27,17 @@
       >
       <ul class="hero-search__results hidden" id="hero-search-results" role="listbox" aria-label="Tool search results"></ul>
     </div>
+
+    {# Category links (P3 §29) — nav_categories is a Jinja global (build.py's
+       create_jinja_env()), same source the header/footer nav use, so this
+       list can never drift out of sync with the site's actual categories. #}
+    {% if nav_categories %}
+    <div class="not-found__categories">
+      {% for cat_id, cat_data in nav_categories.items() %}
+      <a class="btn btn--ghost btn--sm" href="/{{ cat_data.slug }}/">{{ cat_data.name }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
 
   {% if tools %}

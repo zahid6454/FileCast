@@ -641,6 +641,12 @@ img { max-width: 100%; display: block; }
    generate_headers()) covers separately from the element-level style-src. */
 .progress__fill { width: 0; height: 100%; background: linear-gradient(to right, var(--brand-blue), var(--brand-green)); border-radius: var(--radius-full); transition: width 300ms ease; }
 
+/* --- Progress Bar: Label (P3 §27) --- */
+/* aria-hidden in the markup: #a11y-status already announces the equivalent
+   state to screen readers (shared.js's announceState), so this is a
+   sighted-only affordance, not a second live region. */
+.progress__label { font-size: var(--text-sm); color: var(--color-text-muted); text-align: center; margin: calc(-1 * var(--space-3)) 0 var(--space-4); }
+
 /* --- Progress Bar: Indeterminate --- */
 .progress--indeterminate .progress__fill {
   width: 40%;
@@ -852,6 +858,7 @@ img { max-width: 100%; display: block; }
 .not-found__code { font-size: 4rem; font-weight: var(--weight-bold); color: var(--color-text-light); margin-bottom: var(--space-2); }
 .not-found__title { font-size: var(--text-2xl); font-weight: var(--weight-bold); margin-bottom: var(--space-3); }
 .not-found__text { color: var(--color-text-muted); margin-bottom: var(--space-6); }
+.not-found__categories { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); margin-top: var(--space-6); }
 
 /* --- Brand Text Colors --- */
 .text-brand-blue { color: var(--color-primary); }

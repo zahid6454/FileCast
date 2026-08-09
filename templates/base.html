@@ -352,6 +352,18 @@
   {% if auth_js %}
   <script src="/{{ auth_js.path }}" integrity="{{ auth_js.sri }}" crossorigin="anonymous" defer></script>
   {% endif %}
+
+  {# Service worker registration (P3 §25). sw.js itself is generated straight
+     to dist/'s root by generate_service_worker() (build.py) — unhashed and
+     un-versioned in its filename, unlike everything else this file loads,
+     because the browser needs a stable URL to re-check on every navigation;
+     hashing it the way css/js assets are hashed would mean every deploy
+     registers a brand-new worker at a brand-new URL instead of updating the
+     existing one. #}
+  {% set sw_register_js = assets.get('js/sw-register.js') %}
+  {% if sw_register_js %}
+  <script src="/{{ sw_register_js.path }}" integrity="{{ sw_register_js.sri }}" crossorigin="anonymous" defer></script>
+  {% endif %}
   {% block scripts %}{% endblock %}
 
 </body>

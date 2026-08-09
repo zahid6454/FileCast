@@ -4,6 +4,8 @@ Validation/error paths need no Gotenberg (validation runs before the proxy call)
 The success path mocks the Gotenberg call so no container is required.
 """
 
+import asyncio
+
 import converter
 
 
@@ -131,3 +133,106 @@ async def test_health_endpoint_accepts_head(client):
     r = await client.head("/api/v1/health")
     assert r.status_code == 200
     assert r.content == b""
+
+
+# --------------------------------------------------------------------------- #
+# Gotenberg request queue (P3 §31) — caps concurrent Gotenberg calls with an
+# in-process asyncio.Semaphore. `_gotenberg_request` is exercised directly
+# (not through the route) with a fake httpx.AsyncClient, since these tests
+# assert on timing/concurrency, not on any particular tool's request shape.
+# --------------------------------------------------------------------------- #
+
+
+class _FakeResponse:
+    def __init__(self, status_code=200, content=b"ok"):
+        self.status_code = status_code
+        self.content = content
+        self.text = content.decode()
+
+
+def _fake_async_client(post_impl):
+    class _FakeAsyncClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, files=None, headers=None):
+            return await post_impl()
+
+    return _FakeAsyncClient
+
+
+async def test_gotenberg_semaphore_caps_concurrency(monkeypatch):
+    monkeypatch.setattr(converter, "_gotenberg_semaphore", asyncio.Semaphore(1))
+    monkeypatch.setattr(converter, "GOTENBERG_QUEUE_TIMEOUT_SECONDS", 5.0)
+
+    in_flight = 0
+    max_in_flight = 0
+
+    async def post_impl():
+        nonlocal in_flight, max_in_flight
+        in_flight += 1
+        max_in_flight = max(max_in_flight, in_flight)
+        await asyncio.sleep(0.05)
+        in_flight -= 1
+        return _FakeResponse()
+
+    monkeypatch.setattr(
+        converter.httpx, "AsyncClient", _fake_async_client(post_impl)
+    )
+
+    # Three "requests" sharing a single-slot semaphore must never overlap,
+    # even though they're all launched at once.
+    await asyncio.gather(
+        *(
+            converter._gotenberg_request("/forms/libreoffice/convert", {}, "test")
+            for _ in range(3)
+        )
+    )
+    assert max_in_flight == 1
+
+
+async def test_gotenberg_queue_timeout_returns_503_with_retry_after(
+    client, monkeypatch
+):
+    monkeypatch.setattr(converter, "_gotenberg_semaphore", asyncio.Semaphore(1))
+    monkeypatch.setattr(converter, "GOTENBERG_QUEUE_TIMEOUT_SECONDS", 0.05)
+
+    async def post_impl():
+        # Holds the one slot well past the queue timeout so the second
+        # request below is forced to wait and expire.
+        await asyncio.sleep(1.0)
+        return _FakeResponse()
+
+    monkeypatch.setattr(
+        converter.httpx, "AsyncClient", _fake_async_client(post_impl)
+    )
+
+    valid_docx = b"PK\x03\x04" + b"\x00" * 200
+
+    async def _convert_request():
+        return await client.post(
+            "/api/v1/convert/docx-to-pdf",
+            files={
+                "file": (
+                    "report.docx",
+                    valid_docx,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
+
+    # Fire two conversions at once: the first occupies the only slot for 1s
+    # (well past the 0.05s queue timeout), so the second must time out
+    # waiting rather than queue indefinitely.
+    first, second = await asyncio.gather(_convert_request(), _convert_request())
+    timed_out = [r for r in (first, second) if r.status_code == 503]
+    assert timed_out, (first.status_code, second.status_code)
+    body = timed_out[0].json()
+    assert body["error_type"] == "queue_timeout"
+    assert timed_out[0].headers["retry-after"] == "10"
