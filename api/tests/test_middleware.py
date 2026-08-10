@@ -168,3 +168,22 @@ def test_live_origin_list_is_derived_from_the_configured_environment():
     assert middleware.ALLOWED_ORIGINS == middleware.allowed_origins(
         settings.environment
     )
+
+
+# --------------------------------------------------------------------------- #
+# X-Robots-Tag (api.filecast.org must never be indexed)
+# --------------------------------------------------------------------------- #
+
+
+async def test_noindex_header_on_root(client):
+    r = await client.get("/")
+    assert r.headers["x-robots-tag"] == "noindex, nofollow"
+
+
+async def test_noindex_header_on_429(client):
+    codes_and_headers = [
+        await client.post("/api/v1/errors", json={"error_type": "x"}) for _ in range(61)
+    ]
+    last = codes_and_headers[-1]
+    assert last.status_code == 429
+    assert last.headers["x-robots-tag"] == "noindex, nofollow"

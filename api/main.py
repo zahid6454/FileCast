@@ -16,7 +16,12 @@ from data.db import async_engine
 from data.routers import all_routers
 from fastapi import FastAPI
 from log import ENVIRONMENT, SERVICE_NAME, get_logger, setup_logging
-from middleware import RateLimitMiddleware, RequestLoggingMiddleware, add_cors
+from middleware import (
+    NoIndexMiddleware,
+    RateLimitMiddleware,
+    RequestLoggingMiddleware,
+    add_cors,
+)
 from sqlalchemy import text
 
 setup_logging()
@@ -108,14 +113,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Middleware order matters: the LAST added is the OUTERMOST. CORS is added last
-# so it wraps everything — otherwise a rate-limiter 429 (or any early response)
-# would skip CORS and a browser couldn't read it on a credentialed request, and
-# preflight OPTIONS would be rate-limited instead of answered. RateLimit stays
-# inner of RequestLogging (unchanged relative order, so /convert behaves as before).
+# Middleware order matters: the LAST added is the OUTERMOST. CORS is added
+# before NoIndex so it still wraps everything below it — otherwise a
+# rate-limiter 429 (or any early response) would skip CORS and a browser
+# couldn't read it on a credentialed request, and preflight OPTIONS would be
+# rate-limited instead of answered. RateLimit stays inner of RequestLogging
+# (unchanged relative order, so /convert behaves as before). NoIndex is added
+# last (outermost) so the header lands on literally every response this app
+# returns, including CORS preflights and 429s.
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 add_cors(app)
+app.add_middleware(NoIndexMiddleware)
 
 app.include_router(converter_router)
 for data_router in all_routers:
