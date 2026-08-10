@@ -1405,6 +1405,22 @@ def test_full_build_without_db_emits_no_rating_island(tmp_path, monkeypatch):
     assert "Files Converted" not in home
 
 
+# --------------------------------------------------------------------------- #
+# SEO Phase 1 — homepage foundation fixes (O2 report §13 #4-#6)
+# --------------------------------------------------------------------------- #
+
+
+def test_homepage_h1_is_plain_and_unlinked(built):
+    home = (built / "index.html").read_text(encoding="utf-8")
+    assert '<h1 class="hero__title">Free Online File Converter</h1>' in home
+    # The old H1 wrapped its text in a link to /privacy/, making the page's
+    # primary heading double as navigation — must never carry an <a> again.
+    h1 = home.split('<h1 class="hero__title">')[1].split("</h1>")[0]
+    assert "<a" not in h1
+    # The privacy link survives, just relocated to the tagline below the H1.
+    assert '<p class="hero__subtitle"><a href="/privacy/"' in home
+
+
 def test_homepage_conversion_badge_floor(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
 
