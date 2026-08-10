@@ -1861,3 +1861,59 @@ def test_cross_category_links_added_to_when_to_use_content(built):
             encoding="utf-8"
         )
         assert 'href="/convert/image-compress/"' in page
+
+
+# --------------------------------------------------------------------------- #
+# "Alternatives" content block (O2 report §5.8/§13 #19)
+# --------------------------------------------------------------------------- #
+
+ALTERNATIVES_HEADING_RE = re.compile(r"<h2>Other Ways to [^<]+</h2>\s*<p>[^<]+</p>")
+
+
+def test_alternatives_block_present_on_every_tool_page(built):
+    tool_data = json.loads((built / "tool-data.json").read_text(encoding="utf-8"))
+    for tool in tool_data:
+        slug = tool["slug"].strip("/")
+        page = (built / slug / "index.html").read_text(encoding="utf-8")
+        assert ALTERNATIVES_HEADING_RE.search(page), tool["id"]
+
+
+def test_alternatives_block_content_differs_by_group(built):
+    # Not a single boilerplate string copy-pasted onto all 34 pages — the
+    # shared-group snippets must actually differ by real-world alternative.
+    pairs = {
+        "png-to-jpg": "photo viewer",
+        "docx-to-pdf": "Microsoft Word",
+        "pdf-compress": "Compress PDF",
+        "pdf-merge": "Combine Files",
+        "csv-to-json": "script in your language",
+        "html-to-pdf": "Print dialog",
+    }
+    for tool_id, must_contain in pairs.items():
+        page = (built / "convert" / tool_id / "index.html").read_text(
+            encoding="utf-8"
+        )
+        assert must_contain in page, tool_id
+
+
+def test_alternatives_pdf_action_tools_do_not_reuse_office_app_answer(built):
+    # pdf-compress/merge/rotate/split are all PDF->PDF (no source document to
+    # open in Word/Docs/LibreOffice) — must not get the docx-to-pdf-style
+    # "Microsoft Word, PowerPoint, or Excel" answer.
+    for tool_id in ("pdf-compress", "pdf-merge", "pdf-rotate", "pdf-split"):
+        page = (built / "convert" / tool_id / "index.html").read_text(
+            encoding="utf-8"
+        )
+        assert "Microsoft Word, PowerPoint, or Excel" not in page
+
+
+def test_load_alternatives_covers_every_tool(built):
+    # Every one of the 34 shipped tools must resolve to a real ALTERNATIVES
+    # group — an unmapped output_format would silently render an empty
+    # section (load_alternatives()'s `if not entry` branch), not an error.
+    tool_data = json.loads((built / "tool-data.json").read_text(encoding="utf-8"))
+    assert len(tool_data) == 34
+    for tool in tool_data:
+        slug = tool["slug"].strip("/")
+        page = (built / slug / "index.html").read_text(encoding="utf-8")
+        assert "<h2>Other Ways to" in page, tool["id"]

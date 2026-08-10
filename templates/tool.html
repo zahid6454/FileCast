@@ -253,6 +253,12 @@
   </div>
   {% endif %}
 
+  {% if tool.get('alternatives_html') %}
+  <div class="content-block">
+    {{ tool.alternatives_html|safe }}
+  </div>
+  {% endif %}
+
   {% if tool.content_html.get('faq') %}
   <div class="content-block">
     {{ tool.content_html.faq|safe }}
