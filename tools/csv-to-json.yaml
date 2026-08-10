@@ -14,6 +14,7 @@ js_libs: []
 max_file_size: 5MB
 bulk_support: false
 ui_type: text-input
+reverse_tool: json-to-csv
 input_placeholder: "Paste your CSV data here...\n\nExample:\nname,age,city\nAlice,30,New York\nBob,25,London"
 tagline: "Turn CSV spreadsheet data into structured JSON"
 tagline_long: "Convert CSV data to JSON format instantly in your browser — perfect for APIs, databases, and web applications."

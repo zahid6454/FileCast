@@ -13,6 +13,7 @@ js_libs: []
 max_file_size: 5MB
 bulk_support: false
 ui_type: text-input
+reverse_tool: html-to-markdown
 input_placeholder: "Paste your Markdown here...\n\nExample:\n# Hello World\n\nThis is **bold** and this is *italic*.\n\n- Item one\n- Item two"
 tagline: "Render Markdown into clean HTML"
 tagline_long: "Convert Markdown text to HTML instantly in your browser — perfect for blog posts, documentation, and README files."

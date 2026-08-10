@@ -10,7 +10,7 @@ Social platforms accept images but not PDF files. If you've designed a flyer, in
 
 ### Creating Website Content
 
-Websites display images effortlessly but handling embedded PDFs is clunky for visitors. Converting key pages to images lets you show document content directly on a webpage — as a product spec, a preview of a downloadable guide, or a visual reference.
+Websites display images effortlessly but handling embedded PDFs is clunky for visitors. Converting key pages to images lets you show document content directly on a webpage — as a product spec, a preview of a downloadable guide, or a visual reference. If page load speed matters, pass the result through [Image Compressor](/convert/image-compress/) first.
 
 ### Sending Quick Previews in Chat
 

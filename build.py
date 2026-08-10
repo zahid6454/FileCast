@@ -53,6 +53,20 @@ ASSETS_DIR = ROOT / "assets"
 # this field decides a public privacy claim (the Local/Cloud badge); see there.
 VALID_TOOL_TYPES = {"client-side", "server-side"}
 
+# Footer "Popular Tools" row (O2 report §5.7/§13 #18). Reuses the exact 6 tools
+# the SAME report already named "highest-volume" for the Phase 1 Search
+# Console indexing priority (§13 #1) — traceable back to the report itself
+# rather than a fresh, undocumented judgment call. Order is deliberate (highest
+# volume first); select_popular_tools() below preserves it.
+POPULAR_TOOL_IDS = [
+    "docx-to-pdf",
+    "png-to-jpg",
+    "heic-to-jpg",
+    "pdf-merge",
+    "pdf-compress",
+    "image-resize",
+]
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -469,6 +483,23 @@ def sort_tools(tools: list[dict]) -> list[dict]:
         tools,
         key=lambda t: t["sort_order"] if t.get("sort_order") is not None else inf,
     )
+
+
+def select_popular_tools(tools: list[dict]) -> list[dict]:
+    """Resolve POPULAR_TOOL_IDS to lightweight {id, name, slug} dicts, in that
+    list's order, for the footer's "Popular Tools" row.
+
+    Skips any id not present in ``tools`` rather than erroring — the same P10
+    degrade-gracefully posture as apply_tool_overrides(): an admin disabling
+    one of these six tools via the DB overlay must not break every page's
+    footer, just quietly shorten the row by one.
+    """
+    tool_map = {t["id"]: t for t in tools}
+    return [
+        {"id": tid, "name": tool_map[tid]["name"], "slug": tool_map[tid]["slug"]}
+        for tid in POPULAR_TOOL_IDS
+        if tid in tool_map
+    ]
 
 
 def load_tools() -> list[dict]:
@@ -1789,6 +1820,11 @@ def build():
     # 13. Jinja2 environment
     print("[9/11] Setting up Jinja2")
     env = create_jinja_env(site_config, asset_map, categories_with_tools)
+
+    # Footer "Popular Tools" row (O2 report §5.7/§13 #18). Computed from the
+    # already-overridden/sorted `tools` list, so a DB-disabled tool among the
+    # six is dropped the same way it's dropped everywhere else.
+    env.globals["popular_tools"] = select_popular_tools(tools)
 
     # Site-wide totals for the homepage trust counter. Always defined (so the
     # StrictUndefined template guard is a plain `is not none` check); the

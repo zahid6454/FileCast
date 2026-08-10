@@ -11,6 +11,7 @@ output_extension: .docx
 max_file_size: 25MB
 bulk_support: false
 ui_type: standard
+reverse_tool: docx-to-pdf
 api_endpoint: /api/v1/convert/pdf-to-docx
 tagline: "Convert PDF files to editable Word documents"
 tagline_long: "Convert PDF files to editable Word documents — files are encrypted in transit, processed securely, and deleted immediately."

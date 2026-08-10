@@ -1779,3 +1779,85 @@ def test_organization_jsonld_only_on_homepage(built):
     ):
         html = path.read_text(encoding="utf-8")
         assert not [b for b in _ldjson_blocks(html) if b.get("@type") == "Organization"]
+
+
+# --------------------------------------------------------------------------- #
+# Internal linking (O2 report §5.7/§13 #18)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "tool_a,tool_b",
+    [
+        ("docx-to-pdf", "pdf-to-docx"),
+        ("html-to-markdown", "markdown-to-html"),
+        ("csv-to-json", "json-to-csv"),
+        ("xml-to-json", "json-to-xml"),
+    ],
+)
+def test_reverse_tool_link_is_bidirectional(built, tool_a, tool_b):
+    # Each pair must link to each other, not just one direction — the report's
+    # own framing ("ensure every tool WITH a reverse counterpart has this
+    # link") is symmetric by definition.
+    page_a = (built / "convert" / tool_a / "index.html").read_text(encoding="utf-8")
+    page_b = (built / "convert" / tool_b / "index.html").read_text(encoding="utf-8")
+    assert f'href="/convert/{tool_b}/"' in page_a, f"{tool_a} -> {tool_b}"
+    assert f'href="/convert/{tool_a}/"' in page_b, f"{tool_b} -> {tool_a}"
+
+
+def test_footer_popular_tools_row_present_on_every_page_kind(built):
+    pages = [
+        built / "index.html",
+        built / "convert" / "png-to-jpg" / "index.html",
+        built / "document-conversion" / "index.html",
+        built / "privacy" / "index.html",
+    ]
+    expected_hrefs = [
+        "/convert/docx-to-pdf/",
+        "/convert/png-to-jpg/",
+        "/convert/heic-to-jpg/",
+        "/convert/pdf-merge/",
+        "/convert/pdf-compress/",
+        "/convert/image-resize/",
+    ]
+    for path in pages:
+        html = path.read_text(encoding="utf-8")
+        assert "Popular Tools" in html, path
+        for href in expected_hrefs:
+            assert f'href="{href}"' in html, f"{path}: missing {href}"
+
+
+def test_select_popular_tools_skips_missing_ids():
+    # An admin-disabled (or renamed) tool among the six must shorten the row,
+    # not crash the build (P10 — same posture as apply_tool_overrides()).
+    tools = [{"id": "png-to-jpg", "name": "PNG to JPG Converter", "slug": "/convert/png-to-jpg"}]
+    result = build.select_popular_tools(tools)
+    assert result == [
+        {"id": "png-to-jpg", "name": "PNG to JPG Converter", "slug": "/convert/png-to-jpg"}
+    ]
+
+
+def test_cross_category_links_added_to_when_to_use_content(built):
+    # O2 report §5.7 point 1's own example: a tool in one category linking to
+    # a tool in another as a natural next step. image-to-pdf (image-conversion)
+    # -> pdf-compress (document-tools); pdf-to-jpg/pdf-to-png (document-tools)
+    # -> image-compress (image-conversion).
+    #
+    # pdf-compress is ALSO one of the six footer "Popular Tools" links, so a
+    # bare href check on image-to-pdf's page wouldn't distinguish "the content
+    # link was added" from "it's just in every page's footer" — pin the
+    # actual added sentence instead. image-compress isn't a popular tool, so
+    # the href check alone is unambiguous for the other two.
+    page = (built / "convert" / "image-to-pdf" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        '<a href="/convert/pdf-compress/">PDF Compressor</a> afterward to shrink it'
+        in page
+    )
+
+    for tool_id in ("pdf-to-jpg", "pdf-to-png"):
+        page = (built / "convert" / tool_id / "index.html").read_text(
+            encoding="utf-8"
+        )
+        assert 'href="/convert/image-compress/"' in page

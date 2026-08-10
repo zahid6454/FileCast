@@ -14,6 +14,7 @@ js_libs: []
 max_file_size: 5MB
 bulk_support: false
 ui_type: text-input
+reverse_tool: xml-to-json
 input_placeholder: "Paste your JSON here...\n\nExample:\n{\n  \"name\": \"Alice\",\n  \"items\": [1, 2, 3]\n}"
 tagline: "Convert JSON data to XML format"
 tagline_long: "Convert JSON objects and arrays to well-formed XML instantly in your browser."
