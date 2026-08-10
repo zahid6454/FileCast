@@ -85,13 +85,13 @@
       return;
     }
 
-    if (typeof window.convertText !== 'function') {
-      showError('Converter not loaded. Please refresh the page.');
+    var config = window.TOOL_CONFIG;
+    if (!config.text_converter_src || !config.text_converter_worker_src) {
+      showError('Converter is unavailable right now. Please refresh the page.');
       return;
     }
 
     setState('converting');
-    var config = window.TOOL_CONFIG;
     var startTime = Date.now();
 
     trackEvent('conversion_started', {
@@ -112,12 +112,8 @@
     els.progress.classList.add('progress--indeterminate');
     els.progressFill.style.width = '';
 
-    try {
-      var output = window.convertText(text);
-      var durationMs = Date.now() - startTime;
-      showResult(text, output, durationMs);
-    } catch (err) {
-      showError(err.message || 'Conversion failed. Please check your input and try again.');
+    function onFailure(message) {
+      showError(message || 'Conversion failed. Please check your input and try again.');
       trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
       postConversion(
         {
@@ -129,6 +125,33 @@
         false
       );
     }
+
+    // Off the main thread (mirrors pdf-lib-worker.js's P4 §36 fix) — a
+    // multi-MB CSV/JSON/XML input near max_file_size_bytes used to run
+    // window.convertText(text) synchronously here and could visibly freeze
+    // the tab. The converter's own URL rides the worker's query string
+    // (same trick as pdf-lib-worker.js's `lib` param) so one worker file
+    // serves every text-input tool.
+    var worker = new Worker(
+      config.text_converter_worker_src +
+        '?converter=' +
+        encodeURIComponent(config.text_converter_src)
+    );
+    worker.onmessage = function (e) {
+      worker.terminate();
+      var data = e.data || {};
+      if (!data.ok) {
+        onFailure(data.error);
+        return;
+      }
+      var durationMs = Date.now() - startTime;
+      showResult(text, data.result, durationMs);
+    };
+    worker.onerror = function (err) {
+      worker.terminate();
+      onFailure(err && err.message);
+    };
+    worker.postMessage({ text: text });
   }
 
   function showResult(inputText, output, durationMs) {
