@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import processing_pill %}
+{% from "_macros.html" import tool_card_lg %}
 
 {% block title %}{{ category.name }} — {{ site.name }}{% endblock %}
 {% block meta_description %}{{ category.description }}{% endblock %}
@@ -32,16 +32,7 @@
 
   <div class="card-grid card-grid--lg">
     {% for tool in main_tools %}
-    <a class="card card--lg{% if tool.type == 'server-side' %} card--server{% endif %}"
-       href="{{ tool.slug }}/"
-       data-name="{{ tool.name|lower }}"
-       data-category="{{ category.name|lower }}">
-      <strong>{% if tool.input_format == tool.output_format %}{{ tool.name }}{% else %}{{ tool.input_format }} → {{ tool.output_format }}{% endif %}</strong>
-      {% if tool.tagline %}
-      <div class="card__desc">{{ tool.tagline }}</div>
-      {% endif %}
-      {{ processing_pill(tool) }}
-    </a>
+    {{ tool_card_lg(tool, category.name|lower) }}
     {% endfor %}
   </div>
 
@@ -49,16 +40,7 @@
   <div class="section__divider u-mt-8 u-mb-8"></div>
   <div class="card-grid card-grid--lg">
     {% for tool in sub_tools %}
-    <a class="card card--lg{% if tool.type == 'server-side' %} card--server{% endif %}"
-       href="{{ tool.slug }}/"
-       data-name="{{ tool.name|lower }}"
-       data-category="{{ category.name|lower }}">
-      <strong>{% if tool.input_format == tool.output_format %}{{ tool.name }}{% else %}{{ tool.input_format }} → {{ tool.output_format }}{% endif %}</strong>
-      {% if tool.tagline %}
-      <div class="card__desc">{{ tool.tagline }}</div>
-      {% endif %}
-      {{ processing_pill(tool) }}
-    </a>
+    {{ tool_card_lg(tool, category.name|lower) }}
     {% endfor %}
   </div>
   {% endif %}
