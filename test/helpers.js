@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+import { vi } from 'vitest';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -15,7 +16,21 @@ export function createDom(bodyHtml = '', { url = 'http://localhost/' } = {}) {
     runScripts: 'outside-only'
   });
   polyfillArrayBuffer(dom.window);
+  polyfillObjectURL(dom.window);
   return dom;
+}
+
+// This jsdom version doesn't implement URL.createObjectURL/revokeObjectURL at
+// all (throws "not a function") — nearly every converter creates an object
+// URL to feed an <img>/<a download> element. Real browsers hand back an
+// opaque blob: URL; a fake but unique one is enough for every converter's
+// actual usage (they never dereference it themselves, only jsdom's own
+// Image/anchor internals would, and those are mocked separately).
+let objectUrlCounter = 0;
+function polyfillObjectURL(win) {
+  if (typeof win.URL.createObjectURL === 'function') return;
+  win.URL.createObjectURL = () => `blob:mock/${objectUrlCounter++}`;
+  win.URL.revokeObjectURL = () => {};
 }
 
 // This jsdom version's Blob/File don't implement `.arrayBuffer()` (it throws
@@ -61,4 +76,67 @@ export async function boot(dom, relPath) {
   });
   evalScript(dom, relPath);
   await flush();
+}
+
+// Stand in for `new Image()` — jsdom never fires onload/onerror on its own
+// (no real image decoder), so every canvas-based converter's `img.onload`
+// callback would just hang forever without this. Setting `.src` schedules
+// onload (with the given fake naturalWidth/naturalHeight) or onerror.
+export function mockImageLoad(win, { width = 100, height = 80, shouldError = false } = {}) {
+  win.Image = function () {
+    var img = { onload: null, onerror: null, naturalWidth: 0, naturalHeight: 0 };
+    var src = '';
+    Object.defineProperty(img, 'src', {
+      get: function () {
+        return src;
+      },
+      set: function (v) {
+        src = v;
+        setTimeout(function () {
+          if (shouldError) {
+            if (img.onerror) img.onerror(new win.Event('error'));
+          } else {
+            img.naturalWidth = width;
+            img.naturalHeight = height;
+            if (img.onload) img.onload();
+          }
+        }, 0);
+      }
+    });
+    return img;
+  };
+}
+
+// Stand in for <canvas>.getContext('2d')/.toBlob — this jsdom build has no
+// real canvas backend (getContext('2d') returns null), so every converter
+// that draws to a canvas and calls toBlob needs this to resolve at all.
+// Returns the list of {type, quality} toBlob was called with, the fake 2D
+// context (so a test can assert fillRect/drawImage/putImageData calls), and
+// canvasSizes — every converter sets canvas.width/height before calling
+// getContext(), so capturing `this` there records the dimensions actually
+// used even when the canvas itself is never inserted into the document
+// (document.querySelector('canvas') would find nothing).
+export function mockCanvas(win, { blobContent = 'fake-image-data' } = {}) {
+  var toBlobCalls = [];
+  var canvasSizes = [];
+  var ctx = {
+    fillStyle: '',
+    fillRect: vi.fn(),
+    drawImage: vi.fn(),
+    createImageData: function (w, h) {
+      return { data: new Uint8ClampedArray(w * h * 4), width: w, height: h };
+    },
+    putImageData: vi.fn()
+  };
+  win.HTMLCanvasElement.prototype.getContext = function () {
+    canvasSizes.push({ width: this.width, height: this.height });
+    return ctx;
+  };
+  win.HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+    toBlobCalls.push({ type: type, quality: quality });
+    setTimeout(function () {
+      callback(new win.Blob([blobContent], { type: type || 'image/png' }));
+    }, 0);
+  };
+  return { ctx: ctx, toBlobCalls: toBlobCalls, canvasSizes: canvasSizes };
 }
