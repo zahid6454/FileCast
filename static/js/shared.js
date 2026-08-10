@@ -301,25 +301,32 @@
       .then(function (blob) {
         if (cancelledThisRun) return;
         var durationMs = Date.now() - startTime;
-        var savingsPct =
-          currentFile.size > 0 ? Math.round((1 - blob.size / currentFile.size) * 100) : 0;
+        var ownsResult = window._converterOwnsResult;
         // If the converter already rendered its own result UI (multi-page
         // output), just mark complete — overwriting #result-info here would
         // replace its accurate page summary with a page-1-only size stat.
-        if (window._converterOwnsResult) {
+        if (ownsResult) {
           setState('complete');
         } else {
           showResult(currentFile, blob, durationMs);
         }
-        trackEvent('conversion_completed', {
+        var eventData = {
           tool_id: config.id,
           input_format: config.input_format,
           output_format: config.output_format,
           duration_ms: durationMs,
-          file_size_bytes: currentFile.size,
-          output_size_bytes: blob.size,
-          savings_percent: savingsPct
-        });
+          file_size_bytes: currentFile.size
+        };
+        // A multi-output converter (pdf-split.js, pdf-to-jpg.js, pdf-to-png.js)
+        // resolves with only its first page/image's blob so shared.js has
+        // *something* to return — that blob's size vs. the whole original
+        // file is not a real compression ratio, so don't report one.
+        if (!ownsResult) {
+          eventData.output_size_bytes = blob.size;
+          eventData.savings_percent =
+            currentFile.size > 0 ? Math.round((1 - blob.size / currentFile.size) * 100) : 0;
+        }
+        trackEvent('conversion_completed', eventData);
         postConversion(
           {
             tool_id: config.id,
