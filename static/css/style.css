@@ -425,6 +425,7 @@ img { max-width: 100%; display: block; }
   background: var(--color-bg);
   color: var(--color-text);
   outline: none;
+  box-shadow: var(--shadow-sm);
   transition: border-color var(--transition-fast);
 }
 .hero__link { text-decoration: none; }
@@ -1870,7 +1871,8 @@ img { max-width: 100%; display: block; }
 /* --- Homepage hero (scoped to .hero--home so about/terms/contact are untouched, R11) --- */
 .hero--home { padding: var(--space-12) var(--space-4) var(--space-10); }
 .hero--home .hero__title { font-size: var(--text-4xl); }
-.hero--home .hero__subtitle { font-size: var(--text-lg); margin-bottom: var(--space-6); }
+.hero--home .hero__subtitle { font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-text-secondary); margin-bottom: var(--space-6); }
+.hero--home .hero__search { padding: var(--space-4) var(--space-5); font-size: var(--text-lg); }
 .hero__badges {
   display: flex;
   flex-wrap: wrap;
