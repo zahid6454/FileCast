@@ -1431,7 +1431,7 @@ def test_homepage_title_targets_a_searchable_keyword(built):
     # so social shares match the SERP title.
     assert (
         'property="og:title" content="FileCast — Free Online File Converter '
-        "| PDF, Image &amp; Data Tools\"" in home
+        '| PDF, Image &amp; Data Tools"' in home
     )
 
 
@@ -1439,7 +1439,7 @@ def test_homepage_meta_description_describes_the_product(built):
     home = (built / "index.html").read_text(encoding="utf-8")
     assert (
         'name="description" content="Convert documents, images, and data '
-        'files for free — 34 tools, no sign-up, no limits.' in home
+        "files for free — 34 tools, no sign-up, no limits." in home
     )
     # og:description inherits the same copy (home.html doesn't override the
     # block), so social shares match the SERP snippet.
@@ -1447,6 +1447,84 @@ def test_homepage_meta_description_describes_the_product(built):
         'property="og:description" content="Convert documents, images, and '
         "data files for free" in home
     )
+
+
+# --------------------------------------------------------------------------- #
+# Open Graph share images (O2 report §13 #7)
+# --------------------------------------------------------------------------- #
+
+
+def test_og_images_written_for_every_page_kind(built):
+    """One PNG per tool id and category id, plus home.png and one shared
+    default.png. Coverage regression guard: a page kind that stops getting
+    its own image would still build a green site with a broken/missing
+    social card, since og:image itself never errors on a missing file."""
+    og_dir = built / "images" / "og"
+    files = {p.name for p in og_dir.glob("*.png")}
+
+    assert "home.png" in files
+    assert "default.png" in files
+
+    tool_data = json.loads((built / "tool-data.json").read_text(encoding="utf-8"))
+    for tool in tool_data:
+        assert f"{tool['id']}.png" in files, tool["id"]
+
+    for cat_slug in ("document-tools", "image-conversion", "data-conversion"):
+        assert f"{cat_slug}.png" in files, cat_slug
+
+    # No stray/orphaned images beyond what's expected: 34 tools + 3 categories
+    # + home + default.
+    assert len(files) == len(tool_data) + 3 + 2
+
+
+def test_og_images_are_1200x630(built):
+    from PIL import Image
+
+    for name in ("home.png", "default.png", "png-to-jpg.png", "document-tools.png"):
+        with Image.open(built / "images" / "og" / name) as img:
+            assert img.size == (1200, 630), name
+
+
+def test_og_image_tags_present_across_page_kinds(built):
+    """Every page kind carries a complete, well-formed og:image block — not
+    just the homepage. Covers all three tool ui_type templates (§8 of the
+    ad-slot tests above is exactly this same "don't only check one template"
+    lesson applied to OG images), a category page, and a plain static page
+    that relies entirely on base.html's default (no per-template override)."""
+    pages = {
+        "home": built / "index.html",
+        "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
+        "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
+        "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
+        "category": built / "document-tools" / "index.html",
+        "static-default": built / "privacy" / "index.html",
+    }
+    for label, path in pages.items():
+        html = path.read_text(encoding="utf-8")
+        assert re.search(
+            r'<meta property="og:image" content="https://filecast\.org/images/og/[\w-]+\.png">',
+            html,
+        ), label
+        assert '<meta property="og:image:width" content="1200">' in html, label
+        assert '<meta property="og:image:height" content="630">' in html, label
+        assert re.search(r'<meta property="og:image:alt" content="[^"]+">', html), label
+
+
+def test_tool_og_image_path_matches_tool_id_not_slug(built):
+    # tool.slug is "/convert/png-to-jpg" (used for the URL); the OG image is
+    # keyed by the shorter tool.id ("png-to-jpg") — same value here, but a
+    # future tool whose slug diverges from its id must not silently 404 its
+    # share image.
+    page = (built / "convert" / "png-to-jpg" / "index.html").read_text(encoding="utf-8")
+    assert 'content="https://filecast.org/images/og/png-to-jpg.png"' in page
+
+
+def test_category_og_image_path_uses_category_id(built):
+    # category.slug == category.id today for all three live categories, but
+    # the image is keyed by id specifically (generate_og_images() iterates
+    # categories_with_tools by id) — pin that, not the coincidence.
+    page = (built / "document-tools" / "index.html").read_text(encoding="utf-8")
+    assert 'content="https://filecast.org/images/og/document-tools.png"' in page
 
 
 def test_homepage_conversion_badge_floor(tmp_path, monkeypatch):

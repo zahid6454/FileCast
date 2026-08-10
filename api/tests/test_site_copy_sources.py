@@ -35,7 +35,9 @@ SITE_CONFIG = ROOT / "site-config.yaml"
 VERSIONS = ROOT / "api" / "migrations" / "versions"
 MIGRATION = VERSIONS / "0004_honest_site_description.py"  # historical, description
 MIGRATION_TAGLINE = VERSIONS / "0007_seo_homepage_title.py"  # current, tagline
-MIGRATION_DESCRIPTION = VERSIONS / "0008_seo_homepage_description.py"  # current, description
+MIGRATION_DESCRIPTION = (
+    VERSIONS / "0008_seo_homepage_description.py"
+)  # current, description
 
 # Claims that are false for the six ``type: server-side`` tools *unless* the
 # sentence carrying them is scoped to a subset of tools.

@@ -7,6 +7,8 @@
 {% block og_title %}{{ tool.meta.title }}{% endblock %}
 {% block og_description %}{{ tool.meta.description }}{% endblock %}
 {% block og_url %}{{ site.base_url }}{{ tool.slug }}/{% endblock %}
+{% block og_image %}/images/og/{{ tool.id }}.png{% endblock %}
+{% block og_image_alt %}{{ tool.input_format }} to {{ tool.output_format }} — {{ site.name }}{% endblock %}
 
 {% block structured_data %}
 <script type="application/ld+json">

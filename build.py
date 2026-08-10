@@ -14,6 +14,7 @@ import argparse
 import base64
 import hashlib
 import http.server
+import io
 import json
 import os
 import re
@@ -28,6 +29,7 @@ import jinja2
 import markdown
 import rjsmin
 import yaml
+from PIL import Image, ImageDraw, ImageFont
 
 # Ensure console output is UTF-8 so non-ASCII characters (e.g. the "→" in
 # build logs) don't crash on Windows' default cp1252 stdout.
@@ -629,6 +631,155 @@ def write_tool_data(tools: list[dict]):
     ]
     (DIST / "tool-data.json").write_text(json.dumps(records), encoding="utf-8")
     print("  [ok] tool-data.json")
+
+
+# ---------------------------------------------------------------------------
+# Emit dist/images/og/*.png — Open Graph / Twitter share images (P1 §7)
+# ---------------------------------------------------------------------------
+#
+# Rendered at build time via Pillow — no CairoSVG/SVG-rasterizer dependency,
+# no network font fetch, no OS font dependency:
+# ``ImageFont.load_default(size=...)`` (Pillow >= 10.1) ships an embedded
+# scalable font inside the ``pillow`` wheel itself, so this is exactly as
+# portable as every other build step (works identically on the ubuntu-latest
+# CI runner in deploy.yml and on a contributor's machine, unlike relying on a
+# system font that may or may not be installed there). Benchmarked at ~26ms
+# per image for the full set (34 tools + 3 categories + home + one shared
+# default = 39 renders, ~1s total) — not worth caching further.
+#
+# One image per tool/category id, one for the homepage, and ONE shared
+# ``default.png`` for every other page (privacy, terms, about, contact, 404,
+# offline, account) — those get it "for free" via base.html's og_image block
+# default, with no per-template edit.
+
+OG_SIZE = (1200, 630)
+OG_BG = (15, 23, 42)  # --color-bg-dark
+OG_BLUE = (37, 99, 235)  # --brand-blue
+OG_GREEN = (16, 185, 129)  # --brand-green
+OG_WHITE = (255, 255, 255)
+OG_MUTED = (148, 163, 184)  # --color-text-muted (dark-mode value)
+OG_MARGIN = 80
+
+
+def _og_font(size: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.load_default(size=size)
+
+
+def _og_wrap(
+    draw: ImageDraw.ImageDraw, text: str, font, max_width: int, max_lines: int
+) -> list[str]:
+    """Greedy word-wrap into at most `max_lines`; ellipsises the last line if
+    `text` still doesn't fit. Always makes progress even on a single
+    over-wide word (forces it onto its own line rather than looping)."""
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    i = 0
+    while i < len(words) and len(lines) < max_lines:
+        candidate = f"{current} {words[i]}".strip()
+        if not current or draw.textlength(candidate, font=font) <= max_width:
+            current = candidate
+            i += 1
+        else:
+            lines.append(current)
+            current = ""
+    if current:
+        lines.append(current)
+    if i < len(words):  # ran out of lines before words
+        last = lines[-1] if lines else ""
+        while last and draw.textlength(last + "…", font=font) > max_width:
+            last = last[:-1].rstrip()
+        lines = lines[:-1] + [last + "…"] if lines else ["…"]
+    return lines
+
+
+def _render_og_image(headline: str, subtitle: str) -> bytes:
+    """Render one 1200x630 branded PNG for `headline`/`subtitle`."""
+    img = Image.new("RGB", OG_SIZE, OG_BG)
+    draw = ImageDraw.Draw(img)
+
+    # Logo mark — mirrors the inline SVG in base.html's header.
+    draw.rounded_rectangle(
+        (OG_MARGIN, 72, OG_MARGIN + 40, 192), radius=10, fill=OG_BLUE
+    )
+    draw.polygon(
+        [(OG_MARGIN + 70, 102), (OG_MARGIN + 110, 132), (OG_MARGIN + 70, 162)],
+        fill=OG_WHITE,
+    )
+    draw.rounded_rectangle(
+        (OG_MARGIN + 120, 72, OG_MARGIN + 160, 192), radius=10, fill=OG_GREEN
+    )
+    draw.text((OG_MARGIN + 178, 105), "FileCast", font=_og_font(46), fill=OG_WHITE)
+
+    headline_font = _og_font(64)
+    subtitle_font = _og_font(32)
+    max_width = OG_SIZE[0] - 2 * OG_MARGIN
+
+    y = 300
+    for line in _og_wrap(draw, headline, headline_font, max_width, max_lines=2):
+        draw.text((OG_MARGIN, y), line, font=headline_font, fill=OG_WHITE)
+        y += 78
+
+    y += 20
+    for line in _og_wrap(draw, subtitle, subtitle_font, max_width, max_lines=1):
+        draw.text((OG_MARGIN, y), line, font=subtitle_font, fill=OG_MUTED)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
+def generate_og_images(
+    tools: list[dict], categories_with_tools: dict, site_config: dict
+):
+    """Write ``dist/images/og/{home,default,<tool id>,<category id>}.png``.
+
+    Templates reference these by a predictable path built from context they
+    already have (tool id / category id) — see base.html's ``og_image`` block
+    default and each of home/tool*/category's override — so no build-time
+    id-to-path mapping needs to reach Jinja.
+    """
+    out_dir = DIST / "images" / "og"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # ASCII punctuation only in text drawn onto these images: Pillow's bundled
+    # default font (see _og_font's docstring) has no glyph for an em-dash,
+    # arrow, or bullet — each silently falls back to the SAME "missing glyph"
+    # tofu box (verified: all three measure identically wide, unlike every
+    # real glyph tried), not an exception, so this would ship broken-looking
+    # cards with no build error. Doesn't apply to the *_alt text below, which
+    # is real HTML the browser's own font renders.
+    (out_dir / "home.png").write_bytes(
+        _render_og_image(
+            "Free Online File Converter",
+            f"{len(tools)} Free Tools - No Sign-up - No Limits",
+        )
+    )
+
+    for tool in tools:
+        headline = f"{tool.get('input_format', '')} to {tool.get('output_format', '')}"
+        subtitle = (
+            "Free & Secure | FileCast"
+            if tool.get("type") == "server-side"
+            else "Free, No Upload | FileCast"
+        )
+        (out_dir / f"{tool['id']}.png").write_bytes(
+            _render_og_image(headline, subtitle)
+        )
+
+    for cat_id, cat_data in categories_with_tools.items():
+        headline = f"{len(cat_data['tools'])} Free {cat_data['name']} Tools"
+        (out_dir / f"{cat_id}.png").write_bytes(
+            _render_og_image(headline, "No Sign-up - No Limits - filecast.org")
+        )
+
+    (out_dir / "default.png").write_bytes(
+        _render_og_image(
+            site_config.get("site", {}).get("name", "FileCast"),
+            "Free, Private File Conversion - No Sign-up Needed",
+        )
+    )
+    print(f"  [ok] {2 + len(tools) + len(categories_with_tools)} og images")
 
 
 # ---------------------------------------------------------------------------
@@ -1567,21 +1718,21 @@ def build():
     print("FileCast build starting...\n")
 
     # 1. Clean
-    print("[1/10] Cleaning dist/")
+    print("[1/11] Cleaning dist/")
     clean_dist()
 
     # 2. Load config, then overlay the admin Site Settings (graceful fallback to
     # YAML). Merged HERE — before create_jinja_env() and generate_headers() — so
     # the templates and the CSP read one merged dict and never disagree about
     # which integrations are on (P10; all-or-nothing overlay).
-    print("[2/10] Loading site-config.yaml")
+    print("[2/11] Loading site-config.yaml")
     site_config = load_site_config()
     site_config = apply_site_settings(site_config, fetch_site_settings())
 
     # 3-4. Load tools, then overlay DB state (graceful fallback to YAML) and
     # apply the global sort_order upstream of all rendering (P9/D1). Disabled
     # tools are dropped BEFORE resolve_related_tools() so no dangling links remain.
-    print("[3/10] Discovering tools")
+    print("[3/11] Discovering tools")
     tools = load_tools()
     tools = apply_tool_overrides(tools, fetch_tool_overrides())  # may DROP disabled
     tools = sort_tools(tools)
@@ -1592,22 +1743,22 @@ def build():
     print(f"       Found {len(tools)} tool(s)")
 
     # 5. Group by category
-    print("[4/10] Grouping tools by category")
+    print("[4/11] Grouping tools by category")
     categories = site_config.get("categories", [])
     categories_with_tools = group_tools_by_category(tools, categories)
     active_cats = list(categories_with_tools.keys())
     print(f"       Active categories: {active_cats if active_cats else '(none yet)'}")
 
     # 6. Load content
-    print("[5/10] Loading content markdown")
+    print("[5/11] Loading content markdown")
     load_tool_content(tools)
 
     # 7. Resolve related tools
-    print("[6/10] Resolving related tools")
+    print("[6/11] Resolving related tools")
     resolve_related_tools(tools)
 
     # 8-12. Process assets
-    print("[7/10] Processing static assets")
+    print("[7/11] Processing static assets")
     asset_map = process_assets()
     for key, info in asset_map.items():
         print(f"       {key} → {info['path']}")
@@ -1616,8 +1767,13 @@ def build():
     # P8); ordered by sort_order, disabled tools already excluded.
     write_tool_data(tools)
 
+    # Open Graph / Twitter share images (P1 §7) — one per tool/category id,
+    # one for the homepage, one shared default for every other page.
+    print("[8/11] Generating Open Graph images")
+    generate_og_images(tools, categories_with_tools, site_config)
+
     # 13. Jinja2 environment
-    print("[8/10] Setting up Jinja2")
+    print("[9/11] Setting up Jinja2")
     env = create_jinja_env(site_config, asset_map, categories_with_tools)
 
     # Site-wide totals for the homepage trust counter. Always defined (so the
@@ -1633,12 +1789,12 @@ def build():
     }
 
     # 14. Render pages
-    print("[9/10] Rendering pages")
+    print("[10/11] Rendering pages")
     render_all_pages(env, tools, categories_with_tools)
 
     # 15-19. Generate support files
     print(
-        "[10/10] Generating sitemap, robots.txt, manifest.json, sw.js, "
+        "[11/11] Generating sitemap, robots.txt, manifest.json, sw.js, "
         "_headers, _redirects"
     )
     generate_sitemap(site_config, tools, categories_with_tools)

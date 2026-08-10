@@ -5,6 +5,11 @@ markdown
 csscompressor
 rjsmin
 
+# Open Graph share image generation (P1 §7). ImageFont.load_default(size=...)
+# (Pillow >= 10.1) ships an embedded scalable font inside the wheel itself —
+# no system font, no network fetch, no separate rasterizer dependency needed.
+Pillow==12.*
+
 # Phase 2: build.py overlays the tool-state from Postgres via the shared api/data
 # package (sync engine), the same deps seed.py needs. These are effectively
 # optional to build.py — absent them the ImportError degrades to YAML-only (P10) —
