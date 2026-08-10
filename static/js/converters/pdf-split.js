@@ -65,6 +65,14 @@
 
     // Take over the result panel: tell shared.js not to overwrite our summary.
     window._converterOwnsResult = true;
+
+    // Keep the real #reset-btn — shared.js's init() already wired it to
+    // resetUI() (fires the convert_another GA event, clears currentFile/the
+    // file input, returns to the empty state). Rebuilding it here as a new
+    // button with location.reload() used to skip all of that and force a
+    // full page reload for what should be an in-page reset.
+    var resetBtn = document.getElementById('reset-btn');
+
     actionsEl.innerHTML = '';
 
     blobs.forEach(function (item) {
@@ -86,13 +94,7 @@
       actionsEl.appendChild(btn);
     });
 
-    var resetBtn = document.createElement('button');
-    resetBtn.className = 'btn btn--primary';
-    resetBtn.textContent = 'Convert Another';
-    resetBtn.addEventListener('click', function () {
-      location.reload();
-    });
-    actionsEl.appendChild(resetBtn);
+    if (resetBtn) actionsEl.appendChild(resetBtn);
 
     var infoEl = document.getElementById('result-info');
     if (infoEl) {

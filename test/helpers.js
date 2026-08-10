@@ -9,11 +9,31 @@ const ROOT = path.resolve(__dirname, '..');
 // Build an isolated JSDOM window with the given <body> markup. Each test gets a
 // fresh window (fresh localStorage, fresh DOM, no leaked listeners).
 export function createDom(bodyHtml = '', { url = 'http://localhost/' } = {}) {
-  return new JSDOM(`<!DOCTYPE html><html><head></head><body>${bodyHtml}</body></html>`, {
+  const dom = new JSDOM(`<!DOCTYPE html><html><head></head><body>${bodyHtml}</body></html>`, {
     url,
     pretendToBeVisual: true,
     runScripts: 'outside-only'
   });
+  polyfillArrayBuffer(dom.window);
+  return dom;
+}
+
+// This jsdom version's Blob/File don't implement `.arrayBuffer()` (it throws
+// "not a function") even though every browser has had it for years — several
+// converters (pdf-split.js and friends) call `file.arrayBuffer()` as their
+// first step, so without this polyfill any test driving a real file-select ->
+// convert flow fails before the converter's own logic ever runs. Built on
+// FileReader, which jsdom does implement.
+function polyfillArrayBuffer(win) {
+  if (typeof win.Blob.prototype.arrayBuffer === 'function') return;
+  win.Blob.prototype.arrayBuffer = function () {
+    return new Promise((resolve, reject) => {
+      var reader = new win.FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(this);
+    });
+  };
 }
 
 // Evaluate a production JS file *as-is* inside the window (no test hooks in the
