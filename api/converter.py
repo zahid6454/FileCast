@@ -357,6 +357,36 @@ def _max_size_for(user: User | None) -> int:
     return MAX_FILE_SIZE * (2 if user else 1)
 
 
+_READ_CHUNK_SIZE = 1024 * 1024  # 1MB
+
+
+async def _read_capped(file: UploadFile, max_size: int) -> bytes:
+    """Read ``file`` in chunks, aborting as soon as it exceeds ``max_size``.
+
+    A plain ``await file.read()`` buffers the entire body into memory before
+    ``validate_upload``'s size check ever runs — a client can make the API
+    fully materialize an arbitrarily large upload as ``bytes`` regardless of
+    what it declared. Chunked reads with an early abort mean a request that's
+    already over the limit gets rejected without paying for the rest of it.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(_READ_CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_size:
+            raise ValidationError(
+                f"File exceeds the {max_size // (1024 * 1024)}MB limit "
+                "for this conversion type.",
+                "too_large",
+                bytes_read=total,
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 async def _handle_conversion(
     file: UploadFile,
     tool_id: str,
@@ -368,7 +398,7 @@ async def _handle_conversion(
     start = time.time()
     input_size = 0
     try:
-        content = await file.read()
+        content = await _read_capped(file, max_size)
         input_size = len(content)
         validate_upload(content, file.filename or "unknown", tool_id, max_size)
         result = await convert_fn(content, file.filename or "file")
@@ -399,6 +429,8 @@ async def _handle_conversion(
             },
         )
     except ValidationError as e:
+        if e.bytes_read is not None:
+            input_size = e.bytes_read
         duration_ms = round((time.time() - start) * 1000, 1)
         _record_metric(tool_id, False, duration_ms)
         logger.warning(

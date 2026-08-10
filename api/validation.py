@@ -26,9 +26,19 @@ COMPRESS_QUALITIES = {"screen", "ebook", "printer", "prepress"}
 
 
 class ValidationError(Exception):
-    def __init__(self, message: str, error_type: str = "validation_error"):
+    def __init__(
+        self,
+        message: str,
+        error_type: str = "validation_error",
+        bytes_read: int | None = None,
+    ):
         self.message = message
         self.error_type = error_type
+        # Set only when raised mid-stream (e.g. converter.py's capped read
+        # aborting before the full body is buffered) — lets callers log how
+        # much was actually read instead of 0 for a rejection that happened
+        # before a `content` object ever existed.
+        self.bytes_read = bytes_read
         super().__init__(message)
 
 
