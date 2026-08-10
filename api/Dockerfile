@@ -21,6 +21,15 @@ COPY . .
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
 
+# Drop root before serving. Nothing at runtime writes under /app — the only
+# two filesystem writes anywhere in this app (converter.py's temp PDFs,
+# data/tasks.py's purge heartbeat) already go through Python's tempfile
+# module, which defaults to /tmp (world-writable, sticky bit) — so a non-root
+# user needs no chown here, only read+execute on files root already left
+# world-readable by the default umask.
+RUN useradd --create-home --shell /usr/sbin/nologin --uid 1000 appuser
+USER appuser
+
 EXPOSE 8090
 
 # Migrate then serve — in the api service COMMAND (not a shared ENTRYPOINT) so
