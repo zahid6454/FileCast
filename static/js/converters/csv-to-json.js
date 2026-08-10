@@ -1,4 +1,8 @@
 window.convertText = function (text) {
+  // Matches JSON's own number grammar: no leading zeros (so "00501" stays a
+  // string, not 501), no bare "Infinity"/"NaN" (Number() accepts those, but
+  // JSON.stringify silently turns them into null — silent data loss).
+  var NUMERIC_RE = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/;
   var lines = [];
   var current = '';
   var inQuotes = false;
@@ -70,7 +74,7 @@ window.convertText = function (text) {
         obj[headers[c]] = true;
       } else if (val === 'false') {
         obj[headers[c]] = false;
-      } else if (!isNaN(val) && val !== '') {
+      } else if (NUMERIC_RE.test(val)) {
         obj[headers[c]] = Number(val);
       } else {
         obj[headers[c]] = val;

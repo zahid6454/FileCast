@@ -27,6 +27,23 @@ services:
         condition: service_healthy
         required: false
     restart: unless-stopped
+    # No apt package added for this — python:3.12-slim already has Python, and
+    # a 200-range response IS the check (mirrors gotenberg's `curl -sf`
+    # below); urlopen raises on anything else, which is a non-zero exit.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8090/api/v1/health', timeout=3)"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    mem_limit: 2g
+    cpus: 1.5
 
   # The 30-day retention purge (D5/F13). This is THE single purge trigger —
   # one container, not one scheduler per uvicorn worker. Phase 7 specified a
@@ -59,6 +76,28 @@ services:
         condition: service_healthy
         required: false
     restart: unless-stopped
+    # This loop has no server to poll (it wakes once a day — see data/tasks.py)
+    # and a dead process already shows as "Exited" without a HEALTHCHECK, so
+    # the useful failure mode to catch here is different: hung-but-still-alive
+    # inside _run_once() forever. data/tasks.py's loop touches HEARTBEAT_PATH
+    # once per iteration (success or handled failure) right before sleeping;
+    # 48h is 2x the normal interval, generous enough that only a genuine hang
+    # trips it. interval/retries are deliberately loose to match — this isn't
+    # meant to catch anything fast, just to stop a silent, permanent stall.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import pathlib,sys,tempfile,time; p=pathlib.Path(tempfile.gettempdir())/'purge-heartbeat'; sys.exit(0 if p.exists() and time.time()-p.stat().st_mtime < 172800 else 1)"
+        ]
+      interval: 1h
+      timeout: 10s
+      retries: 1
+      start_period: 30s
+    mem_limit: 256m
+    cpus: 0.25
 
   gotenberg:
     image: gotenberg/gotenberg:8

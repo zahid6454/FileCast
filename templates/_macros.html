@@ -133,3 +133,21 @@
   {{ processing_pill(tool) }}
 </a>
 {%- endmacro %}
+
+{# tool_card_lg(tool, cat_id) — the LARGE card used on category.html, for both
+   its main-tools and sub-tools grids (was duplicated verbatim between the
+   two before this — exactly the drift ad_slot()'s docstring above warns
+   about). `cat_id` is required here (category.html always has a `category`
+   in scope to pass), unlike tool_card's optional fallback to tool.category. #}
+{% macro tool_card_lg(tool, cat_id) -%}
+<a class="card card--lg{% if tool.type == 'server-side' %} card--server{% endif %}"
+   href="{{ tool.slug }}/"
+   data-name="{{ tool.name|lower }}"
+   data-category="{{ cat_id }}">
+  <strong>{% if tool.input_format == tool.output_format %}{{ tool.name }}{% else %}{{ tool.input_format }} → {{ tool.output_format }}{% endif %}</strong>
+  {% if tool.tagline %}
+  <div class="card__desc">{{ tool.tagline }}</div>
+  {% endif %}
+  {{ processing_pill(tool) }}
+</a>
+{%- endmacro %}

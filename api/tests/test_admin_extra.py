@@ -85,6 +85,48 @@ async def test_announcement_update_unknown_404(admin_client):
     ).status_code == 404
 
 
+# --- announcements validation (O4 audit item #6) ---
+
+
+async def test_announcement_create_rejects_empty_message(admin_client):
+    r = await admin_client.post("/api/v1/announcements", json={"message": "   "})
+    assert r.status_code == 422
+
+
+async def test_announcement_create_rejects_overlong_message(admin_client):
+    r = await admin_client.post("/api/v1/announcements", json={"message": "x" * 501})
+    assert r.status_code == 422
+
+
+async def test_announcement_create_rejects_unknown_type(admin_client):
+    r = await admin_client.post(
+        "/api/v1/announcements", json={"message": "Hi", "type": "danger"}
+    )
+    assert r.status_code == 422
+
+
+async def test_announcement_create_rejects_overlong_link(admin_client):
+    r = await admin_client.post(
+        "/api/v1/announcements",
+        json={"message": "Hi", "link": "https://example.com/" + "x" * 2048},
+    )
+    assert r.status_code == 422
+
+
+async def test_announcement_update_rejects_invalid_fields(admin_client):
+    created = (
+        await admin_client.post("/api/v1/announcements", json={"message": "Original"})
+    ).json()["announcement"]
+    aid = created["id"]
+
+    assert (
+        await admin_client.put(f"/api/v1/announcements/{aid}", json={"message": ""})
+    ).status_code == 422
+    assert (
+        await admin_client.put(f"/api/v1/announcements/{aid}", json={"type": "danger"})
+    ).status_code == 422
+
+
 # admin-deploy is covered in test_admin_deploy.py (Phase 7 real round-trip).
 
 
@@ -99,3 +141,61 @@ async def test_preferences_requires_auth(client):
 
 async def test_history_requires_auth(client):
     assert (await client.get("/api/v1/user/history")).status_code == 401
+
+
+async def test_my_history_success(user_client):
+    for i in range(3):
+        await user_client.post(
+            "/api/v1/conversions",
+            json={
+                "tool_id": "jpg-to-png",
+                "input_format": "JPG",
+                "output_format": "PNG",
+                "status": "success",
+                "file_size_kb": 100 + i,
+                "duration_ms": 500 + i,
+            },
+        )
+
+    p1 = (await user_client.get("/api/v1/user/history?limit=2&offset=0")).json()
+    assert p1["total"] == 3
+    assert p1["has_more"] is True
+    assert len(p1["history"]) == 2
+    # Most recent first: the third POST's file_size_kb (102) leads.
+    assert p1["history"][0]["file_size_kb"] == 102
+    assert p1["history"][0]["tool_id"] == "jpg-to-png"
+    assert p1["history"][0]["input_format"] == "JPG"
+    assert p1["history"][0]["output_format"] == "PNG"
+    assert p1["history"][0]["status"] == "success"
+    assert p1["history"][0]["created_at"] is not None
+
+    p2 = (await user_client.get("/api/v1/user/history?limit=2&offset=2")).json()
+    assert p2["total"] == 3
+    assert p2["has_more"] is False
+    assert len(p2["history"]) == 1
+    assert p2["history"][0]["file_size_kb"] == 100
+
+
+async def test_my_history_only_returns_the_caller_own_rows(user_client, admin_client):
+    await user_client.post(
+        "/api/v1/conversions",
+        json={
+            "tool_id": "jpg-to-png",
+            "input_format": "JPG",
+            "output_format": "PNG",
+            "status": "success",
+        },
+    )
+    await admin_client.post(
+        "/api/v1/conversions",
+        json={
+            "tool_id": "png-to-jpg",
+            "input_format": "PNG",
+            "output_format": "JPG",
+            "status": "success",
+        },
+    )
+
+    mine = (await user_client.get("/api/v1/user/history")).json()
+    assert mine["total"] == 1
+    assert mine["history"][0]["tool_id"] == "jpg-to-png"

@@ -8,7 +8,7 @@ the path param shadows it and ``active`` is parsed as an id (admin-panel C3).
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,42 @@ from data.models import Announcement
 from data.security import require_admin
 
 router = APIRouter(prefix="/api/v1/announcements", tags=["announcements"])
+
+# Length cap — this renders into the site-wide announcement bar on every page.
+MESSAGE_MAX = 500
+# Generous but bounded; this is a URL, not free text.
+LINK_MAX = 2048
+# Must match the CSS variants in style.css (.announcement-bar--<type>) and the
+# TYPES list in static/js/admin/announcements.js — an unrecognized type falls
+# back to unstyled on the admin preview but would render unstyled on every
+# live page too, so it's rejected server-side rather than left to that fallback.
+ANNOUNCEMENT_TYPES = {"info", "new", "maintenance", "warning"}
+
+
+def _validate_message(v: str) -> str:
+    v = v.strip()
+    if not v:
+        raise ValueError("message must not be empty")
+    if len(v) > MESSAGE_MAX:
+        raise ValueError(f"message must be ≤ {MESSAGE_MAX} characters")
+    return v
+
+
+def _validate_type(v: str) -> str:
+    if v not in ANNOUNCEMENT_TYPES:
+        raise ValueError(f"type must be one of {sorted(ANNOUNCEMENT_TYPES)}")
+    return v
+
+
+def _validate_link(v: str | None) -> str | None:
+    if v is None:
+        return None
+    v = v.strip()
+    if not v:
+        return None
+    if len(v) > LINK_MAX:
+        raise ValueError(f"link must be ≤ {LINK_MAX} characters")
+    return v
 
 
 class AnnouncementBody(BaseModel):
@@ -27,6 +63,21 @@ class AnnouncementBody(BaseModel):
     starts_at: datetime | None = None
     ends_at: datetime | None = None
 
+    @field_validator("message")
+    @classmethod
+    def _message(cls, v: str) -> str:
+        return _validate_message(v)
+
+    @field_validator("type")
+    @classmethod
+    def _type(cls, v: str) -> str:
+        return _validate_type(v)
+
+    @field_validator("link")
+    @classmethod
+    def _link(cls, v: str | None) -> str | None:
+        return _validate_link(v)
+
 
 class AnnouncementUpdate(BaseModel):
     message: str | None = None
@@ -35,6 +86,21 @@ class AnnouncementUpdate(BaseModel):
     active: bool | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
+
+    @field_validator("message")
+    @classmethod
+    def _message(cls, v: str | None) -> str | None:
+        return _validate_message(v) if v is not None else v
+
+    @field_validator("type")
+    @classmethod
+    def _type(cls, v: str | None) -> str | None:
+        return _validate_type(v) if v is not None else v
+
+    @field_validator("link")
+    @classmethod
+    def _link(cls, v: str | None) -> str | None:
+        return _validate_link(v)
 
 
 def _dict(a: Announcement) -> dict:

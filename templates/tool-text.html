@@ -203,7 +203,9 @@
   "output_extension": {{ tool.output_extension|tojson }},
   "max_file_size": {{ tool.max_file_size|tojson }},
   "max_file_size_bytes": {{ tool.max_file_size_bytes|tojson }},
-  "category": {{ tool.category|tojson }}
+  "category": {{ tool.category|tojson }}{% if tool.js_module is defined and tool.js_module %}{% set tool_js = assets.get('js/' + tool.js_module) %}{% set text_worker_asset = assets.get('js/workers/text-converter-worker.js') %}{% if tool_js and text_worker_asset %},
+  "text_converter_src": {{ ("/" + tool_js.path)|tojson }},
+  "text_converter_worker_src": {{ ("/" + text_worker_asset.path)|tojson }}{% endif %}{% endif %}
 }
 </script>
 
@@ -230,11 +232,9 @@
 {% endfor %}
 {% endif %}
 
-{# Tool converter JS #}
-{% if tool.js_module is defined and tool.js_module %}
-{% set tool_js = assets.get('js/' + tool.js_module) %}
-{% if tool_js %}
-<script src="/{{ tool_js.path }}" integrity="{{ tool_js.sri }}" crossorigin="anonymous" defer></script>
-{% endif %}
-{% endif %}
+{# Tool converter JS: NOT loaded here. shared-text.js runs it inside
+   text-converter-worker.js (off the main thread) via the
+   text_converter_src/text_converter_worker_src pair set in #tool-config
+   above — a plain <script> tag would define window.convertText redundantly
+   on the main thread for nothing, since shared-text.js never calls it there. #}
 {% endblock %}

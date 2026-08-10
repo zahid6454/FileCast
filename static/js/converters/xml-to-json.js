@@ -1,6 +1,11 @@
 (function () {
   'use strict';
 
+  // Matches JSON's own number grammar: no leading zeros (so "00501" stays a
+  // string, not 501), no bare "Infinity"/"NaN" (Number() accepts those, but
+  // JSON.stringify silently turns them into null — silent data loss).
+  var NUMERIC_RE = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/;
+
   window.convertText = function (text) {
     var parser = new DOMParser();
     var doc = parser.parseFromString(text, 'text/xml');
@@ -86,7 +91,7 @@
     if (str === '') return null;
     if (str === 'true') return true;
     if (str === 'false') return false;
-    if (!isNaN(str) && str.trim() !== '') return Number(str);
+    if (NUMERIC_RE.test(str)) return Number(str);
     return str;
   }
 })();

@@ -24,6 +24,12 @@ on:
     - cron: "0 7 * * *"
   workflow_dispatch: {}
 
+# Least-privilege default (O4 audit item #16): this job never even checks out
+# the repo — pg_dump reads Neon directly via secrets.DATABASE_URL, and
+# upload-artifact uses the runner's own artifact API, not GITHUB_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   backup:
     name: pg_dump Neon -> artifact

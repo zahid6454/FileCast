@@ -49,11 +49,18 @@ async def test_convert_success_with_mocked_gotenberg(client, monkeypatch):
     assert r.content == b"%PDF-1.4 fake pdf bytes"
 
 
-async def test_metrics_endpoint_shape(client):
-    r = await client.get("/api/v1/metrics")
+async def test_metrics_endpoint_shape(admin_client):
+    r = await admin_client.get("/api/v1/metrics")
     assert r.status_code == 200
     body = r.json()
     assert set(body) == {"conversions", "failures", "avg_duration_ms"}
+
+
+async def test_metrics_endpoint_requires_admin(client, user_client):
+    # Anonymous: no session at all.
+    assert (await client.get("/api/v1/metrics")).status_code == 401
+    # Signed in, but not an admin.
+    assert (await user_client.get("/api/v1/metrics")).status_code == 403
 
 
 async def test_health_endpoint_responds(client):

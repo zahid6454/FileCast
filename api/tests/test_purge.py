@@ -165,3 +165,42 @@ def test_loop_survives_a_failing_run(monkeypatch):
     assert calls["runs"] == 2
     assert calls["sleeps"][0] == tasks.FAILURE_RETRY_SECONDS
     assert calls["sleeps"][1] == 3600
+
+
+def test_loop_writes_a_heartbeat_every_iteration_including_on_failure(
+    monkeypatch, tmp_path
+):
+    """The compose HEALTHCHECK reads this file's mtime to tell "still cycling"
+    apart from "hung inside _run_once() and never coming back" — it must be
+    touched after a failed run too, not only a successful one, or a single
+    transient error would falsely read as a hang until the next success."""
+    from data import tasks
+
+    heartbeat = tmp_path / "purge-heartbeat"
+    monkeypatch.setattr(tasks, "HEARTBEAT_PATH", heartbeat)
+
+    calls = {"runs": 0, "sleeps": 0}
+
+    def fake_run():
+        calls["runs"] += 1
+        if calls["runs"] == 1:
+            raise RuntimeError("transient DB blip")
+
+    class Stop(Exception):
+        pass
+
+    def fake_sleep(seconds):
+        calls["sleeps"] += 1
+        if calls["sleeps"] == 1:
+            # First iteration failed — the heartbeat must already exist.
+            assert heartbeat.exists()
+        if calls["sleeps"] == 2:
+            raise Stop
+
+    monkeypatch.setattr(tasks, "_run_once", fake_run)
+    monkeypatch.setattr(tasks.time, "sleep", fake_sleep)
+
+    with pytest.raises(Stop):
+        tasks._run_loop(3600)
+
+    assert heartbeat.exists()
