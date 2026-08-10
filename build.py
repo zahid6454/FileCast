@@ -1705,9 +1705,7 @@ def generate_redirects(site_config: dict):
     )
     host = urlparse(base).netloc
     if not host:
-        print(
-            f"  [warn] site.base_url {base!r} has no host; skipping the www redirect"
-        )
+        print(f"  [warn] site.base_url {base!r} has no host; skipping the www redirect")
     lines = []
     if host:
         lines.append(f"https://www.{host}/* {base}/:splat 301")

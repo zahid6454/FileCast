@@ -1160,7 +1160,9 @@ def test_generate_redirects_schemeless_base_url_warns_and_skips_www_only(
     assert "no host" in capsys.readouterr().out
 
 
-def test_generate_redirects_document_tools_to_document_conversion(tmp_path, monkeypatch):
+def test_generate_redirects_document_tools_to_document_conversion(
+    tmp_path, monkeypatch
+):
     # O2 report §4.1/§13 #11 — the renamed category URL. Host-independent (a
     # literal path redirect), so it must be present regardless of base_url.
     monkeypatch.setattr(build, "DIST", tmp_path)
@@ -1737,9 +1739,7 @@ def test_webapp_jsonld_feature_list_does_not_claim_no_upload_for_server_tools(bu
 
 
 def test_webapp_jsonld_feature_list_claims_no_upload_for_client_tools(built):
-    html = (built / "convert" / "png-to-jpg" / "index.html").read_text(
-        encoding="utf-8"
-    )
+    html = (built / "convert" / "png-to-jpg" / "index.html").read_text(encoding="utf-8")
     blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "WebApplication"]
     assert "No upload" in blocks[0]["featureList"]
 
@@ -1830,10 +1830,20 @@ def test_footer_popular_tools_row_present_on_every_page_kind(built):
 def test_select_popular_tools_skips_missing_ids():
     # An admin-disabled (or renamed) tool among the six must shorten the row,
     # not crash the build (P10 — same posture as apply_tool_overrides()).
-    tools = [{"id": "png-to-jpg", "name": "PNG to JPG Converter", "slug": "/convert/png-to-jpg"}]
+    tools = [
+        {
+            "id": "png-to-jpg",
+            "name": "PNG to JPG Converter",
+            "slug": "/convert/png-to-jpg",
+        }
+    ]
     result = build.select_popular_tools(tools)
     assert result == [
-        {"id": "png-to-jpg", "name": "PNG to JPG Converter", "slug": "/convert/png-to-jpg"}
+        {
+            "id": "png-to-jpg",
+            "name": "PNG to JPG Converter",
+            "slug": "/convert/png-to-jpg",
+        }
     ]
 
 
@@ -1857,9 +1867,7 @@ def test_cross_category_links_added_to_when_to_use_content(built):
     )
 
     for tool_id in ("pdf-to-jpg", "pdf-to-png"):
-        page = (built / "convert" / tool_id / "index.html").read_text(
-            encoding="utf-8"
-        )
+        page = (built / "convert" / tool_id / "index.html").read_text(encoding="utf-8")
         assert 'href="/convert/image-compress/"' in page
 
 
@@ -1890,9 +1898,7 @@ def test_alternatives_block_content_differs_by_group(built):
         "html-to-pdf": "Print dialog",
     }
     for tool_id, must_contain in pairs.items():
-        page = (built / "convert" / tool_id / "index.html").read_text(
-            encoding="utf-8"
-        )
+        page = (built / "convert" / tool_id / "index.html").read_text(encoding="utf-8")
         assert must_contain in page, tool_id
 
 
@@ -1901,9 +1907,7 @@ def test_alternatives_pdf_action_tools_do_not_reuse_office_app_answer(built):
     # open in Word/Docs/LibreOffice) — must not get the docx-to-pdf-style
     # "Microsoft Word, PowerPoint, or Excel" answer.
     for tool_id in ("pdf-compress", "pdf-merge", "pdf-rotate", "pdf-split"):
-        page = (built / "convert" / tool_id / "index.html").read_text(
-            encoding="utf-8"
-        )
+        page = (built / "convert" / tool_id / "index.html").read_text(encoding="utf-8")
         assert "Microsoft Word, PowerPoint, or Excel" not in page
 
 
