@@ -77,6 +77,21 @@ def add_cors(app):
     )
 
 
+class NoIndexMiddleware(BaseHTTPMiddleware):
+    """Tag every response ``X-Robots-Tag: noindex, nofollow``.
+
+    api.filecast.org is a JSON API, not a page — nothing here belongs in search
+    results. filecast.org's robots.txt (build.py) is scoped to that origin only
+    and has no effect on this subdomain, so the header is what actually stops a
+    crawler here.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
+
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Assign request ID, log request/response, add timing header."""
 
