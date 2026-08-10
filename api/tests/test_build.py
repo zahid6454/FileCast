@@ -1742,3 +1742,40 @@ def test_webapp_jsonld_feature_list_claims_no_upload_for_client_tools(built):
     )
     blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "WebApplication"]
     assert "No upload" in blocks[0]["featureList"]
+
+
+# --------------------------------------------------------------------------- #
+# Organization JSON-LD (O2 report §7.4/§13 #17)
+# --------------------------------------------------------------------------- #
+
+
+def test_organization_jsonld_on_homepage(built):
+    html = (built / "index.html").read_text(encoding="utf-8")
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "Organization"]
+    assert len(blocks) == 1
+    org = blocks[0]
+    assert org["name"] == "FileCast"
+    assert org["url"] == "https://filecast.org/"
+    assert org["logo"] == "https://filecast.org/favicon.svg"
+    assert org["description"]
+
+
+def test_organization_jsonld_omits_sameas(built):
+    # No public social profile or repo link exists yet (the GitHub repo is
+    # private — see contact.html's comment on why its own link was removed).
+    # `sameAs` is optional in schema.org; a link that 404s would be worse
+    # than omitting the field.
+    html = (built / "index.html").read_text(encoding="utf-8")
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "Organization"]
+    assert "sameAs" not in blocks[0]
+
+
+def test_organization_jsonld_only_on_homepage(built):
+    # Not every page needs its own Organization block — one per site is
+    # standard practice; check a tool and a category page don't duplicate it.
+    for path in (
+        built / "convert" / "png-to-jpg" / "index.html",
+        built / "document-conversion" / "index.html",
+    ):
+        html = path.read_text(encoding="utf-8")
+        assert not [b for b in _ldjson_blocks(html) if b.get("@type") == "Organization"]
