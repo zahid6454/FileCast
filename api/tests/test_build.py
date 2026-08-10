@@ -1526,6 +1526,24 @@ def test_og_image_tags_present_across_page_kinds(built):
         assert re.search(r'<meta property="og:image:alt" content="[^"]+">', html), label
 
 
+def test_og_type_present_across_page_kinds(built):
+    """O2 report §5.4/§13 #14 flagged og:type as homepage-only. It's actually
+    unconditional in base.html (outside every block), so this just pins that
+    invariant across every page kind — a future per-template override
+    ("website" for tools, say) would need to keep this passing too."""
+    pages = {
+        "home": built / "index.html",
+        "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
+        "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
+        "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
+        "category": built / "document-conversion" / "index.html",
+        "static-default": built / "privacy" / "index.html",
+    }
+    for label, path in pages.items():
+        html = path.read_text(encoding="utf-8")
+        assert '<meta property="og:type" content="website">' in html, label
+
+
 def test_tool_og_image_path_matches_tool_id_not_slug(built):
     # tool.slug is "/convert/png-to-jpg" (used for the URL); the OG image is
     # keyed by the shorter tool.id ("png-to-jpg") — same value here, but a
