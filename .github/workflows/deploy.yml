@@ -15,6 +15,13 @@ on:
         required: false
         default: manual
 
+# Least-privilege default (O4 audit item #16): both jobs only read the
+# checked-out repo — the actual publish goes to Cloudflare Pages
+# (CLOUDFLARE_API_TOKEN, not GITHUB_TOKEN), and api-drift only runs read-only
+# git/curl commands. Neither pushes or calls the GitHub API for a write.
+permissions:
+  contents: read
+
 # Serialize deploys: two Saves inside the ~1-minute build window must QUEUE, not
 # race. cancel-in-progress:false is the entire P17/D8 fix — `true` silently
 # reintroduces the race the block exists to prevent (the Settings tab is a second

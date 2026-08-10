@@ -5,6 +5,12 @@ on:
   push:
     branches: [master]
 
+# Least-privilege default (O4 audit item #16): every job here only reads the
+# checked-out repo (lint/test), never pushes, comments, or calls the GitHub
+# API for a write. No job needs more than this.
+permissions:
+  contents: read
+
 # Cancel superseded runs on the same ref (e.g. rapid PR pushes).
 concurrency:
   group: ci-${{ github.ref }}

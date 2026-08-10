@@ -13,6 +13,13 @@ on:
   release:
     types: [published]
 
+# Least-privilege default (O4 audit item #16): both jobs only read the
+# checked-out repo — frontend publishes to Cloudflare Pages
+# (CLOUDFLARE_API_TOKEN), backend triggers the Oracle VM over SSH
+# (ORACLE_DEPLOY_SSH_KEY). Neither uses GITHUB_TOKEN to write anything.
+permissions:
+  contents: read
+
 jobs:
   frontend:
     name: Build and publish to Cloudflare Pages
