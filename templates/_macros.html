@@ -116,6 +116,69 @@
 </div>
 {%- endmacro %}
 
+{# breadcrumb_jsonld(category, current_name) — BreadcrumbList structured data
+   (O2 report §7.2/§13 #15) mirroring the VISUAL breadcrumb each of the three
+   tool templates and category.html already render — same Home > [Category] >
+   Current shape, just as schema.org ListItem entries instead of <a> tags.
+   `category` is the intermediate level and is optional (category.html passes
+   none, since ITS current page IS the category — there's no parent level to
+   insert between Home and it); `current_name` is the final crumb and never
+   gets an `item` URL, matching the report's own example (the last ListItem
+   has no `item` key — it's the current page, not a link to navigate to).
+
+   `site` is read as an env global (see ad_slot()'s docstring on that
+   distinction) rather than passed in, since every caller already has it in
+   scope anyway and every page on the site needs this macro eventually.
+
+   Built as a real Jinja list of dicts and serialized with |tojson (the same
+   approach tool.faq_structured_data uses) rather than hand-written JSON
+   string interpolation — avoids trailing-comma/escaping bugs entirely. A
+   `namespace()` is required to mutate `items` across the `{% if %}` because a
+   macro's `{% set %}` would otherwise create a shadowed local. #}
+{% macro breadcrumb_jsonld(category, current_name) -%}
+{%- set ns = namespace(items=[{"@type": "ListItem", "position": 1, "name": "Home", "item": site.base_url ~ "/"}]) -%}
+{%- if category %}
+{%- set ns.items = ns.items + [{"@type": "ListItem", "position": 2, "name": category.name, "item": site.base_url ~ "/" ~ category.slug ~ "/"}] %}
+{%- endif %}
+{%- set ns.items = ns.items + [{"@type": "ListItem", "position": (ns.items|length + 1), "name": current_name}] %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": {{ ns.items|tojson }}
+}
+</script>
+{%- endmacro %}
+
+{# webapp_jsonld(tool) — WebApplication structured data (O2 report §7.3/§13
+   #16) for tool pages. `price: "0"` is what can trigger Google's "FREE" rich
+   result label. featureList branches on tool.type rather than using one
+   fixed string for every tool — "No upload" is true for the 28 client-side
+   tools but would be a false privacy claim baked into structured data for
+   the 6 server-side ones, which DO upload (and delete immediately); that
+   distinction is exactly what processing_pill()/the OG image subtitle
+   already hedge on elsewhere in this codebase (P15). #}
+{% macro webapp_jsonld(tool) -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": {{ tool.name|tojson }},
+  "url": {{ (site.base_url ~ tool.slug ~ "/")|tojson }},
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires JavaScript",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "description": {{ tool.meta.description|tojson }},
+  "featureList": {% if tool.type == 'server-side' %}"Free, No sign-up, Encrypted transfer, Automatic deletion, No file size watermark"{% else %}"Free, No sign-up, No upload, Browser-based, No file size watermark"{% endif %}
+}
+</script>
+{%- endmacro %}
+
 {# tool_card(tool, cat_id) — the SMALL card used on home + 404. All new inner
    structure gets its own classes so the base .card rule stays content-agnostic
    (R12); pass the category id explicitly from the home/category loops, else the

@@ -1635,3 +1635,110 @@ def test_homepage_conversion_badge_floor(tmp_path, monkeypatch):
     assert "1,245+ Files Converted" in (tmp_path / "index.html").read_text(
         encoding="utf-8"
     )
+
+
+# --------------------------------------------------------------------------- #
+# BreadcrumbList + WebApplication JSON-LD (O2 report §7.2/§7.3/§13 #15, #16)
+# --------------------------------------------------------------------------- #
+
+
+def _ldjson_blocks(html: str) -> list[dict]:
+    return [
+        json.loads(m)
+        for m in re.findall(
+            r'<script type="application/ld\+json">(.*?)</script>', html, re.S
+        )
+    ]
+
+
+def test_breadcrumb_jsonld_present_across_page_kinds(built):
+    """Every page kind that renders a visual breadcrumb gets a matching
+    BreadcrumbList block: all three tool ui_type templates, plus category."""
+    pages = {
+        "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
+        "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
+        "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
+        "category": built / "document-conversion" / "index.html",
+    }
+    for label, path in pages.items():
+        html = path.read_text(encoding="utf-8")
+        blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "BreadcrumbList"]
+        assert len(blocks) == 1, label
+        items = blocks[0]["itemListElement"]
+        # Every ListItem but the last (the current page) is a real link;
+        # positions are contiguous starting at 1 (schema.org requirement).
+        for i, item in enumerate(items, start=1):
+            assert item["@type"] == "ListItem", label
+            assert item["position"] == i, label
+            assert item["name"], label
+        assert "item" not in items[-1], label  # current page, no self-link
+        for item in items[:-1]:
+            assert item["item"].startswith("https://filecast.org/"), label
+
+
+def test_breadcrumb_jsonld_tool_page_includes_category_level(built):
+    # Home > Image Conversion > PNG to JPG Converter — three levels, matching
+    # the visual breadcrumb <nav> in the same template.
+    html = (built / "convert" / "png-to-jpg" / "index.html").read_text(encoding="utf-8")
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "BreadcrumbList"]
+    items = blocks[0]["itemListElement"]
+    assert [i["name"] for i in items] == [
+        "Home",
+        "Image Conversion",
+        "PNG to JPG Converter",
+    ]
+    assert items[1]["item"] == "https://filecast.org/image-conversion/"
+
+
+def test_breadcrumb_jsonld_category_page_has_no_intermediate_level(built):
+    # Home > Document Conversion — two levels; the category page IS the
+    # intermediate level, so there's nothing to insert between it and Home.
+    html = (built / "document-conversion" / "index.html").read_text(encoding="utf-8")
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "BreadcrumbList"]
+    items = blocks[0]["itemListElement"]
+    assert [i["name"] for i in items] == ["Home", "Document Conversion"]
+
+
+def test_webapp_jsonld_present_across_tool_ui_types(built):
+    pages = {
+        "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
+        "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
+        "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
+    }
+    for label, path in pages.items():
+        html = path.read_text(encoding="utf-8")
+        blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "WebApplication"]
+        assert len(blocks) == 1, label
+        app = blocks[0]
+        assert app["name"], label
+        assert app["url"].startswith("https://filecast.org/convert/"), label
+        assert app["applicationCategory"] == "UtilitiesApplication", label
+        assert app["operatingSystem"] == "Any", label
+        assert app["offers"] == {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+        }, label
+        assert app["description"], label
+        assert app["featureList"], label
+
+
+def test_webapp_jsonld_feature_list_does_not_claim_no_upload_for_server_tools(built):
+    # docx-to-pdf is server-side — it DOES upload the file (and deletes it
+    # immediately). Baking "No upload" into structured data for it would be a
+    # false privacy claim, same class of bug the OG image subtitle and
+    # processing_pill() already guard against elsewhere (P15).
+    html = (built / "convert" / "docx-to-pdf" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "WebApplication"]
+    assert "No upload" not in blocks[0]["featureList"]
+    assert "Encrypted transfer" in blocks[0]["featureList"]
+
+
+def test_webapp_jsonld_feature_list_claims_no_upload_for_client_tools(built):
+    html = (built / "convert" / "png-to-jpg" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "WebApplication"]
+    assert "No upload" in blocks[0]["featureList"]
