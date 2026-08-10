@@ -941,7 +941,7 @@ def create_jinja_env(
     env.globals["assets"] = asset_map
     env.globals["nav_categories"] = categories_with_tools
     # id → display name, so the admin panel can label tool categories exactly as
-    # the site does (e.g. data-conversion → "Text Conversion"), not by guessing
+    # the site does (e.g. data-conversion → "Data Conversion"), not by guessing
     # from the slug. Injected into the admin config island.
     env.globals["category_names"] = {
         cid: cdata.get("name") for cid, cdata in categories_with_tools.items()
@@ -1523,20 +1523,34 @@ def generate_headers(site_config: dict):
 
 
 def generate_redirects(site_config: dict):
-    """Write dist/_redirects: www.<domain> -> the apex, 301, every path.
+    """Write dist/_redirects: www.<domain> -> the apex, plus the old
+    /document-tools/ category path -> its renamed /document-conversion/ URL,
+    both 301, every path.
 
     Cloudflare Pages reads this file the same way it reads _headers. Both
     filecast.org and www.filecast.org are attached as custom domains on the
     same Pages project and currently serve identical content — this is what
     makes one of them canonical instead of two indexable copies of every page.
+
+    The category redirect (O2 report §4.1/§13 #11) is a literal path, not
+    derived from site_config["categories"] — that list only carries the
+    category's CURRENT slug, which is exactly the thing this line exists to
+    redirect FROM. It stops mattering (and can be deleted) once
+    /document-tools/ has fully dropped out of Google's index and any inbound
+    links pointing at it.
     """
     base = (
         site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
     )
     host = urlparse(base).netloc
     if not host:
-        print(f"  [warn] site.base_url {base!r} has no host; _redirects will be empty")
-    lines = [f"https://www.{host}/* {base}/:splat 301"] if host else []
+        print(
+            f"  [warn] site.base_url {base!r} has no host; skipping the www redirect"
+        )
+    lines = []
+    if host:
+        lines.append(f"https://www.{host}/* {base}/:splat 301")
+    lines.append("/document-tools/* /document-conversion/:splat 301")
     (DIST / "_redirects").write_text(
         "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8"
     )

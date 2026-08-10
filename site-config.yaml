@@ -34,7 +34,12 @@ categories:
   - id: document-tools
     name: Document Conversion
     nav_label: Docs
-    slug: document-tools
+    # URL standardized to the {type}-conversion/ pattern (O2 report §4.1/§13
+    # #11); `id` is left as `document-tools` since it's also the value stored
+    # in tool.category across 11 tool YAMLs, seed.py's DB fallback order, and
+    # api/tests — only the public-facing slug changes. The old /document-tools/
+    # path 301s to this one via build.py's generate_redirects().
+    slug: document-conversion
     description: "Convert documents to PDF, merge, split, compress, and transform PDF files. Most tools run in your browser."
     search_placeholder: "Filter tools... (e.g. DOCX, PDF, merge, compress)"
 
@@ -51,8 +56,11 @@ categories:
     search_placeholder: "Filter tools... (e.g. PNG, WebP, TIFF)"
 
   - id: data-conversion
-    name: Text Conversion
-    nav_label: Text
+    # Relabeled from "Text Conversion" (O2 report §4.1/§13 #11) — CSV/JSON/
+    # XML/YAML/Markdown are data interchange formats, not plain text, and the
+    # old label didn't match the /data-conversion/ URL it lived on.
+    name: Data Conversion
+    nav_label: Data
     slug: data-conversion
     # Same accidental-truth class as image-conversion above: "All processing
     # happens in your browser" holds only because every text tool is

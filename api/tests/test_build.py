@@ -1009,7 +1009,7 @@ def test_full_build_404_links_all_categories(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     not_found = (tmp_path / "404.html").read_text(encoding="utf-8")
-    assert 'href="/document-tools/"' in not_found
+    assert 'href="/document-conversion/"' in not_found
     assert 'href="/image-conversion/"' in not_found
     assert 'href="/data-conversion/"' in not_found
     assert 'id="hero-search"' in not_found  # search stays alongside the links
@@ -1132,7 +1132,8 @@ def test_generate_redirects_www_to_apex(tmp_path, monkeypatch):
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
     assert (
         redirects.strip()
-        == "https://www.filecast.org/* https://filecast.org/:splat 301"
+        == "https://www.filecast.org/* https://filecast.org/:splat 301\n"
+        "/document-tools/* /document-conversion/:splat 301"
     )
 
 
@@ -1145,17 +1146,27 @@ def test_generate_redirects_default_base_url(tmp_path, monkeypatch):
     assert "www.filecast.org" in redirects
 
 
-def test_generate_redirects_schemeless_base_url_warns_and_writes_nothing(
+def test_generate_redirects_schemeless_base_url_warns_and_skips_www_only(
     tmp_path, monkeypatch, capsys
 ):
     # A base_url with no scheme (e.g. "filecast.org" instead of
     # "https://filecast.org") makes urlparse().netloc empty — must not crash
-    # or silently ship an empty file with no explanation.
+    # or silently drop the (host-independent) category redirect below with no
+    # explanation for the missing www line.
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_redirects({"site": {"base_url": "filecast.org"}})
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
-    assert redirects == ""
+    assert redirects == "/document-tools/* /document-conversion/:splat 301\n"
     assert "no host" in capsys.readouterr().out
+
+
+def test_generate_redirects_document_tools_to_document_conversion(tmp_path, monkeypatch):
+    # O2 report §4.1/§13 #11 — the renamed category URL. Host-independent (a
+    # literal path redirect), so it must be present regardless of base_url.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_redirects({"site": {"base_url": "https://filecast.org"}})
+    redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
+    assert "/document-tools/* /document-conversion/:splat 301" in redirects
 
 
 # --------------------------------------------------------------------------- #
@@ -1471,8 +1482,11 @@ def test_og_images_written_for_every_page_kind(built):
     for tool in tool_data:
         assert f"{tool['id']}.png" in files, tool["id"]
 
-    for cat_slug in ("document-tools", "image-conversion", "data-conversion"):
-        assert f"{cat_slug}.png" in files, cat_slug
+    # OG image filenames are keyed by category ID, not slug (see
+    # test_category_og_image_path_uses_category_id) — "document-tools" here is
+    # the id, which is unaffected by #11's slug rename to /document-conversion/.
+    for cat_id in ("document-tools", "image-conversion", "data-conversion"):
+        assert f"{cat_id}.png" in files, cat_id
 
     # No stray/orphaned images beyond what's expected: 34 tools + 3 categories
     # + home + default.
@@ -1498,7 +1512,7 @@ def test_og_image_tags_present_across_page_kinds(built):
         "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
         "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
         "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
-        "category": built / "document-tools" / "index.html",
+        "category": built / "document-conversion" / "index.html",
         "static-default": built / "privacy" / "index.html",
     }
     for label, path in pages.items():
@@ -1522,10 +1536,12 @@ def test_tool_og_image_path_matches_tool_id_not_slug(built):
 
 
 def test_category_og_image_path_uses_category_id(built):
-    # category.slug == category.id today for all three live categories, but
-    # the image is keyed by id specifically (generate_og_images() iterates
-    # categories_with_tools by id) — pin that, not the coincidence.
-    page = (built / "document-tools" / "index.html").read_text(encoding="utf-8")
+    # document-tools' id and slug diverged as of O2 report #11 (slug renamed
+    # to /document-conversion/, id kept as document-tools since it's also the
+    # value in tool.category across 11 tool YAMLs) — this page is served from
+    # /document-conversion/ but its OG image is still og/document-tools.png,
+    # because generate_og_images() keys strictly off id.
+    page = (built / "document-conversion" / "index.html").read_text(encoding="utf-8")
     assert 'content="https://filecast.org/images/og/document-tools.png"' in page
 
 
@@ -1547,7 +1563,7 @@ def test_twitter_card_tags_mirror_og_tags_across_page_kinds(built):
         "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
         "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
         "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
-        "category": built / "document-tools" / "index.html",
+        "category": built / "document-conversion" / "index.html",
         "static-default": built / "privacy" / "index.html",
     }
     for label, path in pages.items():
