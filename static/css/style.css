@@ -2071,7 +2071,16 @@ img { max-width: 100%; display: block; }
   text-align: center;
 }
 @media (min-width: 768px) {
-  .footer__inner { grid-template-columns: 2fr 1fr 1fr 1fr; }
+  /* 2fr (brand) + 4x 1fr (Tools, Popular Tools, Resources, FileCast). The
+     "Popular Tools" column (O2 report §13 #18) made this 5 children where it
+     used to be 4 — a hardcoded 4-track grid left it with no explicit column,
+     pushing it into a new implicit row and dropping "FileCast" onto row 2
+     under the wide brand column. popular_tools is conditionally rendered
+     (build.py's select_popular_tools() can return fewer than 6, or — only if
+     every one of the six were DB-disabled — zero, in which case base.html
+     skips the column entirely). If that ever happens, the grid still has 5
+     tracks but only 4 children — a trailing empty gap, never a wrapped row. */
+  .footer__inner { grid-template-columns: 2fr 1fr 1fr 1fr 1fr; }
 }
 
 /* --- Mobile nav drawer + hamburger visibility --- */
