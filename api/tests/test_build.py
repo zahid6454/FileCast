@@ -1527,6 +1527,62 @@ def test_category_og_image_path_uses_category_id(built):
     assert 'content="https://filecast.org/images/og/document-tools.png"' in page
 
 
+# --------------------------------------------------------------------------- #
+# Twitter Card tags (O2 report §13 #8)
+# --------------------------------------------------------------------------- #
+
+
+def test_twitter_card_tags_mirror_og_tags_across_page_kinds(built):
+    """twitter:title/description/image must equal the SAME page's og:title/
+    og:description/og:image, not just be present — the report's own spec
+    ("Values mirror the corresponding OG tags"). Checked on every page kind
+    (home, all three tool ui_types, category, and a static page relying on
+    base.html's default) so a template that overrides og_title/og_image
+    without the mirrored twitter tag updating can't slip through unnoticed.
+    """
+    pages = {
+        "home": built / "index.html",
+        "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
+        "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
+        "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
+        "category": built / "document-tools" / "index.html",
+        "static-default": built / "privacy" / "index.html",
+    }
+    for label, path in pages.items():
+        html = path.read_text(encoding="utf-8")
+        assert '<meta name="twitter:card" content="summary_large_image">' in html, label
+
+        og_title = re.search(r'<meta property="og:title" content="([^"]*)">', html)
+        og_description = re.search(
+            r'<meta property="og:description" content="([^"]*)">', html
+        )
+        og_image = re.search(r'<meta property="og:image" content="([^"]*)">', html)
+        assert og_title and og_description and og_image, label
+
+        twitter_title = re.search(
+            r'<meta name="twitter:title" content="([^"]*)">', html
+        )
+        twitter_description = re.search(
+            r'<meta name="twitter:description" content="([^"]*)">', html
+        )
+        twitter_image = re.search(
+            r'<meta name="twitter:image" content="([^"]*)">', html
+        )
+        assert twitter_title and twitter_description and twitter_image, label
+
+        assert twitter_title.group(1) == og_title.group(1), label
+        assert twitter_description.group(1) == og_description.group(1), label
+        assert twitter_image.group(1) == og_image.group(1), label
+
+
+def test_twitter_site_handle_omitted(built):
+    # No FileCast Twitter/X account exists — twitter:site names one, and an
+    # absent tag is valid (the card still renders); a placeholder/fake handle
+    # would be worse than nothing.
+    home = (built / "index.html").read_text(encoding="utf-8")
+    assert 'name="twitter:site"' not in home
+
+
 def test_homepage_conversion_badge_floor(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
 
