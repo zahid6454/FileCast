@@ -15,8 +15,8 @@ api_endpoint: /api/v1/convert/pdf-to-docx
 tagline: "Convert PDF files to editable Word documents"
 tagline_long: "Convert PDF files to editable Word documents — files are encrypted in transit, processed securely, and deleted immediately."
 meta:
-  title: "Convert PDF to Word (DOCX) — Free, Secure, Instant"
-  description: "Convert PDF files to editable Word documents online. Your file is encrypted, converted, and deleted immediately — we never store your documents."
+  title: "PDF to DOCX Converter — Free & Secure | FileCast"
+  description: "Convert PDF to DOCX free online — your file is encrypted, converted, and deleted instantly. No sign-up, no limits, no watermarks. Turns a PDF into an editable Word file."
   keywords: ["pdf to word", "pdf to docx", "convert pdf to word", "pdf to word free", "pdf to docx converter"]
 content:
   what_is: "content/pdf-to-docx/what-is.md"

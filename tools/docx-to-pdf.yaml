@@ -16,8 +16,8 @@ tagline: "Convert Word documents to PDF"
 tagline_long: "Convert Word documents to PDF format — files are encrypted in transit, processed securely, and deleted immediately."
 api_endpoint: /api/v1/convert/docx-to-pdf
 meta:
-  title: "Convert DOCX to PDF — Free, Secure, Instant"
-  description: "Convert Word documents to PDF online. Your file is encrypted, converted, and deleted immediately — we never store your documents."
+  title: "DOCX to PDF Converter — Free & Secure | FileCast"
+  description: "Convert DOCX to PDF free online — your file is encrypted, converted, and deleted instantly. No sign-up, no limits, no watermarks. Preserves fonts, tables, and formatting."
   keywords: ["docx to pdf", "word to pdf", "convert docx to pdf", "docx to pdf free", "word to pdf converter"]
 content:
   what_is: "content/docx-to-pdf/what-is.md"

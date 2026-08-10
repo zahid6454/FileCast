@@ -18,8 +18,8 @@ convert_label: "Create PDF"
 tagline: "Turn images into a PDF document"
 tagline_long: "Convert one or more images (JPG, PNG, WebP) into a single PDF document — entirely in your browser, no upload required."
 meta:
-  title: "Convert Images to PDF — Free, Private, No Upload"
-  description: "Convert JPG, PNG, or WebP images to a PDF document instantly in your browser. No upload, no server — your files stay private."
+  title: "Image to PDF Converter — Free, No Upload | FileCast"
+  description: "Convert images to PDF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Combine multiple photos into one document."
   keywords: ["image to pdf", "jpg to pdf", "png to pdf", "convert image to pdf", "photos to pdf"]
 content:
   what_is: "content/image-to-pdf/what-is.md"

@@ -17,8 +17,8 @@ input_placeholder: "Paste your HTML here...\n\nExample:\n<h1>Hello</h1>\n<p>This
 tagline: "Convert HTML markup to clean Markdown"
 tagline_long: "Convert HTML to Markdown instantly in your browser — perfect for CMS migration and documentation."
 meta:
-  title: "Convert HTML to Markdown — Free, Private, No Upload"
-  description: "Convert HTML to Markdown instantly in your browser. No upload, no server — your content stays private."
+  title: "HTML to Markdown Converter — Free, No Upload | FileCast"
+  description: "Convert HTML to Markdown free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Ideal for CMS migration and documentation."
   keywords: ["html to markdown", "convert html to markdown", "html to md", "html converter", "html markdown converter"]
 content:
   what_is: "content/html-to-markdown/what-is.md"

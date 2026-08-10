@@ -17,8 +17,8 @@ input_placeholder: "Paste your JSON array here...\n\nExample:\n[\n  {\"name\": \
 tagline: "Turn JSON arrays into clean CSV spreadsheets"
 tagline_long: "Convert JSON arrays to CSV instantly in your browser — ready for Excel or Google Sheets."
 meta:
-  title: "Convert JSON to CSV — Free, Private, No Upload"
-  description: "Convert JSON arrays to CSV format instantly in your browser. No upload, no server — your data stays private."
+  title: "JSON to CSV Converter — Free, No Upload | FileCast"
+  description: "Convert JSON to CSV free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Ready to open in Excel or Google Sheets."
   keywords: ["json to csv", "convert json to csv", "json converter", "json to csv online", "json to spreadsheet"]
 content:
   what_is: "content/json-to-csv/what-is.md"

@@ -18,8 +18,8 @@ input_placeholder: "Paste your CSV data here...\n\nExample:\nname,age,city\nAlic
 tagline: "Turn CSV spreadsheet data into structured JSON"
 tagline_long: "Convert CSV data to JSON format instantly in your browser — perfect for APIs, databases, and web applications."
 meta:
-  title: "Convert CSV to JSON — Free, Private, No Upload"
-  description: "Convert CSV data to JSON format instantly in your browser. No upload, no server — your data stays private."
+  title: "CSV to JSON Converter — Free, No Upload | FileCast"
+  description: "Convert CSV to JSON free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Ready to drop straight into an API or database."
   keywords: ["csv to json", "convert csv to json", "csv converter", "csv to json online", "spreadsheet to json"]
 content:
   what_is: "content/csv-to-json/what-is.md"

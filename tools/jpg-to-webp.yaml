@@ -17,8 +17,8 @@ reverse_tool: webp-to-jpg
 tagline: "Smaller files for faster websites"
 tagline_long: "Cut your image file sizes by 25–35% by switching to WebP — the modern format built for fast-loading web pages."
 meta:
-  title: "Convert JPG to WebP — Free, Private, No Upload"
-  description: "Convert JPG images to WebP instantly in your browser. No upload, no server — your files stay private."
+  title: "JPG to WebP Converter — Free, No Upload | FileCast"
+  description: "Convert JPG to WebP free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Cuts file size by 25–35% for faster-loading pages."
   keywords: ["jpg to webp", "jpeg to webp", "convert jpg to webp", "webp converter", "image optimizer"]
 content:
   what_is: "content/jpg-to-webp/what-is.md"

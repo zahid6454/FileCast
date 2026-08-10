@@ -18,8 +18,8 @@ reverse_tool: jpg-to-png
 tagline: "Shrink large PNGs into smaller, shareable JPGs"
 tagline_long: "Reduce PNG file sizes by up to 80% by converting to JPG — perfect for email attachments, uploads, and saving storage."
 meta:
-  title: "Convert PNG to JPG — Free, Private, No Upload"
-  description: "Convert PNG images to JPG instantly in your browser. No upload, no server — your files stay private."
+  title: "PNG to JPG Converter — Free, No Upload | FileCast"
+  description: "Convert PNG to JPG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Reduce file size by up to 80%."
   keywords: ["png to jpg", "convert png to jpg", "png converter", "png to jpeg", "image converter"]
 content:
   what_is: "content/png-to-jpg/what-is.md"

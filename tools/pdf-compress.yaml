@@ -30,8 +30,8 @@ options:
       - value: prepress
         label: "Minimal (300 dpi) — highest quality"
 meta:
-  title: "Compress PDF — Free, Secure, Instant"
-  description: "Reduce PDF file size online. Choose your compression level — your file is processed securely and deleted immediately."
+  title: "PDF Compressor — Free & Secure | FileCast"
+  description: "Compress PDF files free online — your file is encrypted, converted, and deleted instantly. No sign-up, no limits, no watermarks. Choose your own compression level."
   keywords: ["compress pdf", "pdf compressor", "reduce pdf size", "compress pdf free", "make pdf smaller"]
 content:
   what_is: "content/pdf-compress/what-is.md"

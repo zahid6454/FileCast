@@ -17,8 +17,8 @@ input_placeholder: "Paste your XML here...\n\nExample:\n<root>\n  <name>Alice</n
 tagline: "Convert XML data to JSON format"
 tagline_long: "Convert XML documents to clean JSON instantly in your browser — handles attributes and nesting."
 meta:
-  title: "Convert XML to JSON — Free, Private, No Upload"
-  description: "Convert XML to JSON format instantly in your browser. No upload, no server — your data stays private."
+  title: "XML to JSON Converter — Free, No Upload | FileCast"
+  description: "Convert XML to JSON free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Handles attributes and nested elements cleanly."
   keywords: ["xml to json", "convert xml to json", "xml converter", "xml to json online", "xml json converter"]
 content:
   what_is: "content/xml-to-json/what-is.md"

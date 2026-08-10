@@ -18,8 +18,8 @@ input_placeholder: "Paste your JSON here...\n\nExample:\n{\n  \"name\": \"Alice\
 tagline: "Convert JSON config files to YAML format"
 tagline_long: "Convert JSON to YAML instantly in your browser — perfect for Docker, Kubernetes, and CI/CD configs."
 meta:
-  title: "Convert JSON to YAML — Free, Private, No Upload"
-  description: "Convert JSON to YAML format instantly in your browser. No upload, no server — your data stays private."
+  title: "JSON to YAML Converter — Free, No Upload | FileCast"
+  description: "Convert JSON to YAML free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Ideal for Docker, Kubernetes, and CI/CD configs."
   keywords: ["json to yaml", "convert json to yaml", "json yaml converter", "json to yaml online", "json converter"]
 content:
   what_is: "content/json-to-yaml/what-is.md"

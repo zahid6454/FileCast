@@ -35,8 +35,8 @@ options:
 tagline: "Resize images to exact dimensions"
 tagline_long: "Resize JPG, PNG, or WebP images to specific dimensions — set width, height, or both to scale proportionally."
 meta:
-  title: "Resize Images — Free, Private, No Upload"
-  description: "Resize images to exact dimensions instantly in your browser. No upload, no server — your files stay private."
+  title: "Image Resizer — Free, No Upload | FileCast"
+  description: "Resize JPG, PNG, or WebP images free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Set exact dimensions in seconds."
   keywords: ["resize image", "image resizer", "change image size", "resize photo", "scale image", "resize image online"]
 content:
   what_is: "content/image-resize/what-is.md"

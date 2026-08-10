@@ -17,8 +17,8 @@ ui_type: standard
 tagline: "Make professional scans and photos easy to share"
 tagline_long: "Turn large TIFF files from scanners and cameras into lightweight JPGs you can email, upload, and view on any device."
 meta:
-  title: "Convert TIFF to JPG — Free, Private, No Upload"
-  description: "Convert TIFF images to JPG instantly in your browser. No upload, no server — your files stay private."
+  title: "TIFF to JPG Converter — Free, No Upload | FileCast"
+  description: "Convert TIFF to JPG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Turns scanner files into lightweight JPGs."
   keywords: ["tiff to jpg", "tif to jpg", "convert tiff to jpg", "tiff converter", "tiff to jpeg"]
 content:
   what_is: "content/tiff-to-jpg/what-is.md"

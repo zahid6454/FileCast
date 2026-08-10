@@ -16,8 +16,8 @@ ui_type: standard
 tagline: "Shrink oversized bitmap files by 90% or more"
 tagline_long: "Convert bulky BMP files into compact JPGs — a single image can drop from 30 MB to under 3 MB while still looking great."
 meta:
-  title: "Convert BMP to JPG — Free, Private, No Upload"
-  description: "Convert BMP images to JPG instantly in your browser. No upload, no server — your files stay private."
+  title: "BMP to JPG Converter — Free, No Upload | FileCast"
+  description: "Convert BMP to JPG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Shrink a 30 MB bitmap to under 3 MB."
   keywords: ["bmp to jpg", "convert bmp to jpg", "bmp converter", "bmp to jpeg", "bitmap converter"]
 content:
   what_is: "content/bmp-to-jpg/what-is.md"

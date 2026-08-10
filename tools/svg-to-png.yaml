@@ -16,8 +16,8 @@ ui_type: standard
 tagline: "Turn vector logos and icons into shareable images"
 tagline_long: "Convert scalable vector graphics into PNG images you can use in presentations, social media, documents, and print."
 meta:
-  title: "Convert SVG to PNG — Free, Private, No Upload"
-  description: "Convert SVG vector images to PNG instantly in your browser. No upload, no server — your files stay private."
+  title: "SVG to PNG Converter — Free, No Upload | FileCast"
+  description: "Convert SVG to PNG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Ready for presentations, social media, and print."
   keywords: ["svg to png", "convert svg to png", "svg converter", "vector to raster", "svg to image"]
 content:
   what_is: "content/svg-to-png/what-is.md"

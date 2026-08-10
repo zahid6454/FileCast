@@ -27,8 +27,8 @@ options:
 tagline: "Rotate PDF pages to the correct orientation"
 tagline_long: "Rotate all pages in a PDF by 90, 180, or 270 degrees — entirely in your browser, no upload required."
 meta:
-  title: "Rotate PDF Pages — Free, Private, No Upload"
-  description: "Rotate PDF pages instantly in your browser. No upload, no server — your files stay private."
+  title: "PDF Rotate — Free, No Upload | FileCast"
+  description: "Rotate PDF pages free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Turn every page 90, 180, or 270 degrees at once."
   keywords: ["rotate pdf", "pdf rotate", "turn pdf pages", "rotate pdf pages", "rotate pdf free"]
 content:
   what_is: "content/pdf-rotate/what-is.md"
