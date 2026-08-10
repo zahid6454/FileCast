@@ -27,8 +27,10 @@ the failure mode the canary exists to catch.
 """
 
 import sys
+import tempfile
 import time
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import delete, func, select
 
@@ -49,6 +51,15 @@ FAILURE_RETRY_SECONDS = 60
 # one interval. Two days of slack keeps the canary quiet in normal operation
 # while still firing long before the promise is visibly broken.
 CANARY_GRACE_DAYS = 2
+
+# Touched once per loop iteration (success or handled failure) so the
+# container's HEALTHCHECK (docker-compose.yml) can tell "still cycling" apart
+# from "hung inside _run_once() and never coming back" — the two look
+# identical from outside (process alive, no crash) without this file's mtime.
+# tempfile.gettempdir() rather than a bare "/tmp" — resolves to /tmp inside
+# the Linux container (where the healthcheck also looks), but stays portable
+# for tests running on any other platform.
+HEARTBEAT_PATH = Path(tempfile.gettempdir()) / "purge-heartbeat"
 
 
 def purge_expired() -> dict[str, int]:
@@ -116,6 +127,7 @@ def _run_loop(interval: int) -> int:
             # would stay invisible until the canary fires days later.
             print(f"purge failed ({exc.__class__.__name__}: {exc})", flush=True)
             sleep_for = min(FAILURE_RETRY_SECONDS, interval)
+        HEARTBEAT_PATH.write_text(datetime.now(UTC).isoformat())
         time.sleep(sleep_for)
 
 
