@@ -1,17 +1,19 @@
-"""The site description has two sources of truth — keep them honest.
+"""The site tagline and description each have two sources of truth — keep them honest.
 
-``site.description`` lives in **both** ``site-config.yaml`` and the
-``site_settings`` row (id=1), and ``build.py`` deep-merges the DB row *on top
-of* the YAML. That asymmetry is what let the false "your files never leave your
-device" claim survive a copy pass: the YAML was the obvious place to look, the
-DB silently won, and nothing warned about it.
+``site.tagline`` and ``site.description`` live in **both** ``site-config.yaml``
+and the ``site_settings`` row (id=1), and ``build.py`` deep-merges the DB row
+*on top of* the YAML. That asymmetry is what let the false "your files never
+leave your device" claim survive a copy pass: the YAML was the obvious place to
+look, the DB silently won, and nothing warned about it.
 
-Migration ``0004_honest_site_description`` corrects the row, carrying its own
-copy of the replacement string so it can guard on the exact prior value. That
-gives us *three* copies of the same sentence (YAML, migration, and whatever is
-in the DB). These tests pin the two that live in the repo together, so a future
-edit to one is a test failure rather than a silent divergence that only shows
-up in production meta tags.
+Migration ``0004_honest_site_description`` corrects the description; migration
+``0007_seo_homepage_title`` corrects the tagline the same way, for the same
+reason (O2-FileCast-SEO-Report.md §4.5 — the shipped tagline had zero search
+volume). Each carries its own copy of the replacement string so it can guard
+on the exact prior value. That gives us *three* copies of the same sentence
+(YAML, migration, and whatever is in the DB) per field. These tests pin the
+two that live in the repo together, so a future edit to one is a test failure
+rather than a silent divergence that only shows up in production meta tags.
 
 Deliberately no DB access — this is a source-consistency check, and it should
 fail fast in CI without a Postgres round trip.
@@ -26,7 +28,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE_CONFIG = ROOT / "site-config.yaml"
-MIGRATION = ROOT / "api" / "migrations" / "versions" / "0004_honest_site_description.py"
+VERSIONS = ROOT / "api" / "migrations" / "versions"
+MIGRATION = VERSIONS / "0004_honest_site_description.py"
+MIGRATION_TAGLINE = VERSIONS / "0007_seo_homepage_title.py"
 
 # Claims that are false for the six ``type: server-side`` tools *unless* the
 # sentence carrying them is scoped to a subset of tools.
@@ -74,13 +78,14 @@ def assert_claims_are_scoped(text: str, where: str):
                 )
 
 
-def _load_migration():
-    """Import the migration module without running Alembic."""
-    spec = importlib.util.spec_from_file_location("_m0004", MIGRATION)
+def _load_migration(path: Path = MIGRATION):
+    """Import a migration module (by path) without running Alembic."""
+    module_name = f"_{path.stem}"
+    spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     # Alembic's ``op`` proxy is import-safe outside a migration context; only
     # calling it requires one, and we only read module constants.
-    sys.modules["_m0004"] = module
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -109,17 +114,36 @@ def test_migration_guard_value_is_not_the_new_value():
     assert m.OLD_DESCRIPTION != m.NEW_DESCRIPTION
 
 
-def test_replacement_fits_the_api_length_cap():
-    """``site_description`` is admin-editable and validated at ≤ 300 chars.
+def test_tagline_migration_matches_site_config(site_config):
+    """Same invariant as the description check above, for the tagline.
 
-    A migration that writes a value the API would reject leaves the row in a
-    state the admin panel cannot re-save.
+    ``site_tagline`` feeds the homepage ``<title>``, so a YAML/migration
+    drift here means a fresh environment and an existing one render
+    different title tags for the same site.
+    """
+    m = _load_migration(MIGRATION_TAGLINE)
+    assert site_config["site"]["tagline"] == m.NEW_TAGLINE
+
+
+def test_migration_0007_guard_value_is_not_the_new_value():
+    m = _load_migration(MIGRATION_TAGLINE)
+    assert m.OLD_TAGLINE != m.NEW_TAGLINE
+
+
+def test_replacement_fits_the_api_length_cap():
+    """``site_description``/``site_tagline`` are admin-editable and validated
+    at ≤ 300 / ≤ 160 chars. A migration that writes a value the API would
+    reject leaves the row in a state the admin panel cannot re-save.
     """
     from data.routers.site_settings import DESCRIPTION_MAX, TAGLINE_MAX
 
     m = _load_migration()
     assert len(m.NEW_DESCRIPTION) <= DESCRIPTION_MAX
     assert len(_load_migration().OLD_DESCRIPTION) <= DESCRIPTION_MAX
+
+    tagline_migration = _load_migration(MIGRATION_TAGLINE)
+    assert len(tagline_migration.NEW_TAGLINE) <= TAGLINE_MAX
+    assert len(tagline_migration.OLD_TAGLINE) <= TAGLINE_MAX
     # Guards the sibling field too, since both are set from the same YAML block.
     with open(SITE_CONFIG, encoding="utf-8") as f:
         assert len(yaml.safe_load(f)["site"]["tagline"]) <= TAGLINE_MAX

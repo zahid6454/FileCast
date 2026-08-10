@@ -1,6 +1,6 @@
 site:
   name: FileCast
-  tagline: "Free File Conversion — Your Files Stay Yours"
+  tagline: "Free Online File Converter | PDF, Image & Data Tools"
   base_url: https://filecast.org
   # P15 honest framing (ledger §9, applied verbatim). The old text — "…your
   # files never leave your device" — is false for the 6 server-side tools.

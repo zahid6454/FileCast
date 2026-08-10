@@ -1421,6 +1421,20 @@ def test_homepage_h1_is_plain_and_unlinked(built):
     assert '<p class="hero__subtitle"><a href="/privacy/"' in home
 
 
+def test_homepage_title_targets_a_searchable_keyword(built):
+    home = (built / "index.html").read_text(encoding="utf-8")
+    assert (
+        "<title>FileCast — Free Online File Converter | PDF, Image "
+        "&amp; Data Tools</title>" in home
+    )
+    # og:title inherits the same copy (home.html doesn't override the block),
+    # so social shares match the SERP title.
+    assert (
+        'property="og:title" content="FileCast — Free Online File Converter '
+        "| PDF, Image &amp; Data Tools\"" in home
+    )
+
+
 def test_homepage_conversion_badge_floor(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
 
