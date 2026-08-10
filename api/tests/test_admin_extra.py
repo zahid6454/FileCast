@@ -85,6 +85,48 @@ async def test_announcement_update_unknown_404(admin_client):
     ).status_code == 404
 
 
+# --- announcements validation (O4 audit item #6) ---
+
+
+async def test_announcement_create_rejects_empty_message(admin_client):
+    r = await admin_client.post("/api/v1/announcements", json={"message": "   "})
+    assert r.status_code == 422
+
+
+async def test_announcement_create_rejects_overlong_message(admin_client):
+    r = await admin_client.post("/api/v1/announcements", json={"message": "x" * 501})
+    assert r.status_code == 422
+
+
+async def test_announcement_create_rejects_unknown_type(admin_client):
+    r = await admin_client.post(
+        "/api/v1/announcements", json={"message": "Hi", "type": "danger"}
+    )
+    assert r.status_code == 422
+
+
+async def test_announcement_create_rejects_overlong_link(admin_client):
+    r = await admin_client.post(
+        "/api/v1/announcements",
+        json={"message": "Hi", "link": "https://example.com/" + "x" * 2048},
+    )
+    assert r.status_code == 422
+
+
+async def test_announcement_update_rejects_invalid_fields(admin_client):
+    created = (
+        await admin_client.post("/api/v1/announcements", json={"message": "Original"})
+    ).json()["announcement"]
+    aid = created["id"]
+
+    assert (
+        await admin_client.put(f"/api/v1/announcements/{aid}", json={"message": ""})
+    ).status_code == 422
+    assert (
+        await admin_client.put(f"/api/v1/announcements/{aid}", json={"type": "danger"})
+    ).status_code == 422
+
+
 # admin-deploy is covered in test_admin_deploy.py (Phase 7 real round-trip).
 
 
