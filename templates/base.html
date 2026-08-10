@@ -13,6 +13,23 @@
   <meta property="og:title" content="{% block og_title %}{{ site.name }} — {{ site.tagline }}{% endblock %}">
   <meta property="og:description" content="{% block og_description %}{{ site.description }}{% endblock %}">
   <meta property="og:url" content="{% block og_url %}{{ site.base_url }}/{% endblock %}">
+  {# Rendered at build time by generate_og_images() (build.py, P1 §7). The
+     block default is the one shared "default.png" every page gets for free;
+     home/tool*/category override it with their own id-keyed image. #}
+  <meta property="og:image" content="{{ site.base_url }}{% block og_image %}/images/og/default.png{% endblock %}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{% block og_image_alt %}{{ site.name }} — {{ site.tagline }}{% endblock %}">
+
+  {# Twitter Card — deliberately mirrors the Open Graph tags above via
+     `self.blockname()` rather than duplicating the copy, so the two can never
+     drift (O2 report §5.6: "Values mirror the corresponding OG tags"). No
+     `twitter:site` — that names an @handle for the site's own account, and
+     there isn't one; the card still renders fully without it. #}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ self.og_title() }}">
+  <meta name="twitter:description" content="{{ self.og_description() }}">
+  <meta name="twitter:image" content="{{ site.base_url }}{{ self.og_image() }}">
 
   {# Favicon #}
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">

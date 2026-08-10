@@ -7,6 +7,8 @@
 {% block og_title %}{{ category.name }} — {{ site.name }}{% endblock %}
 {% block og_description %}{{ category.description }}{% endblock %}
 {% block og_url %}{{ site.base_url }}/{{ category.slug }}/{% endblock %}
+{% block og_image %}/images/og/{{ category.id }}.png{% endblock %}
+{% block og_image_alt %}{{ category.name }} Tools — {{ site.name }}{% endblock %}
 
 {% block content %}
 <div class="container page">

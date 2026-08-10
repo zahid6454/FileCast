@@ -4,6 +4,8 @@
 {% block title %}{{ site.name }} — {{ site.tagline }}{% endblock %}
 {% block meta_description %}{{ site.description }}{% endblock %}
 {% block canonical %}{{ site.base_url }}/{% endblock %}
+{% block og_image %}/images/og/home.png{% endblock %}
+{% block og_image_alt %}Free Online File Converter — {{ site.name }}{% endblock %}
 
 {% block structured_data %}
 <script type="application/ld+json">
@@ -21,8 +23,8 @@
 
 {# ===== Hero (homepage-only enhancements scoped to .hero--home, R11) ===== #}
 <section class="hero hero--home">
-  <h1 class="hero__title"><a href="/privacy/" class="hero__link"><span class="text-brand-blue">Your Files</span> <span class="text-brand-green">Stay Yours</span></a></h1>
-  <p class="hero__subtitle">Free, private file conversion — no sign-up needed</p>
+  <h1 class="hero__title">Free Online File Converter</h1>
+  <p class="hero__subtitle"><a href="/privacy/" class="hero__link"><span class="text-brand-blue">Your Files</span> <span class="text-brand-green">Stay Yours</span></a> — free, private file conversion, no sign-up needed</p>
 
   {# Client search (P21/P22) — nav.js drives it only where #hero-search exists. #}
   <div class="hero-search">

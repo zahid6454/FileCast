@@ -1,13 +1,15 @@
 site:
   name: FileCast
-  tagline: "Free File Conversion — Your Files Stay Yours"
+  tagline: "Free Online File Converter | PDF, Image & Data Tools"
   base_url: https://filecast.org
-  # P15 honest framing (ledger §9, applied verbatim). The old text — "…your
-  # files never leave your device" — is false for the 6 server-side tools.
-  # NOTE: since Phase 7 this field is also stored in site_settings (id=1) and
-  # the DB overlay WINS at build time, so editing this line alone is a no-op on
-  # any environment that has a settings row. Migration 0004 corrects the row.
-  description: "Most tools run entirely in your browser — nothing is uploaded. The few server-side tools convert and delete your file immediately."
+  # SEO Phase 1 (O2 report §4.4/§13 #6): describes the product (what/how many/
+  # free) instead of only the privacy model, while keeping the P15 "most tools"
+  # qualifier (ledger §9) — still false to claim ALL processing is in-browser
+  # given the 6 server-side tools. NOTE: since Phase 7 this field is also
+  # stored in site_settings (id=1) and the DB overlay WINS at build time, so
+  # editing this line alone is a no-op on any environment that has a settings
+  # row. Migration 0008 corrects the row.
+  description: "Convert documents, images, and data files for free — 34 tools, no sign-up, no limits. Most conversions happen in your browser. PDF, DOCX, PNG, JPG, CSV, JSON, and more."
 
 adsense:
   enabled: false
