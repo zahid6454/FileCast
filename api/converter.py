@@ -11,7 +11,7 @@ from collections import defaultdict
 import httpx
 from data.db import async_engine
 from data.models import User
-from data.security import current_user_for_convert
+from data.security import current_user_for_convert, require_admin
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
 from log import get_logger, request_id_var
@@ -661,7 +661,7 @@ async def health():
 
 
 @router.get("/metrics")
-async def get_metrics():
+async def get_metrics(_admin=Depends(require_admin)):
     return {
         "conversions": dict(metrics["conversions"]),
         "failures": dict(metrics["failures"]),
