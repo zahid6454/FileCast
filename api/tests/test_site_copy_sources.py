@@ -6,14 +6,18 @@ and the ``site_settings`` row (id=1), and ``build.py`` deep-merges the DB row
 leave your device" claim survive a copy pass: the YAML was the obvious place to
 look, the DB silently won, and nothing warned about it.
 
-Migration ``0004_honest_site_description`` corrects the description; migration
-``0007_seo_homepage_title`` corrects the tagline the same way, for the same
-reason (O2-FileCast-SEO-Report.md §4.5 — the shipped tagline had zero search
-volume). Each carries its own copy of the replacement string so it can guard
-on the exact prior value. That gives us *three* copies of the same sentence
-(YAML, migration, and whatever is in the DB) per field. These tests pin the
-two that live in the repo together, so a future edit to one is a test failure
-rather than a silent divergence that only shows up in production meta tags.
+Each data migration that has ever corrected one of these fields
+(``0004_honest_site_description``, ``0007_seo_homepage_title``,
+``0008_seo_homepage_description``) carries its own copy of the replacement
+string so it can guard on the exact prior value. That gives us *three* copies
+of the same sentence (YAML, migration, and whatever is in the DB) per edit.
+These tests pin the two that live in the repo together — specifically, that
+the CURRENT YAML value matches the NEWEST migration to touch that field — so a
+future edit to one without the other is a test failure rather than a silent
+divergence that only shows up in production meta tags. Older, superseded
+migrations (0004's description fix) keep their own self-contained tests below,
+pinned to their own historical constants — those never change regardless of
+what ships later.
 
 Deliberately no DB access — this is a source-consistency check, and it should
 fail fast in CI without a Postgres round trip.
@@ -29,8 +33,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SITE_CONFIG = ROOT / "site-config.yaml"
 VERSIONS = ROOT / "api" / "migrations" / "versions"
-MIGRATION = VERSIONS / "0004_honest_site_description.py"
-MIGRATION_TAGLINE = VERSIONS / "0007_seo_homepage_title.py"
+MIGRATION = VERSIONS / "0004_honest_site_description.py"  # historical, description
+MIGRATION_TAGLINE = VERSIONS / "0007_seo_homepage_title.py"  # current, tagline
+MIGRATION_DESCRIPTION = VERSIONS / "0008_seo_homepage_description.py"  # current, description
 
 # Claims that are false for the six ``type: server-side`` tools *unless* the
 # sentence carrying them is scoped to a subset of tools.
@@ -96,33 +101,29 @@ def site_config():
         return yaml.safe_load(f)
 
 
-def test_migration_target_matches_site_config(site_config):
-    """The YAML and the migration must ship the *same* replacement sentence.
+def test_tagline_migration_matches_site_config(site_config):
+    """The YAML and the newest tagline migration must ship the *same* string.
 
     If they drift, a fresh environment (seeded from YAML) and an existing one
-    (corrected by the migration) render different meta descriptions for the
-    same site — the exact failure mode that is invisible until someone diffs
-    two deployments.
-    """
-    m = _load_migration()
-    assert site_config["site"]["description"] == m.NEW_DESCRIPTION
-
-
-def test_migration_guard_value_is_not_the_new_value():
-    """A guard of ``WHERE description = <new>`` would be a silent no-op."""
-    m = _load_migration()
-    assert m.OLD_DESCRIPTION != m.NEW_DESCRIPTION
-
-
-def test_tagline_migration_matches_site_config(site_config):
-    """Same invariant as the description check above, for the tagline.
-
-    ``site_tagline`` feeds the homepage ``<title>``, so a YAML/migration
-    drift here means a fresh environment and an existing one render
-    different title tags for the same site.
+    (corrected by the migration) render different title tags for the same
+    site — the exact failure mode that is invisible until someone diffs two
+    deployments.
     """
     m = _load_migration(MIGRATION_TAGLINE)
     assert site_config["site"]["tagline"] == m.NEW_TAGLINE
+
+
+def test_description_migration_matches_site_config(site_config):
+    """The YAML and the newest description migration must ship the *same*
+    sentence, for the same reason as the tagline check above."""
+    m = _load_migration(MIGRATION_DESCRIPTION)
+    assert site_config["site"]["description"] == m.NEW_DESCRIPTION
+
+
+def test_migration_0004_guard_value_is_not_the_new_value():
+    """A guard of ``WHERE description = <new>`` would be a silent no-op."""
+    m = _load_migration(MIGRATION)
+    assert m.OLD_DESCRIPTION != m.NEW_DESCRIPTION
 
 
 def test_migration_0007_guard_value_is_not_the_new_value():
@@ -130,23 +131,29 @@ def test_migration_0007_guard_value_is_not_the_new_value():
     assert m.OLD_TAGLINE != m.NEW_TAGLINE
 
 
-def test_replacement_fits_the_api_length_cap():
-    """``site_description``/``site_tagline`` are admin-editable and validated
-    at ≤ 300 / ≤ 160 chars. A migration that writes a value the API would
+def test_migration_0008_guard_value_is_not_the_new_value():
+    m = _load_migration(MIGRATION_DESCRIPTION)
+    assert m.OLD_DESCRIPTION != m.NEW_DESCRIPTION
+
+
+def test_replacement_fits_the_api_length_cap(site_config):
+    """``site_tagline``/``site_description`` are admin-editable and validated
+    at ≤ 160 / ≤ 300 chars. A migration that writes a value the API would
     reject leaves the row in a state the admin panel cannot re-save.
     """
     from data.routers.site_settings import DESCRIPTION_MAX, TAGLINE_MAX
 
-    m = _load_migration()
-    assert len(m.NEW_DESCRIPTION) <= DESCRIPTION_MAX
-    assert len(_load_migration().OLD_DESCRIPTION) <= DESCRIPTION_MAX
+    assert len(site_config["site"]["tagline"]) <= TAGLINE_MAX
+    assert len(site_config["site"]["description"]) <= DESCRIPTION_MAX
 
     tagline_migration = _load_migration(MIGRATION_TAGLINE)
     assert len(tagline_migration.NEW_TAGLINE) <= TAGLINE_MAX
     assert len(tagline_migration.OLD_TAGLINE) <= TAGLINE_MAX
-    # Guards the sibling field too, since both are set from the same YAML block.
-    with open(SITE_CONFIG, encoding="utf-8") as f:
-        assert len(yaml.safe_load(f)["site"]["tagline"]) <= TAGLINE_MAX
+
+    for path in (MIGRATION, MIGRATION_DESCRIPTION):
+        m = _load_migration(path)
+        assert len(m.NEW_DESCRIPTION) <= DESCRIPTION_MAX
+        assert len(m.OLD_DESCRIPTION) <= DESCRIPTION_MAX
 
 
 def test_site_description_scopes_its_privacy_claim(site_config):

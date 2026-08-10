@@ -1435,6 +1435,20 @@ def test_homepage_title_targets_a_searchable_keyword(built):
     )
 
 
+def test_homepage_meta_description_describes_the_product(built):
+    home = (built / "index.html").read_text(encoding="utf-8")
+    assert (
+        'name="description" content="Convert documents, images, and data '
+        'files for free — 34 tools, no sign-up, no limits.' in home
+    )
+    # og:description inherits the same copy (home.html doesn't override the
+    # block), so social shares match the SERP snippet.
+    assert (
+        'property="og:description" content="Convert documents, images, and '
+        "data files for free" in home
+    )
+
+
 def test_homepage_conversion_badge_floor(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
 
