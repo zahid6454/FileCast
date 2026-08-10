@@ -428,8 +428,11 @@ img { max-width: 100%; display: block; }
   box-shadow: var(--shadow-sm);
   transition: border-color var(--transition-fast);
 }
-.hero__link { text-decoration: none; }
-.hero__link:hover { text-decoration: none; opacity: 0.85; }
+/* Underlined (not color-only) — it's an inline link inside a paragraph of
+   text, so axe's link-in-text-block rule requires a non-color distinguisher
+   regardless of the link/surrounding-text contrast ratio. */
+.hero__link { text-decoration: underline; text-underline-offset: 2px; }
+.hero__link:hover { opacity: 0.85; }
 .hero__subtitle { color: var(--color-text-muted); font-size: var(--text-base); margin: 0; }
 .hero__search:focus { border-color: var(--color-border-focus); }
 
