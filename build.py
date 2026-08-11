@@ -1518,10 +1518,17 @@ def generate_headers(site_config: dict):
     sentry_enabled = site_config.get("sentry", {}).get("enabled", False)
 
     # script-src is NEVER touched here (ledger P6/P7) — no inline script is added.
-    script_src = "'self'"
+    # https://static.cloudflareinsights.com is the one unconditional exception:
+    # base.html loads Cloudflare Web Analytics' beacon on every page (not
+    # gated behind a config flag the way GA4/Sentry/AdSense are below), so its
+    # origin belongs in the baseline rather than one of the conditional
+    # branches further down.
+    script_src = "'self' https://static.cloudflareinsights.com"
     # connect-src already allows the API origin (data API shares it, F15). Add the
     # Google OAuth token/authorize hosts for Phase 5. img-src gains Google avatars
     # (Phase 5); style-src/font-src gain Google Fonts for the Inter face (Phase 3).
+    # cloudflareinsights.com is where the beacon script above posts RUM data
+    # (`/cdn-cgi/rum`) — same "unconditional" reasoning as script-src above.
     connect_src = " ".join(
         # A config with no api.base_url must not emit a stray empty token.
         p
@@ -1530,6 +1537,7 @@ def generate_headers(site_config: dict):
             api_url,
             "https://accounts.google.com",
             "https://oauth2.googleapis.com",
+            "https://cloudflareinsights.com",
         )
         if p
     )

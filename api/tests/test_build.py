@@ -221,11 +221,12 @@ def _csp_from_build(built) -> str:
 
 def test_full_build_no_db_emits_all_off(tmp_path, monkeypatch):
     # No site_settings row (the CI-with-no-data posture) ⇒ all integrations off:
-    # script-src stays literally 'self' and no gtag/adsense host leaks in.
+    # script-src stays at the unconditional Cloudflare Insights baseline, no
+    # gtag/adsense host leaks in.
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     csp = _csp_from_build(tmp_path)
-    assert "script-src 'self';" in csp
+    assert "script-src 'self' https://static.cloudflareinsights.com;" in csp
     assert "googletagmanager" not in csp
     assert "googlesyndication" not in csp
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
@@ -339,13 +340,14 @@ def test_sentry_and_analytics_load_via_defer_in_document_order(tmp_path, monkeyp
 
 def test_full_build_all_off_row_keeps_script_src(tmp_path, monkeypatch):
     # §3.6: with the overlay row PRESENT but all integrations off, the CSP must be
-    # untouched — script-src stays literally 'self', no vendor host leaks in. This
-    # is the launch posture (a seeded but unconfigured site), distinct from no-row.
+    # untouched — script-src stays at the unconditional Cloudflare Insights
+    # baseline, no vendor host leaks in. This is the launch posture (a seeded
+    # but unconfigured site), distinct from no-row.
     _seed_site_settings(site_name="Present But Off")
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     csp = _csp_from_build(tmp_path)
-    assert "script-src 'self';" in csp
+    assert "script-src 'self' https://static.cloudflareinsights.com;" in csp
     assert "googletagmanager" not in csp
     assert "googlesyndication" not in csp
     assert "sentry-cdn" not in csp
@@ -426,11 +428,14 @@ def test_full_build_no_db_renders_no_ad_slots(tmp_path, monkeypatch):
 
 def test_full_build_all_off_row_renders_no_adsense(tmp_path, monkeypatch):
     # §3.4: off means off end-to-end — no unit markup, no vendor loader, and a
-    # script-src that is literally 'self'.
+    # script-src still at the unconditional Cloudflare Insights baseline.
     _seed_site_settings(site_name="Present But Off")
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
-    assert "script-src 'self';" in _csp_from_build(tmp_path)
+    assert (
+        "script-src 'self' https://static.cloudflareinsights.com;"
+        in _csp_from_build(tmp_path)
+    )
     for slug in TOOL_PAGES.values():
         html = _tool_page(tmp_path, slug)
         assert "adsbygoogle" not in html
@@ -572,7 +577,7 @@ def test_half_configured_adsense_does_not_widen_the_csp(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     csp = _csp_from_build(tmp_path)
-    assert "script-src 'self';" in csp
+    assert "script-src 'self' https://static.cloudflareinsights.com;" in csp
     assert "googlesyndication" not in csp
     assert "frame-src 'none'" in csp
 
@@ -885,10 +890,12 @@ def test_generate_headers_without_api_base_url_emits_no_empty_token(
 
 
 def test_generate_headers_script_src_untouched(tmp_path, monkeypatch):
+    # "untouched" now means "stays at the unconditional Cloudflare Insights
+    # baseline" — no adsense/ga4/sentry host leaks in on top of it.
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_headers({})
     csp = _csp_line(tmp_path)
-    assert "script-src 'self';" in csp  # exactly 'self', no new hosts
+    assert "script-src 'self' https://static.cloudflareinsights.com;" in csp
 
 
 def test_generate_headers_csp_tightened_directives(tmp_path, monkeypatch):
