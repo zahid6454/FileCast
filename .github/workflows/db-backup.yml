@@ -45,6 +45,12 @@ jobs:
             exit 1
           fi
           mkdir -p backup
+          # DATABASE_URL is the SQLAlchemy-style URL the app/Alembic use (see
+          # ci.yml: "postgresql+psycopg://...") — libpq/pg_dump doesn't know
+          # the "+psycopg" driver suffix and errors with "invalid connection
+          # option" on the whole string, so strip it down to a plain
+          # postgresql:// URI before handing it to pg_dump.
+          PG_DUMP_URL=$(printf '%s' "$DATABASE_URL" | sed -E 's#^postgresql\+[A-Za-z0-9_]+://#postgresql://#')
           # Pinned to Postgres 18 to match Neon (project-docs/GO_LIVE_PLAN.md §3:
           # "Neon Postgres 18") — pg_dump should not be older than the server
           # it's dumping. --no-owner/--no-privileges: the read-only role dumping
@@ -54,7 +60,7 @@ jobs:
             -v "$PWD/backup:/backup" \
             postgres:18 \
             pg_dump --no-owner --no-privileges --format=plain \
-              --file=/backup/filecast.sql "$DATABASE_URL"
+              --file=/backup/filecast.sql "$PG_DUMP_URL"
           gzip backup/filecast.sql
           ls -la backup/
 
