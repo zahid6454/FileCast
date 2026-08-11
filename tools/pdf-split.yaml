@@ -19,8 +19,8 @@ ui_type: standard
 tagline: "Extract pages from a PDF into separate files"
 tagline_long: "Split a PDF into individual pages or page ranges — entirely in your browser, no upload required."
 meta:
-  title: "Split PDF Pages — Free, Private, No Upload"
-  description: "Split PDF files into separate pages instantly in your browser. No upload, no server — your files stay private."
+  title: "PDF Split — Free, No Upload | FileCast"
+  description: "Split PDF files free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Extract individual pages or custom page ranges."
   keywords: ["split pdf", "pdf split", "extract pdf pages", "separate pdf pages", "split pdf free"]
 content:
   what_is: "content/pdf-split/what-is.md"

@@ -17,8 +17,8 @@ ui_type: standard
 tagline: "iPhone photos to a format that works everywhere"
 tagline_long: "Convert Apple's HEIC photos into JPG files that open on any device, browser, or platform — no software to install."
 meta:
-  title: "Convert HEIC to JPG — Free, Private, No Upload"
-  description: "Convert HEIC/HEIF images to JPG instantly in your browser. No upload, no server — your files stay private."
+  title: "HEIC to JPG Converter — Free, No Upload | FileCast"
+  description: "Convert HEIC to JPG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Opens on any device, browser, or platform."
   keywords: ["heic to jpg", "heif to jpg", "convert heic", "heic converter", "iphone photo converter"]
 content:
   what_is: "content/heic-to-jpg/what-is.md"

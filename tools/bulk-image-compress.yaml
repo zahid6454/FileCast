@@ -27,8 +27,8 @@ options:
 tagline: "Compress multiple images at once"
 tagline_long: "Compress up to 10 images at once — reduce file sizes in bulk, all processed in your browser."
 meta:
-  title: "Bulk Compress Images — Free, Private, No Upload"
-  description: "Compress multiple images at once in your browser. No upload, no server — your files stay private."
+  title: "Bulk Image Compressor — Free, No Upload | FileCast"
+  description: "Compress up to 10 images at once free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Batch-reduce file sizes in one pass."
   keywords: ["bulk compress images", "batch image compression", "compress multiple images", "bulk image compressor", "batch compress"]
 content:
   what_is: "content/bulk-image-compress/what-is.md"

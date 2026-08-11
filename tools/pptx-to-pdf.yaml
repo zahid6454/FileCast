@@ -15,8 +15,8 @@ tagline: "Convert PowerPoint presentations to PDF"
 tagline_long: "Convert PowerPoint presentations to PDF format — files are encrypted in transit, processed securely, and deleted immediately."
 api_endpoint: /api/v1/convert/pptx-to-pdf
 meta:
-  title: "Convert PPTX to PDF — Free, Secure, Instant"
-  description: "Convert PowerPoint presentations to PDF online. Your file is encrypted, converted, and deleted immediately — we never store your documents."
+  title: "PPTX to PDF Converter — Free & Secure | FileCast"
+  description: "Convert PPTX to PDF free online — your file is encrypted, converted, and deleted instantly. No sign-up, no limits, no watermarks. Preserves slide layout and formatting."
   keywords: ["pptx to pdf", "powerpoint to pdf", "convert pptx to pdf", "pptx to pdf free", "powerpoint to pdf converter"]
 content:
   what_is: "content/pptx-to-pdf/what-is.md"

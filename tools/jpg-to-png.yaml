@@ -17,8 +17,8 @@ reverse_tool: png-to-jpg
 tagline: "Get lossless quality and transparency support"
 tagline_long: "Switch to PNG for lossless quality and transparency support — ideal for logos, graphics, and images you plan to edit further."
 meta:
-  title: "Convert JPG to PNG — Free, Private, No Upload"
-  description: "Convert JPG images to PNG instantly in your browser. No upload, no server — your files stay private."
+  title: "JPG to PNG Converter — Free, No Upload | FileCast"
+  description: "Convert JPG to PNG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Lossless quality with transparency support."
   keywords: ["jpg to png", "jpeg to png", "convert jpg to png", "jpg converter", "image converter"]
 content:
   what_is: "content/jpg-to-png/what-is.md"

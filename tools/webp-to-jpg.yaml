@@ -17,8 +17,8 @@ reverse_tool: jpg-to-webp
 tagline: "Open web images in any app or device"
 tagline_long: "Turn WebP images into JPGs that work with every photo editor, printer, and device — no more 'unsupported format' errors."
 meta:
-  title: "Convert WebP to JPG — Free, Private, No Upload"
-  description: "Convert WebP images to JPG instantly in your browser. No upload, no server — your files stay private."
+  title: "WebP to JPG Converter — Free, No Upload | FileCast"
+  description: "Convert WebP to JPG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Works with any photo editor or device."
   keywords: ["webp to jpg", "convert webp to jpg", "webp converter", "webp to jpeg", "image converter"]
 content:
   what_is: "content/webp-to-jpg/what-is.md"

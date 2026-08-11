@@ -13,12 +13,13 @@ js_libs: []
 max_file_size: 5MB
 bulk_support: false
 ui_type: text-input
+reverse_tool: html-to-markdown
 input_placeholder: "Paste your Markdown here...\n\nExample:\n# Hello World\n\nThis is **bold** and this is *italic*.\n\n- Item one\n- Item two"
 tagline: "Render Markdown into clean HTML"
 tagline_long: "Convert Markdown text to HTML instantly in your browser — perfect for blog posts, documentation, and README files."
 meta:
-  title: "Convert Markdown to HTML — Free, Private, No Upload"
-  description: "Convert Markdown to HTML instantly in your browser. No upload, no server — your content stays private."
+  title: "Markdown to HTML Converter — Free, No Upload | FileCast"
+  description: "Convert Markdown to HTML free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Great for blog posts, docs, and README files."
   keywords: ["markdown to html", "convert markdown to html", "markdown converter", "md to html", "markdown renderer"]
 content:
   what_is: "content/markdown-to-html/what-is.md"

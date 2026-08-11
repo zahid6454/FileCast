@@ -53,6 +53,20 @@ ASSETS_DIR = ROOT / "assets"
 # this field decides a public privacy claim (the Local/Cloud badge); see there.
 VALID_TOOL_TYPES = {"client-side", "server-side"}
 
+# Footer "Popular Tools" row (O2 report §5.7/§13 #18). Reuses the exact 6 tools
+# the SAME report already named "highest-volume" for the Phase 1 Search
+# Console indexing priority (§13 #1) — traceable back to the report itself
+# rather than a fresh, undocumented judgment call. Order is deliberate (highest
+# volume first); select_popular_tools() below preserves it.
+POPULAR_TOOL_IDS = [
+    "docx-to-pdf",
+    "png-to-jpg",
+    "heic-to-jpg",
+    "pdf-merge",
+    "pdf-compress",
+    "image-resize",
+]
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -471,6 +485,23 @@ def sort_tools(tools: list[dict]) -> list[dict]:
     )
 
 
+def select_popular_tools(tools: list[dict]) -> list[dict]:
+    """Resolve POPULAR_TOOL_IDS to lightweight {id, name, slug} dicts, in that
+    list's order, for the footer's "Popular Tools" row.
+
+    Skips any id not present in ``tools`` rather than erroring — the same P10
+    degrade-gracefully posture as apply_tool_overrides(): an admin disabling
+    one of these six tools via the DB overlay must not break every page's
+    footer, just quietly shorten the row by one.
+    """
+    tool_map = {t["id"]: t for t in tools}
+    return [
+        {"id": tid, "name": tool_map[tid]["name"], "slug": tool_map[tid]["slug"]}
+        for tid in POPULAR_TOOL_IDS
+        if tid in tool_map
+    ]
+
+
 def load_tools() -> list[dict]:
     tools = []
     if not TOOLS_DIR.exists():
@@ -545,6 +576,136 @@ def load_tool_content(tools: list[dict]):
             tool["faq_structured_data"] = parse_faq_pairs(ROOT / faq_path)
         else:
             tool["faq_structured_data"] = []
+
+
+# ---------------------------------------------------------------------------
+# Step 6b: "Alternatives" content block (O2 report §5.8/§13 #19)
+# ---------------------------------------------------------------------------
+#
+# Shared, group-keyed snippets rather than 34 bespoke per-tool essays: most
+# tools are grouped by OUTPUT format — a JPG output has the same real-world
+# offline alternatives whether it came from PNG, WebP, or HEIC (Preview/
+# Photos/GIMP handle all of them identically), so {source}/{target} template
+# substitution is enough to keep each one accurate. ALTERNATIVES_GROUP_OVERRIDES
+# covers the tools whose real alternative differs from their output-format
+# siblings:
+#   - the four PDF ACTION tools (pdf-compress/merge/rotate/split are all
+#     PDF->PDF) don't share docx/pptx/xlsx-to-pdf's "open in Office and Save
+#     As" answer — there's no source document to open.
+#   - html-to-pdf/image-to-pdf's alternative is a browser print dialog or the
+#     OS's print-to-PDF feature, not an Office app.
+#   - the three image action tools (compress/resize/bulk-compress) have no
+#     "convert to X" answer at all; they share one resize/compress-specific
+#     snippet instead.
+#
+# Every (heading, sentence) pair below may reference {source}/{target}
+# (tool.input_format/output_format) via str.format().
+ALTERNATIVES: dict[str, tuple[str, str]] = {
+    "PDF": (
+        "Other Ways to Convert {source} to PDF",
+        "You can also convert {source} to PDF using Microsoft Word, PowerPoint, or Excel (File → Save As → PDF), Google Docs, Slides, or Sheets (File → Download → PDF), or LibreOffice (File → Export as PDF). FileCast is useful when you don't have these installed or prefer not to upload your file to a cloud service.",
+    ),
+    "browser-print-to-pdf": (
+        "Other Ways to Convert {source} to PDF",
+        "You can also create a PDF from {source} using your browser's Print dialog (Print → Save as PDF), or your operating system's own print-to-PDF feature. FileCast is useful when you want a quick conversion without opening a print dialog.",
+    ),
+    "DOCX": (
+        "Other Ways to Convert PDF to Word",
+        "You can also convert a PDF to an editable Word document using Adobe Acrobat's Export PDF tool, or by opening the PDF directly in Microsoft Word, which converts it automatically. FileCast is useful when you don't have Acrobat or Word installed.",
+    ),
+    "JPG": (
+        "Other Ways to Convert {source} to JPG",
+        "You can also convert {source} to JPG using your device's built-in photo viewer (File → Export or Save As), or an image editor like GIMP or Photoshop. FileCast is useful when you want a quick conversion without opening a separate app.",
+    ),
+    "PNG": (
+        "Other Ways to Convert {source} to PNG",
+        "You can also convert {source} to PNG using your device's built-in photo viewer (File → Export or Save As), or an image editor like GIMP or Photoshop. FileCast is useful when you want a quick conversion without opening a separate app.",
+    ),
+    "WebP": (
+        "Other Ways to Convert {source} to WebP",
+        "You can also convert {source} to WebP using an image editor like GIMP or Photoshop, both of which support WebP export. FileCast is useful when you don't have an image editor installed.",
+    ),
+    "HTML": (
+        "Other Ways to Convert Markdown to HTML",
+        "You can also convert Markdown to HTML using a Markdown editor with live preview, or a static site generator's built-in renderer. FileCast is useful for a one-off conversion without setting either up.",
+    ),
+    "Markdown": (
+        "Other Ways to Convert HTML to Markdown",
+        "You can also convert HTML to Markdown using a browser extension, or your CMS's built-in export option, if it has one. FileCast is useful when neither is available.",
+    ),
+    "JSON": (
+        "Other Ways to Convert {source} to JSON",
+        "You can also convert {source} to JSON using a short script in your language of choice — most have built-in libraries for both {source} and JSON — or a dedicated command-line conversion tool. FileCast is useful for a quick, one-off conversion without writing any code.",
+    ),
+    "CSV": (
+        "Other Ways to Convert JSON to CSV",
+        "You can also convert JSON to CSV by importing the JSON into a spreadsheet app like Excel or Google Sheets and saving as CSV, or with a short script using your language's JSON and CSV libraries. FileCast is useful for a quick, one-off conversion.",
+    ),
+    "XML": (
+        "Other Ways to Convert JSON to XML",
+        "You can also convert JSON to XML using a command-line tool like xmlstarlet, or a short script using your language's JSON and XML libraries. FileCast is useful for a quick, one-off conversion without writing any code.",
+    ),
+    "YAML": (
+        "Other Ways to Convert JSON to YAML",
+        "You can also convert JSON to YAML using a command-line tool like yq, or a short script using your language's JSON and YAML libraries. FileCast is useful for a quick, one-off conversion without writing any code.",
+    ),
+    "pdf-compress": (
+        "Other Ways to Compress a PDF",
+        "You can also compress a PDF using Adobe Acrobat's Compress PDF tool, or Preview on Mac (File → Export → Reduce File Size). FileCast is useful when you don't have either installed.",
+    ),
+    "pdf-merge": (
+        "Other Ways to Merge PDFs",
+        "You can also merge PDFs using Preview on Mac (drag page thumbnails between two open PDFs), or Adobe Acrobat's Combine Files tool. FileCast is useful when you don't have either installed.",
+    ),
+    "pdf-rotate": (
+        "Other Ways to Rotate a PDF",
+        "You can also rotate PDF pages using Preview on Mac (Tools → Rotate, then File → Export), or Adobe Acrobat's page rotation tool. FileCast is useful when you don't have either installed.",
+    ),
+    "pdf-split": (
+        "Other Ways to Split a PDF",
+        "You can also split a PDF using Preview on Mac (drag pages out of the thumbnail sidebar into a new document), or Adobe Acrobat's Organize Pages tool. FileCast is useful when you don't have either installed.",
+    ),
+    "image-resize-compress": (
+        "Other Ways to Resize or Compress Images",
+        "You can also resize or compress images using your device's Preview or Photos app (File → Export, with a quality or size option), or a desktop tool like ImageOptim (Mac) or FileOptimizer (Windows). FileCast is useful when you don't have any of these installed.",
+    ),
+}
+
+ALTERNATIVES_GROUP_OVERRIDES = {
+    "html-to-pdf": "browser-print-to-pdf",
+    "image-to-pdf": "browser-print-to-pdf",
+    "pdf-compress": "pdf-compress",
+    "pdf-merge": "pdf-merge",
+    "pdf-rotate": "pdf-rotate",
+    "pdf-split": "pdf-split",
+    "image-compress": "image-resize-compress",
+    "image-resize": "image-resize-compress",
+    "bulk-image-compress": "image-resize-compress",
+}
+
+
+def load_alternatives(tools: list[dict]):
+    """Mutate each tool dict: add 'alternatives_html', a short "Other Ways
+    to..." section (O2 report §5.8/§13 #19). See the module comment above
+    ALTERNATIVES for the grouping rationale. `tool["alternatives_html"]` is
+    plain literal HTML built from strings this file owns (never from tool
+    YAML content), so no markdown/escaping pass is needed before rendering it
+    with `|safe`, matching content_html's own already-rendered-HTML contract.
+    """
+    for tool in tools:
+        group = ALTERNATIVES_GROUP_OVERRIDES.get(tool["id"], tool.get("output_format"))
+        entry = ALTERNATIVES.get(group)
+        if not entry:
+            tool["alternatives_html"] = ""
+            continue
+        heading_tmpl, sentence_tmpl = entry
+        fmt = {
+            "source": tool.get("input_format", ""),
+            "target": tool.get("output_format", ""),
+        }
+        tool["alternatives_html"] = (
+            f"<h2>{heading_tmpl.format(**fmt)}</h2>\n<p>{sentence_tmpl.format(**fmt)}</p>"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -941,7 +1102,7 @@ def create_jinja_env(
     env.globals["assets"] = asset_map
     env.globals["nav_categories"] = categories_with_tools
     # id → display name, so the admin panel can label tool categories exactly as
-    # the site does (e.g. data-conversion → "Text Conversion"), not by guessing
+    # the site does (e.g. data-conversion → "Data Conversion"), not by guessing
     # from the slug. Injected into the admin config island.
     env.globals["category_names"] = {
         cid: cdata.get("name") for cid, cdata in categories_with_tools.items()
@@ -1523,20 +1684,32 @@ def generate_headers(site_config: dict):
 
 
 def generate_redirects(site_config: dict):
-    """Write dist/_redirects: www.<domain> -> the apex, 301, every path.
+    """Write dist/_redirects: www.<domain> -> the apex, plus the old
+    /document-tools/ category path -> its renamed /document-conversion/ URL,
+    both 301, every path.
 
     Cloudflare Pages reads this file the same way it reads _headers. Both
     filecast.org and www.filecast.org are attached as custom domains on the
     same Pages project and currently serve identical content — this is what
     makes one of them canonical instead of two indexable copies of every page.
+
+    The category redirect (O2 report §4.1/§13 #11) is a literal path, not
+    derived from site_config["categories"] — that list only carries the
+    category's CURRENT slug, which is exactly the thing this line exists to
+    redirect FROM. It stops mattering (and can be deleted) once
+    /document-tools/ has fully dropped out of Google's index and any inbound
+    links pointing at it.
     """
     base = (
         site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
     )
     host = urlparse(base).netloc
     if not host:
-        print(f"  [warn] site.base_url {base!r} has no host; _redirects will be empty")
-    lines = [f"https://www.{host}/* {base}/:splat 301"] if host else []
+        print(f"  [warn] site.base_url {base!r} has no host; skipping the www redirect")
+    lines = []
+    if host:
+        lines.append(f"https://www.{host}/* {base}/:splat 301")
+    lines.append("/document-tools/* /document-conversion/:splat 301")
     (DIST / "_redirects").write_text(
         "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8"
     )
@@ -1752,6 +1925,7 @@ def build():
     # 6. Load content
     print("[5/11] Loading content markdown")
     load_tool_content(tools)
+    load_alternatives(tools)
 
     # 7. Resolve related tools
     print("[6/11] Resolving related tools")
@@ -1775,6 +1949,11 @@ def build():
     # 13. Jinja2 environment
     print("[9/11] Setting up Jinja2")
     env = create_jinja_env(site_config, asset_map, categories_with_tools)
+
+    # Footer "Popular Tools" row (O2 report §5.7/§13 #18). Computed from the
+    # already-overridden/sorted `tools` list, so a DB-disabled tool among the
+    # six is dropped the same way it's dropped everywhere else.
+    env.globals["popular_tools"] = select_popular_tools(tools)
 
     # Site-wide totals for the homepage trust counter. Always defined (so the
     # StrictUndefined template guard is a plain `is not none` check); the

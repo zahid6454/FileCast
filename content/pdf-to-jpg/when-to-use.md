@@ -14,7 +14,7 @@ Many messaging apps handle images better than PDFs — they show inline previews
 
 ### Creating Website Thumbnails
 
-If you need to show a preview of a PDF on a website — a report cover, a menu, or a product sheet — converting the first page to JPG gives you a lightweight image that loads fast and works in any browser.
+If you need to show a preview of a PDF on a website — a report cover, a menu, or a product sheet — converting the first page to JPG gives you a lightweight image that loads fast and works in any browser. For an even smaller thumbnail, run the result through [Image Compressor](/convert/image-compress/).
 
 ### Reducing File Size for Email
 

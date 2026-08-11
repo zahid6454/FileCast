@@ -17,6 +17,22 @@
   "description": "{{ site.description }}"
 }
 </script>
+{# Organization (O2 report §7.4/§13 #17). No `sameAs` — the report's own
+   example points at github.com/zahid6454/FileCast, but that repo is private
+   (see contact.html: its GitHub Issues link was removed for the same reason,
+   a 404 for every visitor). No other public profile exists yet (Twitter/
+   LinkedIn are Phase 5, not built). `sameAs` is optional in schema.org;
+   omitting it is preferable to shipping a link that 404s. #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "{{ site.name }}",
+  "url": "{{ site.base_url }}/",
+  "logo": "{{ site.base_url }}/favicon.svg",
+  "description": "{{ site.description }}"
+}
+</script>
 {% endblock %}
 
 {% block content %}

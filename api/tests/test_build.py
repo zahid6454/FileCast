@@ -1009,7 +1009,7 @@ def test_full_build_404_links_all_categories(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     not_found = (tmp_path / "404.html").read_text(encoding="utf-8")
-    assert 'href="/document-tools/"' in not_found
+    assert 'href="/document-conversion/"' in not_found
     assert 'href="/image-conversion/"' in not_found
     assert 'href="/data-conversion/"' in not_found
     assert 'id="hero-search"' in not_found  # search stays alongside the links
@@ -1132,7 +1132,8 @@ def test_generate_redirects_www_to_apex(tmp_path, monkeypatch):
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
     assert (
         redirects.strip()
-        == "https://www.filecast.org/* https://filecast.org/:splat 301"
+        == "https://www.filecast.org/* https://filecast.org/:splat 301\n"
+        "/document-tools/* /document-conversion/:splat 301"
     )
 
 
@@ -1145,17 +1146,29 @@ def test_generate_redirects_default_base_url(tmp_path, monkeypatch):
     assert "www.filecast.org" in redirects
 
 
-def test_generate_redirects_schemeless_base_url_warns_and_writes_nothing(
+def test_generate_redirects_schemeless_base_url_warns_and_skips_www_only(
     tmp_path, monkeypatch, capsys
 ):
     # A base_url with no scheme (e.g. "filecast.org" instead of
     # "https://filecast.org") makes urlparse().netloc empty — must not crash
-    # or silently ship an empty file with no explanation.
+    # or silently drop the (host-independent) category redirect below with no
+    # explanation for the missing www line.
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_redirects({"site": {"base_url": "filecast.org"}})
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
-    assert redirects == ""
+    assert redirects == "/document-tools/* /document-conversion/:splat 301\n"
     assert "no host" in capsys.readouterr().out
+
+
+def test_generate_redirects_document_tools_to_document_conversion(
+    tmp_path, monkeypatch
+):
+    # O2 report §4.1/§13 #11 — the renamed category URL. Host-independent (a
+    # literal path redirect), so it must be present regardless of base_url.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_redirects({"site": {"base_url": "https://filecast.org"}})
+    redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
+    assert "/document-tools/* /document-conversion/:splat 301" in redirects
 
 
 # --------------------------------------------------------------------------- #
@@ -1471,8 +1484,11 @@ def test_og_images_written_for_every_page_kind(built):
     for tool in tool_data:
         assert f"{tool['id']}.png" in files, tool["id"]
 
-    for cat_slug in ("document-tools", "image-conversion", "data-conversion"):
-        assert f"{cat_slug}.png" in files, cat_slug
+    # OG image filenames are keyed by category ID, not slug (see
+    # test_category_og_image_path_uses_category_id) — "document-tools" here is
+    # the id, which is unaffected by #11's slug rename to /document-conversion/.
+    for cat_id in ("document-tools", "image-conversion", "data-conversion"):
+        assert f"{cat_id}.png" in files, cat_id
 
     # No stray/orphaned images beyond what's expected: 34 tools + 3 categories
     # + home + default.
@@ -1498,7 +1514,7 @@ def test_og_image_tags_present_across_page_kinds(built):
         "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
         "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
         "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
-        "category": built / "document-tools" / "index.html",
+        "category": built / "document-conversion" / "index.html",
         "static-default": built / "privacy" / "index.html",
     }
     for label, path in pages.items():
@@ -1512,6 +1528,24 @@ def test_og_image_tags_present_across_page_kinds(built):
         assert re.search(r'<meta property="og:image:alt" content="[^"]+">', html), label
 
 
+def test_og_type_present_across_page_kinds(built):
+    """O2 report §5.4/§13 #14 flagged og:type as homepage-only. It's actually
+    unconditional in base.html (outside every block), so this just pins that
+    invariant across every page kind — a future per-template override
+    ("website" for tools, say) would need to keep this passing too."""
+    pages = {
+        "home": built / "index.html",
+        "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
+        "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
+        "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
+        "category": built / "document-conversion" / "index.html",
+        "static-default": built / "privacy" / "index.html",
+    }
+    for label, path in pages.items():
+        html = path.read_text(encoding="utf-8")
+        assert '<meta property="og:type" content="website">' in html, label
+
+
 def test_tool_og_image_path_matches_tool_id_not_slug(built):
     # tool.slug is "/convert/png-to-jpg" (used for the URL); the OG image is
     # keyed by the shorter tool.id ("png-to-jpg") — same value here, but a
@@ -1522,10 +1556,12 @@ def test_tool_og_image_path_matches_tool_id_not_slug(built):
 
 
 def test_category_og_image_path_uses_category_id(built):
-    # category.slug == category.id today for all three live categories, but
-    # the image is keyed by id specifically (generate_og_images() iterates
-    # categories_with_tools by id) — pin that, not the coincidence.
-    page = (built / "document-tools" / "index.html").read_text(encoding="utf-8")
+    # document-tools' id and slug diverged as of O2 report #11 (slug renamed
+    # to /document-conversion/, id kept as document-tools since it's also the
+    # value in tool.category across 11 tool YAMLs) — this page is served from
+    # /document-conversion/ but its OG image is still og/document-tools.png,
+    # because generate_og_images() keys strictly off id.
+    page = (built / "document-conversion" / "index.html").read_text(encoding="utf-8")
     assert 'content="https://filecast.org/images/og/document-tools.png"' in page
 
 
@@ -1547,7 +1583,7 @@ def test_twitter_card_tags_mirror_og_tags_across_page_kinds(built):
         "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
         "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
         "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
-        "category": built / "document-tools" / "index.html",
+        "category": built / "document-conversion" / "index.html",
         "static-default": built / "privacy" / "index.html",
     }
     for label, path in pages.items():
@@ -1601,3 +1637,287 @@ def test_homepage_conversion_badge_floor(tmp_path, monkeypatch):
     assert "1,245+ Files Converted" in (tmp_path / "index.html").read_text(
         encoding="utf-8"
     )
+
+
+# --------------------------------------------------------------------------- #
+# BreadcrumbList + WebApplication JSON-LD (O2 report §7.2/§7.3/§13 #15, #16)
+# --------------------------------------------------------------------------- #
+
+
+def _ldjson_blocks(html: str) -> list[dict]:
+    return [
+        json.loads(m)
+        for m in re.findall(
+            r'<script type="application/ld\+json">(.*?)</script>', html, re.S
+        )
+    ]
+
+
+def test_breadcrumb_jsonld_present_across_page_kinds(built):
+    """Every page kind that renders a visual breadcrumb gets a matching
+    BreadcrumbList block: all three tool ui_type templates, plus category."""
+    pages = {
+        "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
+        "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
+        "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
+        "category": built / "document-conversion" / "index.html",
+    }
+    for label, path in pages.items():
+        html = path.read_text(encoding="utf-8")
+        blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "BreadcrumbList"]
+        assert len(blocks) == 1, label
+        items = blocks[0]["itemListElement"]
+        # Every ListItem but the last (the current page) is a real link;
+        # positions are contiguous starting at 1 (schema.org requirement).
+        for i, item in enumerate(items, start=1):
+            assert item["@type"] == "ListItem", label
+            assert item["position"] == i, label
+            assert item["name"], label
+        assert "item" not in items[-1], label  # current page, no self-link
+        for item in items[:-1]:
+            assert item["item"].startswith("https://filecast.org/"), label
+
+
+def test_breadcrumb_jsonld_tool_page_includes_category_level(built):
+    # Home > Image Conversion > PNG to JPG Converter — three levels, matching
+    # the visual breadcrumb <nav> in the same template.
+    html = (built / "convert" / "png-to-jpg" / "index.html").read_text(encoding="utf-8")
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "BreadcrumbList"]
+    items = blocks[0]["itemListElement"]
+    assert [i["name"] for i in items] == [
+        "Home",
+        "Image Conversion",
+        "PNG to JPG Converter",
+    ]
+    assert items[1]["item"] == "https://filecast.org/image-conversion/"
+
+
+def test_breadcrumb_jsonld_category_page_has_no_intermediate_level(built):
+    # Home > Document Conversion — two levels; the category page IS the
+    # intermediate level, so there's nothing to insert between it and Home.
+    html = (built / "document-conversion" / "index.html").read_text(encoding="utf-8")
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "BreadcrumbList"]
+    items = blocks[0]["itemListElement"]
+    assert [i["name"] for i in items] == ["Home", "Document Conversion"]
+
+
+def test_webapp_jsonld_present_across_tool_ui_types(built):
+    pages = {
+        "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
+        "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
+        "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
+    }
+    for label, path in pages.items():
+        html = path.read_text(encoding="utf-8")
+        blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "WebApplication"]
+        assert len(blocks) == 1, label
+        app = blocks[0]
+        assert app["name"], label
+        assert app["url"].startswith("https://filecast.org/convert/"), label
+        assert app["applicationCategory"] == "UtilitiesApplication", label
+        assert app["operatingSystem"] == "Any", label
+        assert app["offers"] == {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+        }, label
+        assert app["description"], label
+        assert app["featureList"], label
+
+
+def test_webapp_jsonld_feature_list_does_not_claim_no_upload_for_server_tools(built):
+    # docx-to-pdf is server-side — it DOES upload the file (and deletes it
+    # immediately). Baking "No upload" into structured data for it would be a
+    # false privacy claim, same class of bug the OG image subtitle and
+    # processing_pill() already guard against elsewhere (P15).
+    html = (built / "convert" / "docx-to-pdf" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "WebApplication"]
+    assert "No upload" not in blocks[0]["featureList"]
+    assert "Encrypted transfer" in blocks[0]["featureList"]
+
+
+def test_webapp_jsonld_feature_list_claims_no_upload_for_client_tools(built):
+    html = (built / "convert" / "png-to-jpg" / "index.html").read_text(encoding="utf-8")
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "WebApplication"]
+    assert "No upload" in blocks[0]["featureList"]
+
+
+# --------------------------------------------------------------------------- #
+# Organization JSON-LD (O2 report §7.4/§13 #17)
+# --------------------------------------------------------------------------- #
+
+
+def test_organization_jsonld_on_homepage(built):
+    html = (built / "index.html").read_text(encoding="utf-8")
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "Organization"]
+    assert len(blocks) == 1
+    org = blocks[0]
+    assert org["name"] == "FileCast"
+    assert org["url"] == "https://filecast.org/"
+    assert org["logo"] == "https://filecast.org/favicon.svg"
+    assert org["description"]
+
+
+def test_organization_jsonld_omits_sameas(built):
+    # No public social profile or repo link exists yet (the GitHub repo is
+    # private — see contact.html's comment on why its own link was removed).
+    # `sameAs` is optional in schema.org; a link that 404s would be worse
+    # than omitting the field.
+    html = (built / "index.html").read_text(encoding="utf-8")
+    blocks = [b for b in _ldjson_blocks(html) if b.get("@type") == "Organization"]
+    assert "sameAs" not in blocks[0]
+
+
+def test_organization_jsonld_only_on_homepage(built):
+    # Not every page needs its own Organization block — one per site is
+    # standard practice; check a tool and a category page don't duplicate it.
+    for path in (
+        built / "convert" / "png-to-jpg" / "index.html",
+        built / "document-conversion" / "index.html",
+    ):
+        html = path.read_text(encoding="utf-8")
+        assert not [b for b in _ldjson_blocks(html) if b.get("@type") == "Organization"]
+
+
+# --------------------------------------------------------------------------- #
+# Internal linking (O2 report §5.7/§13 #18)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "tool_a,tool_b",
+    [
+        ("docx-to-pdf", "pdf-to-docx"),
+        ("html-to-markdown", "markdown-to-html"),
+        ("csv-to-json", "json-to-csv"),
+        ("xml-to-json", "json-to-xml"),
+    ],
+)
+def test_reverse_tool_link_is_bidirectional(built, tool_a, tool_b):
+    # Each pair must link to each other, not just one direction — the report's
+    # own framing ("ensure every tool WITH a reverse counterpart has this
+    # link") is symmetric by definition.
+    page_a = (built / "convert" / tool_a / "index.html").read_text(encoding="utf-8")
+    page_b = (built / "convert" / tool_b / "index.html").read_text(encoding="utf-8")
+    assert f'href="/convert/{tool_b}/"' in page_a, f"{tool_a} -> {tool_b}"
+    assert f'href="/convert/{tool_a}/"' in page_b, f"{tool_b} -> {tool_a}"
+
+
+def test_footer_popular_tools_row_present_on_every_page_kind(built):
+    pages = [
+        built / "index.html",
+        built / "convert" / "png-to-jpg" / "index.html",
+        built / "document-conversion" / "index.html",
+        built / "privacy" / "index.html",
+    ]
+    expected_hrefs = [
+        "/convert/docx-to-pdf/",
+        "/convert/png-to-jpg/",
+        "/convert/heic-to-jpg/",
+        "/convert/pdf-merge/",
+        "/convert/pdf-compress/",
+        "/convert/image-resize/",
+    ]
+    for path in pages:
+        html = path.read_text(encoding="utf-8")
+        assert "Popular Tools" in html, path
+        for href in expected_hrefs:
+            assert f'href="{href}"' in html, f"{path}: missing {href}"
+
+
+def test_select_popular_tools_skips_missing_ids():
+    # An admin-disabled (or renamed) tool among the six must shorten the row,
+    # not crash the build (P10 — same posture as apply_tool_overrides()).
+    tools = [
+        {
+            "id": "png-to-jpg",
+            "name": "PNG to JPG Converter",
+            "slug": "/convert/png-to-jpg",
+        }
+    ]
+    result = build.select_popular_tools(tools)
+    assert result == [
+        {
+            "id": "png-to-jpg",
+            "name": "PNG to JPG Converter",
+            "slug": "/convert/png-to-jpg",
+        }
+    ]
+
+
+def test_cross_category_links_added_to_when_to_use_content(built):
+    # O2 report §5.7 point 1's own example: a tool in one category linking to
+    # a tool in another as a natural next step. image-to-pdf (image-conversion)
+    # -> pdf-compress (document-tools); pdf-to-jpg/pdf-to-png (document-tools)
+    # -> image-compress (image-conversion).
+    #
+    # pdf-compress is ALSO one of the six footer "Popular Tools" links, so a
+    # bare href check on image-to-pdf's page wouldn't distinguish "the content
+    # link was added" from "it's just in every page's footer" — pin the
+    # actual added sentence instead. image-compress isn't a popular tool, so
+    # the href check alone is unambiguous for the other two.
+    page = (built / "convert" / "image-to-pdf" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        '<a href="/convert/pdf-compress/">PDF Compressor</a> afterward to shrink it'
+        in page
+    )
+
+    for tool_id in ("pdf-to-jpg", "pdf-to-png"):
+        page = (built / "convert" / tool_id / "index.html").read_text(encoding="utf-8")
+        assert 'href="/convert/image-compress/"' in page
+
+
+# --------------------------------------------------------------------------- #
+# "Alternatives" content block (O2 report §5.8/§13 #19)
+# --------------------------------------------------------------------------- #
+
+ALTERNATIVES_HEADING_RE = re.compile(r"<h2>Other Ways to [^<]+</h2>\s*<p>[^<]+</p>")
+
+
+def test_alternatives_block_present_on_every_tool_page(built):
+    tool_data = json.loads((built / "tool-data.json").read_text(encoding="utf-8"))
+    for tool in tool_data:
+        slug = tool["slug"].strip("/")
+        page = (built / slug / "index.html").read_text(encoding="utf-8")
+        assert ALTERNATIVES_HEADING_RE.search(page), tool["id"]
+
+
+def test_alternatives_block_content_differs_by_group(built):
+    # Not a single boilerplate string copy-pasted onto all 34 pages — the
+    # shared-group snippets must actually differ by real-world alternative.
+    pairs = {
+        "png-to-jpg": "photo viewer",
+        "docx-to-pdf": "Microsoft Word",
+        "pdf-compress": "Compress PDF",
+        "pdf-merge": "Combine Files",
+        "csv-to-json": "script in your language",
+        "html-to-pdf": "Print dialog",
+    }
+    for tool_id, must_contain in pairs.items():
+        page = (built / "convert" / tool_id / "index.html").read_text(encoding="utf-8")
+        assert must_contain in page, tool_id
+
+
+def test_alternatives_pdf_action_tools_do_not_reuse_office_app_answer(built):
+    # pdf-compress/merge/rotate/split are all PDF->PDF (no source document to
+    # open in Word/Docs/LibreOffice) — must not get the docx-to-pdf-style
+    # "Microsoft Word, PowerPoint, or Excel" answer.
+    for tool_id in ("pdf-compress", "pdf-merge", "pdf-rotate", "pdf-split"):
+        page = (built / "convert" / tool_id / "index.html").read_text(encoding="utf-8")
+        assert "Microsoft Word, PowerPoint, or Excel" not in page
+
+
+def test_load_alternatives_covers_every_tool(built):
+    # Every one of the 34 shipped tools must resolve to a real ALTERNATIVES
+    # group — an unmapped output_format would silently render an empty
+    # section (load_alternatives()'s `if not entry` branch), not an error.
+    tool_data = json.loads((built / "tool-data.json").read_text(encoding="utf-8"))
+    assert len(tool_data) == 34
+    for tool in tool_data:
+        slug = tool["slug"].strip("/")
+        page = (built / slug / "index.html").read_text(encoding="utf-8")
+        assert "<h2>Other Ways to" in page, tool["id"]

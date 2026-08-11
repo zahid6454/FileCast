@@ -22,8 +22,8 @@ convert_label: "Merge PDFs"
 tagline: "Combine multiple PDFs into one file"
 tagline_long: "Merge two or more PDF files into a single document — entirely in your browser, no upload required."
 meta:
-  title: "Merge PDF Files — Free, Private, No Upload"
-  description: "Combine multiple PDF files into one document instantly in your browser. No upload, no server — your files stay private."
+  title: "PDF Merge — Combine PDFs Free, No Upload | FileCast"
+  description: "Merge PDF files free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Combine two or more PDFs into a single document."
   keywords: ["merge pdf", "combine pdf", "pdf merge", "join pdf", "merge pdf files free"]
 content:
   what_is: "content/pdf-merge/what-is.md"

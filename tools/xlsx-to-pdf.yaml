@@ -15,8 +15,8 @@ tagline: "Convert Excel spreadsheets to PDF"
 tagline_long: "Convert Excel spreadsheets to PDF format — files are encrypted in transit, processed securely, and deleted immediately."
 api_endpoint: /api/v1/convert/xlsx-to-pdf
 meta:
-  title: "Convert XLSX to PDF — Free, Secure, Instant"
-  description: "Convert Excel spreadsheets to PDF online. Your file is encrypted, converted, and deleted immediately — we never store your documents."
+  title: "XLSX to PDF Converter — Free & Secure | FileCast"
+  description: "Convert XLSX to PDF free online — your file is encrypted, converted, and deleted instantly. No sign-up, no limits, no watermarks. Preserves sheet layout and formatting."
   keywords: ["xlsx to pdf", "excel to pdf", "convert xlsx to pdf", "xlsx to pdf free", "excel to pdf converter"]
 content:
   what_is: "content/xlsx-to-pdf/what-is.md"

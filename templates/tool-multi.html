@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import ad_slot, processing_pill, feedback_widget %}
+{% from "_macros.html" import ad_slot, processing_pill, feedback_widget, breadcrumb_jsonld, webapp_jsonld %}
 
 {% block title %}{{ tool.meta.title }}{% endblock %}
 {% block meta_description %}{{ tool.meta.description }}{% endblock %}
@@ -48,6 +48,8 @@
 }
 </script>
 {% endif %}
+{{ breadcrumb_jsonld(category, tool.name) }}
+{{ webapp_jsonld(tool) }}
 {% endblock %}
 
 {% block content %}
@@ -192,6 +194,12 @@
   {% if tool.content_html.get('when_to_use') %}
   <div class="content-block">
     {{ tool.content_html.when_to_use|safe }}
+  </div>
+  {% endif %}
+
+  {% if tool.get('alternatives_html') %}
+  <div class="content-block">
+    {{ tool.alternatives_html|safe }}
   </div>
   {% endif %}
 

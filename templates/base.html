@@ -285,6 +285,19 @@
         <a href="/{{ cat_data.slug }}/">{{ cat_data.name }}</a>
         {% endfor %}
       </div>
+      {# Popular Tools row (O2 report §5.7/§13 #18) — the same 6 tools the
+         report itself named "highest-volume" for the Phase 1 GSC indexing
+         priority, resolved in build.py's select_popular_tools(). Keeps every
+         page within 2 clicks of these six, on top of the category links
+         above. #}
+      {% if popular_tools %}
+      <div class="footer__col">
+        <h2 class="footer__heading">Popular Tools</h2>
+        {% for pt in popular_tools %}
+        <a href="{{ pt.slug }}/">{{ pt.name }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
       <div class="footer__col">
         <h2 class="footer__heading">Resources</h2>
         <a href="/about/">About</a>

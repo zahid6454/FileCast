@@ -25,8 +25,8 @@ options:
 tagline: "Shrink image file size without visible quality loss"
 tagline_long: "Compress JPG, PNG, or WebP images to reduce file size — adjust quality with the slider, all in your browser."
 meta:
-  title: "Compress Images — Free, Private, No Upload"
-  description: "Compress JPG, PNG, and WebP images instantly in your browser. Adjust quality, no upload, no server — your files stay private."
+  title: "Image Compressor — Free, No Upload | FileCast"
+  description: "Compress JPG, PNG, or WebP images free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Adjustable quality slider."
   keywords: ["compress image", "image compressor", "reduce image size", "compress jpg", "compress png", "image compression"]
 content:
   what_is: "content/image-compress/what-is.md"

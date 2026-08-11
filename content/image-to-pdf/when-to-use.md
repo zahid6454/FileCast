@@ -14,7 +14,7 @@ When you need to share slides, charts, or visual materials from a meeting, combi
 
 ### Archiving Receipts and Records
 
-Keeping digital records of receipts, warranties, and important documents is much easier when they are organized as PDFs. Converting a batch of receipt photos into a single PDF per month or per category creates a tidy filing system that is easy to search through later.
+Keeping digital records of receipts, warranties, and important documents is much easier when they are organized as PDFs. Converting a batch of receipt photos into a single PDF per month or per category creates a tidy filing system that is easy to search through later. If the archived file is larger than you'd like, run it through [PDF Compressor](/convert/pdf-compress/) afterward to shrink it before storing.
 
 ### Sending Images by Email
 

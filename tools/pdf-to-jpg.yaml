@@ -17,8 +17,8 @@ reverse_tool: pdf-to-png
 tagline: "Convert PDF pages to JPG images"
 tagline_long: "Convert each page of a PDF into a JPG image — entirely in your browser, no upload required."
 meta:
-  title: "Convert PDF to JPG — Free, Private, No Upload"
-  description: "Convert PDF pages to JPG images instantly in your browser. No upload, no server — your files stay private."
+  title: "PDF to JPG Converter — Free, No Upload | FileCast"
+  description: "Convert PDF to JPG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Exports every page as a separate JPG image."
   keywords: ["pdf to jpg", "convert pdf to jpg", "pdf to jpeg", "pdf to jpg free", "pdf page to jpg"]
 content:
   what_is: "content/pdf-to-jpg/what-is.md"

@@ -16,8 +16,8 @@ ui_type: standard
 tagline: "Save the first frame as a photo-quality image"
 tagline_long: "Extract a still image from any GIF and save it as a high-quality JPG — great for thumbnails, previews, and static versions of animations."
 meta:
-  title: "Convert GIF to JPG — Free, Private, No Upload"
-  description: "Convert GIF images to JPG instantly in your browser. No upload, no server — your files stay private."
+  title: "GIF to JPG Converter — Free, No Upload | FileCast"
+  description: "Convert GIF to JPG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Extract a sharp still frame for thumbnails."
   keywords: ["gif to jpg", "convert gif to jpg", "gif converter", "gif to jpeg", "image converter"]
 content:
   what_is: "content/gif-to-jpg/what-is.md"
