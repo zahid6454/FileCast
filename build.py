@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import base64
+import functools
 import hashlib
 import http.server
 import io
@@ -1230,9 +1231,15 @@ def _sitemap_page_path(segment: str) -> Path:
 # count that moves on nearly every build) and a tool page's baked rating tally
 # (apply_rating_aggregates, which moves on every vote). Stripped before hashing
 # so the sitemap's lastmod signal tracks real content changes, not counter
-# churn between deploys.
+# churn between deploys. The first pattern is scoped to the "Files Converted"
+# badge specifically (via the negative lookahead + literal anchor) — home.html
+# has three OTHER static `hero__badge` spans ("N Free Tools", "Sign-up
+# optional", "No Limits") that must NOT be stripped, or a real copy edit to one
+# of those would leave the hash unchanged and silently suppress lastmod.
 _HASH_VOLATILE_PATTERNS = (
-    re.compile(r'<span class="hero__badge">.*?</span>', re.S),
+    re.compile(
+        r'<span class="hero__badge">(?:(?!</span>).)*?Files Converted</span>', re.S
+    ),
     re.compile(r'<script type="application/json" id="tool-ratings">.*?</script>', re.S),
 )
 
@@ -1253,6 +1260,7 @@ def _hash_file(path: Path) -> str | None:
 _SITEMAP_HASH_COMMENT_RE = re.compile(r"<!--\s*hash:([0-9a-f]{64})\s*-->")
 
 
+@functools.cache
 def _fetch_previous_sitemap(base: str) -> str | None:
     """Best-effort GET of the currently-published sitemap.xml.
 
@@ -1262,13 +1270,21 @@ def _fetch_previous_sitemap(base: str) -> str | None:
     publish." Returns None on ANY failure — unreachable, non-200, timeout,
     first-ever deploy — same P10 posture as this file's DB touchpoints; a miss
     just means every URL's lastmod falls back to today (the pre-#25 behavior).
+
+    Cached per (process, base) — ``--watch`` calls build() on every save
+    (0.5s poll loop), and without this a live HTTP round-trip would land on
+    every single local edit instead of once per dev session.
     """
     try:
         with urllib.request.urlopen(f"{base}/sitemap.xml", timeout=5) as resp:
             if resp.status != 200:
                 return None
             return resp.read().decode("utf-8")
-    except Exception:  # noqa: BLE001 — intentional catch-all (ledger P10)
+    except Exception as e:  # noqa: BLE001 — intentional catch-all (ledger P10)
+        print(
+            f"  [sitemap] previous sitemap.xml unavailable ({type(e).__name__}); "
+            f"lastmod defaults to today for every URL"
+        )
         return None
 
 

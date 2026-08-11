@@ -1233,6 +1233,25 @@ def test_generate_sitemap_lastmod_reuses_previous_when_content_unchanged(
     )
 
 
+def _render_homepage_with_badges(dist: Path, counter: int, free_tools_label: str):
+    # Mirrors home.html's actual shape: three STATIC hero__badge spans plus one
+    # DB-sourced one, all sharing the same class — the exact ambiguity the
+    # volatile-content regex has to resolve correctly.
+    build.clean_dist()
+    (dist / "index.html").write_text(
+        "<html><body>"
+        '<div class="hero__badges">'
+        f'<span class="hero__badge">{free_tools_label}</span>'
+        '<span class="hero__badge">Sign-up optional</span>'
+        '<span class="hero__badge">No Limits</span>'
+        "</div>"
+        f'<span class="hero__badge">{counter}+ Files Converted</span>'
+        "<p>Static homepage content</p>"
+        "</body></html>",
+        encoding="utf-8",
+    )
+
+
 def test_generate_sitemap_hash_ignores_live_homepage_counter(tmp_path, monkeypatch):
     # The homepage's hero badge embeds totals.conversions_display, an exact,
     # unbucketed live DB count that moves on nearly every build — it must not
@@ -1241,26 +1260,40 @@ def test_generate_sitemap_hash_ignores_live_homepage_counter(tmp_path, monkeypat
     monkeypatch.setattr(build, "DIST", tmp_path)
     config = {"site": {"base_url": "https://filecast.org"}}
 
-    def render(count: int):
-        build.clean_dist()
-        (tmp_path / "index.html").write_text(
-            "<html><body>"
-            f'<span class="hero__badge">{count}+ Files Converted</span>'
-            "<p>Static homepage content</p>"
-            "</body></html>",
-            encoding="utf-8",
-        )
-
-    render(1000)
+    _render_homepage_with_badges(tmp_path, 1000, "39 Free Tools")
     build.generate_sitemap(config, [], {})
     sitemap_1 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
     lastmod_1 = _sitemap_entry(sitemap_1, "https://filecast.org/")["lastmod"]
 
-    render(1042)  # counter moved; nothing else on the page changed
+    # Counter moved; nothing else on the page changed.
+    _render_homepage_with_badges(tmp_path, 1042, "39 Free Tools")
     monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_1)
     build.generate_sitemap(config, [], {})
     sitemap_2 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
     assert _sitemap_entry(sitemap_2, "https://filecast.org/")["lastmod"] == lastmod_1
+
+
+def test_generate_sitemap_hash_still_reacts_to_static_badge_edits(
+    tmp_path, monkeypatch
+):
+    # The volatile-content strip must be scoped to the "Files Converted" badge
+    # specifically — a real copy edit to one of the three OTHER hero__badge
+    # spans (same class, static text) is a genuine content change and must
+    # still advance lastmod, not get silently swallowed by an over-broad strip.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    config = {"site": {"base_url": "https://filecast.org"}}
+
+    _render_homepage_with_badges(tmp_path, 1000, "39 Free Tools")
+    build.generate_sitemap(config, [], {})
+    sitemap_1 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+
+    # Only the static "N Free Tools" badge's text changed; counter unchanged.
+    today = date.today().isoformat()
+    _render_homepage_with_badges(tmp_path, 1000, "40 Free Tools")
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_1)
+    build.generate_sitemap(config, [], {})
+    sitemap_2 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert _sitemap_entry(sitemap_2, "https://filecast.org/")["lastmod"] == today
 
 
 def test_generate_sitemap_hash_ignores_live_rating_counts(tmp_path, monkeypatch):
@@ -1300,15 +1333,49 @@ def test_generate_sitemap_hash_ignores_live_rating_counts(tmp_path, monkeypatch)
     )
 
 
-def test_fetch_previous_sitemap_degrades_on_any_failure(monkeypatch):
+def test_fetch_previous_sitemap_degrades_on_any_failure(monkeypatch, capsys):
     # Same graceful-degrade posture as this file's DB touchpoints (P10) — an
     # unreachable/erroring live site must not crash the build, just fall back
-    # to "no previous state" (every URL gets today's date).
+    # to "no previous state" (every URL gets today's date). Unlike this file's
+    # other P10 paths, a silent except-and-return-None here would mean a
+    # persistently failing fetch regresses the build to "today" on every URL
+    # forever with zero signal in the logs — so it must also print.
     def boom(*_args, **_kwargs):
         raise OSError("unreachable")
 
     monkeypatch.setattr(build.urllib.request, "urlopen", boom)
-    assert _REAL_FETCH_PREVIOUS_SITEMAP("https://filecast.org") is None
+    _REAL_FETCH_PREVIOUS_SITEMAP.cache_clear()
+    assert _REAL_FETCH_PREVIOUS_SITEMAP("https://filecast-degrade-test.example") is None
+    assert "[sitemap] previous sitemap.xml unavailable" in capsys.readouterr().out
+
+
+def test_fetch_previous_sitemap_caches_per_base(monkeypatch):
+    # --watch calls build() (and therefore generate_sitemap()) on every saved
+    # file (0.5s poll loop) — without caching, that's a live HTTP round-trip on
+    # every local edit instead of once per dev session.
+    calls = []
+
+    class _FakeResponse:
+        status = 200
+
+        def read(self):
+            return b"<urlset></urlset>"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    def fake_urlopen(url, timeout=None):
+        calls.append(url)
+        return _FakeResponse()
+
+    monkeypatch.setattr(build.urllib.request, "urlopen", fake_urlopen)
+    _REAL_FETCH_PREVIOUS_SITEMAP.cache_clear()
+    _REAL_FETCH_PREVIOUS_SITEMAP("https://filecast-cache-test.example")
+    _REAL_FETCH_PREVIOUS_SITEMAP("https://filecast-cache-test.example")
+    assert len(calls) == 1
 
 
 # --------------------------------------------------------------------------- #
