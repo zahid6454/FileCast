@@ -1099,6 +1099,16 @@ def create_jinja_env(
     if api_url_override:
         api_config["base_url"] = api_url_override.rstrip("/")
     env.globals["api"] = api_config
+    # Cloudflare Web Analytics: a build-time env var, not a DB-backed
+    # site_settings flag like ga4/sentry/adsense above — see base.html's
+    # comment on the beacon <script> for why (absent in CI/local builds is
+    # load-bearing, not incidental). Folded into site_config the same way
+    # API_URL is, so generate_headers() (called after this, same site_config
+    # object) picks it up too without a second env read.
+    site_config["cloudflare_analytics"] = {
+        "token": os.environ.get("CLOUDFLARE_BEACON_TOKEN", "")
+    }
+    env.globals["cloudflare_analytics"] = site_config["cloudflare_analytics"]
     env.globals["assets"] = asset_map
     env.globals["nav_categories"] = categories_with_tools
     # id → display name, so the admin panel can label tool categories exactly as
@@ -1516,6 +1526,12 @@ def generate_headers(site_config: dict):
     adsense_enabled = adsense_is_live(site_config)
     ga4_enabled = site_config.get("ga4", {}).get("enabled", False)
     sentry_enabled = site_config.get("sentry", {}).get("enabled", False)
+    # Not a DB-backed flag like the two above — see create_jinja_env()'s
+    # comment on where this token comes from (build-time env var, absent in
+    # CI/local builds on purpose).
+    cf_analytics_enabled = bool(
+        site_config.get("cloudflare_analytics", {}).get("token")
+    )
 
     # script-src is NEVER touched here (ledger P6/P7) — no inline script is added.
     script_src = "'self'"
@@ -1609,6 +1625,10 @@ def generate_headers(site_config: dict):
         ingest_host = urlparse(sentry_dsn).hostname if sentry_dsn else None
         if ingest_host:
             connect_src += f" https://{ingest_host}"
+    if cf_analytics_enabled:
+        script_src += " https://static.cloudflareinsights.com"
+        # Where the beacon posts RUM data (`/cdn-cgi/rum`).
+        connect_src += " https://cloudflareinsights.com"
 
     csp = (
         f"default-src 'self'; "

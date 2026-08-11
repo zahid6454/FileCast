@@ -83,6 +83,38 @@
   {% set adsense_src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=" ~ adsense.publisher_id if (adsense_live and tool is defined) else none %}
   {% set consent_needed = ga4_src or adsense_src %}
 
+  {# Cloudflare Web Analytics. Gated on a build-time token (env var, folded
+     into site_config by create_jinja_env() the same way API_URL is — see
+     that function's comment), NOT on a DB-backed site_settings flag like
+     GA4/Sentry/AdSense below, since this isn't something an admin toggles
+     live: it's absent in CI/local builds (no env var set) and present only
+     in the real deploy workflow. That absence is load-bearing, not
+     incidental — the beacon's CORS response only allows the real
+     `filecast.org` origin, so firing it against Playwright's
+     `http://127.0.0.1:8000` test server throws a CORS console error that
+     several e2e specs assert against (zero console errors).
+
+     Unlike GA4/AdSense, not gated by the cookie-consent banner —
+     cookieless/no persistent identifiers (Cloudflare's own privacy-first RUM
+     product), so nothing here needs a "granted" decision first. Disclosed in
+     privacy.html's data-collection table regardless (transmits IP/UA/referrer
+     even without a cookie).
+
+     No `integrity`: beacon.min.js is an unversioned, floating CDN URL (same
+     reasoning as GTM's gtag.js below — a hash pinned today would break
+     tomorrow's legitimate load). `type="module"` rather than `defer`
+     (Cloudflare's documented snippet uses `defer`) — functionally equivalent
+     here (module scripts defer by default) and matches what Cloudflare's own
+     dashboard generated for this token; not worth diverging from the copied
+     snippet for a no-op change. Requires `script-src` +
+     `static.cloudflareinsights.com` and `connect-src` +
+     `cloudflareinsights.com` in generate_headers() (build.py) — added only
+     when this same token is present, or the beacon would be silently
+     CSP-blocked. #}
+  {% if cloudflare_analytics.token %}
+  <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="{{ {'token': cloudflare_analytics.token}|tojson }}"></script>
+  {% endif %}
+
   {# Analytics / error tracking (conditional). Sentry's SDK loads from its
      allowlisted CDN; initialization is handled by self-hosted analytics.js
      (no inline script) so a strict `script-src 'self'` CSP is preserved.

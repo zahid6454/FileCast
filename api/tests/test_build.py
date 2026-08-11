@@ -232,6 +232,37 @@ def test_full_build_no_db_emits_all_off(tmp_path, monkeypatch):
     assert "FileCast" in home  # YAML-seeded copy renders
 
 
+def test_full_build_no_cloudflare_token_omits_beacon(tmp_path, monkeypatch):
+    # The default/CI/local-build posture (no CLOUDFLARE_BEACON_TOKEN env var):
+    # no beacon anywhere in the output. Load-bearing, not incidental — the
+    # beacon's CORS response only allows the real filecast.org origin, so
+    # firing it against a test server (e.g. Playwright's 127.0.0.1) throws a
+    # console error several e2e specs assert against (zero console errors).
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    monkeypatch.delenv("CLOUDFLARE_BEACON_TOKEN", raising=False)
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "cloudflareinsights" not in home
+    assert "cloudflareinsights" not in _csp_from_build(tmp_path)
+
+
+def test_full_build_cloudflare_token_renders_beacon(tmp_path, monkeypatch):
+    # Regression coverage for the actual bug this integration exists to fix:
+    # the previous mechanism (Cloudflare's automatic edge injection) silently
+    # stopped reaching real visitors, with nothing catching it except a
+    # manual curl. Asserts the built HTML actually contains the beacon
+    # script and token, not just that the CSP would allow it if it existed.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_BEACON_TOKEN", "test-token-123")
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "static.cloudflareinsights.com/beacon.min.js" in home
+    assert "test-token-123" in home
+    csp = _csp_from_build(tmp_path)
+    assert "https://static.cloudflareinsights.com" in csp
+    assert "https://cloudflareinsights.com" in csp
+
+
 def test_headers_api_origin_follows_site_config(tmp_path, monkeypatch):
     # §5 item 5: connect-src derives the API origin from site_config instead of
     # a hardcoded literal, so a new environment is a config edit — and so the
@@ -831,6 +862,31 @@ def test_generate_headers_csp_additions(tmp_path, monkeypatch):
     assert "https://accounts.google.com" in csp  # connect-src OAuth
     assert "https://oauth2.googleapis.com" in csp
     assert "https://api.filecast.org" in csp  # from site_config
+
+
+def test_generate_headers_cloudflare_analytics_token_widens_csp(tmp_path, monkeypatch):
+    # Both origins are required or the beacon is silently CSP-blocked — the
+    # exact failure mode this integration replaced (Cloudflare's own
+    # automatic injection was already failing silently, no error anywhere).
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers(
+        {
+            "api": {"base_url": "https://api.filecast.org"},
+            "cloudflare_analytics": {"token": "abc123"},
+        }
+    )
+    csp = _csp_line(tmp_path)
+    assert (
+        "https://static.cloudflareinsights.com"
+        in csp.split("script-src")[1].split(";")[0]
+    )
+    assert "https://cloudflareinsights.com" in csp.split("connect-src")[1].split(";")[0]
+
+
+def test_generate_headers_cloudflare_analytics_absent_by_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
+    assert "cloudflareinsights" not in _csp_line(tmp_path)
 
 
 def test_generate_headers_permissions_policy_and_cors(tmp_path, monkeypatch):
