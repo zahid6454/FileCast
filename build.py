@@ -49,6 +49,13 @@ TOOLS_DIR = ROOT / "tools"
 STATIC_DIR = ROOT / "static"
 ASSETS_DIR = ROOT / "assets"
 
+# Per-URL content-hash → lastmod ledger for sitemap.xml (O2 report §13 #25).
+# Lives outside dist/ (which clean_dist() wipes every build, and which CI never
+# carries between runs) so it survives both local rebuilds and fresh CI
+# checkouts — it's a tracked file, committed like any other generated-but-kept
+# artifact. See generate_sitemap() for how it's read/updated.
+SITEMAP_LASTMOD_PATH = ROOT / "sitemap-lastmod.json"
+
 # The only accepted values for a tool's `type`. Enforced in load_tools() because
 # this field decides a public privacy claim (the Local/Cloud badge); see there.
 VALID_TOOL_TYPES = {"client-side", "server-side"}
@@ -1218,6 +1225,26 @@ def render_all_pages(
 # ---------------------------------------------------------------------------
 
 
+def _sitemap_page_path(segment: str) -> Path:
+    """Map a sitemap URL's path segment (no leading/trailing slash) to the
+    rendered file render_all_pages() wrote it to, so its content can be hashed."""
+    return DIST / "index.html" if not segment else DIST / segment / "index.html"
+
+
+def _hash_file(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _load_sitemap_lastmods() -> dict:
+    try:
+        return json.loads(SITEMAP_LASTMOD_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
 def generate_sitemap(site_config: dict, tools: list[dict], categories_with_tools: dict):
     base = (
         site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
@@ -1225,36 +1252,86 @@ def generate_sitemap(site_config: dict, tools: list[dict], categories_with_tools
     today = date.today().isoformat()
     urls = []
 
-    urls.append({"loc": f"{base}/", "priority": "1.0"})
+    urls.append(
+        {"loc": f"{base}/", "segment": "", "priority": "1.0", "changefreq": "weekly"}
+    )
 
     for tool in tools:
-        slug = tool.get("slug", f"/convert/{tool['id']}")
-        if not slug.startswith("/"):
-            slug = f"/{slug}"
-        if not slug.endswith("/"):
-            slug += "/"
-        urls.append({"loc": f"{base}{slug}", "priority": "0.8"})
+        slug = tool.get("slug", f"/convert/{tool['id']}").strip("/")
+        urls.append(
+            {
+                "loc": f"{base}/{slug}/",
+                "segment": slug,
+                "priority": "0.8",
+                "changefreq": "weekly",
+            }
+        )
 
     for cat_data in categories_with_tools.values():
-        urls.append({"loc": f"{base}/{cat_data['slug']}/", "priority": "0.6"})
+        slug = cat_data["slug"]
+        urls.append(
+            {
+                "loc": f"{base}/{slug}/",
+                "segment": slug,
+                "priority": "0.6",
+                "changefreq": "weekly",
+            }
+        )
 
-    urls.append({"loc": f"{base}/privacy/", "priority": "0.3"})
-    urls.append({"loc": f"{base}/terms/", "priority": "0.3"})
-    urls.append({"loc": f"{base}/about/", "priority": "0.4"})
-    urls.append({"loc": f"{base}/contact/", "priority": "0.3"})
+    # (segment, priority, changefreq) — info pages monthly, legal pages yearly
+    # (O2 report §13 #25).
+    for segment, priority, changefreq in (
+        ("privacy", "0.3", "yearly"),
+        ("terms", "0.3", "yearly"),
+        ("about", "0.4", "monthly"),
+        ("contact", "0.3", "monthly"),
+    ):
+        urls.append(
+            {
+                "loc": f"{base}/{segment}/",
+                "segment": segment,
+                "priority": priority,
+                "changefreq": changefreq,
+            }
+        )
+
+    # lastmod only advances when a URL's rendered content actually changed
+    # since the last build (not on every build) — compare each page's fresh
+    # content hash against the hash recorded for that URL last time. A new
+    # URL, or one whose rendered file is missing/unreadable, always gets
+    # today's date.
+    previous = _load_sitemap_lastmods()
+    lastmods = {}
 
     lines = ['<?xml version="1.0" encoding="UTF-8"?>']
     lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
     for u in urls:
+        content_hash = _hash_file(_sitemap_page_path(u["segment"]))
+        prev_entry = previous.get(u["loc"])
+        if (
+            content_hash is not None
+            and prev_entry
+            and prev_entry.get("hash") == content_hash
+        ):
+            lastmod = prev_entry["lastmod"]
+        else:
+            lastmod = today
+        lastmods[u["loc"]] = {"hash": content_hash or "", "lastmod": lastmod}
+
         lines.append("  <url>")
         lines.append(f"    <loc>{u['loc']}</loc>")
-        lines.append(f"    <lastmod>{today}</lastmod>")
+        lines.append(f"    <lastmod>{lastmod}</lastmod>")
+        lines.append(f"    <changefreq>{u['changefreq']}</changefreq>")
         lines.append(f"    <priority>{u['priority']}</priority>")
         lines.append("  </url>")
     lines.append("</urlset>")
 
     (DIST / "sitemap.xml").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("  [ok] sitemap.xml")
+
+    SITEMAP_LASTMOD_PATH.write_text(
+        json.dumps(lastmods, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 # ---------------------------------------------------------------------------

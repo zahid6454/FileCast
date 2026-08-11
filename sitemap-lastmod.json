@@ -1,0 +1,170 @@
+{
+  "https://filecast.org/": {
+    "hash": "33042643a138ff12584a32ce3f54f2e34176315c47fe888c8cba26cc297a3f00",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/about/": {
+    "hash": "406c7a38151ddcf4aa07e14070c940d01ad305a64a77da8ca4e3f6a5c7511a11",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/contact/": {
+    "hash": "b5d983c577afff998cbb591e3a569d1af1cb5d00f117dad5b98f329771634186",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/bmp-to-jpg/": {
+    "hash": "aac6c5d8e0c45725a3e1dc9c87f49238e122366f2b194debeeef4297993dc137",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/bulk-image-compress/": {
+    "hash": "5cadaf33c1418ff5a2c761eb7c1e70333d46f6c7744b40252a1a76153d24f29b",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/csv-to-json/": {
+    "hash": "17632bdf6ace481f9594866d92c11a271e4cca27508d2dbb5a93f946ce3f4bf8",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/docx-to-pdf/": {
+    "hash": "4ca4f9801e1e1116264545735479b4c5b971681ac24341f444c8ffb357e41281",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/gif-to-jpg/": {
+    "hash": "362d5acf4c5202b440a7f1edcd1d73a84ba5c7aa2fd85b3502d6b6101dcb9812",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/heic-to-jpg/": {
+    "hash": "775d630cec7533fa7294c1ce075713311df8cb82bc143bac3e6a4d5c9f29d494",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/html-to-markdown/": {
+    "hash": "86cb130d40970ae4763495d4d1a4e142353747fc792a0b47bfd8adcbebaff21d",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/html-to-pdf/": {
+    "hash": "56b0176b91c4408b3ce3f8f883c3199811ff397c6780f5dbdbe700ef6d87d3af",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/image-compress/": {
+    "hash": "21478167943b2c57100e47beae6e7cc4f4a80b546b43c9777a162885b8a6d199",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/image-resize/": {
+    "hash": "c9dd0d669affbf2e2ce75b73c4e8f2741db1d2b52b787de13ce543255ccf049f",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/image-to-pdf/": {
+    "hash": "ca2de8b25af8a133db824621fac8f36d64447ddecb7a3270189fff723f285c99",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/jpg-to-png/": {
+    "hash": "ce03aa1f292f2d5546ce4d5794f931614ff59eed5f18ca15aeb613f6227d5825",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/jpg-to-webp/": {
+    "hash": "ccf930d9fc56141ec9f57cf642be2286c4b59fe097caaba9770306bfeb727a72",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/json-to-csv/": {
+    "hash": "d239db97dead8230eb1b9a51a52639c76e4c06196bd2921dab8c4ff1c31dade9",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/json-to-xml/": {
+    "hash": "52937bb8d0d57545a7d782827068199e4f26d7e783daaaaf309743d5a24714e7",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/json-to-yaml/": {
+    "hash": "a3b0cf9cb74d88b71f9e52761280f16c8b8f5d277ffd5ea78046a0bf8aa4ff17",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/markdown-to-html/": {
+    "hash": "5b33c42e43ed42d2ea256e14a1c82a5ccf4b08d3cf75a1fbe729fc9a7c0b3753",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/pdf-compress/": {
+    "hash": "c54e651e25678e5594390a03680d3a135aecaa3bac4b475d2e170dc4552df14a",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/pdf-merge/": {
+    "hash": "132cbf6d78e6cb968ed1c41c0d136284f2b56718138d490d73f1ab618634c1c4",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/pdf-rotate/": {
+    "hash": "9f26f52967cbfaf74ed3cb757ba241e7e7071eb71a067d24fbd1d79cd2406a07",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/pdf-split/": {
+    "hash": "0be025f6a058ca20839fe7adc77dfcb3da09e4d272675fb7b1213b5bce5cb87e",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/pdf-to-docx/": {
+    "hash": "c4c0113407ac38d25db9662805505cda1333ce1ffb7f057a07aa8dcc9116e10a",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/pdf-to-jpg/": {
+    "hash": "cc0b3cc9f1558e0b3adcdc7a2c6028993e7100557e8a1b7303e21c18c274d5d2",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/pdf-to-png/": {
+    "hash": "2c53d79ab0f45c0a86abdd13e442106f9f1b6eab21bd5275d08ee4c9b52d6f85",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/png-to-jpg/": {
+    "hash": "fd29562054752c541e9a7899bfbfc410cf34cc9fa502fb0a26506b21ecc8ba0a",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/png-to-webp/": {
+    "hash": "55e3eec7dda16e8699248e0fdda3001e30cd3c4ece0e022df775dfe5b63f228a",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/pptx-to-pdf/": {
+    "hash": "adb20e79e7ca41e44a43b3d318ade2c2f12cc365a1bcaec7ea82fedde8f4fcf0",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/svg-to-png/": {
+    "hash": "3cc64242d503d94c977aded89084ad207616956e38fc2c6b4d87910ce022d963",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/tiff-to-jpg/": {
+    "hash": "f1e89554ca5be18293bce9b9ba507e6642f0be4889f1ecf9244d16b3ae381d8c",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/webp-to-jpg/": {
+    "hash": "fae9469677bf942ad02d9c616646f22318f7d4206508fa60ac5c406e41d9a6d6",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/webp-to-png/": {
+    "hash": "5f2dae75ed789712d8cc95653360c4f62358e1c38965c32708a87605aeeada59",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/xlsx-to-pdf/": {
+    "hash": "2ccdf26914371482dd39e82ed5d681aec85abbe4bb3c90a97196f7f50ae9a145",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/xml-to-json/": {
+    "hash": "910e7cec4e0b9137e3e779f216cdc132f65c4858d4300d451c6fc9e662508887",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/convert/yaml-to-json/": {
+    "hash": "c03a204aff1f686ac237d462a26cec54d4a019ecc6e973728156e53859f2c46d",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/data-conversion/": {
+    "hash": "6135dad863d68d2bbb667c631afbc4dd18d1560c0772b4eac7a5f1c87e2cfbdb",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/document-conversion/": {
+    "hash": "825c3827653529566abc295f29bee7f2d1b6ab4db04259e92e149e5322a36bce",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/image-conversion/": {
+    "hash": "9434d3a12da51b921f98f5044b14bbd694ba75195f219ab2aa133f1c0521fa48",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/privacy/": {
+    "hash": "ac9b330e12f791b41957d52647ac5a0ba82be3c313686225a4da4a0ff5cba32b",
+    "lastmod": "2026-08-11"
+  },
+  "https://filecast.org/terms/": {
+    "hash": "3b643b16290b2f7ea437b529d0ce0c3ecf6c8a130913f5fed8b01b35ccebca28",
+    "lastmod": "2026-08-11"
+  }
+}
