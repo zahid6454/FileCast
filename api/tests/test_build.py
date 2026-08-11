@@ -29,6 +29,23 @@ import build  # noqa: E402
 # conftest sets DATABASE_URL → the test DB before importing data.*, so build.py's
 # lazy ``from data.db import sync_session`` binds to the same test engine.
 
+# Captured before the autouse fixture below ever patches build._fetch_previous_
+# sitemap, so the one test that exercises the REAL function (its own
+# graceful-degrade behavior) can still reach it.
+_REAL_FETCH_PREVIOUS_SITEMAP = build._fetch_previous_sitemap
+
+
+@pytest.fixture(autouse=True)
+def _no_live_sitemap_fetch(monkeypatch):
+    """generate_sitemap() best-effort GETs the currently-published sitemap.xml
+    to diff lastmod against (O2 report §13 #25) — without this, every build.py
+    call in this file would fire a real HTTP request at the live site. Default
+    to "unreachable" (matches a fresh/offline environment, i.e. every URL gets
+    today's date); tests exercising the lastmod-comparison logic itself
+    override this per-test with a canned previous sitemap.xml.
+    """
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: None)
+
 
 def _seed(rows: list[dict]) -> None:
     with sync_session() as s:
@@ -223,9 +240,6 @@ def test_full_build_no_db_emits_all_off(tmp_path, monkeypatch):
     # No site_settings row (the CI-with-no-data posture) ⇒ all integrations off:
     # script-src stays literally 'self' and no gtag/adsense host leaks in.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     csp = _csp_from_build(tmp_path)
     assert "script-src 'self';" in csp
@@ -242,9 +256,6 @@ def test_full_build_no_cloudflare_token_omits_beacon(tmp_path, monkeypatch):
     # firing it against a test server (e.g. Playwright's 127.0.0.1) throws a
     # console error several e2e specs assert against (zero console errors).
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     monkeypatch.delenv("CLOUDFLARE_BEACON_TOKEN", raising=False)
     build.build()
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
@@ -259,9 +270,6 @@ def test_full_build_cloudflare_token_renders_beacon(tmp_path, monkeypatch):
     # manual curl. Asserts the built HTML actually contains the beacon
     # script and token, not just that the CSP would allow it if it existed.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     monkeypatch.setenv("CLOUDFLARE_BEACON_TOKEN", "test-token-123")
     build.build()
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
@@ -279,9 +287,6 @@ def test_headers_api_origin_follows_site_config(tmp_path, monkeypatch):
     # generate_headers() runs after create_jinja_env(), which folds the API_URL
     # override into site_config, so the override reaches the CSP too.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     monkeypatch.setenv("API_URL", "https://api.staging.example/")
     build.build()
     csp = _csp_from_build(tmp_path)
@@ -297,9 +302,6 @@ def test_full_build_overlay_bakes_ga4(tmp_path, monkeypatch):
     # gtag URL is baked. Proves the overlay reaches BOTH the CSP and templates.
     _seed_site_settings(ga4_enabled=True, ga4_measurement_id="G-TESTBUILD")
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     csp = _csp_from_build(tmp_path)
     assert "https://www.googletagmanager.com" in csp
@@ -322,9 +324,6 @@ def test_full_build_overlay_bakes_sentry_with_pinned_cdn_version(tmp_path, monke
         sentry_dsn="https://abc123@o4511862654894081.ingest.us.sentry.io/456",
     )
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert re.search(r"browser\.sentry-cdn\.com/\d+\.\d+\.\d+/bundle\.min\.js", home)
@@ -359,9 +358,6 @@ def test_sentry_and_analytics_load_via_defer_in_document_order(tmp_path, monkeyp
         sentry_dsn="https://abc123@o4511862654894081.ingest.us.sentry.io/456",
     )
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
 
@@ -395,9 +391,6 @@ def test_full_build_all_off_row_keeps_script_src(tmp_path, monkeypatch):
     # is the launch posture (a seeded but unconfigured site), distinct from no-row.
     _seed_site_settings(site_name="Present But Off")
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     csp = _csp_from_build(tmp_path)
     assert "script-src 'self';" in csp
@@ -415,9 +408,6 @@ def test_full_build_overlay_bakes_site_copy(tmp_path, monkeypatch):
         site_description="Overlaid description text.",
     )
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert "<title>Overlaid Name — Overlaid Tagline</title>" in home
@@ -430,9 +420,6 @@ def test_full_build_site_name_html_is_escaped(tmp_path, monkeypatch):
     # autoescape), never as a live tag that breaks out of the JSON-LD <script>.
     _seed_site_settings(site_name="</script><script>alert(1)</script>")
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert "<script>alert(1)</script>" not in home  # no live injected tag
@@ -469,9 +456,6 @@ def test_full_build_all_off_row_renders_no_ad_slots(tmp_path, monkeypatch):
     # left the other 11 unverified.
     _seed_site_settings(site_name="Present But Off")
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     for ui_type, slug in TOOL_PAGES.items():
         html = _tool_page(tmp_path, slug)
@@ -482,9 +466,6 @@ def test_full_build_no_db_renders_no_ad_slots(tmp_path, monkeypatch):
     # Same invariant on the no-row (pure-YAML) path, where `adsense.enabled`
     # comes from site-config.yaml rather than the overlay.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     for ui_type, slug in TOOL_PAGES.items():
         html = _tool_page(tmp_path, slug)
@@ -496,9 +477,6 @@ def test_full_build_all_off_row_renders_no_adsense(tmp_path, monkeypatch):
     # script-src that is literally 'self'.
     _seed_site_settings(site_name="Present But Off")
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     assert "script-src 'self';" in _csp_from_build(tmp_path)
     for slug in TOOL_PAGES.values():
@@ -530,9 +508,6 @@ def test_full_build_ads_on_renders_units_on_all_three_templates(tmp_path, monkey
     # would recur in the opposite direction (units on tool.html only).
     _seed_site_settings(**ADS_ON)
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
 
     for ui_type, slug in TOOL_PAGES.items():
@@ -569,9 +544,6 @@ def test_full_build_ads_on_leaves_adless_pages_alone(tmp_path, monkeypatch):
     # either — §7.2 item 1's "confirm no leakage", pinned in CI.
     _seed_site_settings(**ADS_ON)
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     for page in ("index.html", "about/index.html", "privacy/index.html"):
         html = (tmp_path / page).read_text(encoding="utf-8")
@@ -646,9 +618,6 @@ def test_half_configured_adsense_does_not_widen_the_csp(tmp_path, monkeypatch):
         adsense_publisher_id="ca-pub-1234567890123456",
     )
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     csp = _csp_from_build(tmp_path)
     assert "script-src 'self';" in csp
@@ -676,9 +645,6 @@ def test_csp_ad_origins_appear_exactly_when_units_do(
     # opened for nothing (§1.1), or units whose origins are blocked.
     _seed_site_settings(**overlay)
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     has_origins = "googlesyndication" in _csp_from_build(tmp_path)
     has_units = "adsbygoogle" in _tool_page(tmp_path, TOOL_PAGES["standard"])
@@ -695,9 +661,6 @@ def test_full_build_half_configured_adsense_renders_nothing(tmp_path, monkeypatc
         adsense_publisher_id="ca-pub-1234567890123456",
     )
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     for ui_type, slug in TOOL_PAGES.items():
         html = _tool_page(tmp_path, slug)
@@ -714,9 +677,6 @@ def test_full_build_one_slot_configured_renders_only_that_slot(tmp_path, monkeyp
         adsense_slot_leaderboard="1111111111",
     )
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     for ui_type, slug in TOOL_PAGES.items():
         html = _tool_page(tmp_path, slug)
@@ -734,9 +694,6 @@ def test_built_css_reserves_each_slot_at_its_own_height(tmp_path, monkeypatch):
     # carrying a near-identical rule shadowed this one in greps until §5 deleted
     # it.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     sheets = list((tmp_path / "css").glob("style.*.css"))
     assert len(sheets) == 1, sheets
@@ -760,9 +717,6 @@ def test_full_build_no_inline_script_anywhere(tmp_path, monkeypatch):
     # #filecast-config); JSON-LD likewise. Everything else must carry a src.
     _seed_site_settings(**ADS_ON)
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
 
     offenders = []
@@ -864,9 +818,6 @@ def test_sort_no_db_preserves_filename_order():
 
 def test_write_tool_data_shape(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.write_tool_data([_tool(id="a", tagline="hi"), _tool(id="b")])
     out = tmp_path / "tool-data.json"
     assert out.exists()
@@ -886,9 +837,6 @@ def test_write_tool_data_shape(tmp_path, monkeypatch):
 
 def test_tool_data_excludes_disabled(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     tools = build.apply_tool_overrides(
         [_tool(id="a"), _tool(id="b")], {"a": {"enabled": False}}
     )
@@ -899,9 +847,6 @@ def test_tool_data_excludes_disabled(tmp_path, monkeypatch):
 
 def test_write_tool_data_slug_fallback(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     slugless = _tool(id="widget")
     del slugless["slug"]  # a YAML tool may omit slug; must not KeyError the build
     build.write_tool_data([slugless])
@@ -921,9 +866,6 @@ def _csp_line(tmp_path) -> str:
 
 def test_generate_headers_csp_additions(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     # no adsense/ga4/sentry; api.base_url is where connect-src's API origin now
     # comes from (§5 item 5) instead of a literal in generate_headers().
     build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
@@ -944,9 +886,6 @@ def test_generate_headers_cloudflare_analytics_token_widens_csp(tmp_path, monkey
     # exact failure mode this integration replaced (Cloudflare's own
     # automatic injection was already failing silently, no error anywhere).
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_headers(
         {
             "api": {"base_url": "https://api.filecast.org"},
@@ -963,18 +902,12 @@ def test_generate_headers_cloudflare_analytics_token_widens_csp(tmp_path, monkey
 
 def test_generate_headers_cloudflare_analytics_absent_by_default(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
     assert "cloudflareinsights" not in _csp_line(tmp_path)
 
 
 def test_generate_headers_permissions_policy_and_cors(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
     text = (tmp_path / "_headers").read_text(encoding="utf-8")
     assert (
@@ -991,9 +924,6 @@ def test_generate_headers_permissions_policy_and_cors(tmp_path, monkeypatch):
 
 def test_generate_headers_fonts_cache_rule(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
     text = (tmp_path / "_headers").read_text(encoding="utf-8")
     assert "/fonts/*" in text
@@ -1003,9 +933,6 @@ def test_generate_headers_fonts_cache_rule(tmp_path, monkeypatch):
 
 def test_process_assets_hashes_font_and_rewrites_css(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     asset_map = build.process_assets()
     font_entry = asset_map.get("fonts/inter-latin.woff2")
     assert font_entry is not None
@@ -1024,9 +951,6 @@ def test_generate_headers_without_api_base_url_emits_no_empty_token(
     # A config with no api section must not leave a stray double space (or worse,
     # a malformed directive) in connect-src.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_headers({})
     csp = _csp_line(tmp_path)
     assert "connect-src 'self' https://accounts.google.com" in csp
@@ -1035,9 +959,6 @@ def test_generate_headers_without_api_base_url_emits_no_empty_token(
 
 def test_generate_headers_script_src_untouched(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_headers({})
     csp = _csp_line(tmp_path)
     assert "script-src 'self';" in csp  # exactly 'self', no new hosts
@@ -1048,9 +969,6 @@ def test_generate_headers_csp_tightened_directives(tmp_path, monkeypatch):
     # and base-uri/form-action/object-src are added. Regression coverage for
     # the PR's highest-blast-radius change, which had none before this test.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_headers({})
     csp = _csp_line(tmp_path)
     assert "style-src 'self';" in csp
@@ -1068,9 +986,6 @@ def test_generate_headers_sentry_connect_src_matches_dsn_host(tmp_path, monkeypa
     # silently drops every event via CSP with no application-visible error.
     # connect-src must derive the real host from the DSN, whatever region.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_headers(
         {
             "sentry": {
@@ -1086,9 +1001,6 @@ def test_generate_headers_sentry_connect_src_matches_dsn_host(tmp_path, monkeypa
 
 def test_generate_robots_excludes_admin_account(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_robots({"site": {"base_url": "https://filecast.org"}})
     robots = (tmp_path / "robots.txt").read_text(encoding="utf-8")
     assert "Disallow: /admin/" in robots
@@ -1104,9 +1016,6 @@ def test_generate_robots_excludes_admin_account(tmp_path, monkeypatch):
 
 def test_generate_service_worker_writes_unhashed_root_file(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_service_worker("2026-08-09")
     sw_path = tmp_path / "sw.js"
     assert sw_path.exists()
@@ -1122,9 +1031,6 @@ def test_generate_service_worker_never_intercepts_cross_origin(tmp_path, monkeyp
     # The API (api.filecast.org), Sentry's CDN, GTM, and AdSense must never be
     # cached or proxied by this worker.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_service_worker("2026-08-09")
     content = (tmp_path / "sw.js").read_text(encoding="utf-8")
     assert "url.origin !== self.location.origin" in content
@@ -1132,9 +1038,6 @@ def test_generate_service_worker_never_intercepts_cross_origin(tmp_path, monkeyp
 
 def test_generate_service_worker_only_handles_get(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_service_worker("2026-08-09")
     content = (tmp_path / "sw.js").read_text(encoding="utf-8")
     assert "request.method !== 'GET'" in content
@@ -1147,9 +1050,6 @@ def test_generate_service_worker_cache_writes_use_wait_until(tmp_path, monkeypat
     # write on memory-pressured (mobile) browsers. Both the navigate and the
     # static-asset path must thread their cache write through waitUntil.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_service_worker("2026-08-09")
     content = (tmp_path / "sw.js").read_text(encoding="utf-8")
     # install + activate each have one waitUntil; the fetch handler must add
@@ -1163,9 +1063,6 @@ def test_generate_service_worker_only_caches_ok_responses(tmp_path, monkeypatch)
     # were the real content and keep being served until CACHE_VERSION next
     # rotates.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_service_worker("2026-08-09")
     content = (tmp_path / "sw.js").read_text(encoding="utf-8")
     assert content.count("if (response.ok)") == 2
@@ -1173,9 +1070,6 @@ def test_generate_service_worker_only_caches_ok_responses(tmp_path, monkeypatch)
 
 def test_generate_headers_worker_src(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_headers({})
     csp = _csp_line(tmp_path)
     assert "worker-src 'self';" in csp
@@ -1186,9 +1080,6 @@ def test_full_build_404_links_all_categories(tmp_path, monkeypatch):
     # tool search. Sourced from nav_categories (a Jinja global), so this can
     # never drift out of sync with the site's actual category list.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     not_found = (tmp_path / "404.html").read_text(encoding="utf-8")
     assert 'href="/document-conversion/"' in not_found
@@ -1199,9 +1090,6 @@ def test_full_build_404_links_all_categories(tmp_path, monkeypatch):
 
 def test_full_build_renders_offline_page_and_sw(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     assert (tmp_path / "offline.html").exists()
     assert (tmp_path / "sw.js").exists()
@@ -1211,9 +1099,6 @@ def test_full_build_renders_offline_page_and_sw(tmp_path, monkeypatch):
 
 def test_generate_sitemap_excludes_admin_account(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_sitemap(
         {"site": {"base_url": "https://filecast.org"}}, [_tool(id="a")], {}
     )
@@ -1240,9 +1125,6 @@ def test_generate_sitemap_changefreq_by_page_type(tmp_path, monkeypatch):
     # O2 report §13 #25 — weekly for tool/category pages (and the homepage,
     # per §6.13), monthly for info pages, yearly for legal pages.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_sitemap(
         {"site": {"base_url": "https://filecast.org"}},
         [_tool(id="a")],
@@ -1277,36 +1159,33 @@ def test_generate_sitemap_changefreq_by_page_type(tmp_path, monkeypatch):
     )
 
 
-def test_generate_sitemap_lastmod_survives_dist_wipe_when_content_unchanged(
+def test_generate_sitemap_lastmod_reuses_previous_when_content_unchanged(
     tmp_path, monkeypatch
 ):
-    # build.py's own clean_dist() rewrites dist/ from scratch on every build, and
-    # CI starts every deploy from a fresh checkout with no dist/ at all — lastmod
-    # must be tracked outside dist/ (SITEMAP_LASTMOD_PATH) and keyed off content,
-    # not off "was this the same build process."
-    dist_dir = tmp_path / "dist"
-    state_path = tmp_path / "sitemap-lastmod.json"
-    monkeypatch.setattr(build, "DIST", dist_dir)
-    monkeypatch.setattr(build, "SITEMAP_LASTMOD_PATH", state_path)
-
+    # dist/ never survives between build.py invocations (clean_dist() wipes it
+    # every run, CI starts every deploy from a fresh checkout) — the durable
+    # record is the sitemap.xml already published at base_url, which
+    # generate_sitemap() re-fetches and diffs against. Simulated here by
+    # feeding each build's own output back in as "what's currently live."
+    monkeypatch.setattr(build, "DIST", tmp_path)
     tools = [_tool(id="a")]
     categories = {"image-conversion": {"slug": "image-conversion"}}
     config = {"site": {"base_url": "https://filecast.org"}}
 
     def render(home_body: str, tool_body: str, cat_body: str):
         build.clean_dist()  # mirrors the wipe every real build starts with
-        (dist_dir / "index.html").write_text(home_body, encoding="utf-8")
-        tool_dir = dist_dir / "convert" / "png-to-jpg"
+        (tmp_path / "index.html").write_text(home_body, encoding="utf-8")
+        tool_dir = tmp_path / "convert" / "png-to-jpg"
         tool_dir.mkdir(parents=True)
         (tool_dir / "index.html").write_text(tool_body, encoding="utf-8")
-        cat_dir = dist_dir / "image-conversion"
+        cat_dir = tmp_path / "image-conversion"
         cat_dir.mkdir(parents=True)
         (cat_dir / "index.html").write_text(cat_body, encoding="utf-8")
 
-    # First build.
+    # First "deploy": nothing published yet (the autouse fixture's default).
     render("home v1", "tool v1", "cat v1")
     build.generate_sitemap(config, tools, categories)
-    sitemap_1 = (dist_dir / "sitemap.xml").read_text(encoding="utf-8")
+    sitemap_1 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
     home_lastmod_1 = _sitemap_entry(sitemap_1, "https://filecast.org/")["lastmod"]
     tool_lastmod_1 = _sitemap_entry(
         sitemap_1, "https://filecast.org/convert/png-to-jpg/"
@@ -1315,11 +1194,13 @@ def test_generate_sitemap_lastmod_survives_dist_wipe_when_content_unchanged(
         "lastmod"
     ]
 
-    # Second build: dist/ wiped and re-rendered byte-for-byte identical output
+    # Second "deploy": fresh dist/, but the site now serves what the first
+    # deploy published, and re-rendered content is byte-for-byte identical
     # (e.g. nothing in the DB/templates changed) — lastmod must not move.
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_1)
     render("home v1", "tool v1", "cat v1")
     build.generate_sitemap(config, tools, categories)
-    sitemap_2 = (dist_dir / "sitemap.xml").read_text(encoding="utf-8")
+    sitemap_2 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
     assert (
         _sitemap_entry(sitemap_2, "https://filecast.org/")["lastmod"] == home_lastmod_1
     )
@@ -1332,12 +1213,13 @@ def test_generate_sitemap_lastmod_survives_dist_wipe_when_content_unchanged(
         == cat_lastmod_1
     )
 
-    # Third build: only the tool page's rendered content changed — only its
-    # lastmod should advance to today; the untouched pages keep their date.
+    # Third "deploy": only the tool page's rendered content changed since
+    # what's published — only its lastmod should advance to today.
     today = date.today().isoformat()
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_2)
     render("home v1", "tool v2", "cat v1")
     build.generate_sitemap(config, tools, categories)
-    sitemap_3 = (dist_dir / "sitemap.xml").read_text(encoding="utf-8")
+    sitemap_3 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
     assert (
         _sitemap_entry(sitemap_3, "https://filecast.org/")["lastmod"] == home_lastmod_1
     )
@@ -1349,6 +1231,84 @@ def test_generate_sitemap_lastmod_survives_dist_wipe_when_content_unchanged(
         _sitemap_entry(sitemap_3, "https://filecast.org/image-conversion/")["lastmod"]
         == cat_lastmod_1
     )
+
+
+def test_generate_sitemap_hash_ignores_live_homepage_counter(tmp_path, monkeypatch):
+    # The homepage's hero badge embeds totals.conversions_display, an exact,
+    # unbucketed live DB count that moves on nearly every build — it must not
+    # make the homepage (priority 1.0) churn lastmod on every deploy the way
+    # byte-exact hashing would.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    config = {"site": {"base_url": "https://filecast.org"}}
+
+    def render(count: int):
+        build.clean_dist()
+        (tmp_path / "index.html").write_text(
+            "<html><body>"
+            f'<span class="hero__badge">{count}+ Files Converted</span>'
+            "<p>Static homepage content</p>"
+            "</body></html>",
+            encoding="utf-8",
+        )
+
+    render(1000)
+    build.generate_sitemap(config, [], {})
+    sitemap_1 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    lastmod_1 = _sitemap_entry(sitemap_1, "https://filecast.org/")["lastmod"]
+
+    render(1042)  # counter moved; nothing else on the page changed
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_1)
+    build.generate_sitemap(config, [], {})
+    sitemap_2 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert _sitemap_entry(sitemap_2, "https://filecast.org/")["lastmod"] == lastmod_1
+
+
+def test_generate_sitemap_hash_ignores_live_rating_counts(tmp_path, monkeypatch):
+    # apply_rating_aggregates() bakes live yes/no vote tallies into the
+    # #tool-ratings island — a vote landing between builds must not bump that
+    # tool page's lastmod on its own.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    config = {"site": {"base_url": "https://filecast.org"}}
+    tools = [_tool(id="a")]
+
+    def render(yes: int, no: int):
+        build.clean_dist()
+        tool_dir = tmp_path / "convert" / "png-to-jpg"
+        tool_dir.mkdir(parents=True)
+        tool_dir.joinpath("index.html").write_text(
+            "<html><body><p>Static tool content</p>"
+            f'<script type="application/json" id="tool-ratings">'
+            f'{{"yes": {yes}, "no": {no}}}</script>'
+            "</body></html>",
+            encoding="utf-8",
+        )
+
+    render(10, 2)
+    build.generate_sitemap(config, tools, {})
+    sitemap_1 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    lastmod_1 = _sitemap_entry(sitemap_1, "https://filecast.org/convert/png-to-jpg/")[
+        "lastmod"
+    ]
+
+    render(11, 2)  # a vote came in; nothing else on the page changed
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_1)
+    build.generate_sitemap(config, tools, {})
+    sitemap_2 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert (
+        _sitemap_entry(sitemap_2, "https://filecast.org/convert/png-to-jpg/")["lastmod"]
+        == lastmod_1
+    )
+
+
+def test_fetch_previous_sitemap_degrades_on_any_failure(monkeypatch):
+    # Same graceful-degrade posture as this file's DB touchpoints (P10) — an
+    # unreachable/erroring live site must not crash the build, just fall back
+    # to "no previous state" (every URL gets today's date).
+    def boom(*_args, **_kwargs):
+        raise OSError("unreachable")
+
+    monkeypatch.setattr(build.urllib.request, "urlopen", boom)
+    assert _REAL_FETCH_PREVIOUS_SITEMAP("https://filecast.org") is None
 
 
 # --------------------------------------------------------------------------- #
@@ -1371,9 +1331,6 @@ def test_full_build_all_off_renders_no_consent_gate(tmp_path, monkeypatch):
     # island, no consent.js — same "off means off end-to-end" posture as the
     # AdSense-off tests above.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert 'id="cookie-consent"' not in home
@@ -1387,9 +1344,6 @@ def test_full_build_ga4_on_renders_consent_gate_sitewide(tmp_path, monkeypatch):
     # carry AdSense inventory.
     _seed_site_settings(ga4_enabled=True, ga4_measurement_id="G-CONSENT")
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     for page in ("index.html", "about/index.html", "privacy/index.html"):
         html = (tmp_path / page).read_text(encoding="utf-8")
@@ -1412,9 +1366,6 @@ def test_full_build_ads_on_gates_adsbygoogle_behind_consent(tmp_path, monkeypatc
     # config island for consent.js to fetch later, never as a live <script src>.
     _seed_site_settings(**ADS_ON)
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     for slug in TOOL_PAGES.values():
         html = _tool_page(tmp_path, slug)
@@ -1436,9 +1387,6 @@ def test_full_build_ads_on_leaves_adless_pages_without_a_consent_gate(
     # so the homepage/static pages have nothing to gate consent for either.
     _seed_site_settings(**ADS_ON)
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     for page in ("index.html", "about/index.html"):
         html = (tmp_path / page).read_text(encoding="utf-8")
@@ -1447,9 +1395,6 @@ def test_full_build_ads_on_leaves_adless_pages_without_a_consent_gate(
 
 def test_generate_headers_includes_hsts(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_headers({})
     headers = (tmp_path / "_headers").read_text(encoding="utf-8")
     assert (
@@ -1460,9 +1405,6 @@ def test_generate_headers_includes_hsts(tmp_path, monkeypatch):
 
 def test_generate_redirects_www_to_apex(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_redirects({"site": {"base_url": "https://filecast.org"}})
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
     assert (
@@ -1476,9 +1418,6 @@ def test_generate_redirects_default_base_url(tmp_path, monkeypatch):
     # No site.base_url in config ⇒ falls back to the same default the rest of
     # build.py uses, never a crash or an empty file.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_redirects({})
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
     assert "www.filecast.org" in redirects
@@ -1492,9 +1431,6 @@ def test_generate_redirects_schemeless_base_url_warns_and_skips_www_only(
     # or silently drop the (host-independent) category redirect below with no
     # explanation for the missing www line.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_redirects({"site": {"base_url": "filecast.org"}})
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
     assert redirects == "/document-tools/* /document-conversion/:splat 301\n"
@@ -1507,9 +1443,6 @@ def test_generate_redirects_document_tools_to_document_conversion(
     # O2 report §4.1/§13 #11 — the renamed category URL. Host-independent (a
     # literal path redirect), so it must be present regardless of base_url.
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.generate_redirects({"site": {"base_url": "https://filecast.org"}})
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
     assert "/document-tools/* /document-conversion/:splat 301" in redirects
@@ -1524,9 +1457,6 @@ def test_generate_redirects_document_tools_to_document_conversion(
 def built(tmp_path, monkeypatch):
     """Run a full build into a temp dir (no DB overlay unless the test seeds)."""
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     return tmp_path
 
@@ -1580,9 +1510,6 @@ def test_full_build_disable_propagates(tmp_path, monkeypatch):
         ]
     )
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     assert not (tmp_path / "convert" / "png-to-jpg" / "index.html").exists()
     data = json.loads((tmp_path / "tool-data.json").read_text(encoding="utf-8"))
@@ -1603,9 +1530,6 @@ def test_full_build_rename_propagates(tmp_path, monkeypatch):
         ]
     )
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     page = (tmp_path / "convert" / "png-to-jpg" / "index.html").read_text(
         encoding="utf-8"
@@ -1630,9 +1554,6 @@ def test_full_build_sort_order_drives_ordering(tmp_path, monkeypatch):
         ]
     )
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
     data = json.loads((tmp_path / "tool-data.json").read_text(encoding="utf-8"))
     assert data[0]["id"] == "xml-to-json"
@@ -1729,9 +1650,6 @@ def test_fetch_total_conversions_sums_and_degrades(monkeypatch):
 def test_full_build_bakes_rating_island_only_where_rated(tmp_path, monkeypatch):
     _seed_ratings("png-to-jpg", yes=44, no=8)
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()
 
     rated = (tmp_path / "convert" / "png-to-jpg" / "index.html").read_text(
@@ -1766,9 +1684,6 @@ def test_full_build_without_db_emits_no_rating_island(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ddb, "sync_session", boom)
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
     build.build()  # must not raise (P10)
 
     page = (tmp_path / "convert" / "png-to-jpg" / "index.html").read_text(
@@ -1985,9 +1900,6 @@ def test_twitter_site_handle_omitted(built):
 
 def test_homepage_conversion_badge_floor(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
-    monkeypatch.setattr(
-        build, "SITEMAP_LASTMOD_PATH", tmp_path / "sitemap-lastmod.json"
-    )
 
     # Below the 1000 floor → hidden, so the counter is never a sad small number.
     monkeypatch.setattr(build, "fetch_total_conversions", lambda: 999)
