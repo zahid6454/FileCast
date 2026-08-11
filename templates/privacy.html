@@ -89,6 +89,7 @@
       <li>Optional written feedback if you tell us what went wrong after a "No" rating (the text you type, your browser's user-agent string, and the tool and time &mdash; not linked to any account, vote, or IP address). Please don't include personal information in it; we can't act on anything typed there as a support request or data request &mdash; use <a href="mailto:support@filecast.org">support@filecast.org</a> for that.</li>
       <li>Client-side error logs (tool name, error type, browser &mdash; no personal data).</li>
       <li>Google Analytics, if enabled &mdash; standard anonymous usage analytics.</li>
+      <li>Cloudflare Web Analytics &mdash; your IP address, browser/device info, and the page you visited, used only to measure aggregate traffic. Sets no cookie and creates no persistent identifier for your visit, so it isn't behind the cookie consent banner below; see "Third-Party Services" for the lawful basis.</li>
     </ul>
   </div>
 
@@ -130,13 +131,13 @@
       <li><strong>Lodge a complaint</strong> with your local data protection supervisory authority if you believe we've mishandled your data.</li>
     </ul>
     <p>
-      <strong>Lawful basis:</strong> account data is processed on the basis of your consent (signing in is opt-in) and to perform the service you asked for (converting files, keeping your history). Anonymous usage analytics and, once enabled, ad personalization run only after you consent via the cookie banner.
+      <strong>Lawful basis:</strong> account data is processed on the basis of your consent (signing in is opt-in) and to perform the service you asked for (converting files, keeping your history). Anonymous usage analytics and, once enabled, ad personalization run only after you consent via the cookie banner. Cloudflare Web Analytics is the one exception: it sets no cookie and creates no persistent visitor identifier, so we rely on legitimate interest &mdash; understanding aggregate site traffic and performance &mdash; rather than consent, per GDPR Art. 6(1)(f).
     </p>
     <p>
       <strong>Do Not Sell or Share My Personal Information (CCPA):</strong> we don't sell or share personal information with third parties for money or other value, and never have. There's nothing to opt out of on that front &mdash; it simply doesn't happen.
     </p>
     <p>
-      <strong>International data transfers:</strong> Google (Sign-in, Analytics, and AdSense) and Sentry (error monitoring) are US-based processors. Where data crosses into the US, it does so under those providers' own standard contractual safeguards (e.g. Google's and Sentry's respective data processing terms) &mdash; we don't operate any infrastructure of our own outside the region our server is hosted in.
+      <strong>International data transfers:</strong> Google (Sign-in, Analytics, and AdSense), Sentry (error monitoring), and Cloudflare (Web Analytics, plus the CDN/security layer every request already passes through) are US-based processors. Where data crosses into the US, it does so under those providers' own standard contractual safeguards (e.g. Google's, Sentry's, and Cloudflare's respective data processing terms) &mdash; we don't operate any infrastructure of our own outside the region our server is hosted in.
     </p>
   </div>
 
@@ -157,6 +158,7 @@
       <li><strong>Google Analytics (GA4)</strong> &mdash; anonymous usage analytics, only after cookie consent. See <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>.</li>
       <li><strong>Google AdSense</strong> &mdash; advertising, once enabled on the site, only after cookie consent. Ads may be personalized based on your activity across the web; see <a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener">how Google uses information from sites that use its services</a> and <a href="https://adssettings.google.com/" target="_blank" rel="noopener">your Google Ads Settings</a> to control ad personalization.</li>
       <li><strong>Sentry</strong> &mdash; error monitoring, so we notice and fix bugs. Captures things like error messages, browser/device info, and the tool you were using &mdash; never file names or file content. See <a href="https://sentry.io/privacy/" target="_blank" rel="noopener">Sentry's Privacy Policy</a>.</li>
+      <li><strong>Cloudflare Web Analytics</strong> &mdash; aggregate traffic measurement (page views, load times). Sets no cookie and doesn't fingerprint or track you across sites, so it runs without cookie consent, on the basis of our legitimate interest in understanding site traffic (see "Your Privacy Rights" above). See <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare's Privacy Policy</a>.</li>
       <li><strong>Gotenberg / Ghostscript</strong> &mdash; run on our own server for server-side conversions. Not third-party services; nothing you send them leaves our infrastructure, and files are deleted immediately after conversion.</li>
     </ul>
   </div>

@@ -221,16 +221,46 @@ def _csp_from_build(built) -> str:
 
 def test_full_build_no_db_emits_all_off(tmp_path, monkeypatch):
     # No site_settings row (the CI-with-no-data posture) ⇒ all integrations off:
-    # script-src stays at the unconditional Cloudflare Insights baseline, no
-    # gtag/adsense host leaks in.
+    # script-src stays literally 'self' and no gtag/adsense host leaks in.
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     csp = _csp_from_build(tmp_path)
-    assert "script-src 'self' https://static.cloudflareinsights.com;" in csp
+    assert "script-src 'self';" in csp
     assert "googletagmanager" not in csp
     assert "googlesyndication" not in csp
     home = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert "FileCast" in home  # YAML-seeded copy renders
+
+
+def test_full_build_no_cloudflare_token_omits_beacon(tmp_path, monkeypatch):
+    # The default/CI/local-build posture (no CLOUDFLARE_BEACON_TOKEN env var):
+    # no beacon anywhere in the output. Load-bearing, not incidental — the
+    # beacon's CORS response only allows the real filecast.org origin, so
+    # firing it against a test server (e.g. Playwright's 127.0.0.1) throws a
+    # console error several e2e specs assert against (zero console errors).
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    monkeypatch.delenv("CLOUDFLARE_BEACON_TOKEN", raising=False)
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "cloudflareinsights" not in home
+    assert "cloudflareinsights" not in _csp_from_build(tmp_path)
+
+
+def test_full_build_cloudflare_token_renders_beacon(tmp_path, monkeypatch):
+    # Regression coverage for the actual bug this integration exists to fix:
+    # the previous mechanism (Cloudflare's automatic edge injection) silently
+    # stopped reaching real visitors, with nothing catching it except a
+    # manual curl. Asserts the built HTML actually contains the beacon
+    # script and token, not just that the CSP would allow it if it existed.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_BEACON_TOKEN", "test-token-123")
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert "static.cloudflareinsights.com/beacon.min.js" in home
+    assert "test-token-123" in home
+    csp = _csp_from_build(tmp_path)
+    assert "https://static.cloudflareinsights.com" in csp
+    assert "https://cloudflareinsights.com" in csp
 
 
 def test_headers_api_origin_follows_site_config(tmp_path, monkeypatch):
@@ -340,14 +370,13 @@ def test_sentry_and_analytics_load_via_defer_in_document_order(tmp_path, monkeyp
 
 def test_full_build_all_off_row_keeps_script_src(tmp_path, monkeypatch):
     # §3.6: with the overlay row PRESENT but all integrations off, the CSP must be
-    # untouched — script-src stays at the unconditional Cloudflare Insights
-    # baseline, no vendor host leaks in. This is the launch posture (a seeded
-    # but unconfigured site), distinct from no-row.
+    # untouched — script-src stays literally 'self', no vendor host leaks in. This
+    # is the launch posture (a seeded but unconfigured site), distinct from no-row.
     _seed_site_settings(site_name="Present But Off")
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     csp = _csp_from_build(tmp_path)
-    assert "script-src 'self' https://static.cloudflareinsights.com;" in csp
+    assert "script-src 'self';" in csp
     assert "googletagmanager" not in csp
     assert "googlesyndication" not in csp
     assert "sentry-cdn" not in csp
@@ -428,14 +457,11 @@ def test_full_build_no_db_renders_no_ad_slots(tmp_path, monkeypatch):
 
 def test_full_build_all_off_row_renders_no_adsense(tmp_path, monkeypatch):
     # §3.4: off means off end-to-end — no unit markup, no vendor loader, and a
-    # script-src still at the unconditional Cloudflare Insights baseline.
+    # script-src that is literally 'self'.
     _seed_site_settings(site_name="Present But Off")
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
-    assert (
-        "script-src 'self' https://static.cloudflareinsights.com;"
-        in _csp_from_build(tmp_path)
-    )
+    assert "script-src 'self';" in _csp_from_build(tmp_path)
     for slug in TOOL_PAGES.values():
         html = _tool_page(tmp_path, slug)
         assert "adsbygoogle" not in html
@@ -577,7 +603,7 @@ def test_half_configured_adsense_does_not_widen_the_csp(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     csp = _csp_from_build(tmp_path)
-    assert "script-src 'self' https://static.cloudflareinsights.com;" in csp
+    assert "script-src 'self';" in csp
     assert "googlesyndication" not in csp
     assert "frame-src 'none'" in csp
 
@@ -838,6 +864,31 @@ def test_generate_headers_csp_additions(tmp_path, monkeypatch):
     assert "https://api.filecast.org" in csp  # from site_config
 
 
+def test_generate_headers_cloudflare_analytics_token_widens_csp(tmp_path, monkeypatch):
+    # Both origins are required or the beacon is silently CSP-blocked — the
+    # exact failure mode this integration replaced (Cloudflare's own
+    # automatic injection was already failing silently, no error anywhere).
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers(
+        {
+            "api": {"base_url": "https://api.filecast.org"},
+            "cloudflare_analytics": {"token": "abc123"},
+        }
+    )
+    csp = _csp_line(tmp_path)
+    assert (
+        "https://static.cloudflareinsights.com"
+        in csp.split("script-src")[1].split(";")[0]
+    )
+    assert "https://cloudflareinsights.com" in csp.split("connect-src")[1].split(";")[0]
+
+
+def test_generate_headers_cloudflare_analytics_absent_by_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
+    assert "cloudflareinsights" not in _csp_line(tmp_path)
+
+
 def test_generate_headers_permissions_policy_and_cors(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
@@ -890,12 +941,10 @@ def test_generate_headers_without_api_base_url_emits_no_empty_token(
 
 
 def test_generate_headers_script_src_untouched(tmp_path, monkeypatch):
-    # "untouched" now means "stays at the unconditional Cloudflare Insights
-    # baseline" — no adsense/ga4/sentry host leaks in on top of it.
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_headers({})
     csp = _csp_line(tmp_path)
-    assert "script-src 'self' https://static.cloudflareinsights.com;" in csp
+    assert "script-src 'self';" in csp  # exactly 'self', no new hosts
 
 
 def test_generate_headers_csp_tightened_directives(tmp_path, monkeypatch):

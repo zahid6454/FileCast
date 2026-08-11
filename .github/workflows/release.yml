@@ -48,10 +48,14 @@ jobs:
       - name: Install build dependencies
         run: pip install -r requirements.txt
 
+      # Same posture as deploy.yml's build step — see that file's comment on
+      # why this token is safe to hardcode (not a secret) and what its
+      # absence means for CI/local builds.
       - name: Build site
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           API_URL: https://api.filecast.org
+          CLOUDFLARE_BEACON_TOKEN: b54e19e5eb2d4ae4bbe9448bef01f362
         run: python build.py
 
       - uses: actions/setup-node@v4

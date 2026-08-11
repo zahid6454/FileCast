@@ -52,10 +52,15 @@ jobs:
       # Bake the site. The read-only Neon DATABASE_URL lets build.py apply the
       # site-settings + tool overlays; if it's unset/unreachable the build still
       # succeeds all-off (P10). API_URL points the static site at the prod API.
+      # CLOUDFLARE_BEACON_TOKEN is not a secret (it's meant to be embedded in
+      # client-side HTML — same posture as GA4's measurement ID). Its absence
+      # here is what keeps the beacon off in CI/local builds (base.html only
+      # renders it when this is set) — see build.py's create_jinja_env().
       - name: Build site
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           API_URL: https://api.filecast.org
+          CLOUDFLARE_BEACON_TOKEN: b54e19e5eb2d4ae4bbe9448bef01f362
         run: python build.py
 
       - uses: actions/setup-node@v4
