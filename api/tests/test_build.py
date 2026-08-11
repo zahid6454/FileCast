@@ -29,6 +29,23 @@ import build  # noqa: E402
 # conftest sets DATABASE_URL → the test DB before importing data.*, so build.py's
 # lazy ``from data.db import sync_session`` binds to the same test engine.
 
+# Captured before the autouse fixture below ever patches build._fetch_previous_
+# sitemap, so the one test that exercises the REAL function (its own
+# graceful-degrade behavior) can still reach it.
+_REAL_FETCH_PREVIOUS_SITEMAP = build._fetch_previous_sitemap
+
+
+@pytest.fixture(autouse=True)
+def _no_live_sitemap_fetch(monkeypatch):
+    """generate_sitemap() best-effort GETs the currently-published sitemap.xml
+    to diff lastmod against (O2 report §13 #25) — without this, every build.py
+    call in this file would fire a real HTTP request at the live site. Default
+    to "unreachable" (matches a fresh/offline environment, i.e. every URL gets
+    today's date); tests exercising the lastmod-comparison logic itself
+    override this per-test with a canned previous sitemap.xml.
+    """
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: None)
+
 
 def _seed(rows: list[dict]) -> None:
     with sync_session() as s:
@@ -1088,6 +1105,277 @@ def test_generate_sitemap_excludes_admin_account(tmp_path, monkeypatch):
     sitemap = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
     assert "/admin/" not in sitemap
     assert "/account/" not in sitemap
+
+
+def _sitemap_entry(sitemap_xml: str, loc: str) -> dict:
+    """Pull the lastmod/changefreq/priority out of the <url> block for `loc`."""
+    m = re.search(
+        r"<url>\s*<loc>" + re.escape(loc) + r"</loc>(.*?)</url>", sitemap_xml, re.S
+    )
+    assert m, f"{loc} not found in sitemap"
+    block = m.group(1)
+    return {
+        tag: re.search(rf"<{tag}>(.*?)</{tag}>", block).group(1)
+        for tag in ("lastmod", "changefreq", "priority")
+        if re.search(rf"<{tag}>(.*?)</{tag}>", block)
+    }
+
+
+def test_generate_sitemap_changefreq_by_page_type(tmp_path, monkeypatch):
+    # O2 report §13 #25 — weekly for tool/category pages (and the homepage,
+    # per §6.13), monthly for info pages, yearly for legal pages.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_sitemap(
+        {"site": {"base_url": "https://filecast.org"}},
+        [_tool(id="a")],
+        {"image-conversion": {"slug": "image-conversion"}},
+    )
+    sitemap = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert _sitemap_entry(sitemap, "https://filecast.org/")["changefreq"] == "weekly"
+    assert (
+        _sitemap_entry(sitemap, "https://filecast.org/convert/png-to-jpg/")[
+            "changefreq"
+        ]
+        == "weekly"
+    )
+    assert (
+        _sitemap_entry(sitemap, "https://filecast.org/image-conversion/")["changefreq"]
+        == "weekly"
+    )
+    assert (
+        _sitemap_entry(sitemap, "https://filecast.org/about/")["changefreq"]
+        == "monthly"
+    )
+    assert (
+        _sitemap_entry(sitemap, "https://filecast.org/contact/")["changefreq"]
+        == "monthly"
+    )
+    assert (
+        _sitemap_entry(sitemap, "https://filecast.org/privacy/")["changefreq"]
+        == "yearly"
+    )
+    assert (
+        _sitemap_entry(sitemap, "https://filecast.org/terms/")["changefreq"] == "yearly"
+    )
+
+
+def test_generate_sitemap_lastmod_reuses_previous_when_content_unchanged(
+    tmp_path, monkeypatch
+):
+    # dist/ never survives between build.py invocations (clean_dist() wipes it
+    # every run, CI starts every deploy from a fresh checkout) — the durable
+    # record is the sitemap.xml already published at base_url, which
+    # generate_sitemap() re-fetches and diffs against. Simulated here by
+    # feeding each build's own output back in as "what's currently live."
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    tools = [_tool(id="a")]
+    categories = {"image-conversion": {"slug": "image-conversion"}}
+    config = {"site": {"base_url": "https://filecast.org"}}
+
+    def render(home_body: str, tool_body: str, cat_body: str):
+        build.clean_dist()  # mirrors the wipe every real build starts with
+        (tmp_path / "index.html").write_text(home_body, encoding="utf-8")
+        tool_dir = tmp_path / "convert" / "png-to-jpg"
+        tool_dir.mkdir(parents=True)
+        (tool_dir / "index.html").write_text(tool_body, encoding="utf-8")
+        cat_dir = tmp_path / "image-conversion"
+        cat_dir.mkdir(parents=True)
+        (cat_dir / "index.html").write_text(cat_body, encoding="utf-8")
+
+    # First "deploy": nothing published yet (the autouse fixture's default).
+    render("home v1", "tool v1", "cat v1")
+    build.generate_sitemap(config, tools, categories)
+    sitemap_1 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    home_lastmod_1 = _sitemap_entry(sitemap_1, "https://filecast.org/")["lastmod"]
+    tool_lastmod_1 = _sitemap_entry(
+        sitemap_1, "https://filecast.org/convert/png-to-jpg/"
+    )["lastmod"]
+    cat_lastmod_1 = _sitemap_entry(sitemap_1, "https://filecast.org/image-conversion/")[
+        "lastmod"
+    ]
+
+    # Second "deploy": fresh dist/, but the site now serves what the first
+    # deploy published, and re-rendered content is byte-for-byte identical
+    # (e.g. nothing in the DB/templates changed) — lastmod must not move.
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_1)
+    render("home v1", "tool v1", "cat v1")
+    build.generate_sitemap(config, tools, categories)
+    sitemap_2 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert (
+        _sitemap_entry(sitemap_2, "https://filecast.org/")["lastmod"] == home_lastmod_1
+    )
+    assert (
+        _sitemap_entry(sitemap_2, "https://filecast.org/convert/png-to-jpg/")["lastmod"]
+        == tool_lastmod_1
+    )
+    assert (
+        _sitemap_entry(sitemap_2, "https://filecast.org/image-conversion/")["lastmod"]
+        == cat_lastmod_1
+    )
+
+    # Third "deploy": only the tool page's rendered content changed since
+    # what's published — only its lastmod should advance to today.
+    today = date.today().isoformat()
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_2)
+    render("home v1", "tool v2", "cat v1")
+    build.generate_sitemap(config, tools, categories)
+    sitemap_3 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert (
+        _sitemap_entry(sitemap_3, "https://filecast.org/")["lastmod"] == home_lastmod_1
+    )
+    assert (
+        _sitemap_entry(sitemap_3, "https://filecast.org/convert/png-to-jpg/")["lastmod"]
+        == today
+    )
+    assert (
+        _sitemap_entry(sitemap_3, "https://filecast.org/image-conversion/")["lastmod"]
+        == cat_lastmod_1
+    )
+
+
+def _render_homepage_with_badges(dist: Path, counter: int, free_tools_label: str):
+    # Mirrors home.html's actual shape: three STATIC hero__badge spans plus one
+    # DB-sourced one, all sharing the same class — the exact ambiguity the
+    # volatile-content regex has to resolve correctly.
+    build.clean_dist()
+    (dist / "index.html").write_text(
+        "<html><body>"
+        '<div class="hero__badges">'
+        f'<span class="hero__badge">{free_tools_label}</span>'
+        '<span class="hero__badge">Sign-up optional</span>'
+        '<span class="hero__badge">No Limits</span>'
+        "</div>"
+        f'<span class="hero__badge">{counter}+ Files Converted</span>'
+        "<p>Static homepage content</p>"
+        "</body></html>",
+        encoding="utf-8",
+    )
+
+
+def test_generate_sitemap_hash_ignores_live_homepage_counter(tmp_path, monkeypatch):
+    # The homepage's hero badge embeds totals.conversions_display, an exact,
+    # unbucketed live DB count that moves on nearly every build — it must not
+    # make the homepage (priority 1.0) churn lastmod on every deploy the way
+    # byte-exact hashing would.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    config = {"site": {"base_url": "https://filecast.org"}}
+
+    _render_homepage_with_badges(tmp_path, 1000, "39 Free Tools")
+    build.generate_sitemap(config, [], {})
+    sitemap_1 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    lastmod_1 = _sitemap_entry(sitemap_1, "https://filecast.org/")["lastmod"]
+
+    # Counter moved; nothing else on the page changed.
+    _render_homepage_with_badges(tmp_path, 1042, "39 Free Tools")
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_1)
+    build.generate_sitemap(config, [], {})
+    sitemap_2 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert _sitemap_entry(sitemap_2, "https://filecast.org/")["lastmod"] == lastmod_1
+
+
+def test_generate_sitemap_hash_still_reacts_to_static_badge_edits(
+    tmp_path, monkeypatch
+):
+    # The volatile-content strip must be scoped to the "Files Converted" badge
+    # specifically — a real copy edit to one of the three OTHER hero__badge
+    # spans (same class, static text) is a genuine content change and must
+    # still advance lastmod, not get silently swallowed by an over-broad strip.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    config = {"site": {"base_url": "https://filecast.org"}}
+
+    _render_homepage_with_badges(tmp_path, 1000, "39 Free Tools")
+    build.generate_sitemap(config, [], {})
+    sitemap_1 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+
+    # Only the static "N Free Tools" badge's text changed; counter unchanged.
+    today = date.today().isoformat()
+    _render_homepage_with_badges(tmp_path, 1000, "40 Free Tools")
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_1)
+    build.generate_sitemap(config, [], {})
+    sitemap_2 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert _sitemap_entry(sitemap_2, "https://filecast.org/")["lastmod"] == today
+
+
+def test_generate_sitemap_hash_ignores_live_rating_counts(tmp_path, monkeypatch):
+    # apply_rating_aggregates() bakes live yes/no vote tallies into the
+    # #tool-ratings island — a vote landing between builds must not bump that
+    # tool page's lastmod on its own.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    config = {"site": {"base_url": "https://filecast.org"}}
+    tools = [_tool(id="a")]
+
+    def render(yes: int, no: int):
+        build.clean_dist()
+        tool_dir = tmp_path / "convert" / "png-to-jpg"
+        tool_dir.mkdir(parents=True)
+        tool_dir.joinpath("index.html").write_text(
+            "<html><body><p>Static tool content</p>"
+            f'<script type="application/json" id="tool-ratings">'
+            f'{{"yes": {yes}, "no": {no}}}</script>'
+            "</body></html>",
+            encoding="utf-8",
+        )
+
+    render(10, 2)
+    build.generate_sitemap(config, tools, {})
+    sitemap_1 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    lastmod_1 = _sitemap_entry(sitemap_1, "https://filecast.org/convert/png-to-jpg/")[
+        "lastmod"
+    ]
+
+    render(11, 2)  # a vote came in; nothing else on the page changed
+    monkeypatch.setattr(build, "_fetch_previous_sitemap", lambda base: sitemap_1)
+    build.generate_sitemap(config, tools, {})
+    sitemap_2 = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert (
+        _sitemap_entry(sitemap_2, "https://filecast.org/convert/png-to-jpg/")["lastmod"]
+        == lastmod_1
+    )
+
+
+def test_fetch_previous_sitemap_degrades_on_any_failure(monkeypatch, capsys):
+    # Same graceful-degrade posture as this file's DB touchpoints (P10) — an
+    # unreachable/erroring live site must not crash the build, just fall back
+    # to "no previous state" (every URL gets today's date). Unlike this file's
+    # other P10 paths, a silent except-and-return-None here would mean a
+    # persistently failing fetch regresses the build to "today" on every URL
+    # forever with zero signal in the logs — so it must also print.
+    def boom(*_args, **_kwargs):
+        raise OSError("unreachable")
+
+    monkeypatch.setattr(build.urllib.request, "urlopen", boom)
+    _REAL_FETCH_PREVIOUS_SITEMAP.cache_clear()
+    assert _REAL_FETCH_PREVIOUS_SITEMAP("https://filecast-degrade-test.example") is None
+    assert "[sitemap] previous sitemap.xml unavailable" in capsys.readouterr().out
+
+
+def test_fetch_previous_sitemap_caches_per_base(monkeypatch):
+    # --watch calls build() (and therefore generate_sitemap()) on every saved
+    # file (0.5s poll loop) — without caching, that's a live HTTP round-trip on
+    # every local edit instead of once per dev session.
+    calls = []
+
+    class _FakeResponse:
+        status = 200
+
+        def read(self):
+            return b"<urlset></urlset>"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    def fake_urlopen(url, timeout=None):
+        calls.append(url)
+        return _FakeResponse()
+
+    monkeypatch.setattr(build.urllib.request, "urlopen", fake_urlopen)
+    _REAL_FETCH_PREVIOUS_SITEMAP.cache_clear()
+    _REAL_FETCH_PREVIOUS_SITEMAP("https://filecast-cache-test.example")
+    _REAL_FETCH_PREVIOUS_SITEMAP("https://filecast-cache-test.example")
+    assert len(calls) == 1
 
 
 # --------------------------------------------------------------------------- #
