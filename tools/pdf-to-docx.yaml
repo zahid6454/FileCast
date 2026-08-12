@@ -2,7 +2,7 @@ enabled: true
 id: pdf-to-docx
 name: "PDF to Word Converter"
 slug: /convert/pdf-to-docx
-category: document-tools
+category: document-conversion
 type: server-side
 input_format: PDF
 output_format: DOCX

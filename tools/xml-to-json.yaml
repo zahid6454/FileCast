@@ -2,7 +2,7 @@ enabled: true
 id: xml-to-json
 name: XML to JSON Converter
 slug: /convert/xml-to-json
-category: data-conversion
+category: developer-tools
 type: client-side
 input_format: XML
 output_format: JSON

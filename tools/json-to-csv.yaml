@@ -2,7 +2,7 @@ enabled: true
 id: json-to-csv
 name: JSON to CSV Converter
 slug: /convert/json-to-csv
-category: data-conversion
+category: developer-tools
 type: client-side
 input_format: JSON
 output_format: CSV

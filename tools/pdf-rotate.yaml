@@ -2,7 +2,7 @@ enabled: true
 id: pdf-rotate
 name: PDF Rotate
 slug: /convert/pdf-rotate
-category: document-tools
+category: document-conversion
 subcategory: pdf-operations
 type: client-side
 input_format: PDF

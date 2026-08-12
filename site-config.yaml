@@ -31,52 +31,54 @@ api:
   base_url: https://api.filecast.org
 
 categories:
-  - id: document-tools
+  - id: document-conversion
     name: Document Conversion
-    nav_label: Docs
+    nav_label: Document
     # URL standardized to the {type}-conversion/ pattern (O2 report §4.1/§13
-    # #11); `id` is left as `document-tools` since it's also the value stored
-    # in tool.category across 11 tool YAMLs, seed.py's DB fallback order, and
-    # api/tests — only the public-facing slug changes. The old /document-tools/
-    # path 301s to this one via build.py's generate_redirects().
+    # #11). id was originally left as document-tools (only the slug renamed)
+    # to avoid touching the 12 tool YAMLs, seed.py, and api/tests that stored
+    # it — since fixed (id now matches slug like the other two categories),
+    # so update tool.category across those 12 tool YAMLs whenever this line
+    # changes again. The old /document-tools/ path still 301s here via
+    # build.py's generate_redirects() — that line is keyed off the historical
+    # URL, not this id, so it does NOT need to change with it.
     slug: document-conversion
     description: "Convert documents to PDF, merge, split, compress, and transform PDF files. Most tools run in your browser."
     search_placeholder: "Filter tools... (e.g. DOCX, PDF, merge, compress)"
 
   - id: image-conversion
     name: Image Conversion
-    nav_label: Images
+    nav_label: Image
     slug: image-conversion
     # The old text ("Your files never leave your device") was only
     # *accidentally* true — every image tool happens to be client-side today.
     # As a category-level promise it breaks silently the first time a
-    # server-side image tool is added, so it is hedged like document-tools
+    # server-side image tool is added, so it is hedged like document-conversion
     # above; the per-tool Local/Cloud badge carries the exact claim.
     description: "Convert between image formats instantly. Most tools run entirely in your browser — nothing is uploaded."
     search_placeholder: "Filter tools... (e.g. PNG, WebP, TIFF)"
 
-  - id: data-conversion
-    # Relabeled from "Text Conversion" (O2 report §4.1/§13 #11) — CSV/JSON/
-    # XML/YAML/Markdown are data interchange formats, not plain text, and the
-    # old label didn't match the /data-conversion/ URL it lived on.
-    name: Data Conversion
-    nav_label: Data
-    slug: data-conversion
-    # Same accidental-truth class as image-conversion above: "All processing
-    # happens in your browser" holds only because every text tool is
-    # client-side today. Hedged so it degrades gracefully rather than becoming
-    # false the moment that stops being true.
-    description: "Convert between data formats like JSON, XML, YAML, CSV, and Markdown. Most tools process everything in your browser."
+  - id: developer-tools
+    # Renamed from "Data Conversion" (Build Action Plan Phase 0) — the
+    # category is no longer just conversions (JSON Formatter, Hash Generator,
+    # QR Code Generator, JWT Decoder don't convert anything), so "Developer
+    # Tools" matches how comparable sites (CodeBeautify, FreeFormatter) label
+    # this exact tool set.
+    name: Developer Tools
+    nav_label: Developer
+    slug: developer-tools
+    # Opens with three verbs (not just "Convert") since the category covers
+    # formatters/validators/generators too. Still says "convert" in the first
+    # sentence since the id/slug dropped the word. "Most tools," matching the
+    # hedge the other two categories use, not "all," so this doesn't become
+    # false the day a server-processed Developer tool is added.
+    #
+    # PR review caught "and Base64" here — the original Build Action Plan
+    # draft was written for the category's eventual tool set (Base64
+    # Encode/Decode ships in a later PR), not what this Phase 0 PR actually
+    # ships (8 JSON/XML/YAML/CSV/HTML/Markdown round-trip converters, no
+    # Base64 tool anywhere in tools/). Dropped until a Base64 tool exists —
+    # same "no factually wrong content" bar the ALTERNATIVES re-templating
+    # in this PR was held to.
+    description: "Format, convert, and validate developer data — JSON, XML, YAML, and CSV. Most tools run entirely in your browser."
     search_placeholder: "Filter tools... (e.g. JSON, XML, YAML)"
-
-  # Reserved for a future audio/video tool set. It has 0 tools today, so
-  # group_tools_by_category() omits it — no nav entry, no category page, no
-  # sitemap URL. Kept here (and in seed.py's CATEGORY_ORDER_FALLBACK) so the walk
-  # order is already correct the moment the first media tool ships. Intentional,
-  # not a leftover.
-  - id: audio-video
-    name: Audio & Video
-    nav_label: Media
-    slug: audio-video
-    description: "Extract audio, convert formats, and process media files."
-    search_placeholder: "Filter tools... (e.g. MP4, MP3, WAV)"

@@ -3,7 +3,7 @@ homepage_order: 2
 id: json-to-xml
 name: JSON to XML Converter
 slug: /convert/json-to-xml
-category: data-conversion
+category: developer-tools
 type: client-side
 input_format: JSON
 output_format: XML

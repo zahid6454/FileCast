@@ -3,7 +3,7 @@ homepage_order: 1
 id: csv-to-json
 name: CSV to JSON Converter
 slug: /convert/csv-to-json
-category: data-conversion
+category: developer-tools
 type: client-side
 input_format: CSV
 output_format: JSON

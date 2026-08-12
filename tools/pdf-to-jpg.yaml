@@ -2,7 +2,7 @@ enabled: true
 id: pdf-to-jpg
 name: PDF to JPG Converter
 slug: /convert/pdf-to-jpg
-category: document-tools
+category: document-conversion
 type: client-side
 input_format: PDF
 output_format: JPG

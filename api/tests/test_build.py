@@ -1084,7 +1084,7 @@ def test_full_build_404_links_all_categories(tmp_path, monkeypatch):
     not_found = (tmp_path / "404.html").read_text(encoding="utf-8")
     assert 'href="/document-conversion/"' in not_found
     assert 'href="/image-conversion/"' in not_found
-    assert 'href="/data-conversion/"' in not_found
+    assert 'href="/developer-tools/"' in not_found
     assert 'id="hero-search"' in not_found  # search stays alongside the links
 
 
@@ -1477,7 +1477,8 @@ def test_generate_redirects_www_to_apex(tmp_path, monkeypatch):
     assert (
         redirects.strip()
         == "https://www.filecast.org/* https://filecast.org/:splat 301\n"
-        "/document-tools/* /document-conversion/:splat 301"
+        "/document-tools/* /document-conversion/:splat 301\n"
+        "/data-conversion/* /developer-tools/:splat 301"
     )
 
 
@@ -1500,7 +1501,10 @@ def test_generate_redirects_schemeless_base_url_warns_and_skips_www_only(
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_redirects({"site": {"base_url": "filecast.org"}})
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
-    assert redirects == "/document-tools/* /document-conversion/:splat 301\n"
+    assert redirects == (
+        "/document-tools/* /document-conversion/:splat 301\n"
+        "/data-conversion/* /developer-tools/:splat 301\n"
+    )
     assert "no host" in capsys.readouterr().out
 
 
@@ -1513,6 +1517,16 @@ def test_generate_redirects_document_tools_to_document_conversion(
     build.generate_redirects({"site": {"base_url": "https://filecast.org"}})
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
     assert "/document-tools/* /document-conversion/:splat 301" in redirects
+
+
+def test_generate_redirects_data_conversion_to_developer_tools(tmp_path, monkeypatch):
+    # Build Action Plan Phase 0 — the data-conversion category was renamed to
+    # developer-tools. Host-independent (a literal path redirect), so it must
+    # be present regardless of base_url.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_redirects({"site": {"base_url": "https://filecast.org"}})
+    redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
+    assert "/data-conversion/* /developer-tools/:splat 301" in redirects
 
 
 # --------------------------------------------------------------------------- #
@@ -1534,7 +1548,10 @@ def test_full_build_additive_outputs(built):
     assert tool_data.exists()
     assert not (built / "js" / "tool-data.json").exists()
     records = json.loads(tool_data.read_text(encoding="utf-8"))
-    assert len(records) == 34  # all YAML tools (no overlay)
+    # All YAML tools (no overlay) — live count so this never goes stale the
+    # moment a new tool YAML is added, mirroring how home.html's
+    # "{{ tools|length }} Free Tools" computes its count at build time.
+    assert len(records) == len(build.load_tools())
 
     # Snapshot one record's shape/content.
     png = next(r for r in records if r["id"] == "png-to-jpg")
@@ -1829,9 +1846,9 @@ def test_og_images_written_for_every_page_kind(built):
         assert f"{tool['id']}.png" in files, tool["id"]
 
     # OG image filenames are keyed by category ID, not slug (see
-    # test_category_og_image_path_uses_category_id) — "document-tools" here is
-    # the id, which is unaffected by #11's slug rename to /document-conversion/.
-    for cat_id in ("document-tools", "image-conversion", "data-conversion"):
+    # test_category_og_image_keys_by_id_not_slug) — all three ids match their
+    # slugs today, but the mechanism itself is id-keyed, not slug-keyed.
+    for cat_id in ("document-conversion", "image-conversion", "developer-tools"):
         assert f"{cat_id}.png" in files, cat_id
 
     # No stray/orphaned images beyond what's expected: 34 tools + 3 categories
@@ -1842,7 +1859,12 @@ def test_og_images_written_for_every_page_kind(built):
 def test_og_images_are_1200x630(built):
     from PIL import Image
 
-    for name in ("home.png", "default.png", "png-to-jpg.png", "document-tools.png"):
+    for name in (
+        "home.png",
+        "default.png",
+        "png-to-jpg.png",
+        "document-conversion.png",
+    ):
         with Image.open(built / "images" / "og" / name) as img:
             assert img.size == (1200, 630), name
 
@@ -1899,14 +1921,34 @@ def test_tool_og_image_path_matches_tool_id_not_slug(built):
     assert 'content="https://filecast.org/images/og/png-to-jpg.png"' in page
 
 
-def test_category_og_image_path_uses_category_id(built):
-    # document-tools' id and slug diverged as of O2 report #11 (slug renamed
-    # to /document-conversion/, id kept as document-tools since it's also the
-    # value in tool.category across 11 tool YAMLs) — this page is served from
-    # /document-conversion/ but its OG image is still og/document-tools.png,
-    # because generate_og_images() keys strictly off id.
-    page = (built / "document-conversion" / "index.html").read_text(encoding="utf-8")
-    assert 'content="https://filecast.org/images/og/document-tools.png"' in page
+def test_category_og_image_keys_by_id_not_slug(tmp_path, monkeypatch):
+    # document-tools' id and slug used to diverge (O2 report §4.1/§13 #11
+    # renamed the slug to /document-conversion/, but the id stayed
+    # document-tools) — that was the real-world example proving
+    # generate_og_images() keys off id, not slug. A later rename (Build
+    # Action Plan Phase 0 follow-up) unified id and slug for every category,
+    # so no real example of the divergence is left. Guards both halves of the
+    # mechanism directly instead: generate_og_images() must name the file
+    # after the category dict's KEY (its id), and category.html's og:image
+    # block must read {{ category.id }}, never {{ category.slug }}.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_og_images(
+        tools=[],
+        categories_with_tools={
+            "fake-id": {
+                "name": "Fake Category",
+                "slug": "totally-different-slug",
+                "tools": [],
+            }
+        },
+        site_config={},
+    )
+    og_dir = tmp_path / "images" / "og"
+    assert (og_dir / "fake-id.png").exists()
+    assert not (og_dir / "totally-different-slug.png").exists()
+
+    template_src = (build.TEMPLATES_DIR / "category.html").read_text(encoding="utf-8")
+    assert "{{ category.id }}.png" in template_src
 
 
 # --------------------------------------------------------------------------- #
@@ -2194,8 +2236,8 @@ def test_select_popular_tools_skips_missing_ids():
 def test_cross_category_links_added_to_when_to_use_content(built):
     # O2 report §5.7 point 1's own example: a tool in one category linking to
     # a tool in another as a natural next step. image-to-pdf (image-conversion)
-    # -> pdf-compress (document-tools); pdf-to-jpg/pdf-to-png (document-tools)
-    # -> image-compress (image-conversion).
+    # -> pdf-compress (document-conversion); pdf-to-jpg/pdf-to-png
+    # (document-conversion) -> image-compress (image-conversion).
     #
     # pdf-compress is ALSO one of the six footer "Popular Tools" links, so a
     # bare href check on image-to-pdf's page wouldn't distinguish "the content
@@ -2256,12 +2298,44 @@ def test_alternatives_pdf_action_tools_do_not_reuse_office_app_answer(built):
 
 
 def test_load_alternatives_covers_every_tool(built):
-    # Every one of the 34 shipped tools must resolve to a real ALTERNATIVES
-    # group — an unmapped output_format would silently render an empty
-    # section (load_alternatives()'s `if not entry` branch), not an error.
+    # Every shipped tool must resolve to a real ALTERNATIVES group — an
+    # unmapped output_format would silently render an empty section
+    # (load_alternatives()'s `if not entry` branch), not an error. Live count
+    # so this never goes stale the moment a new tool YAML is added.
     tool_data = json.loads((built / "tool-data.json").read_text(encoding="utf-8"))
-    assert len(tool_data) == 34
+    assert len(tool_data) == len(build.load_tools())
     for tool in tool_data:
         slug = tool["slug"].strip("/")
         page = (built / slug / "index.html").read_text(encoding="utf-8")
         assert "<h2>Other Ways to" in page, tool["id"]
+
+
+def test_alternatives_retemplated_groups_substitute_source():
+    # DOCX/HTML/CSV/XML/YAML used to hardcode one specific source (e.g. the
+    # YAML entry literally read "...Convert JSON to YAML") — harmless while
+    # only one shipped tool targeted each format, but Prompts 3/5/6 add a
+    # second tool sharing each of these targets (Build Action Plan Phase 0
+    # "Two tests worth fixing here too"). Exercises load_alternatives()
+    # directly with a source none of today's 34 tools use, so a future
+    # regression back to a hardcoded string is caught immediately rather than
+    # only once that second tool actually ships.
+    cases = [
+        ("DOCX", "Markdown"),
+        ("HTML", "PDF"),
+        ("CSV", "TSV"),
+        ("XML", "CSV"),
+        ("YAML", "XML"),
+    ]
+    tools = [
+        {
+            "id": f"fake-to-{group.lower()}",
+            "input_format": source,
+            "output_format": group,
+        }
+        for group, source in cases
+    ]
+    build.load_alternatives(tools)
+    for tool, (group, source) in zip(tools, cases, strict=True):
+        html = tool["alternatives_html"]
+        assert f"Convert {source} to" in html, group
+        assert html.count(source) >= 2, group  # heading AND sentence both substitute it

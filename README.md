@@ -104,7 +104,7 @@ FileCast lists **34 tools** across three categories. 28 run entirely in the brow
 | 25| **PDF → DOCX** | Server-Side | Gotenberg / LibreOffice | Converts PDF layers back into editable doc | 25MB |
 | 26| **PDF Compress** | Server-Side | Ghostscript | Quality options: Screen, Ebook, Printer, Prepress | 25MB |
 
-### 3. Data Conversions (8 Tools - 100% Client-Side)
+### 3. Developer Tools (8 Tools - 100% Client-Side)
 *File size limit: 5MB (browser parsing is memory intensive)*
 
 | # | Tool | Engine | UI Type | Features |
@@ -272,7 +272,7 @@ Create `tools/my-tool.yaml`:
 id: my-tool
 name: My Format Converter
 slug: /convert/my-format-converter
-category: image-conversion # or document-tools, data-text-tools
+category: image-conversion # or document-conversion, developer-tools
 type: client-side          # or "server-side" for API tools
 input_format: MYF
 output_format: JPG

@@ -16,7 +16,7 @@ function makeResponse(status, body) {
 const TOOLS = [
   { id: 'jpg-to-png', name: 'JPG to PNG', category: 'image-conversion', enabled: true },
   { id: 'png-to-jpg', name: 'PNG to JPG', category: 'image-conversion', enabled: true },
-  { id: 'csv-to-json', name: 'CSV to JSON', category: 'data-conversion', enabled: false }
+  { id: 'csv-to-json', name: 'CSV to JSON', category: 'developer-tools', enabled: false }
 ];
 
 function load(routeFor) {
