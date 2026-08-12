@@ -93,7 +93,10 @@
   <div class="diff-inputs">
     <div class="diff-inputs__col">
       <label class="diff-inputs__label" for="text-input-a">Original {{ tool.input_format }}</label>
-      <textarea class="text-input-area" id="text-input-a" placeholder="{{ tool.get('input_placeholder_a', 'Paste the original ' + tool.input_format + ' here...') }}"></textarea>
+      <div class="text-editor">
+        <div class="text-editor__gutter" aria-hidden="true"></div>
+        <textarea class="text-input-area" id="text-input-a" placeholder="{{ tool.get('input_placeholder_a', 'Paste the original ' + tool.input_format + ' here...') }}"></textarea>
+      </div>
       <div class="text-input-meta">
         <span id="char-count-a">0 chars</span>
         <span id="byte-count-a">0 Bytes</span>
@@ -101,7 +104,10 @@
     </div>
     <div class="diff-inputs__col">
       <label class="diff-inputs__label" for="text-input-b">Changed {{ tool.input_format }}</label>
-      <textarea class="text-input-area" id="text-input-b" placeholder="{{ tool.get('input_placeholder_b', 'Paste the changed ' + tool.input_format + ' here...') }}"></textarea>
+      <div class="text-editor">
+        <div class="text-editor__gutter" aria-hidden="true"></div>
+        <textarea class="text-input-area" id="text-input-b" placeholder="{{ tool.get('input_placeholder_b', 'Paste the changed ' + tool.input_format + ' here...') }}"></textarea>
+      </div>
       <div class="text-input-meta">
         <span id="char-count-b">0 chars</span>
         <span id="byte-count-b">0 Bytes</span>
@@ -121,7 +127,10 @@
 
   <div class="text-result hidden" id="text-result">
     <div class="text-result__title">Comparison Complete</div>
-    <textarea class="text-output-area" id="text-output" readonly></textarea>
+    <div class="text-editor">
+      <div class="text-editor__gutter" aria-hidden="true"></div>
+      <textarea class="text-output-area" id="text-output" readonly></textarea>
+    </div>
     <div class="text-input-meta">
       <span id="result-info"></span>
     </div>
@@ -139,7 +148,29 @@
 
   </div>{# /tool-panel #}
 
+  {# in_content ad — right after the converter, before Related Tools: higher
+     up the page (better viewability) and a natural section break between the
+     primary task and further navigation. Same placement on every tool
+     template (tool.html, tool-text.html, tool-multi.html). #}
   {{ ad_slot(adsense, 'in_content') }}
+
+  {# Related Tools — surfaced right after the converter (the primary action),
+     before the long-form content below. Same placement as tool.html. #}
+  {% if tool.related_tools_resolved %}
+  <div class="related-tools">
+    <h2 class="related-tools__title">Related Tools</h2>
+    <div class="card-grid">
+      {% for related in tool.related_tools_resolved %}
+      <a class="card{% if related.type == 'server-side' %} card--server{% endif %}"
+         href="{{ related.slug }}/"
+         data-source="{{ tool.id }}"
+         data-target="{{ related.id }}">
+        {% if related.input_format == related.output_format %}{{ related.name }}{% else %}{{ related.input_format }} → {{ related.output_format }}{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 
   {% if tool.content_html.get('what_is') %}
   <div class="content-block">
@@ -171,22 +202,6 @@
   </div>
   {% endif %}
 
-  {% if tool.related_tools_resolved %}
-  <div class="related-tools">
-    <h2 class="related-tools__title">Related Tools</h2>
-    <div class="card-grid">
-      {% for related in tool.related_tools_resolved %}
-      <a class="card{% if related.type == 'server-side' %} card--server{% endif %}"
-         href="{{ related.slug }}/"
-         data-source="{{ tool.id }}"
-         data-target="{{ related.id }}">
-        {% if related.input_format == related.output_format %}{{ related.name }}{% else %}{{ related.input_format }} → {{ related.output_format }}{% endif %}
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
 </div>
 
 {# Tool config as a non-executable JSON data island — same CSP-safe pattern as
@@ -215,6 +230,12 @@
 {% endblock %}
 
 {% block scripts %}
+{# Line-number gutter for the two diff-input textareas and the output above #}
+{% set gutter_js = assets.get('js/text-editor-gutter.js') %}
+{% if gutter_js %}
+<script src="/{{ gutter_js.path }}" integrity="{{ gutter_js.sri }}" crossorigin="anonymous" defer></script>
+{% endif %}
+
 {% set diff_js = assets.get('js/shared-diff.js') %}
 {% if diff_js %}
 <script src="/{{ diff_js.path }}" integrity="{{ diff_js.sri }}" crossorigin="anonymous" defer></script>

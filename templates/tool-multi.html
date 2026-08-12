@@ -176,7 +176,29 @@
 
   </div>{# /tool-panel #}
 
+  {# in_content ad — right after the converter, before Related Tools: higher
+     up the page (better viewability) and a natural section break between the
+     primary task and further navigation. Same placement on every tool
+     template (tool.html, tool-text.html, tool-diff.html). #}
   {{ ad_slot(adsense, 'in_content') }}
+
+  {# Related Tools — surfaced right after the converter (the primary action),
+     before the long-form content below. Same placement as tool.html. #}
+  {% if tool.related_tools_resolved %}
+  <div class="related-tools">
+    <h2 class="related-tools__title">Related Tools</h2>
+    <div class="card-grid">
+      {% for related in tool.related_tools_resolved %}
+      <a class="card{% if related.type == 'server-side' %} card--server{% endif %}"
+         href="{{ related.slug }}/"
+         data-source="{{ tool.id }}"
+         data-target="{{ related.id }}">
+        {% if related.input_format == related.output_format %}{{ related.name }}{% else %}{{ related.input_format }} → {{ related.output_format }}{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 
   {# Content Blocks #}
   {% if tool.content_html.get('what_is') %}
@@ -208,24 +230,6 @@
     {{ tool.content_html.faq|safe }}
   </div>
   {% endif %}
-
-  {# Related Tools #}
-  {% if tool.related_tools_resolved %}
-  <div class="related-tools">
-    <h2 class="related-tools__title">Related Tools</h2>
-    <div class="card-grid">
-      {% for related in tool.related_tools_resolved %}
-      <a class="card{% if related.type == 'server-side' %} card--server{% endif %}"
-         href="{{ related.slug }}/"
-         data-source="{{ tool.id }}"
-         data-target="{{ related.id }}">
-        {% if related.input_format == related.output_format %}{{ related.name }}{% else %}{{ related.input_format }} → {{ related.output_format }}{% endif %}
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
 
 </div>
 

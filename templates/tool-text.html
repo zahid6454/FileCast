@@ -98,7 +98,10 @@
   </div>
 
   {# Text Input #}
-  <textarea class="text-input-area" id="text-input" placeholder="{{ tool.get('input_placeholder', 'Paste your ' + tool.input_format + ' here...') }}"></textarea>
+  <div class="text-editor">
+    <div class="text-editor__gutter" aria-hidden="true"></div>
+    <textarea class="text-input-area" id="text-input" placeholder="{{ tool.get('input_placeholder', 'Paste your ' + tool.input_format + ' here...') }}"></textarea>
+  </div>
   <div class="text-input-meta">
     <span id="char-count">0 chars</span>
     <span>
@@ -131,7 +134,10 @@
   {# Text Result #}
   <div class="text-result hidden" id="text-result">
     <div class="text-result__title">Conversion Complete</div>
-    <textarea class="text-output-area" id="text-output" readonly></textarea>
+    <div class="text-editor">
+      <div class="text-editor__gutter" aria-hidden="true"></div>
+      <textarea class="text-output-area" id="text-output" readonly></textarea>
+    </div>
     <div class="text-input-meta">
       <span id="result-info"></span>
     </div>
@@ -151,7 +157,29 @@
 
   </div>{# /tool-panel #}
 
+  {# in_content ad — right after the converter, before Related Tools: higher
+     up the page (better viewability) and a natural section break between the
+     primary task and further navigation. Same placement on every tool
+     template (tool.html, tool-diff.html, tool-multi.html). #}
   {{ ad_slot(adsense, 'in_content') }}
+
+  {# Related Tools — surfaced right after the converter (the primary action),
+     before the long-form content below. Same placement as tool.html. #}
+  {% if tool.related_tools_resolved %}
+  <div class="related-tools">
+    <h2 class="related-tools__title">Related Tools</h2>
+    <div class="card-grid">
+      {% for related in tool.related_tools_resolved %}
+      <a class="card{% if related.type == 'server-side' %} card--server{% endif %}"
+         href="{{ related.slug }}/"
+         data-source="{{ tool.id }}"
+         data-target="{{ related.id }}">
+        {% if related.input_format == related.output_format %}{{ related.name }}{% else %}{{ related.input_format }} → {{ related.output_format }}{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 
   {# Content Blocks #}
   {% if tool.content_html.get('what_is') %}
@@ -184,24 +212,6 @@
   </div>
   {% endif %}
 
-  {# Related Tools #}
-  {% if tool.related_tools_resolved %}
-  <div class="related-tools">
-    <h2 class="related-tools__title">Related Tools</h2>
-    <div class="card-grid">
-      {% for related in tool.related_tools_resolved %}
-      <a class="card{% if related.type == 'server-side' %} card--server{% endif %}"
-         href="{{ related.slug }}/"
-         data-source="{{ tool.id }}"
-         data-target="{{ related.id }}">
-        {% if related.input_format == related.output_format %}{{ related.name }}{% else %}{{ related.input_format }} → {{ related.output_format }}{% endif %}
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
-
 </div>
 
 {# Tool config as a non-executable JSON data island (CSP-safe under
@@ -230,6 +240,12 @@
 {% endblock %}
 
 {% block scripts %}
+{# Line-number gutter for the text-input/text-output textareas above #}
+{% set gutter_js = assets.get('js/text-editor-gutter.js') %}
+{% if gutter_js %}
+<script src="/{{ gutter_js.path }}" integrity="{{ gutter_js.sri }}" crossorigin="anonymous" defer></script>
+{% endif %}
+
 {# Shared text-input handler #}
 {% set text_js = assets.get('js/shared-text.js') %}
 {% if text_js %}

@@ -14,6 +14,9 @@
   var formatBytes = FC.formatBytes;
   var trackEvent = FC.trackEvent;
   var postConversion = FC.postConversion;
+  // Falls back to a no-op when text-editor-gutter.js isn't loaded (e.g. unit
+  // tests that eval this file standalone) rather than assuming it's always present.
+  var refreshLineNumbers = FC.refreshLineNumbers || function () {};
 
   function announceState(newState) {
     if (!els.status) return;
@@ -159,6 +162,7 @@
     var outputText = output.text;
 
     els.outputArea.value = outputText;
+    refreshLineNumbers(els.outputArea);
     els.textResult.classList.remove('hidden');
 
     var outputBytes = new Blob([outputText]).size;
@@ -224,6 +228,8 @@
   function resetUI() {
     els.inputAreaA.value = '';
     els.inputAreaB.value = '';
+    refreshLineNumbers(els.inputAreaA);
+    refreshLineNumbers(els.inputAreaB);
     window._convertedText = null;
     window._convertedFilename = null;
     els.progressFill.style.width = '0%';
