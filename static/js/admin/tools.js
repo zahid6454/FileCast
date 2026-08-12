@@ -75,7 +75,7 @@
   }
 
   function catTitle(cat) {
-    // Prefer the site's display name (e.g. data-conversion → "Data Conversion");
+    // Prefer the site's display name (e.g. developer-tools → "Developer Tools");
     // fall back to a humanized slug for any category not in the map.
     var names = (window.FILECAST && window.FILECAST.categories) || {};
     if (names[cat]) return names[cat];

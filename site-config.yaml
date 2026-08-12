@@ -72,5 +72,13 @@ categories:
     # sentence since the id/slug dropped the word. "Most tools," matching the
     # hedge the other two categories use, not "all," so this doesn't become
     # false the day a server-processed Developer tool is added.
-    description: "Format, convert, and validate developer data — JSON, XML, YAML, CSV, and Base64. Most tools run entirely in your browser."
+    #
+    # PR review caught "and Base64" here — the original Build Action Plan
+    # draft was written for the category's eventual tool set (Base64
+    # Encode/Decode ships in a later PR), not what this Phase 0 PR actually
+    # ships (8 JSON/XML/YAML/CSV/HTML/Markdown round-trip converters, no
+    # Base64 tool anywhere in tools/). Dropped until a Base64 tool exists —
+    # same "no factually wrong content" bar the ALTERNATIVES re-templating
+    # in this PR was held to.
+    description: "Format, convert, and validate developer data — JSON, XML, YAML, and CSV. Most tools run entirely in your browser."
     search_placeholder: "Filter tools... (e.g. JSON, XML, YAML)"
