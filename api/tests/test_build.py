@@ -1084,7 +1084,7 @@ def test_full_build_404_links_all_categories(tmp_path, monkeypatch):
     not_found = (tmp_path / "404.html").read_text(encoding="utf-8")
     assert 'href="/document-conversion/"' in not_found
     assert 'href="/image-conversion/"' in not_found
-    assert 'href="/data-conversion/"' in not_found
+    assert 'href="/developer-tools/"' in not_found
     assert 'id="hero-search"' in not_found  # search stays alongside the links
 
 
@@ -1845,7 +1845,7 @@ def test_og_images_written_for_every_page_kind(built):
     # OG image filenames are keyed by category ID, not slug (see
     # test_category_og_image_path_uses_category_id) — "document-tools" here is
     # the id, which is unaffected by #11's slug rename to /document-conversion/.
-    for cat_id in ("document-tools", "image-conversion", "data-conversion"):
+    for cat_id in ("document-tools", "image-conversion", "developer-tools"):
         assert f"{cat_id}.png" in files, cat_id
 
     # No stray/orphaned images beyond what's expected: 34 tools + 3 categories
