@@ -1846,9 +1846,9 @@ def test_og_images_written_for_every_page_kind(built):
         assert f"{tool['id']}.png" in files, tool["id"]
 
     # OG image filenames are keyed by category ID, not slug (see
-    # test_category_og_image_path_uses_category_id) — "document-tools" here is
-    # the id, which is unaffected by #11's slug rename to /document-conversion/.
-    for cat_id in ("document-tools", "image-conversion", "developer-tools"):
+    # test_category_og_image_keys_by_id_not_slug) — all three ids match their
+    # slugs today, but the mechanism itself is id-keyed, not slug-keyed.
+    for cat_id in ("document-conversion", "image-conversion", "developer-tools"):
         assert f"{cat_id}.png" in files, cat_id
 
     # No stray/orphaned images beyond what's expected: 34 tools + 3 categories
@@ -1859,7 +1859,12 @@ def test_og_images_written_for_every_page_kind(built):
 def test_og_images_are_1200x630(built):
     from PIL import Image
 
-    for name in ("home.png", "default.png", "png-to-jpg.png", "document-tools.png"):
+    for name in (
+        "home.png",
+        "default.png",
+        "png-to-jpg.png",
+        "document-conversion.png",
+    ):
         with Image.open(built / "images" / "og" / name) as img:
             assert img.size == (1200, 630), name
 
@@ -1916,14 +1921,34 @@ def test_tool_og_image_path_matches_tool_id_not_slug(built):
     assert 'content="https://filecast.org/images/og/png-to-jpg.png"' in page
 
 
-def test_category_og_image_path_uses_category_id(built):
-    # document-tools' id and slug diverged as of O2 report #11 (slug renamed
-    # to /document-conversion/, id kept as document-tools since it's also the
-    # value in tool.category across 11 tool YAMLs) — this page is served from
-    # /document-conversion/ but its OG image is still og/document-tools.png,
-    # because generate_og_images() keys strictly off id.
-    page = (built / "document-conversion" / "index.html").read_text(encoding="utf-8")
-    assert 'content="https://filecast.org/images/og/document-tools.png"' in page
+def test_category_og_image_keys_by_id_not_slug(tmp_path, monkeypatch):
+    # document-tools' id and slug used to diverge (O2 report §4.1/§13 #11
+    # renamed the slug to /document-conversion/, but the id stayed
+    # document-tools) — that was the real-world example proving
+    # generate_og_images() keys off id, not slug. A later rename (Build
+    # Action Plan Phase 0 follow-up) unified id and slug for every category,
+    # so no real example of the divergence is left. Guards both halves of the
+    # mechanism directly instead: generate_og_images() must name the file
+    # after the category dict's KEY (its id), and category.html's og:image
+    # block must read {{ category.id }}, never {{ category.slug }}.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_og_images(
+        tools=[],
+        categories_with_tools={
+            "fake-id": {
+                "name": "Fake Category",
+                "slug": "totally-different-slug",
+                "tools": [],
+            }
+        },
+        site_config={},
+    )
+    og_dir = tmp_path / "images" / "og"
+    assert (og_dir / "fake-id.png").exists()
+    assert not (og_dir / "totally-different-slug.png").exists()
+
+    template_src = (build.TEMPLATES_DIR / "category.html").read_text(encoding="utf-8")
+    assert "{{ category.id }}.png" in template_src
 
 
 # --------------------------------------------------------------------------- #
@@ -2211,8 +2236,8 @@ def test_select_popular_tools_skips_missing_ids():
 def test_cross_category_links_added_to_when_to_use_content(built):
     # O2 report §5.7 point 1's own example: a tool in one category linking to
     # a tool in another as a natural next step. image-to-pdf (image-conversion)
-    # -> pdf-compress (document-tools); pdf-to-jpg/pdf-to-png (document-tools)
-    # -> image-compress (image-conversion).
+    # -> pdf-compress (document-conversion); pdf-to-jpg/pdf-to-png
+    # (document-conversion) -> image-compress (image-conversion).
     #
     # pdf-compress is ALSO one of the six footer "Popular Tools" links, so a
     # bare href check on image-to-pdf's page wouldn't distinguish "the content
