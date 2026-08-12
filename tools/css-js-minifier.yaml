@@ -3,6 +3,7 @@ id: css-js-minifier
 name: CSS/JS Minifier
 slug: /convert/css-js-minifier
 category: developer-tools
+subcategory: developer-operations
 type: client-side
 input_format: CSS/JS
 output_format: CSS/JS

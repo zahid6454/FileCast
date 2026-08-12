@@ -3,6 +3,7 @@ id: json-formatter
 name: JSON Formatter
 slug: /convert/json-formatter
 category: developer-tools
+subcategory: developer-operations
 type: client-side
 input_format: JSON
 output_format: JSON

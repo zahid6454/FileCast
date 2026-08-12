@@ -3,6 +3,7 @@ id: json-diff
 name: JSON Diff
 slug: /convert/json-diff
 category: developer-tools
+subcategory: developer-operations
 type: client-side
 input_format: JSON
 output_format: JSON

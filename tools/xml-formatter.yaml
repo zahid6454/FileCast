@@ -3,6 +3,7 @@ id: xml-formatter
 name: XML Formatter
 slug: /convert/xml-formatter
 category: developer-tools
+subcategory: developer-operations
 type: client-side
 input_format: XML
 output_format: XML

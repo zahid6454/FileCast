@@ -3,6 +3,7 @@ id: html-minifier
 name: HTML Minifier
 slug: /convert/html-minifier
 category: developer-tools
+subcategory: developer-operations
 type: client-side
 input_format: HTML
 output_format: HTML

@@ -3,6 +3,7 @@ id: json-validator
 name: JSON Validator
 slug: /convert/json-validator
 category: developer-tools
+subcategory: developer-operations
 type: client-side
 input_format: JSON
 output_format: JSON

@@ -3,6 +3,7 @@ id: xml-validator
 name: XML Validator
 slug: /convert/xml-validator
 category: developer-tools
+subcategory: developer-operations
 type: client-side
 input_format: XML
 output_format: XML
