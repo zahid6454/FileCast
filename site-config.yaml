@@ -31,14 +31,17 @@ api:
   base_url: https://api.filecast.org
 
 categories:
-  - id: document-tools
+  - id: document-conversion
     name: Document Conversion
     nav_label: Document
     # URL standardized to the {type}-conversion/ pattern (O2 report §4.1/§13
-    # #11); `id` is left as `document-tools` since it's also the value stored
-    # in tool.category across 11 tool YAMLs, seed.py's DB fallback order, and
-    # api/tests — only the public-facing slug changes. The old /document-tools/
-    # path 301s to this one via build.py's generate_redirects().
+    # #11). id was originally left as document-tools (only the slug renamed)
+    # to avoid touching the 12 tool YAMLs, seed.py, and api/tests that stored
+    # it — since fixed (id now matches slug like the other two categories),
+    # so update tool.category across those 12 tool YAMLs whenever this line
+    # changes again. The old /document-tools/ path still 301s here via
+    # build.py's generate_redirects() — that line is keyed off the historical
+    # URL, not this id, so it does NOT need to change with it.
     slug: document-conversion
     description: "Convert documents to PDF, merge, split, compress, and transform PDF files. Most tools run in your browser."
     search_placeholder: "Filter tools... (e.g. DOCX, PDF, merge, compress)"
@@ -50,7 +53,7 @@ categories:
     # The old text ("Your files never leave your device") was only
     # *accidentally* true — every image tool happens to be client-side today.
     # As a category-level promise it breaks silently the first time a
-    # server-side image tool is added, so it is hedged like document-tools
+    # server-side image tool is added, so it is hedged like document-conversion
     # above; the per-tool Local/Cloud badge carries the exact claim.
     description: "Convert between image formats instantly. Most tools run entirely in your browser — nothing is uploaded."
     search_placeholder: "Filter tools... (e.g. PNG, WebP, TIFF)"
