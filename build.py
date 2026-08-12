@@ -1840,19 +1840,20 @@ def generate_headers(site_config: dict):
 def generate_redirects(site_config: dict):
     """Write dist/_redirects: www.<domain> -> the apex, plus the old
     /document-tools/ category path -> its renamed /document-conversion/ URL,
-    both 301, every path.
+    and the old /data-conversion/ category path -> its renamed
+    /developer-tools/ URL, all 301, every path.
 
     Cloudflare Pages reads this file the same way it reads _headers. Both
     filecast.org and www.filecast.org are attached as custom domains on the
     same Pages project and currently serve identical content — this is what
     makes one of them canonical instead of two indexable copies of every page.
 
-    The category redirect (O2 report §4.1/§13 #11) is a literal path, not
-    derived from site_config["categories"] — that list only carries the
-    category's CURRENT slug, which is exactly the thing this line exists to
-    redirect FROM. It stops mattering (and can be deleted) once
-    /document-tools/ has fully dropped out of Google's index and any inbound
-    links pointing at it.
+    Both category redirects (O2 report §4.1/§13 #11; Build Action Plan Phase 0)
+    are literal paths, not derived from site_config["categories"] — that list
+    only carries each category's CURRENT slug, which is exactly the thing
+    these lines exist to redirect FROM. Each one stops mattering (and can be
+    deleted) once its old path has fully dropped out of Google's index and any
+    inbound links pointing at it.
     """
     base = (
         site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
@@ -1864,6 +1865,7 @@ def generate_redirects(site_config: dict):
     if host:
         lines.append(f"https://www.{host}/* {base}/:splat 301")
     lines.append("/document-tools/* /document-conversion/:splat 301")
+    lines.append("/data-conversion/* /developer-tools/:splat 301")
     (DIST / "_redirects").write_text(
         "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8"
     )

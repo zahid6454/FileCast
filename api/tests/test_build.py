@@ -1515,6 +1515,16 @@ def test_generate_redirects_document_tools_to_document_conversion(
     assert "/document-tools/* /document-conversion/:splat 301" in redirects
 
 
+def test_generate_redirects_data_conversion_to_developer_tools(tmp_path, monkeypatch):
+    # Build Action Plan Phase 0 — the data-conversion category was renamed to
+    # developer-tools. Host-independent (a literal path redirect), so it must
+    # be present regardless of base_url.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_redirects({"site": {"base_url": "https://filecast.org"}})
+    redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
+    assert "/data-conversion/* /developer-tools/:splat 301" in redirects
+
+
 # --------------------------------------------------------------------------- #
 # Full build — snapshot + end-to-end overlay (also StrictUndefined-safe render)
 # --------------------------------------------------------------------------- #
