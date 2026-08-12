@@ -612,8 +612,8 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "You can also create a PDF from {source} using your browser's Print dialog (Print → Save as PDF), or your operating system's own print-to-PDF feature. FileCast is useful when you want a quick conversion without opening a print dialog.",
     ),
     "DOCX": (
-        "Other Ways to Convert PDF to Word",
-        "You can also convert a PDF to an editable Word document using Adobe Acrobat's Export PDF tool, or by opening the PDF directly in Microsoft Word, which converts it automatically. FileCast is useful when you don't have Acrobat or Word installed.",
+        "Other Ways to Convert {source} to Word",
+        "You can also convert {source} to an editable Word document using Microsoft Word (Open, then Save As), Google Docs (Open, then Download as Word), or LibreOffice Writer (Open, then Export as DOCX). FileCast is useful when you don't have any of these installed.",
     ),
     "JPG": (
         "Other Ways to Convert {source} to JPG",
@@ -628,8 +628,8 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "You can also convert {source} to WebP using an image editor like GIMP or Photoshop, both of which support WebP export. FileCast is useful when you don't have an image editor installed.",
     ),
     "HTML": (
-        "Other Ways to Convert Markdown to HTML",
-        "You can also convert Markdown to HTML using a Markdown editor with live preview, or a static site generator's built-in renderer. FileCast is useful for a one-off conversion without setting either up.",
+        "Other Ways to Convert {source} to HTML",
+        "You can also convert {source} to HTML using a word processor's \"Save as Web Page\" export, or a short script using your language's {source} and HTML libraries. FileCast is useful for a one-off conversion without setting either up.",
     ),
     "Markdown": (
         "Other Ways to Convert HTML to Markdown",
@@ -640,16 +640,16 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "You can also convert {source} to JSON using a short script in your language of choice — most have built-in libraries for both {source} and JSON — or a dedicated command-line conversion tool. FileCast is useful for a quick, one-off conversion without writing any code.",
     ),
     "CSV": (
-        "Other Ways to Convert JSON to CSV",
-        "You can also convert JSON to CSV by importing the JSON into a spreadsheet app like Excel or Google Sheets and saving as CSV, or with a short script using your language's JSON and CSV libraries. FileCast is useful for a quick, one-off conversion.",
+        "Other Ways to Convert {source} to CSV",
+        "You can also convert {source} to CSV by importing it into a spreadsheet app like Excel or Google Sheets and saving as CSV, or with a short script using your language's {source} and CSV libraries. FileCast is useful for a quick, one-off conversion.",
     ),
     "XML": (
-        "Other Ways to Convert JSON to XML",
-        "You can also convert JSON to XML using a command-line tool like xmlstarlet, or a short script using your language's JSON and XML libraries. FileCast is useful for a quick, one-off conversion without writing any code.",
+        "Other Ways to Convert {source} to XML",
+        "You can also convert {source} to XML using a dedicated command-line conversion tool, or a short script using your language's {source} and XML libraries. FileCast is useful for a quick, one-off conversion without writing any code.",
     ),
     "YAML": (
-        "Other Ways to Convert JSON to YAML",
-        "You can also convert JSON to YAML using a command-line tool like yq, or a short script using your language's JSON and YAML libraries. FileCast is useful for a quick, one-off conversion without writing any code.",
+        "Other Ways to Convert {source} to YAML",
+        "You can also convert {source} to YAML using a dedicated command-line conversion tool, or a short script using your language's {source} and YAML libraries. FileCast is useful for a quick, one-off conversion without writing any code.",
     ),
     "pdf-compress": (
         "Other Ways to Compress a PDF",
@@ -1114,7 +1114,7 @@ def create_jinja_env(
     env.globals["assets"] = asset_map
     env.globals["nav_categories"] = categories_with_tools
     # id → display name, so the admin panel can label tool categories exactly as
-    # the site does (e.g. data-conversion → "Data Conversion"), not by guessing
+    # the site does (e.g. developer-tools → "Developer Tools"), not by guessing
     # from the slug. Injected into the admin config island.
     env.globals["category_names"] = {
         cid: cdata.get("name") for cid, cdata in categories_with_tools.items()
