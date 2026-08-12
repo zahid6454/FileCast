@@ -1,0 +1,29 @@
+enabled: true
+id: json-formatter
+name: JSON Formatter
+slug: /convert/json-formatter
+category: developer-tools
+type: client-side
+input_format: JSON
+output_format: JSON
+accept_extensions: [.json]
+output_extension: .json
+js_module: converters/json-formatter.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Format JSON"
+input_placeholder: "Paste your JSON here...\n\nExample:\n{\"name\":\"Alice\",\"age\":30,\"active\":true}"
+tagline: "Pretty-print and indent messy or minified JSON"
+tagline_long: "Format JSON instantly in your browser — turn minified or single-line JSON into clean, readable, 2-space-indented output."
+meta:
+  title: "JSON Formatter — Free, No Upload | FileCast"
+  description: "Format JSON free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Turns minified JSON into clean, indented output."
+  keywords: ["json formatter", "format json", "json beautifier", "pretty print json", "json indent online"]
+content:
+  what_is: "content/json-formatter/what-is.md"
+  comparison: "content/json-formatter/comparison.md"
+  when_to_use: "content/json-formatter/when-to-use.md"
+  faq: "content/json-formatter/faq.md"
+related_tools: [json-validator, json-minifier, json-diff, json-to-yaml]

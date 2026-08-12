@@ -1,25 +1,26 @@
 (function () {
   'use strict';
 
+  // Controller for the two-input "diff" tool family (tool-diff.html) —
+  // mirrors shared-text.js's state machine and off-main-thread pattern (P4
+  // §36 / O4 #19) but drives two textareas instead of one, and posts to the
+  // dedicated text-diff-worker.js rather than the generic single-input
+  // text-converter-worker.js.
+
   var state = 'empty';
   var els = {};
 
-  // Shared helpers live in fc-util.js (loaded before this file); see there for
-  // the fire-and-forget postConversion tracking contract.
   var FC = window.FC || {};
   var formatBytes = FC.formatBytes;
   var trackEvent = FC.trackEvent;
   var postConversion = FC.postConversion;
 
-  // Conversion status live region (§6, P2 #17) — see shared.js's announceState
-  // for the full rationale; same pattern, mirrored per-file (no shared module
-  // seam between these three converter scripts).
   function announceState(newState) {
     if (!els.status) return;
     if (newState === 'converting') {
-      els.status.textContent = 'Converting…';
+      els.status.textContent = 'Comparing…';
     } else if (newState === 'complete') {
-      els.status.textContent = 'Conversion complete. Result ready.';
+      els.status.textContent = 'Comparison complete. Result ready.';
     } else {
       els.status.textContent = '';
     }
@@ -38,27 +39,27 @@
     }
   }
 
-  function updateMeta() {
-    var text = els.inputArea.value;
+  function updateMeta(area, charCountEl, byteCountEl) {
+    var text = area.value;
     var bytes = new Blob([text]).size;
-    els.charCount.textContent = text.length.toLocaleString() + ' chars';
-    els.byteCount.textContent = formatBytes(bytes);
+    charCountEl.textContent = text.length.toLocaleString() + ' chars';
+    byteCountEl.textContent = formatBytes(bytes);
   }
 
-  function validate(text) {
+  function validate(textA, textB) {
     var config = window.TOOL_CONFIG;
-    if (!text.trim()) {
+    if (!textA.trim() || !textB.trim()) {
       return {
         valid: false,
-        error: 'Please enter or paste some text to convert.',
+        error: 'Please paste content into both text areas before comparing.',
         error_type: 'empty_input'
       };
     }
-    var bytes = new Blob([text]).size;
+    var bytes = new Blob([textA]).size + new Blob([textB]).size;
     if (bytes > config.max_file_size_bytes) {
       return {
         valid: false,
-        error: 'Input is too large. Maximum size: ' + config.max_file_size + '.',
+        error: 'Input is too large. Maximum size: ' + config.max_file_size + ' combined.',
         error_type: 'too_large'
       };
     }
@@ -66,11 +67,9 @@
   }
 
   function showError(message) {
-    // setState() unconditionally re-hides #error-msg (it's the shared reset
-    // for every state transition) — so it MUST run before we reveal the
-    // error, not after, or the message we just showed gets hidden again
-    // immediately (previously: showError() ran setState('empty') last,
-    // which silently re-hid the error a frame after showing it).
+    // setState() unconditionally re-hides #error-msg — it must run before
+    // we reveal the error, not after, or the message gets hidden again
+    // immediately (see shared-text.js's showError() for the same fix).
     if (state === 'converting') setState('empty');
     els.progress.classList.add('hidden');
     els.errorMsg.textContent = message;
@@ -79,8 +78,9 @@
   }
 
   function startConversion() {
-    var text = els.inputArea.value;
-    var result = validate(text);
+    var textA = els.inputAreaA.value;
+    var textB = els.inputAreaB.value;
+    var result = validate(textA, textB);
     if (!result.valid) {
       showError(result.error);
       trackEvent('conversion_failed', {
@@ -92,24 +92,25 @@
 
     var config = window.TOOL_CONFIG;
     if (!config.text_converter_src || !config.text_converter_worker_src) {
-      showError('Converter is unavailable right now. Please refresh the page.');
+      showError('Comparison is unavailable right now. Please refresh the page.');
       return;
     }
 
     setState('converting');
     var startTime = Date.now();
+    var totalBytes = new Blob([textA]).size + new Blob([textB]).size;
 
     trackEvent('conversion_started', {
       tool_id: config.id,
       input_format: config.input_format,
       output_format: config.output_format,
-      file_size_bytes: new Blob([text]).size
+      file_size_bytes: totalBytes
     });
     FC.setSentryContext({
       tool_id: config.id,
       input_format: config.input_format,
       output_format: config.output_format,
-      file_size_bytes: new Blob([text]).size,
+      file_size_bytes: totalBytes,
       mode: config.type === 'server-side' ? 'Cloud' : 'Local'
     });
 
@@ -118,7 +119,7 @@
     els.progressFill.style.width = '';
 
     function onFailure(message) {
-      showError(message || 'Conversion failed. Please check your input and try again.');
+      showError(message || 'Comparison failed. Please check your input and try again.');
       trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
       postConversion(
         {
@@ -131,12 +132,6 @@
       );
     }
 
-    // Off the main thread (mirrors pdf-lib-worker.js's P4 §36 fix) — a
-    // multi-MB CSV/JSON/XML input near max_file_size_bytes used to run
-    // window.convertText(text) synchronously here and could visibly freeze
-    // the tab. The converter's own URL rides the worker's query string
-    // (same trick as pdf-lib-worker.js's `lib` param) so one worker file
-    // serves every text-input tool.
     var worker = new Worker(
       config.text_converter_worker_src +
         '?converter=' +
@@ -150,26 +145,25 @@
         return;
       }
       var durationMs = Date.now() - startTime;
-      showResult(text, data.result, durationMs);
+      showResult(totalBytes, data.result, durationMs);
     };
     worker.onerror = function (err) {
       worker.terminate();
       onFailure(err && err.message);
     };
-    worker.postMessage({ text: text });
+    worker.postMessage({ textA: textA, textB: textB });
   }
 
-  function showResult(inputText, output, durationMs) {
+  function showResult(inputBytes, output, durationMs) {
     var config = window.TOOL_CONFIG;
     var outputText = output.text;
 
     els.outputArea.value = outputText;
     els.textResult.classList.remove('hidden');
 
-    var inputBytes = new Blob([inputText]).size;
     var outputBytes = new Blob([outputText]).size;
     els.resultInfo.textContent =
-      formatBytes(inputBytes) + ' in → ' + formatBytes(outputBytes) + ' out';
+      formatBytes(inputBytes) + ' compared → ' + formatBytes(outputBytes) + ' report';
 
     window._convertedText = outputText;
     window._convertedFilename = output.filename;
@@ -228,53 +222,33 @@
   }
 
   function resetUI() {
-    els.inputArea.value = '';
-    els.outputArea.value = '';
+    els.inputAreaA.value = '';
+    els.inputAreaB.value = '';
     window._convertedText = null;
     window._convertedFilename = null;
     els.progressFill.style.width = '0%';
     els.progress.classList.remove('progress--indeterminate');
-    updateMeta();
+    updateMeta(els.inputAreaA, els.charCountA, els.byteCountA);
+    updateMeta(els.inputAreaB, els.charCountB, els.byteCountB);
     setState('empty');
 
     trackEvent('convert_another', { tool_id: window.TOOL_CONFIG.id });
   }
 
-  function formatXml(xml) {
-    var formatted = '';
-    var indent = 0;
-    xml = xml.replace(/(>)\s*(<)/g, '$1\n$2');
-    var lines = xml.split('\n');
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].trim();
-      if (!line) continue;
-      if (line.match(/^<\?/) || line.match(/^<!/)) {
-        formatted += pad(indent) + line + '\n';
-        continue;
-      }
-      var isClose = line.match(/^<\//);
-      var isSelfClose = line.match(/\/>$/);
-      var isOpenAndClose = line.match(/^<\w/) && line.match(/<\/[^>]+>$/);
-      if (isClose) indent = Math.max(0, indent - 1);
-      formatted += pad(indent) + line + '\n';
-      if (!isClose && !isSelfClose && !isOpenAndClose && line.match(/^<\w/)) indent++;
-    }
-    return formatted.trim();
-  }
-
-  function pad(n) {
-    var s = '';
-    for (var i = 0; i < n; i++) s += '  ';
-    return s;
+  function updateConvertEnabled() {
+    els.convertBtn.disabled = !els.inputAreaA.value.trim() || !els.inputAreaB.value.trim();
   }
 
   function init() {
     var config = window.TOOL_CONFIG;
-    if (!config || config.ui_type !== 'text-input') return;
+    if (!config || config.ui_type !== 'text-diff') return;
 
-    els.inputArea = document.getElementById('text-input');
-    els.charCount = document.getElementById('char-count');
-    els.byteCount = document.getElementById('byte-count');
+    els.inputAreaA = document.getElementById('text-input-a');
+    els.inputAreaB = document.getElementById('text-input-b');
+    els.charCountA = document.getElementById('char-count-a');
+    els.byteCountA = document.getElementById('byte-count-a');
+    els.charCountB = document.getElementById('char-count-b');
+    els.byteCountB = document.getElementById('byte-count-b');
     els.convertBtn = document.getElementById('convert-btn');
     els.progress = document.getElementById('progress');
     els.progressFill = document.getElementById('progress-fill');
@@ -285,44 +259,19 @@
     els.downloadBtn = document.getElementById('download-btn');
     els.resetBtn = document.getElementById('reset-btn');
     els.errorMsg = document.getElementById('error-msg');
-    els.formatBtn = document.getElementById('format-btn');
     els.status = document.getElementById('a11y-status');
 
     els.convertBtn.disabled = true;
 
-    var formattableFormats = ['json', 'xml', 'html'];
-    function isFormattable() {
-      return formattableFormats.indexOf(config.input_format.toLowerCase()) !== -1;
-    }
-
-    if (els.formatBtn) {
-      if (isFormattable()) els.formatBtn.classList.remove('hidden');
-      els.formatBtn.addEventListener('click', function () {
-        var text = els.inputArea.value.trim();
-        if (!text) return;
-        var fmt = config.input_format.toLowerCase();
-        if (fmt === 'xml' || fmt === 'html') {
-          try {
-            els.inputArea.value = formatXml(text);
-            updateMeta();
-          } catch (e) {
-            /* ignore */
-          }
-        } else if (fmt === 'json') {
-          try {
-            els.inputArea.value = JSON.stringify(JSON.parse(text), null, 2);
-            updateMeta();
-          } catch (e) {
-            /* ignore */
-          }
-        }
-      });
-    }
-
-    els.inputArea.addEventListener('input', function () {
-      updateMeta();
+    els.inputAreaA.addEventListener('input', function () {
+      updateMeta(els.inputAreaA, els.charCountA, els.byteCountA);
       els.errorMsg.classList.add('hidden');
-      els.convertBtn.disabled = !els.inputArea.value.trim();
+      updateConvertEnabled();
+    });
+    els.inputAreaB.addEventListener('input', function () {
+      updateMeta(els.inputAreaB, els.charCountB, els.byteCountB);
+      els.errorMsg.classList.add('hidden');
+      updateConvertEnabled();
     });
 
     els.convertBtn.addEventListener('click', startConversion);
@@ -330,7 +279,8 @@
     els.downloadBtn.addEventListener('click', downloadOutput);
     els.resetBtn.addEventListener('click', resetUI);
 
-    updateMeta();
+    updateMeta(els.inputAreaA, els.charCountA, els.byteCountA);
+    updateMeta(els.inputAreaB, els.charCountB, els.byteCountB);
 
     trackEvent('tool_view', {
       tool_id: config.id,

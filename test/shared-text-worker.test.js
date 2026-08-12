@@ -125,6 +125,12 @@ describe('shared-text.js — worker-based conversion', () => {
     await flush();
 
     expect(dom.window.document.getElementById('error-msg').textContent).toBe('Bad input.');
+    // Regression guard: setState('empty') used to run AFTER the error was
+    // revealed and unconditionally re-hid #error-msg, so the message never
+    // stayed visible long enough for a user (or Playwright) to see it.
+    expect(dom.window.document.getElementById('error-msg').classList.contains('hidden')).toBe(
+      false
+    );
     expect(dom.window.document.getElementById('text-result').classList.contains('hidden')).toBe(
       true
     );

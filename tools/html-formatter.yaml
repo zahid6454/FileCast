@@ -1,0 +1,29 @@
+enabled: true
+id: html-formatter
+name: HTML Formatter
+slug: /convert/html-formatter
+category: developer-tools
+type: client-side
+input_format: HTML
+output_format: HTML
+accept_extensions: [.html, .htm]
+output_extension: .html
+js_module: converters/html-formatter.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Format HTML"
+input_placeholder: "Paste your HTML here...\n\nExample:\n<div><p>Hello</p><span>World</span></div>"
+tagline: "Pretty-print and indent messy or minified HTML"
+tagline_long: "Format HTML instantly in your browser — turn minified or single-line markup into clean, readable, properly indented output."
+meta:
+  title: "HTML Formatter — Free, No Upload | FileCast"
+  description: "Format HTML free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Turns minified markup into clean, indented output."
+  keywords: ["html formatter", "format html", "html beautifier", "pretty print html", "html indent online"]
+content:
+  what_is: "content/html-formatter/what-is.md"
+  comparison: "content/html-formatter/comparison.md"
+  when_to_use: "content/html-formatter/when-to-use.md"
+  faq: "content/html-formatter/faq.md"
+related_tools: [html-minifier, html-to-text, markdown-to-html, html-to-markdown]

@@ -671,6 +671,52 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "Other Ways to Resize or Compress Images",
         "You can also resize or compress images using your device's Preview or Photos app (File → Export, with a quality or size option), or a desktop tool like ImageOptim (Mac) or FileOptimizer (Windows). FileCast is useful when you don't have any of these installed.",
     ),
+    # Build Action Plan PR 1: 10 Modification-type Developer tools (formatters,
+    # validators, minifiers, a diff tool) that don't convert one format to
+    # another, so none of them fit the {source}/{target} conversion phrasing
+    # above even though several share an output_format with a conversion tool
+    # already in that table (JSON/XML/HTML). Each gets its own id-keyed entry
+    # here, phrased as an action, the same way the four pdf-* action tools do.
+    "json-formatter": (
+        "Other Ways to Format JSON",
+        "You can also format JSON using your code editor's built-in \"Format Document\" command (most support JSON out of the box), or a command-line tool like jq (jq . file.json) or Python's python -m json.tool. FileCast is useful when you don't have either installed.",
+    ),
+    "json-validator": (
+        "Other Ways to Validate JSON",
+        "You can also validate JSON using your code editor's built-in linting (most flag malformed JSON as you type), or a command-line tool like jq or Python's python -m json.tool, which fails loudly on invalid input. FileCast is useful when you don't have either installed.",
+    ),
+    "json-minifier": (
+        "Other Ways to Minify JSON",
+        "You can also minify JSON using a command-line tool like jq -c, or as part of a JavaScript build pipeline (webpack, esbuild, etc.) that already minifies JSON imports. FileCast is useful for a quick, one-off minification without setting up a build.",
+    ),
+    "xml-formatter": (
+        "Other Ways to Format XML",
+        "You can also format XML using your code editor's built-in \"Format Document\" command, or a command-line tool like xmllint --format. FileCast is useful when you don't have either installed.",
+    ),
+    "xml-validator": (
+        "Other Ways to Validate XML",
+        "You can also validate XML using a command-line tool like xmllint --noout, or the W3C's online XML Validator. FileCast is useful when you don't have either installed.",
+    ),
+    "html-formatter": (
+        "Other Ways to Format HTML",
+        "You can also format HTML using your code editor's built-in \"Format Document\" command (often via the Prettier extension), or Prettier's own command-line tool. FileCast is useful when you don't have either installed.",
+    ),
+    "html-minifier": (
+        "Other Ways to Minify HTML",
+        "You can also minify HTML using the html-minifier-terser command-line tool, or as part of a build pipeline (webpack, Vite, etc.) that already minifies HTML output. FileCast is useful for a quick, one-off minification without setting up a build.",
+    ),
+    "yaml-validator": (
+        "Other Ways to Validate YAML",
+        "You can also validate YAML using the yamllint command-line tool, or Python's python -c \"import yaml, sys; yaml.safe_load(open(sys.argv[1]))\" sys.argv[1] filename, which raises an error on malformed input. FileCast is useful when you don't have either installed.",
+    ),
+    "css-js-minifier": (
+        "Other Ways to Minify CSS or JavaScript",
+        "You can also minify CSS or JavaScript using a build tool like esbuild, Terser (JS), or cssnano (CSS), or an IDE extension that minifies on save. FileCast is useful for a quick, one-off minification without setting up a build.",
+    ),
+    "json-diff": (
+        "Other Ways to Diff JSON",
+        "You can also diff JSON by formatting both files (e.g. with jq -S . file.json to sort keys) and comparing them with a regular text diff tool like diff or your code editor's built-in file comparison view. FileCast is useful for a quick, one-off comparison without formatting each file yourself first.",
+    ),
 }
 
 ALTERNATIVES_GROUP_OVERRIDES = {
@@ -683,6 +729,16 @@ ALTERNATIVES_GROUP_OVERRIDES = {
     "image-compress": "image-resize-compress",
     "image-resize": "image-resize-compress",
     "bulk-image-compress": "image-resize-compress",
+    "json-formatter": "json-formatter",
+    "json-validator": "json-validator",
+    "json-minifier": "json-minifier",
+    "xml-formatter": "xml-formatter",
+    "xml-validator": "xml-validator",
+    "html-formatter": "html-formatter",
+    "html-minifier": "html-minifier",
+    "yaml-validator": "yaml-validator",
+    "css-js-minifier": "css-js-minifier",
+    "json-diff": "json-diff",
 }
 
 
@@ -1164,6 +1220,8 @@ def render_all_pages(
             template_name = "tool-text.html"
         elif ui == "multi-file":
             template_name = "tool-multi.html"
+        elif ui == "text-diff":
+            template_name = "tool-diff.html"
 
         slug = tool.get("slug", f"/convert/{tool['id']}").strip("/")
         out_path = DIST / slug / "index.html"

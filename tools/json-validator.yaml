@@ -1,0 +1,29 @@
+enabled: true
+id: json-validator
+name: JSON Validator
+slug: /convert/json-validator
+category: developer-tools
+type: client-side
+input_format: JSON
+output_format: JSON
+accept_extensions: [.json]
+output_extension: .txt
+js_module: converters/json-validator.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Validate JSON"
+input_placeholder: "Paste your JSON here to check it's valid...\n\nExample:\n{\"name\":\"Alice\",\"age\":30}"
+tagline: "Check whether JSON is well-formed, with a clear error location"
+tagline_long: "Validate JSON instantly in your browser — get a precise error message and location if something's wrong, or a formatted confirmation if it's valid."
+meta:
+  title: "JSON Validator — Free, No Upload | FileCast"
+  description: "Validate JSON free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Pinpoints exactly what's wrong with invalid JSON."
+  keywords: ["json validator", "validate json", "json syntax checker", "check json online", "is json valid"]
+content:
+  what_is: "content/json-validator/what-is.md"
+  comparison: "content/json-validator/comparison.md"
+  when_to_use: "content/json-validator/when-to-use.md"
+  faq: "content/json-validator/faq.md"
+related_tools: [json-formatter, json-minifier, json-diff, yaml-validator]

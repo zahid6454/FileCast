@@ -1,0 +1,29 @@
+enabled: true
+id: json-diff
+name: JSON Diff
+slug: /convert/json-diff
+category: developer-tools
+type: client-side
+input_format: JSON
+output_format: JSON
+accept_extensions: [.json]
+output_extension: .txt
+js_module: converters/json-diff.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-diff
+input_placeholder_a: "Paste the original JSON here...\n\nExample:\n{\"name\":\"Alice\",\"age\":30}"
+input_placeholder_b: "Paste the changed JSON here...\n\nExample:\n{\"name\":\"Alice\",\"age\":31}"
+tagline: "Compare two JSON values and see exactly what changed"
+tagline_long: "Diff two JSON values instantly in your browser — a structural comparison that reports added, removed, and changed fields, unaffected by key order."
+meta:
+  title: "JSON Diff — Free, No Upload | FileCast"
+  description: "Diff JSON free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. A structural comparison, not a line-by-line text diff."
+  keywords: ["json diff", "compare json", "json comparison tool", "json diff online", "json compare two files"]
+content:
+  what_is: "content/json-diff/what-is.md"
+  comparison: "content/json-diff/comparison.md"
+  when_to_use: "content/json-diff/when-to-use.md"
+  faq: "content/json-diff/faq.md"
+related_tools: [json-formatter, json-validator, json-minifier, yaml-validator]
