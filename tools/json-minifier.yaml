@@ -1,0 +1,30 @@
+enabled: true
+id: json-minifier
+name: JSON Minifier
+slug: /convert/json-minifier
+category: developer-tools
+subcategory: developer-operations
+type: client-side
+input_format: JSON
+output_format: JSON
+accept_extensions: [.json]
+output_extension: .json
+js_module: converters/json-minifier.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Minify JSON"
+input_placeholder: "Paste your JSON here...\n\nExample:\n{\n  \"name\": \"Alice\",\n  \"age\": 30\n}"
+tagline: "Strip whitespace from JSON to shrink its size"
+tagline_long: "Minify JSON instantly in your browser — removes every unnecessary space, tab, and line break to produce the smallest valid output."
+meta:
+  title: "JSON Minifier — Free, No Upload | FileCast"
+  description: "Minify JSON free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Strips whitespace to shrink your file size."
+  keywords: ["json minifier", "minify json", "compress json", "json compact", "remove whitespace json"]
+content:
+  what_is: "content/json-minifier/what-is.md"
+  comparison: "content/json-minifier/comparison.md"
+  when_to_use: "content/json-minifier/when-to-use.md"
+  faq: "content/json-minifier/faq.md"
+related_tools: [json-formatter, json-validator, json-diff, json-to-yaml]

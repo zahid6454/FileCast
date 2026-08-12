@@ -1,0 +1,30 @@
+enabled: true
+id: xml-validator
+name: XML Validator
+slug: /convert/xml-validator
+category: developer-tools
+subcategory: developer-operations
+type: client-side
+input_format: XML
+output_format: XML
+accept_extensions: [.xml]
+output_extension: .xml
+js_module: converters/xml-validator.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Validate XML"
+input_placeholder: "Paste your XML here to check it's well-formed...\n\nExample:\n<root><name>Alice</name></root>"
+tagline: "Check whether XML is well-formed, with a clear error message"
+tagline_long: "Validate XML instantly in your browser — get a clear error if something's wrong (a mismatched tag, invalid syntax), or a formatted confirmation if it's well-formed."
+meta:
+  title: "XML Validator — Free, No Upload | FileCast"
+  description: "Validate XML free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Pinpoints exactly what's wrong with malformed XML."
+  keywords: ["xml validator", "validate xml", "xml syntax checker", "check xml online", "well-formed xml checker"]
+content:
+  what_is: "content/xml-validator/what-is.md"
+  comparison: "content/xml-validator/comparison.md"
+  when_to_use: "content/xml-validator/when-to-use.md"
+  faq: "content/xml-validator/faq.md"
+related_tools: [xml-formatter, json-to-xml, xml-to-json, yaml-validator]

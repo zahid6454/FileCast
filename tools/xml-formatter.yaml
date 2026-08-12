@@ -1,0 +1,30 @@
+enabled: true
+id: xml-formatter
+name: XML Formatter
+slug: /convert/xml-formatter
+category: developer-tools
+subcategory: developer-operations
+type: client-side
+input_format: XML
+output_format: XML
+accept_extensions: [.xml]
+output_extension: .xml
+js_module: converters/xml-formatter.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Format XML"
+input_placeholder: "Paste your XML here...\n\nExample:\n<root><name>Alice</name><age>30</age></root>"
+tagline: "Pretty-print and indent messy or minified XML"
+tagline_long: "Format XML instantly in your browser — turn minified or single-line XML into clean, readable, properly indented output."
+meta:
+  title: "XML Formatter — Free, No Upload | FileCast"
+  description: "Format XML free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Turns minified XML into clean, indented output."
+  keywords: ["xml formatter", "format xml", "xml beautifier", "pretty print xml", "xml indent online"]
+content:
+  what_is: "content/xml-formatter/what-is.md"
+  comparison: "content/xml-formatter/comparison.md"
+  when_to_use: "content/xml-formatter/when-to-use.md"
+  faq: "content/xml-formatter/faq.md"
+related_tools: [xml-validator, json-to-xml, xml-to-json, xml-to-yaml]

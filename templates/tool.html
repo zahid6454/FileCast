@@ -214,6 +214,12 @@
 
   </div>{# /tool-panel #}
 
+  {# in_content ad — right after the converter, before Related Tools: higher
+     up the page (better viewability) and a natural section break between the
+     primary task and further navigation. Same placement on every tool
+     template (tool-text.html, tool-diff.html, tool-multi.html). #}
+  {{ ad_slot(adsense, 'in_content') }}
+
   {# Related Tools — surfaced right after the converter (the primary action),
      before the long-form content below. #}
   {% if tool.related_tools_resolved %}
@@ -231,8 +237,6 @@
     </div>
   </div>
   {% endif %}
-
-  {{ ad_slot(adsense, 'in_content') }}
 
   {# Content Blocks #}
   {% if tool.content_html.get('what_is') %}

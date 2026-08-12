@@ -1,0 +1,30 @@
+enabled: true
+id: yaml-validator
+name: YAML Validator
+slug: /convert/yaml-validator
+category: developer-tools
+subcategory: developer-operations
+type: client-side
+input_format: YAML
+output_format: YAML
+accept_extensions: [.yaml, .yml]
+output_extension: .yaml
+js_module: converters/yaml-validator.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Validate YAML"
+input_placeholder: "Paste your YAML here to check it's valid...\n\nExample:\nname: Alice\nage: 30"
+tagline: "Catch tabs, duplicate keys, and indentation mistakes in YAML"
+tagline_long: "Validate YAML instantly in your browser — catches the mistakes that break YAML most often: tab indentation, inconsistent indentation, and duplicate keys."
+meta:
+  title: "YAML Validator — Free, No Upload | FileCast"
+  description: "Validate YAML free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Catches tabs, bad indentation, and duplicate keys."
+  keywords: ["yaml validator", "validate yaml", "yaml syntax checker", "yaml linter online", "check yaml online"]
+content:
+  what_is: "content/yaml-validator/what-is.md"
+  comparison: "content/yaml-validator/comparison.md"
+  when_to_use: "content/yaml-validator/when-to-use.md"
+  faq: "content/yaml-validator/faq.md"
+related_tools: [json-to-yaml, yaml-to-json, xml-validator, json-validator]

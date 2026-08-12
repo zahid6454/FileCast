@@ -1,0 +1,30 @@
+enabled: true
+id: html-minifier
+name: HTML Minifier
+slug: /convert/html-minifier
+category: developer-tools
+subcategory: developer-operations
+type: client-side
+input_format: HTML
+output_format: HTML
+accept_extensions: [.html, .htm]
+output_extension: .html
+js_module: converters/html-minifier.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Minify HTML"
+input_placeholder: "Paste your HTML here...\n\nExample:\n<div>\n  <p>Hello</p>\n  <!-- a comment -->\n  <span>World</span>\n</div>"
+tagline: "Strip comments and whitespace from HTML to shrink page weight"
+tagline_long: "Minify HTML instantly in your browser — removes comments and unnecessary whitespace while preserving the content of <pre>, <textarea>, <script>, and <style> blocks exactly."
+meta:
+  title: "HTML Minifier — Free, No Upload | FileCast"
+  description: "Minify HTML free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Strips comments and whitespace to shrink page weight."
+  keywords: ["html minifier", "minify html", "compress html", "html whitespace remover", "shrink html"]
+content:
+  what_is: "content/html-minifier/what-is.md"
+  comparison: "content/html-minifier/comparison.md"
+  when_to_use: "content/html-minifier/when-to-use.md"
+  faq: "content/html-minifier/faq.md"
+related_tools: [html-formatter, css-js-minifier, json-minifier, html-to-markdown]

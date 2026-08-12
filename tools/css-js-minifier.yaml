@@ -1,0 +1,30 @@
+enabled: true
+id: css-js-minifier
+name: CSS/JS Minifier
+slug: /convert/css-js-minifier
+category: developer-tools
+subcategory: developer-operations
+type: client-side
+input_format: CSS/JS
+output_format: CSS/JS
+accept_extensions: [.css, .js]
+output_extension: .min.js
+js_module: converters/css-js-minifier.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Minify"
+input_placeholder: "Paste CSS or JavaScript here — the tool auto-detects which...\n\nExample:\n.button {\n  color: blue;\n}"
+tagline: "Strip comments and whitespace from CSS or JavaScript"
+tagline_long: "Minify CSS or JavaScript instantly in your browser — auto-detects which one you pasted, then safely strips comments and unnecessary whitespace without touching your strings or logic."
+meta:
+  title: "CSS/JS Minifier — Free, No Upload | FileCast"
+  description: "Minify CSS or JavaScript free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Auto-detects which one you pasted."
+  keywords: ["css minifier", "js minifier", "minify css", "minify javascript", "compress css js online"]
+content:
+  what_is: "content/css-js-minifier/what-is.md"
+  comparison: "content/css-js-minifier/comparison.md"
+  when_to_use: "content/css-js-minifier/when-to-use.md"
+  faq: "content/css-js-minifier/faq.md"
+related_tools: [html-minifier, json-minifier, svg-to-png]

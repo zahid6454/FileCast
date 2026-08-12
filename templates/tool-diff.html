@@ -8,7 +8,7 @@
 {% block og_description %}{{ tool.meta.description }}{% endblock %}
 {% block og_url %}{{ site.base_url }}{{ tool.slug }}/{% endblock %}
 {% block og_image %}/images/og/{{ tool.id }}.png{% endblock %}
-{% block og_image_alt %}{{ tool.input_format }} to {{ tool.output_format }} — {{ site.name }}{% endblock %}
+{% block og_image_alt %}{{ tool.name }} — {{ site.name }}{% endblock %}
 
 {% block structured_data %}
 <script type="application/ld+json">
@@ -21,20 +21,20 @@
     {
       "@type": "HowToStep",
       "position": 1,
-      "name": "Paste your {{ tool.input_format }} text",
-      "text": "Paste or type your {{ tool.input_format }} content into the text area."
+      "name": "Paste your original {{ tool.input_format }}",
+      "text": "Paste or type the original {{ tool.input_format }} into the left text area."
     },
     {
       "@type": "HowToStep",
       "position": 2,
-      "name": "Convert to {{ tool.output_format }}",
-      "text": "Click the Convert button. Your text is processed entirely in your browser — nothing is uploaded."
+      "name": "Paste the changed {{ tool.input_format }}",
+      "text": "Paste or type the changed {{ tool.input_format }} into the right text area."
     },
     {
       "@type": "HowToStep",
       "position": 3,
-      "name": "Copy or download the result",
-      "text": "Copy the converted text to your clipboard or download it as a file."
+      "name": "Compare",
+      "text": "Click Compare. Both are processed entirely in your browser — nothing is uploaded."
     }
   ]
 }
@@ -53,7 +53,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container container--narrow page">
+<div class="container page">
 
   {# Breadcrumb #}
   <nav class="breadcrumb">
@@ -64,18 +64,12 @@
     {{ tool.name }}
   </nav>
 
-  {# Converter panel — the whole tool area on one raised surface: title/tagline,
-     leaderboard ad, the privacy trust badge, and the controls, all in one card.
-     Same boundary as tool.html; see the comment there. #}
   <div class="tool-panel">
 
-  {# Conversion status live region (§6, P2 #17) — see tool.html for the comment. #}
   <div class="sr-only" id="a11y-status" role="status" aria-live="polite"></div>
 
-  {# Title + Tagline #}
   <div class="tool-title-row">
     <h1 class="page__title page__title--tight">{{ tool.name }}</h1>
-    {# Favorites heart — hidden until auth.js reveals it for a signed-in user (§10). #}
     <button class="tool-fav" id="tool-fav" type="button" hidden aria-pressed="false" aria-label="Save to favorites">
       <svg class="tool-fav__icon" aria-hidden="true" focusable="false"><use href="#icon-heart-toggle"></use></svg>
     </button>
@@ -86,8 +80,6 @@
 
   {{ ad_slot(adsense, 'leaderboard') }}
 
-  {# Privacy Badge — same Local/Cloud pill and privacy link as tool.html; see
-     the comment there for why this is a bare link rather than a caption. #}
   <div class="tool-badge">
     {{ processing_pill(tool) }}
     <a href="/privacy/" class="tool-badge__note">
@@ -97,43 +89,44 @@
     </a>
   </div>
 
-  {# Text Input #}
-  <div class="text-editor">
-    <div class="text-editor__gutter" aria-hidden="true"></div>
-    <textarea class="text-input-area" id="text-input" placeholder="{{ tool.get('input_placeholder', 'Paste your ' + tool.input_format + ' here...') }}"></textarea>
-  </div>
-  <div class="text-input-meta">
-    <span id="char-count">0 chars</span>
-    <span>
-      <button class="card text-input-format-btn hidden" id="format-btn">Prettier</button>
-      <span id="byte-count">0 Bytes</span>
-    </span>
+  {# Two-pane diff input #}
+  <div class="diff-inputs">
+    <div class="diff-inputs__col">
+      <label class="diff-inputs__label" for="text-input-a">Original {{ tool.input_format }}</label>
+      <div class="text-editor">
+        <div class="text-editor__gutter" aria-hidden="true"></div>
+        <textarea class="text-input-area" id="text-input-a" placeholder="{{ tool.get('input_placeholder_a', 'Paste the original ' + tool.input_format + ' here...') }}"></textarea>
+      </div>
+      <div class="text-input-meta">
+        <span id="char-count-a">0 chars</span>
+        <span id="byte-count-a">0 Bytes</span>
+      </div>
+    </div>
+    <div class="diff-inputs__col">
+      <label class="diff-inputs__label" for="text-input-b">Changed {{ tool.input_format }}</label>
+      <div class="text-editor">
+        <div class="text-editor__gutter" aria-hidden="true"></div>
+        <textarea class="text-input-area" id="text-input-b" placeholder="{{ tool.get('input_placeholder_b', 'Paste the changed ' + tool.input_format + ' here...') }}"></textarea>
+      </div>
+      <div class="text-input-meta">
+        <span id="char-count-b">0 chars</span>
+        <span id="byte-count-b">0 Bytes</span>
+      </div>
+    </div>
   </div>
 
-  {# Reverse Tool Swap Link #}
-  {% if tool.reverse_tool_resolved %}
-  <a class="reverse-link" href="{{ tool.reverse_tool_resolved.slug }}/">Looking for {{ tool.reverse_tool_resolved.input_format }} → {{ tool.reverse_tool_resolved.output_format }} ?</a>
-  {% endif %}
-
-  {# Convert Button — action_label lets a Modification tool (formatter,
-     validator, minifier) say what it actually does instead of the generic
-     "Convert to X" phrasing, which reads oddly when input_format equals
-     output_format (e.g. "Convert to JSON" on a JSON Formatter). Conversion
-     tools don't set it, so they keep the exact same default text. #}
   <div class="convert-action">
     <button class="btn btn--primary btn--lg" id="convert-btn">
-      {{ tool.get('action_label', 'Convert to ' + tool.output_format) }}
+      Compare
     </button>
   </div>
 
-  {# Progress Bar #}
   <div class="progress hidden" id="progress">
     <div class="progress__fill" id="progress-fill"></div>
   </div>
 
-  {# Text Result #}
   <div class="text-result hidden" id="text-result">
-    <div class="text-result__title">Conversion Complete</div>
+    <div class="text-result__title">Comparison Complete</div>
     <div class="text-editor">
       <div class="text-editor__gutter" aria-hidden="true"></div>
       <textarea class="text-output-area" id="text-output" readonly></textarea>
@@ -144,15 +137,13 @@
     <div class="text-result__actions">
       <button class="btn btn--success" id="copy-btn">Copy to Clipboard</button>
       <button class="btn btn--success" id="download-btn">Download File</button>
-      <button class="btn btn--primary" id="reset-btn">Convert Another</button>
+      <button class="btn btn--primary" id="reset-btn">Compare Another</button>
     </div>
     {{ feedback_widget() }}
   </div>
 
-  {# Error Message #}
   <div class="error-msg hidden" id="error-msg"></div>
 
-  {# Post-conversion sign-in touchpoint / "Saved ✓" — populated by auth.js (§10). #}
   <div class="signin-slot" id="signin-slot" hidden></div>
 
   </div>{# /tool-panel #}
@@ -160,7 +151,7 @@
   {# in_content ad — right after the converter, before Related Tools: higher
      up the page (better viewability) and a natural section break between the
      primary task and further navigation. Same placement on every tool
-     template (tool.html, tool-diff.html, tool-multi.html). #}
+     template (tool.html, tool-text.html, tool-multi.html). #}
   {{ ad_slot(adsense, 'in_content') }}
 
   {# Related Tools — surfaced right after the converter (the primary action),
@@ -181,7 +172,6 @@
   </div>
   {% endif %}
 
-  {# Content Blocks #}
   {% if tool.content_html.get('what_is') %}
   <div class="content-block">
     {{ tool.content_html.what_is|safe }}
@@ -214,8 +204,9 @@
 
 </div>
 
-{# Tool config as a non-executable JSON data island (CSP-safe under
-   script-src 'self'); parsed into window.TOOL_CONFIG by tool-config.js #}
+{# Tool config as a non-executable JSON data island — same CSP-safe pattern as
+   tool-text.html. `text_converter_worker_src` points at the dedicated
+   two-input diff worker rather than the generic single-input one. #}
 <script type="application/json" id="tool-config">
 {
   "id": {{ tool.id|tojson }},
@@ -227,44 +218,26 @@
   "output_extension": {{ tool.output_extension|tojson }},
   "max_file_size": {{ tool.max_file_size|tojson }},
   "max_file_size_bytes": {{ tool.max_file_size_bytes|tojson }},
-  "category": {{ tool.category|tojson }}{% if tool.js_module is defined and tool.js_module %}{% set tool_js = assets.get('js/' + tool.js_module) %}{% set text_worker_asset = assets.get('js/workers/text-converter-worker.js') %}{% if tool_js and text_worker_asset %},
+  "category": {{ tool.category|tojson }}{% if tool.js_module is defined and tool.js_module %}{% set tool_js = assets.get('js/' + tool.js_module) %}{% set diff_worker_asset = assets.get('js/workers/text-diff-worker.js') %}{% if tool_js and diff_worker_asset %},
   "text_converter_src": {{ ("/" + tool_js.path)|tojson }},
-  "text_converter_worker_src": {{ ("/" + text_worker_asset.path)|tojson }}{% endif %}{% endif %}
+  "text_converter_worker_src": {{ ("/" + diff_worker_asset.path)|tojson }}{% endif %}{% endif %}
 }
 </script>
 
-{# Baked rating aggregate — see tool.html for the sibling-island rationale. #}
 {% if tool.get('rating') %}
 <script type="application/json" id="tool-ratings">{{ tool.rating|tojson }}</script>
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
-{# Line-number gutter for the text-input/text-output textareas above #}
+{# Line-number gutter for the two diff-input textareas and the output above #}
 {% set gutter_js = assets.get('js/text-editor-gutter.js') %}
 {% if gutter_js %}
 <script src="/{{ gutter_js.path }}" integrity="{{ gutter_js.sri }}" crossorigin="anonymous" defer></script>
 {% endif %}
 
-{# Shared text-input handler #}
-{% set text_js = assets.get('js/shared-text.js') %}
-{% if text_js %}
-<script src="/{{ text_js.path }}" integrity="{{ text_js.sri }}" crossorigin="anonymous" defer></script>
+{% set diff_js = assets.get('js/shared-diff.js') %}
+{% if diff_js %}
+<script src="/{{ diff_js.path }}" integrity="{{ diff_js.sri }}" crossorigin="anonymous" defer></script>
 {% endif %}
-
-{# Tool-specific JS libraries #}
-{% if tool.js_libs is defined and tool.js_libs %}
-{% for lib in tool.js_libs %}
-{% set lib_asset = assets.get('lib/' + lib) %}
-{% if lib_asset %}
-<script src="/{{ lib_asset.path }}" integrity="{{ lib_asset.sri }}" crossorigin="anonymous" defer></script>
-{% endif %}
-{% endfor %}
-{% endif %}
-
-{# Tool converter JS: NOT loaded here. shared-text.js runs it inside
-   text-converter-worker.js (off the main thread) via the
-   text_converter_src/text_converter_worker_src pair set in #tool-config
-   above — a plain <script> tag would define window.convertText redundantly
-   on the main thread for nothing, since shared-text.js never calls it there. #}
 {% endblock %}
