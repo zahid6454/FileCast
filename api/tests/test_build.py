@@ -1477,7 +1477,8 @@ def test_generate_redirects_www_to_apex(tmp_path, monkeypatch):
     assert (
         redirects.strip()
         == "https://www.filecast.org/* https://filecast.org/:splat 301\n"
-        "/document-tools/* /document-conversion/:splat 301"
+        "/document-tools/* /document-conversion/:splat 301\n"
+        "/data-conversion/* /developer-tools/:splat 301"
     )
 
 
@@ -1500,7 +1501,10 @@ def test_generate_redirects_schemeless_base_url_warns_and_skips_www_only(
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_redirects({"site": {"base_url": "filecast.org"}})
     redirects = (tmp_path / "_redirects").read_text(encoding="utf-8")
-    assert redirects == "/document-tools/* /document-conversion/:splat 301\n"
+    assert redirects == (
+        "/document-tools/* /document-conversion/:splat 301\n"
+        "/data-conversion/* /developer-tools/:splat 301\n"
+    )
     assert "no host" in capsys.readouterr().out
 
 
