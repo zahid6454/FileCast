@@ -55,6 +55,36 @@ describe('xml-formatter.js — window.convertText', () => {
     expect(() => dom.window.convertText('<note>Tom & Jerry</note>')).toThrow(/unescaped "&"/);
   });
 
+  it('throws on an unescaped ampersand inside an attribute value', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/xml-formatter.js');
+
+    expect(() => dom.window.convertText('<a href="x&y">hi</a>')).toThrow(/unescaped "&"/);
+  });
+
+  it('accepts a properly escaped ampersand inside an attribute value', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/xml-formatter.js');
+
+    expect(() => dom.window.convertText('<a href="x&amp;y">hi</a>')).not.toThrow();
+  });
+
+  it('throws on non-whitespace content after the root element closes', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/xml-formatter.js');
+
+    expect(() => dom.window.convertText('<a>hi</a>trailing garbage')).toThrow(
+      /content found after the root element/
+    );
+  });
+
+  it('tolerates trailing whitespace after the root element closes', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/xml-formatter.js');
+
+    expect(() => dom.window.convertText('<a>hi</a>\n')).not.toThrow();
+  });
+
   // This is the actual bug this rewrite fixes: DOMParser is a Window-only
   // API and this converter runs inside a Worker (via text-converter-worker.js
   // in production), where DOMParser is undefined.

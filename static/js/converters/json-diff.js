@@ -89,7 +89,11 @@
   }
 
   function unionKeys(a, b) {
-    var seen = {};
+    // A plain {} object's own "seen" checks are shadowed by Object.prototype
+    // members — a JSON key literally named "constructor", "toString",
+    // "hasOwnProperty", etc. would read as already-seen and get silently
+    // dropped from the diff. Object.create(null) has no prototype at all.
+    var seen = Object.create(null);
     var out = [];
     var aKeys = Object.keys(a);
     var bKeys = Object.keys(b);

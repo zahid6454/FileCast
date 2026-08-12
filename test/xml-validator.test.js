@@ -61,6 +61,36 @@ describe('xml-validator.js — window.convertText', () => {
     expect(() => dom.window.convertText('<note>Tom &amp; Jerry</note>')).not.toThrow();
   });
 
+  it('throws on an unescaped ampersand inside an attribute value', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/xml-validator.js');
+
+    expect(() => dom.window.convertText('<a href="x&y">hi</a>')).toThrow(/unescaped "&"/);
+  });
+
+  it('accepts a properly escaped ampersand inside an attribute value', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/xml-validator.js');
+
+    expect(() => dom.window.convertText('<a href="x&amp;y">hi</a>')).not.toThrow();
+  });
+
+  it('throws on non-whitespace content after the root element closes', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/xml-validator.js');
+
+    expect(() => dom.window.convertText('<a>hi</a>trailing garbage')).toThrow(
+      /content found after the root element/
+    );
+  });
+
+  it('tolerates trailing whitespace after the root element closes', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/xml-validator.js');
+
+    expect(() => dom.window.convertText('<a>hi</a>\n')).not.toThrow();
+  });
+
   it('accepts self-closing tags without treating them as a second root', () => {
     const dom = createDom();
     evalScript(dom, 'converters/xml-validator.js');

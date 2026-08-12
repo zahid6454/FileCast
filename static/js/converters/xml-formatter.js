@@ -36,6 +36,7 @@
 
     while ((match = tagRe.exec(cleaned)) !== null) {
       checkEntities(cleaned.slice(lastEnd, match.index));
+      checkAttributeEntities(match[3] || '');
       lastEnd = tagRe.lastIndex;
 
       var isClose = !!match[1];
@@ -70,7 +71,8 @@
         stack.push(name);
       }
     }
-    checkEntities(cleaned.slice(lastEnd));
+    var trailing = cleaned.slice(lastEnd);
+    checkEntities(trailing);
 
     if (stack.length > 0) {
       throw new Error('tag <' + stack[stack.length - 1] + '> was never closed.');
@@ -78,11 +80,27 @@
     if (!seenRootClose) {
       throw new Error('no root element found.');
     }
+    if (/\S/.test(trailing)) {
+      throw new Error("content found after the root element's closing tag.");
+    }
   }
 
   function checkEntities(textChunk) {
     if (/&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#[0-9]+|#x[0-9a-fA-F]+);)/.test(textChunk)) {
       throw new Error('unescaped "&" — use "&amp;" instead.');
+    }
+  }
+
+  // checkEntities() above only ever sees text BETWEEN tags — an unescaped
+  // "&" inside a quoted attribute value (<a href="x&y">) never reached it,
+  // since that text lives inside the tag match itself. Pulls each quoted
+  // attribute value back out of the tag's attribute string and runs the
+  // same check against its (unquoted) contents.
+  function checkAttributeEntities(attrs) {
+    var re = /"([^"]*)"|'([^']*)'/g;
+    var m;
+    while ((m = re.exec(attrs)) !== null) {
+      checkEntities(m[1] !== undefined ? m[1] : m[2]);
     }
   }
 

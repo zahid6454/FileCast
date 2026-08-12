@@ -62,6 +62,24 @@ describe('json-diff.js — window.convertText', () => {
     expect(text).toContain('~ $.user.address.city: "NYC" → "LA"');
   });
 
+  it('detects a change on a key that shadows an Object.prototype member', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/json-diff.js');
+
+    const { text } = dom.window.convertText('{"constructor":1}', '{"constructor":2}');
+    expect(text).toContain('~ $.constructor: 1 → 2');
+    expect(text).not.toContain('No differences');
+  });
+
+  it('detects an added key named like a common Object.prototype member', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/json-diff.js');
+
+    const { text } = dom.window.convertText('{}', '{"hasOwnProperty":true,"toString":1}');
+    expect(text).toContain('+ $.hasOwnProperty: true (added)');
+    expect(text).toContain('+ $.toString: 1 (added)');
+  });
+
   it('throws a descriptive error naming which side is invalid', () => {
     const dom = createDom();
     evalScript(dom, 'converters/json-diff.js');
