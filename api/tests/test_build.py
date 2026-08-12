@@ -1548,7 +1548,10 @@ def test_full_build_additive_outputs(built):
     assert tool_data.exists()
     assert not (built / "js" / "tool-data.json").exists()
     records = json.loads(tool_data.read_text(encoding="utf-8"))
-    assert len(records) == 34  # all YAML tools (no overlay)
+    # All YAML tools (no overlay) — live count so this never goes stale the
+    # moment a new tool YAML is added, mirroring how home.html's
+    # "{{ tools|length }} Free Tools" computes its count at build time.
+    assert len(records) == len(build.load_tools())
 
     # Snapshot one record's shape/content.
     png = next(r for r in records if r["id"] == "png-to-jpg")
@@ -2270,11 +2273,12 @@ def test_alternatives_pdf_action_tools_do_not_reuse_office_app_answer(built):
 
 
 def test_load_alternatives_covers_every_tool(built):
-    # Every one of the 34 shipped tools must resolve to a real ALTERNATIVES
-    # group — an unmapped output_format would silently render an empty
-    # section (load_alternatives()'s `if not entry` branch), not an error.
+    # Every shipped tool must resolve to a real ALTERNATIVES group — an
+    # unmapped output_format would silently render an empty section
+    # (load_alternatives()'s `if not entry` branch), not an error. Live count
+    # so this never goes stale the moment a new tool YAML is added.
     tool_data = json.loads((built / "tool-data.json").read_text(encoding="utf-8"))
-    assert len(tool_data) == 34
+    assert len(tool_data) == len(build.load_tools())
     for tool in tool_data:
         slug = tool["slug"].strip("/")
         page = (built / slug / "index.html").read_text(encoding="utf-8")
