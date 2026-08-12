@@ -44,7 +44,7 @@ SITE_CONFIG = ROOT / "site-config.yaml"
 # it went unnoticed. Fixed here (Build Action Plan Phase 0 audit) rather than
 # left for the next person who hits that edge case.
 CATEGORY_ORDER_FALLBACK = [
-    "document-tools",
+    "document-conversion",
     "image-conversion",
     "developer-tools",
 ]
