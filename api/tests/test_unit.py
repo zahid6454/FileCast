@@ -80,7 +80,7 @@ def test_category_order_follows_site_config():
     order = seed._load_category_order()
     assert order == expected
     # Regression guard for the reported mismatch: document before image.
-    assert order.index("document-tools") < order.index("image-conversion")
+    assert order.index("document-conversion") < order.index("image-conversion")
 
 
 def test_category_order_fallback_matches_site_config_order(monkeypatch):
@@ -95,7 +95,7 @@ def test_category_order_fallback_matches_site_config_order(monkeypatch):
     monkeypatch.setattr(seed, "SITE_CONFIG", seed.ROOT / "does-not-exist.yaml")
     order = seed._load_category_order()
     assert order == seed.CATEGORY_ORDER_FALLBACK
-    assert order.index("document-tools") < order.index("image-conversion")
+    assert order.index("document-conversion") < order.index("image-conversion")
 
 
 # ---------------------------------------------------------------------------

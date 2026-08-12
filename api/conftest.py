@@ -139,7 +139,7 @@ async def seeded_tools(db):
                 id="docx-to-pdf",
                 enabled=True,
                 sort_order=2,
-                category="document-tools",
+                category="document-conversion",
                 name="DOCX to PDF",
                 input_format="DOCX",
                 output_format="PDF",
