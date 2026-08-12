@@ -65,8 +65,12 @@
   function parseBlock(entries, startIdx, baseIndent) {
     var isArray = false;
     var isMapping = false;
-    var obj = {};
-    var seenKeys = {};
+    // Object.create(null) rather than {} — a mapping key literally named
+    // "__proto__" would otherwise repoint obj's prototype via the Annex-B
+    // accessor instead of becoming an own property, silently vanishing from
+    // the "confirmed valid" output. Same fix as json-diff.js's unionKeys().
+    var obj = Object.create(null);
+    var seenKeys = Object.create(null);
     var arr = [];
     var i = startIdx;
     var siblingIndent = null;
@@ -276,7 +280,8 @@
     }
     function parseObject() {
       pos++; // consume '{'
-      var obj = {};
+      // Object.create(null) — same __proto__-shadowing reason as parseBlock()'s obj.
+      var obj = Object.create(null);
       skipSpace();
       if (str.charAt(pos) === '}') {
         pos++;

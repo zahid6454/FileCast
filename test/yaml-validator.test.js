@@ -106,4 +106,30 @@ describe('yaml-validator.js — window.convertText', () => {
     const { text } = dom.window.convertText('');
     expect(text).toContain('null');
   });
+
+  it('round-trips a mapping key literally named __proto__ instead of silently dropping it', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/yaml-validator.js');
+
+    const { text } = dom.window.convertText('__proto__:\n  a: 1\n');
+    expect(text).toContain('__proto__:');
+    expect(text).toContain('a: 1');
+  });
+
+  it('catches a duplicate __proto__ key at the same level', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/yaml-validator.js');
+
+    expect(() => dom.window.convertText('__proto__: 1\n__proto__: 2')).toThrow(
+      /duplicate key "__proto__" on line 2/
+    );
+  });
+
+  it('round-trips a flow-collection key literally named __proto__', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/yaml-validator.js');
+
+    const { text } = dom.window.convertText('obj: {__proto__: 1}');
+    expect(text).toContain('__proto__: 1');
+  });
 });
