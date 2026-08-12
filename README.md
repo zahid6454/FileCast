@@ -272,7 +272,7 @@ Create `tools/my-tool.yaml`:
 id: my-tool
 name: My Format Converter
 slug: /convert/my-format-converter
-category: image-conversion # or document-tools, data-text-tools
+category: image-conversion # or document-conversion, developer-tools
 type: client-side          # or "server-side" for API tools
 input_format: MYF
 output_format: JPG
