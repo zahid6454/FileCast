@@ -3,7 +3,7 @@ homepage_order: 3
 id: yaml-to-json
 name: YAML to JSON Converter
 slug: /convert/yaml-to-json
-category: data-conversion
+category: developer-tools
 type: client-side
 input_format: YAML
 output_format: JSON

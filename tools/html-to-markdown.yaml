@@ -2,7 +2,7 @@ enabled: true
 id: html-to-markdown
 name: HTML to Markdown Converter
 slug: /convert/html-to-markdown
-category: data-conversion
+category: developer-tools
 type: client-side
 input_format: HTML
 output_format: Markdown
