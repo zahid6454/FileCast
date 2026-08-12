@@ -2283,3 +2283,34 @@ def test_load_alternatives_covers_every_tool(built):
         slug = tool["slug"].strip("/")
         page = (built / slug / "index.html").read_text(encoding="utf-8")
         assert "<h2>Other Ways to" in page, tool["id"]
+
+
+def test_alternatives_retemplated_groups_substitute_source():
+    # DOCX/HTML/CSV/XML/YAML used to hardcode one specific source (e.g. the
+    # YAML entry literally read "...Convert JSON to YAML") — harmless while
+    # only one shipped tool targeted each format, but Prompts 3/5/6 add a
+    # second tool sharing each of these targets (Build Action Plan Phase 0
+    # "Two tests worth fixing here too"). Exercises load_alternatives()
+    # directly with a source none of today's 34 tools use, so a future
+    # regression back to a hardcoded string is caught immediately rather than
+    # only once that second tool actually ships.
+    cases = [
+        ("DOCX", "Markdown"),
+        ("HTML", "PDF"),
+        ("CSV", "TSV"),
+        ("XML", "CSV"),
+        ("YAML", "XML"),
+    ]
+    tools = [
+        {
+            "id": f"fake-to-{group.lower()}",
+            "input_format": source,
+            "output_format": group,
+        }
+        for group, source in cases
+    ]
+    build.load_alternatives(tools)
+    for tool, (group, source) in zip(tools, cases, strict=True):
+        html = tool["alternatives_html"]
+        assert f"Convert {source} to" in html, group
+        assert html.count(source) >= 2, group  # heading AND sentence both substitute it
