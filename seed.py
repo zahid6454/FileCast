@@ -40,7 +40,7 @@ SITE_CONFIG = ROOT / "site-config.yaml"
 CATEGORY_ORDER_FALLBACK = [
     "image-conversion",
     "document-tools",
-    "data-conversion",
+    "developer-tools",
     "audio-video",
 ]
 
