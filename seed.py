@@ -47,7 +47,6 @@ CATEGORY_ORDER_FALLBACK = [
     "document-tools",
     "image-conversion",
     "developer-tools",
-    "audio-video",
 ]
 
 
