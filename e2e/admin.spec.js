@@ -255,7 +255,7 @@ test.describe('tools', () => {
     await expect(imgA.locator('.admin-tool__up')).toBeFocused();
   });
 
-  test('labels categories with the site display name (data-conversion → Data Conversion)', async ({
+  test('labels categories with the site display name (developer-tools → Developer Tools)', async ({
     page
   }) => {
     // The real admin page (from dist) bakes category id→name into its config
@@ -267,7 +267,7 @@ test.describe('tools', () => {
           id: 'csv-to-json',
           enabled: true,
           sort_order: 1,
-          category: 'data-conversion',
+          category: 'developer-tools',
           name: 'CSV to JSON',
           display_name: null,
           maintenance_message: null,
@@ -279,7 +279,7 @@ test.describe('tools', () => {
     });
     await installApi(page, state);
     await page.goto('/admin/#tools');
-    await expect(page.locator('.admin-toolgroup__title')).toHaveText('Data Conversion');
+    await expect(page.locator('.admin-toolgroup__title')).toHaveText('Developer Tools');
   });
 
   test('marks the homepage cutoff with a labeled divider', async ({ page }) => {
