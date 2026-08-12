@@ -83,6 +83,21 @@ def test_category_order_follows_site_config():
     assert order.index("document-tools") < order.index("image-conversion")
 
 
+def test_category_order_fallback_matches_site_config_order(monkeypatch):
+    # CATEGORY_ORDER_FALLBACK is a static duplicate of site-config.yaml's real
+    # order, only read on a config-unreadable day — the two drifted apart
+    # once already (image before document in the fallback, document before
+    # image in the config) without any test catching it. Forces the
+    # config-unreadable path so the fallback's own ordering is checked
+    # directly, not just the config-readable path the test above covers.
+    import seed
+
+    monkeypatch.setattr(seed, "SITE_CONFIG", seed.ROOT / "does-not-exist.yaml")
+    order = seed._load_category_order()
+    assert order == seed.CATEGORY_ORDER_FALLBACK
+    assert order.index("document-tools") < order.index("image-conversion")
+
+
 # ---------------------------------------------------------------------------
 # netutil.get_client_ip — spoof resistance
 # ---------------------------------------------------------------------------

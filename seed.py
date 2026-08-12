@@ -37,9 +37,15 @@ SITE_CONFIG = ROOT / "site-config.yaml"
 
 # Fallback category walk order for the global sort_order (ledger D1 / Phase 1
 # §14.3), used only if site-config.yaml can't be read. Unknown categories last.
+# Matches site-config.yaml's actual order — the two used to disagree (image
+# before document here, document before image there), a stale mismatch from
+# before _load_category_order() started sourcing from the config file; this
+# fallback list only ever surfaces the mismatch on a config-unreadable day, so
+# it went unnoticed. Fixed here (Build Action Plan Phase 0 audit) rather than
+# left for the next person who hits that edge case.
 CATEGORY_ORDER_FALLBACK = [
-    "image-conversion",
     "document-tools",
+    "image-conversion",
     "developer-tools",
     "audio-video",
 ]
