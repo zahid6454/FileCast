@@ -3,7 +3,7 @@ homepage_order: 1
 id: docx-to-pdf
 name: "DOCX to PDF Converter"
 slug: /convert/docx-to-pdf
-category: document-tools
+category: document-conversion
 type: server-side
 input_format: DOCX
 output_format: PDF

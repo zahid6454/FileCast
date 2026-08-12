@@ -2,7 +2,7 @@ enabled: true
 id: pdf-merge
 name: PDF Merge
 slug: /convert/pdf-merge
-category: document-tools
+category: document-conversion
 subcategory: pdf-operations
 type: client-side
 input_format: PDF

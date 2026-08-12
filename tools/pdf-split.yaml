@@ -3,7 +3,7 @@ homepage_order: 3
 id: pdf-split
 name: PDF Split
 slug: /convert/pdf-split
-category: document-tools
+category: document-conversion
 subcategory: pdf-operations
 type: client-side
 input_format: PDF

@@ -2,7 +2,7 @@ enabled: true
 id: xlsx-to-pdf
 name: "XLSX to PDF Converter"
 slug: /convert/xlsx-to-pdf
-category: document-tools
+category: document-conversion
 type: server-side
 input_format: XLSX
 output_format: PDF
