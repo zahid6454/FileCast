@@ -4,7 +4,7 @@ import { createDom, evalScript, flush } from './helpers.js';
 // account.js exports nothing (it is an IIFE, like every other file in static/js),
 // so these drive it the way the browser does — real source, canned network — and
 // assert on what it renders. That still pins the pure logic the reviewer flagged:
-// formatKb's sub-KB branch, maxUpload's modal scan, toolBadgeChildren's
+// formatKb's sub-KB branch, maxUpload's min/max range scan, toolBadgeChildren's
 // same-format fallback, and the pager's page-count arithmetic.
 
 const API = 'https://api.test';
@@ -201,10 +201,19 @@ describe('account.js — conversion badge', () => {
 });
 
 describe('account.js — max upload stat', () => {
-  it('reports the doubled MODAL tool limit, not the maximum', async () => {
-    // 20MB is modal (4 of 5 tools); 50MB is the max. Overstating sends people
-    // to a rejection, so the modal is the safe one to show.
+  it('reports the doubled MIN–MAX range across the catalogue, not one aggregate', async () => {
+    // 20MB (4 tools) and 50MB (1 tool) → doubled range is 40–100 MB. A single
+    // number (modal or max) is always an approximation; the range is the
+    // actual fact, computed live so it can't drift the way a hand-maintained
+    // figure could.
     const doc = await mount(createDom(MOUNT));
+    expect(stat(doc, 'Max upload')).toBe('40 - 100 MB');
+  });
+
+  it('collapses to one value when every tool shares the same limit', async () => {
+    const doc = await mount(createDom(MOUNT), {
+      tools: TOOLS.map((t) => Object.assign({}, t, { max_file_size_bytes: 20 * MB }))
+    });
     expect(stat(doc, 'Max upload')).toBe('40 MB');
   });
 
@@ -223,6 +232,16 @@ describe('account.js — max upload stat', () => {
   it('survives an empty tool catalogue', async () => {
     const doc = await mount(createDom(MOUNT), { tools: [] });
     expect(stat(doc, 'Max upload')).toBe('—');
+  });
+
+  it('links to the full per-tool-type breakdown', async () => {
+    const doc = await mount(createDom(MOUNT));
+    const tiles = [...doc.querySelectorAll('.account-stat')];
+    const tile = tiles.find(
+      (t) => t.querySelector('.account-stat__label')?.textContent === 'Max upload'
+    );
+    expect(tile.tagName).toBe('A');
+    expect(tile.getAttribute('href')).toBe('/terms/#file-size-rate-limits');
   });
 });
 
