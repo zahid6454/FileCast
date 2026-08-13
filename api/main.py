@@ -15,6 +15,7 @@ from data.config import settings
 from data.db import async_engine
 from data.routers import all_routers
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from log import ENVIRONMENT, SERVICE_NAME, get_logger, setup_logging
 from middleware import (
     NoIndexMiddleware,
@@ -120,7 +121,11 @@ app = FastAPI(
 # rate-limited instead of answered. RateLimit stays inner of RequestLogging
 # (unchanged relative order, so /convert behaves as before). NoIndex is added
 # last (outermost) so the header lands on literally every response this app
-# returns, including CORS preflights and 429s.
+# returns, including CORS preflights and 429s. GZip is added first (innermost)
+# so it compresses the actual response body right as it leaves the route,
+# before any other middleware touches it — every JSON response shipped
+# uncompressed until now.
+app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 add_cors(app)

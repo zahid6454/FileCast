@@ -11,7 +11,7 @@ Pinned shapes: ``POST /ratings`` body ``{tool_id, vote}``;
 ``GET /ratings`` (admin) → ``[{tool_id, yes, no}, …]``.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -114,6 +114,7 @@ async def all_ratings(
 @router.get("/{tool_id}")
 async def tool_ratings(
     tool_id: str,
+    response: Response,
     db: AsyncSession = Depends(get_session),
 ):
     rows = (
@@ -127,4 +128,7 @@ async def tool_ratings(
     for vote, n in rows:
         if vote in ("yes", "no"):
             counts[vote] += n
+    # Public, identical for every visitor, fetched per tool page — same
+    # reasoning as /announcements/active.
+    response.headers["Cache-Control"] = "public, max-age=60"
     return {"tool_id": tool_id, "yes": counts["yes"], "no": counts["no"]}
