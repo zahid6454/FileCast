@@ -34,6 +34,7 @@ VERSION = "1.0.0"
 # as up to date. Read once at import: it cannot change while the process lives.
 GIT_SHA = os.getenv("GIT_SHA") or "unknown"
 
+
 # Phase 9 §9.2: backend error tracking. Empty DSN ⇒ never calls sentry_sdk.init()
 # at all, so the SDK stays fully inert (no network calls, no monkeypatching) —
 # same posture as GOOGLE_CLIENT_ID/GITHUB_PAT being optional above. FastAPI's
@@ -48,13 +49,33 @@ GIT_SHA = os.getenv("GIT_SHA") or "unknown"
 # with the default on, that content ships to Sentry verbatim on any conversion
 # failure, straight against log.py's own "never logs file content" privacy
 # guarantee. Still get exception type/message/full stack trace without it.
+#
+# traces_sampler instead of a flat traces_sample_rate: Docker's healthcheck
+# (docker-compose.yml) hits GET /api/v1/health every 15s, which at 100%
+# sampling would flood the project with ~5,760 traces/day for a route with no
+# diagnostic value. Sentry's project-level "filter out health check
+# transactions" inbound filter was relied on to hide this, but it was matching
+# broadly enough to also silently drop real traffic — nothing showed up under
+# Explore > Traces at all until that filter was disabled. Excluding the route
+# here instead keeps the inbound filter off (so real transactions are never at
+# its mercy) while still sparing Sentry the healthcheck noise.
+def traces_sampler(sampling_context: dict) -> float:
+    parent_sampled = sampling_context.get("parent_sampled")
+    if parent_sampled is not None:
+        return float(parent_sampled)
+    name = sampling_context.get("transaction_context", {}).get("name") or ""
+    if name.endswith("/api/v1/health"):
+        return 0.0
+    return settings.sentry_traces_sample_rate
+
+
 if settings.sentry_dsn:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=ENVIRONMENT,
         release=GIT_SHA,
         include_local_variables=False,
-        traces_sample_rate=settings.sentry_traces_sample_rate,
+        traces_sampler=traces_sampler,
     )
 
 
