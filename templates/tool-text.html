@@ -97,10 +97,13 @@
     </a>
   </div>
 
-  {# Text Input #}
+  {# Text Input — input_default lets a no-real-input generator (e.g. UUID
+     Generator's "how many?" count) start pre-filled and ready to run instead
+     of forcing an empty-input error before the visitor has typed anything;
+     every existing tool omits it and starts empty as before. #}
   <div class="text-editor">
     <div class="text-editor__gutter" aria-hidden="true"></div>
-    <textarea class="text-input-area" id="text-input" placeholder="{{ tool.get('input_placeholder', 'Paste your ' + tool.input_format + ' here...') }}"></textarea>
+    <textarea class="text-input-area" id="text-input" placeholder="{{ tool.get('input_placeholder', 'Paste your ' + tool.input_format + ' here...') }}">{{- tool.get('input_default', '') -}}</textarea>
   </div>
   <div class="text-input-meta">
     <span id="char-count">0 chars</span>
@@ -134,6 +137,12 @@
   {# Text Result #}
   <div class="text-result hidden" id="text-result">
     <div class="text-result__title">Conversion Complete</div>
+    {# Image preview — shown instead of/above the raw output textarea when
+       output_is_data_url is set (e.g. Base64 to Image): the output text IS a
+       data: URL, so rendering it as an <img> is far more useful than reading
+       it as text. Hidden by default; every other text-input tool never sets
+       output_is_data_url so this never appears for them. #}
+    <img class="text-image-preview hidden" id="text-image-preview" alt="Converted image preview">
     <div class="text-editor">
       <div class="text-editor__gutter" aria-hidden="true"></div>
       <textarea class="text-output-area" id="text-output" readonly></textarea>
@@ -225,6 +234,7 @@
   "input_format": {{ tool.input_format|tojson }},
   "output_format": {{ tool.output_format|tojson }},
   "output_extension": {{ tool.output_extension|tojson }},
+  "output_is_data_url": {{ tool.get('output_is_data_url', false)|tojson }},
   "max_file_size": {{ tool.max_file_size|tojson }},
   "max_file_size_bytes": {{ tool.max_file_size_bytes|tojson }},
   "category": {{ tool.category|tojson }}{% if tool.js_module is defined and tool.js_module %}{% set tool_js = assets.get('js/' + tool.js_module) %}{% set text_worker_asset = assets.get('js/workers/text-converter-worker.js') %}{% if tool_js and text_worker_asset %},

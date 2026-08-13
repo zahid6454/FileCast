@@ -170,6 +170,16 @@
     refreshLineNumbers(els.outputArea);
     els.textResult.classList.remove('hidden');
 
+    if (els.imagePreview) {
+      if (config.output_is_data_url) {
+        els.imagePreview.src = outputText;
+        els.imagePreview.classList.remove('hidden');
+      } else {
+        els.imagePreview.classList.add('hidden');
+        els.imagePreview.removeAttribute('src');
+      }
+    }
+
     var inputBytes = new Blob([inputText]).size;
     var outputBytes = new Blob([outputText]).size;
     els.resultInfo.textContent =
@@ -211,9 +221,25 @@
     });
   }
 
+  // A data: URL means the "text" output is really binary content encoded as
+  // base64 (e.g. Base64 to Image) — downloading it as text/plain would save
+  // the literal "data:image/png;base64,..." string as a broken image file.
+  // Decode it back to real bytes with the right MIME type instead.
+  function dataUrlToBlob(dataUrl) {
+    var match = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(dataUrl);
+    if (!match || !match[2]) return null;
+    var mime = match[1] || 'application/octet-stream';
+    var binary = atob(match[3]);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
+
   function downloadOutput() {
     if (!window._convertedText) return;
-    var blob = new Blob([window._convertedText], { type: 'text/plain;charset=utf-8' });
+    var blob =
+      (window._convertedText.indexOf('data:') === 0 && dataUrlToBlob(window._convertedText)) ||
+      new Blob([window._convertedText], { type: 'text/plain;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
@@ -234,6 +260,10 @@
   function resetUI() {
     els.inputArea.value = '';
     els.outputArea.value = '';
+    if (els.imagePreview) {
+      els.imagePreview.classList.add('hidden');
+      els.imagePreview.removeAttribute('src');
+    }
     refreshLineNumbers(els.inputArea);
     refreshLineNumbers(els.outputArea);
     window._convertedText = null;
@@ -286,6 +316,7 @@
     els.progressFill = document.getElementById('progress-fill');
     els.textResult = document.getElementById('text-result');
     els.outputArea = document.getElementById('text-output');
+    els.imagePreview = document.getElementById('text-image-preview');
     els.resultInfo = document.getElementById('result-info');
     els.copyBtn = document.getElementById('copy-btn');
     els.downloadBtn = document.getElementById('download-btn');
@@ -294,7 +325,11 @@
     els.formatBtn = document.getElementById('format-btn');
     els.status = document.getElementById('a11y-status');
 
-    els.convertBtn.disabled = true;
+    // Disabled by default, same as every existing tool's empty textarea —
+    // except a tool that pre-fills the textarea via input_default (e.g. UUID
+    // Generator's count field), which should be ready to run immediately
+    // rather than waiting for an edit event that may never come.
+    els.convertBtn.disabled = !els.inputArea.value.trim();
 
     var formattableFormats = ['json', 'xml', 'html'];
     function isFormattable() {

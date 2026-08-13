@@ -717,6 +717,47 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "Other Ways to Diff JSON",
         "You can also diff JSON by formatting both files (e.g. with jq -S . file.json to sort keys) and comparing them with a regular text diff tool like diff or your code editor's built-in file comparison view. FileCast is useful for a quick, one-off comparison without formatting each file yourself first.",
     ),
+    # Build Action Plan PR 2: 9 Conversion-type Developer tools that are still
+    # bespoke enough (bidirectional, generator, or decode-only) that the
+    # {source}/{target} conversion phrasing above doesn't fit any better than
+    # it did for PR 1's Modification tools — each gets its own id-keyed entry
+    # here, the same way.
+    "base64-encode-decode": (
+        "Other Ways to Encode or Decode Base64",
+        "You can also encode or decode Base64 using your command line (base64 and base64 -d on Mac/Linux, or certutil -encode on Windows), or a short script in your language of choice — most have a built-in Base64 library. FileCast is useful for a quick, one-off conversion without opening a terminal.",
+    ),
+    "url-encode-decode": (
+        "Other Ways to URL-Encode or Decode Text",
+        "You can also URL-encode or decode text using your browser's developer console (encodeURIComponent()/decodeURIComponent()), or a short script in your language of choice. FileCast is useful for a quick, one-off conversion without opening dev tools.",
+    ),
+    "base64-to-image": (
+        "Other Ways to Convert Base64 to an Image",
+        "You can also convert Base64 to an image by saving the string to a text file and decoding it with a command-line tool like base64 -d, or by pasting a full data: URL directly into your browser's address bar to view it. FileCast is useful when you also want a live preview and a ready-to-download file in one step.",
+    ),
+    "html-to-text": (
+        "Other Ways to Strip HTML Tags",
+        "You can also strip HTML tags using a command-line tool like Python's html2text library, or by pasting into a plain-text editor that ignores markup on paste. FileCast is useful for a quick, one-off conversion without writing any code.",
+    ),
+    "json-to-typescript": (
+        "Other Ways to Generate TypeScript from JSON",
+        "You can also generate TypeScript types from JSON using a code editor extension, or the quicktype command-line tool. FileCast is useful for a quick, one-off conversion without installing anything.",
+    ),
+    "uuid-generator": (
+        "Other Ways to Generate a UUID",
+        "You can also generate a UUID using your command line (uuidgen on Mac/Linux, or [guid]::NewGuid() in PowerShell), or a one-line snippet in most programming languages' standard library. FileCast is useful when you need several at once without opening a terminal.",
+    ),
+    "number-base-converter": (
+        "Other Ways to Convert Number Bases",
+        "You can also convert between number bases using your calculator app's programmer mode, or a quick command in your language's REPL (Python's bin(), hex(), and oct(), for example). FileCast is useful for a quick, one-off conversion without switching apps.",
+    ),
+    "unix-timestamp-converter": (
+        "Other Ways to Convert a Unix Timestamp",
+        "You can also convert a Unix timestamp using your command line (date -d @<timestamp> on Linux), or a quick snippet in your language of choice. FileCast is useful for a quick, one-off conversion with both directions in one place.",
+    ),
+    "jwt-decoder": (
+        "Other Ways to Decode a JWT",
+        "You can also decode a JWT using jwt.io, or a short script using your language's Base64 library — the header and payload are just Base64url-encoded JSON. FileCast is useful for a quick, one-off decode without pasting a token into a third-party site tied to a specific vendor.",
+    ),
 }
 
 ALTERNATIVES_GROUP_OVERRIDES = {
@@ -739,6 +780,15 @@ ALTERNATIVES_GROUP_OVERRIDES = {
     "yaml-validator": "yaml-validator",
     "css-js-minifier": "css-js-minifier",
     "json-diff": "json-diff",
+    "base64-encode-decode": "base64-encode-decode",
+    "url-encode-decode": "url-encode-decode",
+    "base64-to-image": "base64-to-image",
+    "html-to-text": "html-to-text",
+    "json-to-typescript": "json-to-typescript",
+    "uuid-generator": "uuid-generator",
+    "number-base-converter": "number-base-converter",
+    "unix-timestamp-converter": "unix-timestamp-converter",
+    "jwt-decoder": "jwt-decoder",
 }
 
 

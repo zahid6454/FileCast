@@ -1,0 +1,29 @@
+enabled: true
+id: base64-to-image
+name: Base64 to Image Converter
+slug: /convert/base64-to-image
+category: developer-tools
+type: client-side
+input_format: Base64
+output_format: Image
+accept_extensions: [.txt]
+output_extension: .png
+output_is_data_url: true
+js_module: converters/base64-to-image.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+input_placeholder: "Paste a Base64 image string or data URL here...\n\nExample:\ndata:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+tagline: "Turn a Base64 string back into a downloadable image"
+tagline_long: "Decode a Base64-encoded image back into a real PNG/JPEG/GIF/WebP file instantly in your browser, with a live preview."
+meta:
+  title: "Base64 to Image Converter — Free, No Upload | FileCast"
+  description: "Convert Base64 to an image free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Preview and download the result instantly."
+  keywords: ["base64 to image", "base64 image decoder", "base64 to png", "decode base64 image online", "data url to image"]
+content:
+  what_is: "content/base64-to-image/what-is.md"
+  comparison: "content/base64-to-image/comparison.md"
+  when_to_use: "content/base64-to-image/when-to-use.md"
+  faq: "content/base64-to-image/faq.md"
+related_tools: [base64-encode-decode, image-compress, image-resize]

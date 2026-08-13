@@ -1,0 +1,29 @@
+enabled: true
+id: html-to-text
+name: HTML to Text Converter
+slug: /convert/html-to-text
+category: developer-tools
+type: client-side
+input_format: HTML
+output_format: Text
+accept_extensions: [.html, .htm]
+output_extension: .txt
+js_module: converters/html-to-text.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Strip Tags"
+input_placeholder: "Paste your HTML here...\n\nExample:\n<h1>Hello</h1>\n<p>This is <strong>bold</strong> text.</p>"
+tagline: "Strip HTML tags and get the plain text content"
+tagline_long: "Strip HTML tags instantly in your browser — removes markup, scripts, and styles, decodes entities, and leaves you with clean, readable plain text."
+meta:
+  title: "HTML to Text Converter — Free, No Upload | FileCast"
+  description: "Convert HTML to plain text free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Strips tags, scripts, and styles instantly."
+  keywords: ["html to text", "strip html tags", "remove html tags online", "html tag stripper", "extract text from html"]
+content:
+  what_is: "content/html-to-text/what-is.md"
+  comparison: "content/html-to-text/comparison.md"
+  when_to_use: "content/html-to-text/when-to-use.md"
+  faq: "content/html-to-text/faq.md"
+related_tools: [html-formatter, html-minifier, html-to-markdown]

@@ -1,0 +1,29 @@
+enabled: true
+id: url-encode-decode
+name: URL Encode/Decode
+slug: /convert/url-encode-decode
+category: developer-tools
+type: client-side
+input_format: Text
+output_format: URL-Encoded
+accept_extensions: [.txt]
+output_extension: .txt
+js_module: converters/url-encode-decode.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Encode / Decode"
+input_placeholder: "Paste text to URL-encode, or a URL-encoded string to decode — auto-detected...\n\nExample:\nhttps://example.com/search?q=hello world"
+tagline: "Percent-encode text for a URL, or decode it back"
+tagline_long: "URL-encode or decode instantly in your browser — auto-detects whether you pasted plain text or a percent-encoded string, so there's no mode switch to think about."
+meta:
+  title: "URL Encode/Decode — Free, No Upload | FileCast"
+  description: "URL-encode or decode text free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Auto-detects which direction you need."
+  keywords: ["url encode", "url decode", "percent encoding", "uri encode online", "url encoder decoder"]
+content:
+  what_is: "content/url-encode-decode/what-is.md"
+  comparison: "content/url-encode-decode/comparison.md"
+  when_to_use: "content/url-encode-decode/when-to-use.md"
+  faq: "content/url-encode-decode/faq.md"
+related_tools: [base64-encode-decode, jwt-decoder, html-to-text]

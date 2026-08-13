@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TextDecoder as NodeTextDecoder, TextEncoder as NodeTextEncoder } from 'node:util';
 import { JSDOM } from 'jsdom';
 import { vi } from 'vitest';
 
@@ -17,7 +18,21 @@ export function createDom(bodyHtml = '', { url = 'http://localhost/' } = {}) {
   });
   polyfillArrayBuffer(dom.window);
   polyfillObjectURL(dom.window);
+  polyfillTextCodec(dom.window);
   return dom;
+}
+
+// This jsdom version doesn't expose TextEncoder/TextDecoder on the window at
+// all (they exist as real Node globals, just never attached to the jsdom
+// global object) — converters that encode/decode UTF-8 by hand (Base64,
+// JWT) call `new TextEncoder()`/`new TextDecoder()` as bare globals, which
+// resolve against `dom.window` when eval'd via evalScript(), not Node's own
+// global scope. Node's own implementation is spec-compliant (including the
+// `fatal` decode option), so it's reused as-is rather than reimplemented.
+function polyfillTextCodec(win) {
+  if (typeof win.TextEncoder === 'function') return;
+  win.TextEncoder = NodeTextEncoder;
+  win.TextDecoder = NodeTextDecoder;
 }
 
 // This jsdom version doesn't implement URL.createObjectURL/revokeObjectURL at

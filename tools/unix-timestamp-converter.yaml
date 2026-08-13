@@ -1,0 +1,29 @@
+enabled: true
+id: unix-timestamp-converter
+name: Unix Timestamp Converter
+slug: /convert/unix-timestamp-converter
+category: developer-tools
+type: client-side
+input_format: Timestamp
+output_format: Date
+accept_extensions: [.txt]
+output_extension: .txt
+js_module: converters/unix-timestamp-converter.js
+js_libs: []
+max_file_size: 1MB
+bulk_support: false
+ui_type: text-input
+action_label: "Convert Timestamp"
+input_placeholder: "One Unix timestamp or date per line...\n\nExample:\n1700000000\n1700000000000\n2024-01-15T12:00:00Z"
+tagline: "Convert Unix timestamps to readable dates, and back"
+tagline_long: "Convert Unix timestamps to human-readable dates, or dates back to timestamps, instantly in your browser — auto-detects seconds vs. milliseconds and which direction you need."
+meta:
+  title: "Unix Timestamp Converter — Free, No Upload | FileCast"
+  description: "Convert Unix timestamps to dates, or dates to timestamps, free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits. Handles seconds and milliseconds."
+  keywords: ["unix timestamp converter", "epoch converter", "timestamp to date", "date to unix timestamp", "unix time online"]
+content:
+  what_is: "content/unix-timestamp-converter/what-is.md"
+  comparison: "content/unix-timestamp-converter/comparison.md"
+  when_to_use: "content/unix-timestamp-converter/when-to-use.md"
+  faq: "content/unix-timestamp-converter/faq.md"
+related_tools: [jwt-decoder, number-base-converter, uuid-generator]
