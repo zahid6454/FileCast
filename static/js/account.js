@@ -73,8 +73,10 @@
   // the reader has already seen seconds earlier reads as obviously "empty
   // favorites" / "empty history" — a new compound illustration doesn't.
   function emptyStateIcon(kind) {
-    var iconId = kind === 'favorites' ? 'icon-heart' : 'icon-arrow-convert';
-    var variant = kind === 'favorites' ? 'fav' : 'conv';
+    var iconId =
+      kind === 'favorites' ? 'icon-heart' : kind === 'conversion' ? 'icon-arrow-convert' : null;
+    var variant = kind === 'favorites' ? 'fav' : kind === 'conversion' ? 'conv' : null;
+    if (!iconId) return el('div', { class: 'account-empty-icon' });
     return el('div', { class: 'account-empty-icon account-empty-icon--' + variant }, [
       icon(iconId, 'account-empty-icon__svg')
     ]);
