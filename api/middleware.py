@@ -7,6 +7,7 @@ from data.config import settings
 from data.netutil import get_client_ip
 from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from log import get_logger, new_request_id, request_id_var
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -90,6 +91,29 @@ class NoIndexMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
         return response
+
+
+class SelectiveGZipMiddleware:
+    """``GZipMiddleware``, skipped for the given path prefixes.
+
+    File-conversion output (PDF/DOCX/XLSX/PPTX) is already an internally
+    compressed binary format — gzipping it again buys ~0% size reduction while
+    paying real CPU (compresslevel 9) and a second full in-memory buffer, on
+    the request the user is synchronously waiting on. Raw ASGI (not
+    ``BaseHTTPMiddleware``) to wrap ``GZipMiddleware`` directly rather than
+    re-buffering the response ourselves just to decide whether to skip it.
+    """
+
+    def __init__(self, app, exclude_prefixes=(), **gzip_kwargs):
+        self._plain_app = app
+        self._gzip_app = GZipMiddleware(app, **gzip_kwargs)
+        self._exclude_prefixes = tuple(exclude_prefixes)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith(self._exclude_prefixes):
+            await self._plain_app(scope, receive, send)
+        else:
+            await self._gzip_app(scope, receive, send)
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):

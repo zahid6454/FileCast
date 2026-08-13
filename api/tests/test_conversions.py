@@ -42,8 +42,28 @@ async def test_history_pagination_has_more(admin_client, db):
         await admin_client.post("/api/v1/conversions", json=_payload())
     p1 = (await admin_client.get("/api/v1/user/history?limit=2&offset=0")).json()
     assert len(p1["history"]) == 2 and p1["has_more"] is True
+    assert p1["total"] == 3
     p2 = (await admin_client.get("/api/v1/user/history?limit=2&offset=2")).json()
     assert len(p2["history"]) == 1 and p2["has_more"] is False
+    assert p2["total"] == 3
+
+
+async def test_history_total_correct_when_offset_past_the_end(admin_client, db):
+    # The row-select + total ride along in one windowed query; OFFSET past the
+    # last row leaves zero rows to carry that window value, so `total` must
+    # fall back to a direct count rather than silently reporting 0.
+    for _ in range(3):
+        await admin_client.post("/api/v1/conversions", json=_payload())
+    r = (await admin_client.get("/api/v1/user/history?limit=10&offset=10")).json()
+    assert r["history"] == []
+    assert r["has_more"] is False
+    assert r["total"] == 3
+
+
+async def test_history_total_zero_when_user_has_no_conversions(admin_client, db):
+    r = (await admin_client.get("/api/v1/user/history")).json()
+    assert r["history"] == []
+    assert r["total"] == 0
 
 
 async def test_aggregate_increments_on_conflict(client, db):

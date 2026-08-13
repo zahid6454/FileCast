@@ -42,6 +42,7 @@ services:
       - GITHUB_OWNER=${GITHUB_OWNER:-zahid6454}
       - GITHUB_REPO=${GITHUB_REPO:-FileCast}
       - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-1.0}
 
   purge:
     environment:

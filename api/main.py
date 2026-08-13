@@ -15,12 +15,12 @@ from data.config import settings
 from data.db import async_engine
 from data.routers import all_routers
 from fastapi import FastAPI
-from fastapi.middleware.gzip import GZipMiddleware
 from log import ENVIRONMENT, SERVICE_NAME, get_logger, setup_logging
 from middleware import (
     NoIndexMiddleware,
     RateLimitMiddleware,
     RequestLoggingMiddleware,
+    SelectiveGZipMiddleware,
     add_cors,
 )
 from sqlalchemy import text
@@ -54,6 +54,7 @@ if settings.sentry_dsn:
         environment=ENVIRONMENT,
         release=GIT_SHA,
         include_local_variables=False,
+        traces_sample_rate=settings.sentry_traces_sample_rate,
     )
 
 
@@ -124,8 +125,13 @@ app = FastAPI(
 # returns, including CORS preflights and 429s. GZip is added first (innermost)
 # so it compresses the actual response body right as it leaves the route,
 # before any other middleware touches it — every JSON response shipped
-# uncompressed until now.
-app.add_middleware(GZipMiddleware, minimum_size=500)
+# uncompressed until now. /convert output is already a compressed binary
+# format (PDF/DOCX/XLSX/PPTX) — excluded so it isn't gzipped a second time for
+# no size benefit at real CPU cost on the app's largest, most latency-sensitive
+# responses.
+app.add_middleware(
+    SelectiveGZipMiddleware, exclude_prefixes=("/api/v1/convert",), minimum_size=500
+)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 add_cors(app)

@@ -9,6 +9,8 @@ import asyncio
 import main
 import middleware
 from data.config import settings
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 
 async def test_cors_credentials_on_normal_request(client):
@@ -187,3 +189,46 @@ async def test_noindex_header_on_429(client):
     last = codes_and_headers[-1]
     assert last.status_code == 429
     assert last.headers["x-robots-tag"] == "noindex, nofollow"
+
+
+# --------------------------------------------------------------------------- #
+# SelectiveGZipMiddleware — /convert output shouldn't be gzipped twice
+# --------------------------------------------------------------------------- #
+
+
+def _gzip_test_app() -> FastAPI:
+    app = FastAPI()
+    big = "x" * 2000  # well over the 500-byte minimum_size
+
+    @app.get("/plain/big")
+    def plain_big():
+        return {"data": big}
+
+    @app.get("/api/v1/convert/big")
+    def convert_big():
+        return {"data": big}
+
+    app.add_middleware(
+        middleware.SelectiveGZipMiddleware,
+        exclude_prefixes=("/api/v1/convert",),
+        minimum_size=500,
+    )
+    return app
+
+
+async def test_gzip_applies_to_ordinary_large_responses():
+    async with AsyncClient(
+        transport=ASGITransport(app=_gzip_test_app()), base_url="http://test"
+    ) as c:
+        r = await c.get("/plain/big", headers={"Accept-Encoding": "gzip"})
+    assert r.headers.get("content-encoding") == "gzip"
+    assert r.json() == {"data": "x" * 2000}
+
+
+async def test_gzip_skips_excluded_convert_prefix():
+    async with AsyncClient(
+        transport=ASGITransport(app=_gzip_test_app()), base_url="http://test"
+    ) as c:
+        r = await c.get("/api/v1/convert/big", headers={"Accept-Encoding": "gzip"})
+    assert "content-encoding" not in r.headers
+    assert r.json() == {"data": "x" * 2000}
