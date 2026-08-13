@@ -7,7 +7,7 @@ the path param shadows it and ``active`` is parsed as an id (admin-panel C3).
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -124,7 +124,9 @@ async def _deactivate_others(db: AsyncSession, keep_id: int | None) -> None:
 
 
 @router.get("/active")
-async def active_announcement(db: AsyncSession = Depends(get_session)):
+async def active_announcement(
+    response: Response, db: AsyncSession = Depends(get_session)
+):
     now = datetime.now(UTC)
     rows = (
         (
@@ -137,6 +139,10 @@ async def active_announcement(db: AsyncSession = Depends(get_session)):
         .scalars()
         .all()
     )
+    # Public, identical for every visitor, and hit on every single page load
+    # (nav.js) — only changes when an admin edits it, so a short public cache
+    # eliminates a DB round trip on nearly every page view.
+    response.headers["Cache-Control"] = "public, max-age=60"
     for a in rows:
         if a.starts_at and a.starts_at > now:
             continue

@@ -42,6 +42,15 @@
   <meta name="theme-color" content="#2563EB">
   <link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
 
+  {# Every page calls the API (nav's announcements fetch, and /me for signed-in
+     users — auth.js's initUserMenu()), so warm the connection before those
+     scripts even run rather than paying DNS+TLS+TCP on the first request. #}
+  <link rel="preconnect" href="{{ api.base_url }}">
+  <link rel="dns-prefetch" href="{{ api.base_url }}">
+  {% if sentry.enabled and sentry.dsn %}
+  <link rel="dns-prefetch" href="https://browser.sentry-cdn.com">
+  {% endif %}
+
   {# Anti-FOUC theme init (P20). Render-blocking (NOT deferred) and placed BEFORE
      the stylesheet so `data-theme` is set on <html> before styles first apply —
      no flash of the wrong theme. External same-origin file → passes a strict

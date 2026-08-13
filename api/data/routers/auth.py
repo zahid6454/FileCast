@@ -12,7 +12,7 @@ from authlib.integrations.httpx_client import AsyncOAuth2Client
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.config import settings
@@ -101,13 +101,27 @@ async def _favorites_for(db: AsyncSession, user_id: str) -> list[str]:
     return list(rows)
 
 
-async def _preferences_for(db: AsyncSession, user_id: str) -> dict:
-    prefs = (
-        await db.execute(
-            select(UserPreference.preferences).where(UserPreference.user_id == user_id)
-        )
-    ).scalar_one_or_none()
-    return prefs or {}
+async def _favorites_and_preferences_for(
+    db: AsyncSession, user_id: str
+) -> tuple[list[str], dict]:
+    """Favorites + preferences in one round trip via two independent scalar
+    subqueries — an ``AsyncSession`` can't run two ``execute()`` calls
+    concurrently, so this is the safe way to avoid paying two sequential queries
+    on every ``/me`` call."""
+    favorites_subq = (
+        select(func.array_agg(UserFavorite.tool_id))
+        .where(UserFavorite.user_id == user_id)
+        .scalar_subquery()
+    )
+    preferences_subq = (
+        select(UserPreference.preferences)
+        .where(UserPreference.user_id == user_id)
+        .scalar_subquery()
+    )
+    favorites, preferences = (
+        await db.execute(select(favorites_subq, preferences_subq))
+    ).one()
+    return (favorites or []), (preferences or {})
 
 
 @router.post("/dev-login")
@@ -132,11 +146,19 @@ async def dev_login(
 
 @router.get("/me")
 async def me(
+    response: Response,
     user=Depends(require_user),
     db: AsyncSession = Depends(get_session),
 ):
-    favorites = await _favorites_for(db, user.id)
-    preferences = await _preferences_for(db, user.id)
+    favorites, preferences = await _favorites_and_preferences_for(db, user.id)
+    # Fetched on every page (nav's account menu) plus every /account/ load, with
+    # nothing else to invalidate it on — a short private cache absorbs repeat
+    # navigations within a few seconds without meaningfully hiding a fresh write.
+    # `Vary: Cookie` is required alongside `private`: browser HTTP caches key on
+    # URL, not on the Cookie header, so without it a cached response could be
+    # replayed to a different session hitting this same URL.
+    response.headers["Cache-Control"] = "private, max-age=5"
+    response.headers["Vary"] = "Cookie"
     return {"user": user_dict(user, favorites, preferences)}
 
 

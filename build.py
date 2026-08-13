@@ -1890,6 +1890,13 @@ def generate_headers(site_config: dict):
         "/images/*",
         "  Cache-Control: public, max-age=86400",
         "",
+        # write_tool_data() emits this straight to dist/ unhashed (never through
+        # process_assets(), so it can't go `immutable` like css/js/fonts do), but
+        # it only changes on deploy — bound staleness to 5 minutes instead of
+        # falling through to no explicit Cache-Control at all.
+        "/tool-data.json",
+        "  Cache-Control: public, max-age=300",
+        "",
     ]
     (DIST / "_headers").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("  [ok] _headers")

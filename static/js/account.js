@@ -554,7 +554,11 @@
     ]);
   }
 
-  function historySection(toolsById, onTotal) {
+  // `prefetch`, when given, is the in-flight fetch() promise for page 0 that
+  // boot() already kicked off in parallel with /me and /tool-data.json —
+  // reused here instead of firing a second identical request. Only page 0
+  // benefits; pager clicks always hit the network fresh.
+  function historySection(toolsById, onTotal, prefetch) {
     var card = section('Conversion history', null);
     card.appendChild(
       el('p', { class: 'account-card__sub', text: 'Kept for 30 days, then deleted automatically.' })
@@ -568,7 +572,11 @@
     var reportedTotal = false;
 
     function load() {
-      api('/api/v1/user/history?limit=' + HISTORY_PAGE + '&offset=' + page * HISTORY_PAGE)
+      var req =
+        page === 0 && prefetch
+          ? prefetch
+          : api('/api/v1/user/history?limit=' + HISTORY_PAGE + '&offset=' + page * HISTORY_PAGE);
+      req
         .then(function (r) {
           return r.ok ? r.json() : { history: [], has_more: false };
         })
@@ -840,32 +848,27 @@
 
   // --- boot ---------------------------------------------------------------
 
-  function render(user) {
+  // `toolsPromise`/`historyPromise` are kicked off in boot() at the same time
+  // as /me, so all three network requests race in parallel instead of /me →
+  // /tool-data.json → /history running one after another.
+  function render(user, toolsPromise, historyPromise) {
     var prefs = user.preferences || {};
     clear(app);
-    // Resolve tool metadata once for both favorites and history links.
-    fetch('/tool-data.json')
-      .then(function (r) {
-        return r.ok ? r.json() : [];
-      })
-      .catch(function () {
-        return [];
-      })
-      .then(function (tools) {
-        var byId = {};
-        (tools || []).forEach(function (t) {
-          byId[t.id] = t;
-        });
-        clear(app);
-        var profile = profileSection(user, tools);
-        app.appendChild(profile.card);
-        app.appendChild(favoritesSectionResolved(user, byId));
-        // The history fetch is the only source of the 30-day count, so it feeds
-        // the Profile stat tile rather than us issuing a second request.
-        app.appendChild(historySection(byId, profile.setConversions));
-        app.appendChild(preferencesSection(prefs));
-        app.appendChild(dataSection());
+    toolsPromise.then(function (tools) {
+      var byId = {};
+      (tools || []).forEach(function (t) {
+        byId[t.id] = t;
       });
+      clear(app);
+      var profile = profileSection(user, tools);
+      app.appendChild(profile.card);
+      app.appendChild(favoritesSectionResolved(user, byId));
+      // The history fetch is the only source of the 30-day count, so it feeds
+      // the Profile stat tile rather than us issuing a second request.
+      app.appendChild(historySection(byId, profile.setConversions, historyPromise));
+      app.appendChild(preferencesSection(prefs));
+      app.appendChild(dataSection());
+    });
   }
 
   // Favorites with tool map already resolved (avoids a second fetch).
@@ -992,8 +995,29 @@
     // the signed-out prompt — no flash. Show a placeholder until /me resolves.
     var loading = el('p', { class: 'account-empty', text: 'Loading your account…' });
     app.appendChild(loading);
+
+    // Fire all three independent of one another: none of /tool-data.json or
+    // /history needs /me's payload, only the auth cookie already on every
+    // request, so there is no reason to chain them and pay three round trips
+    // back-to-back instead of the slowest of the three.
+    var toolsPromise = fetch('/tool-data.json')
+      .then(function (r) {
+        return r.ok ? r.json() : [];
+      })
+      .catch(function () {
+        return [];
+      });
+    var historyPromise = api('/api/v1/user/history?limit=' + HISTORY_PAGE + '&offset=0');
+    // historySection() (via load()) is the real consumer, but it only gets
+    // wired up once getMe() resolves — if /me fails first, nothing else would
+    // ever attach a rejection handler here, so guard separately against an
+    // "unhandled promise rejection" console warning on a plain network hiccup.
+    historyPromise.catch(function () {});
+
     getMe()
-      .then(render) // clears app (prompt + placeholder) and builds the sections
+      .then(function (user) {
+        render(user, toolsPromise, historyPromise); // clears app, builds the sections
+      })
       .catch(function () {
         // Stale cookie: reveal the untouched server prompt, drop the marker.
         clearLoggedIn();
