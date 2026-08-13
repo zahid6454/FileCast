@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     # never called at all (main.py checks before calling it) — same
     # guarded-if-configured shape as the Google OAuth / GitHub PAT settings above.
     sentry_dsn: str = ""
+    # Performance tracing (distributed traces, not just error capture). 1.0 =
+    # every request traced — current traffic is low enough (the busiest rate
+    # limit is 120/hr) that full sampling costs nothing meaningful; dial this
+    # down via env once volume makes that worth doing.
+    sentry_traces_sample_rate: float = 1.0
 
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 

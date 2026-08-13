@@ -27,7 +27,11 @@ async def my_history(
     offset = max(0, offset)
     # Fetch one extra row to know whether a next page exists, without a separate
     # COUNT(*) round trip — `total` (for "Page 2 of 5" + the account-page stat
-    # tile) rides along on every row via a window function instead.
+    # tile) rides along on every row via a window function instead. The window
+    # is evaluated over every WHERE-matched row before OFFSET/LIMIT slice it, so
+    # any surviving row carries the true total — but if `offset` lands at or
+    # past the end, OFFSET discards every row (windowed total included), and
+    # there's nothing left to read it off of.
     result = list(
         await db.execute(
             select(UserConversion, func.count().over().label("total"))
@@ -37,7 +41,18 @@ async def my_history(
             .limit(limit + 1)
         )
     )
-    total = result[0].total if result else 0
+    if result:
+        total = result[0].total
+    else:
+        # offset >= total (or the user has zero rows) — ask directly instead of
+        # reporting a bogus 0 for a page that's simply past the end.
+        total = (
+            await db.execute(
+                select(func.count())
+                .select_from(UserConversion)
+                .where(UserConversion.user_id == user.id)
+            )
+        ).scalar_one()
     rows = [r[0] for r in result]
     has_more = len(rows) > limit
     rows = rows[:limit]

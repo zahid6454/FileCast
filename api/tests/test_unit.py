@@ -366,3 +366,13 @@ def test_sentry_dsn_defaults_empty_and_reads_from_env(monkeypatch):
         Settings(_env_file=None).sentry_dsn
         == "https://abc@o123.ingest.us.sentry.io/456"
     )
+
+
+def test_sentry_traces_sample_rate_defaults_full_and_reads_from_env(monkeypatch):
+    from data.config import Settings
+
+    monkeypatch.delenv("SENTRY_TRACES_SAMPLE_RATE", raising=False)
+    assert Settings(_env_file=None).sentry_traces_sample_rate == 1.0
+
+    monkeypatch.setenv("SENTRY_TRACES_SAMPLE_RATE", "0.2")
+    assert Settings(_env_file=None).sentry_traces_sample_rate == 0.2
