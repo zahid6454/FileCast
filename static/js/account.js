@@ -67,6 +67,96 @@
     return svg;
   }
 
+  // Empty-state icon: the exact same sprite glyph already shown in that
+  // section's own stat tile (icon-heart for Favorites, icon-arrow-convert for
+  // Conversions), just larger, in a matching tinted circle. Reusing an icon
+  // the reader has already seen seconds earlier reads as obviously "empty
+  // favorites" / "empty history" — a new compound illustration doesn't.
+  function emptyStateIcon(kind) {
+    var iconId = kind === 'favorites' ? 'icon-heart' : 'icon-arrow-convert';
+    var variant = kind === 'favorites' ? 'fav' : 'conv';
+    return el('div', { class: 'account-empty-icon account-empty-icon--' + variant }, [
+      icon(iconId, 'account-empty-icon__svg')
+    ]);
+  }
+
+  // Wave background behind the profile card: four bands share one blue→teal
+  // gradient, plus three white contour lines tracing some of the crests.
+  // Gradient stops are set via .style, not the stop-color attribute, so they
+  // can hold var(...) tokens and repaint correctly in dark mode.
+  function profileWave() {
+    var ns = 'http://www.w3.org/2000/svg';
+    function shape(tag, attrs) {
+      var node = document.createElementNS(ns, tag);
+      Object.keys(attrs).forEach(function (k) {
+        node.setAttribute(k, attrs[k]);
+      });
+      return node;
+    }
+    function stop(offset, colorVar) {
+      var node = shape('stop', { offset: offset });
+      node.style.setProperty('stop-color', colorVar);
+      return node;
+    }
+    // A wave band: a crest curve closed down to the bottom edge, filled with
+    // the shared spectrum gradient at its own opacity.
+    function band(d, opacity) {
+      return shape('path', {
+        d: d + ' L400,150 L0,150 Z',
+        fill: 'url(#account-wave-spectrum)',
+        opacity: opacity
+      });
+    }
+    // The same crest curve traced again as a bare stroke — the contour line.
+    function crest(d, opacity) {
+      return shape('path', {
+        class: 'account-wave__line',
+        fill: 'none',
+        d: d,
+        opacity: opacity
+      });
+    }
+
+    var svg = shape('svg', {
+      viewBox: '0 0 400 150',
+      preserveAspectRatio: 'none',
+      class: 'account-wave',
+      'aria-hidden': 'true',
+      focusable: 'false'
+    });
+
+    var defs = shape('defs', {});
+    var spectrum = shape('linearGradient', {
+      id: 'account-wave-spectrum',
+      x1: '0%',
+      y1: '0%',
+      x2: '100%',
+      y2: '0%'
+    });
+    spectrum.appendChild(stop('0%', 'var(--wave-tint-blue)'));
+    spectrum.appendChild(stop('100%', 'var(--wave-tint-green)'));
+    defs.appendChild(spectrum);
+    svg.appendChild(defs);
+
+    var crestA = 'M0,68 C60,32 110,86 170,55 C230,24 270,80 330,48 C360,30 385,50 400,36';
+    var crestB = 'M0,48 C70,92 130,38 190,76 C250,108 300,54 350,82 C375,94 390,74 400,64';
+    var crestC = 'M0,100 C80,68 140,118 210,88 C280,62 330,108 400,80';
+
+    svg.appendChild(band(crestA, '0.025'));
+    svg.appendChild(band(crestB, '0.025'));
+    svg.appendChild(band(crestC, '0.025'));
+    svg.appendChild(band('M0,122 C90,100 160,132 230,110 C300,88 350,120 400,104', '0.025'));
+
+    // The white contour lines were the loudest thing here even at a low fill
+    // opacity — a bright stroke against a barely-there fill reads as popping
+    // regardless of how faint the fill is. Turned down to match.
+    svg.appendChild(crest(crestA, '0.2'));
+    svg.appendChild(crest(crestB, '0.14'));
+    svg.appendChild(crest(crestC, '0.12'));
+
+    return svg;
+  }
+
   function resolvedTheme() {
     var t = document.documentElement.dataset.theme;
     if (t === 'light' || t === 'dark') return t;
@@ -175,39 +265,62 @@
 
   // A single stat tile. Returns the node with a `.set()` so async numbers (the
   // 30-day conversion count, which only the history fetch knows) can land later
-  // without the tile having to be rebuilt.
-  function statTile(value, label, hint) {
+  // without the tile having to be rebuilt. `iconId`/`variant` are optional.
+  // `href`, when given, renders a real `<a>` (keyboard-focusable, announced as
+  // a link) instead of a `<div>` — used by Max upload to link out to the full
+  // per-category breakdown rather than trying to be self-explanatory alone.
+  function statTile(value, label, hint, iconId, variant, href) {
     var val = el('div', { class: 'account-stat__value', text: value });
-    var tile = el('div', { class: 'account-stat', title: hint }, [
+    var body = el('div', { class: 'account-stat__body' }, [
       val,
       el('div', { class: 'account-stat__label', text: label })
     ]);
+    var kids = [];
+    if (iconId) {
+      kids.push(
+        el('div', { class: 'account-stat__icon account-stat__icon--' + variant }, [
+          icon(iconId, null)
+        ])
+      );
+    }
+    kids.push(body);
+    var cls = 'account-stat' + (href ? ' account-stat--link' : '');
+    var attrs = { class: cls, title: hint };
+    if (href) attrs.href = href;
+    var tile = el(href ? 'a' : 'div', attrs, kids);
     tile.set = function (v) {
       val.textContent = v;
     };
     return tile;
   }
 
-  // The largest file this account can upload, as a real number.
+  // What this account can upload, as a real range.
   //
   // Limits are PER TOOL (tools/*.yaml, 5MB–50MB) and auth.js doubles the baked
-  // limit for a signed-in user, so there is no single site-wide figure. We show
-  // the doubled MODAL limit — the value most tools use — because understating is
-  // the safe direction to be wrong in: a tool that allows more still accepts the
-  // file, whereas an overstated cap sends people to a rejection. An admin-set
-  // absolute override on the user wins outright, matching auth.js's precedence.
+  // limit for a signed-in user, so there is no single site-wide figure — a
+  // single number (whichever aggregate you pick — modal, max) is always an
+  // approximation standing in for a fact that doesn't reduce to one number.
+  // A range is the actual fact: min and max are computed live from the same
+  // `tools` catalog every other stat on this card reads, so it can never
+  // drift the way a hand-maintained figure could. The tile links out to
+  // /terms/#file-size-rate-limits, which has the full per-category table —
+  // the range is the honest headline, the table is the detail. An admin-set
+  // absolute override on the user wins outright, matching auth.js's
+  // precedence, and isn't a range since it's one real number for that account.
   function maxUpload(user, tools) {
     if (user.max_file_size) return String(user.max_file_size).replace(/(\d)([A-Za-z])/, '$1 $2');
-    var counts = {};
-    var best = null;
+    var min = null;
+    var max = null;
     (tools || []).forEach(function (t) {
       var b = t.max_file_size_bytes;
       if (!b) return;
-      counts[b] = (counts[b] || 0) + 1;
-      if (best == null || counts[b] > counts[best]) best = b;
+      if (min == null || b < min) min = b;
+      if (max == null || b > max) max = b;
     });
-    if (best == null) return '—';
-    return Math.round((best * 2) / (1024 * 1024)) + ' MB';
+    if (max == null) return '—';
+    var minMb = Math.round((min * 2) / (1024 * 1024));
+    var maxMb = Math.round((max * 2) / (1024 * 1024));
+    return minMb === maxMb ? maxMb + ' MB' : minMb + ' - ' + maxMb + ' MB';
   }
 
   // Returns { card, setConversions } — the profile card plus a hook the history
@@ -217,6 +330,7 @@
     // "Profile" label above them is pure repetition. The cards below it still
     // carry headings because their contents don't announce themselves.
     var card = el('section', { class: 'account-card account-card--profile' });
+    card.appendChild(profileWave());
 
     // Identity row: avatar left (it anchors the card), name/email beside it.
     // Both are Google-sourced and read-only — we never store an editable profile.
@@ -243,8 +357,14 @@
 
     // Stat strip — the card was mostly empty air with only name/email/join date
     // in it. Everything here is already on /me except the conversion count.
-    var conversions = statTile('—', 'Conversions (30d)');
-    var favTile = statTile(String((user.favorites || []).length), 'Favorites');
+    var conversions = statTile('—', 'Conversions (30d)', null, 'icon-arrow-convert', 'conv');
+    var favTile = statTile(
+      String((user.favorites || []).length),
+      'Favorites',
+      null,
+      'icon-heart',
+      'fav'
+    );
     favTile.classList.add('account-stat--fav'); // removals below update it in place
     card.appendChild(
       el('div', { class: 'account-stats' }, [
@@ -253,9 +373,12 @@
         statTile(
           maxUpload(user, tools),
           'Max upload',
-          'Your signed-in limit on most tools (2× the anonymous limit). A few tools allow more.'
+          'Signed-in limits by tool type — see the full breakdown.',
+          'icon-upload-cloud',
+          'upload',
+          '/terms/#file-size-rate-limits'
         ),
-        statTile(formatMonthYear(user.created_at), 'Member since')
+        statTile(formatMonthYear(user.created_at), 'Member since', null, 'icon-calendar', 'member')
       ])
     );
 
@@ -463,10 +586,13 @@
       clear(body);
       if (rows.length === 0 && page === 0) {
         body.appendChild(
-          el('p', {
-            class: 'account-empty',
-            text: 'No conversions yet. Your history will appear here after you convert a file.'
-          })
+          el('div', { class: 'account-empty--art' }, [
+            emptyStateIcon('conversion'),
+            el('p', {
+              class: 'account-empty',
+              text: 'No conversions yet. Your history will appear here after you convert a file.'
+            })
+          ])
         );
         return;
       }
@@ -753,10 +879,13 @@
     var page = 0;
 
     function emptyState() {
-      return el('p', {
-        class: 'account-empty',
-        text: 'No favorites yet. Click the heart on any tool page to bookmark it.'
-      });
+      return el('div', { class: 'account-empty--art' }, [
+        emptyStateIcon('favorites'),
+        el('p', {
+          class: 'account-empty',
+          text: 'No favorites yet. Click the heart on any tool page to bookmark it.'
+        })
+      ]);
     }
 
     // Keep the heading chip and the Profile stat tile honest after a removal.
