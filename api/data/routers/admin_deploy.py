@@ -160,15 +160,22 @@ def _runs_from(resp) -> list[dict]:
 
 
 async def _resolve_run_id(
-    client: httpx.AsyncClient, deploy_id: str, dispatched_at: datetime
+    client: httpx.AsyncClient,
+    deploy_id: str,
+    dispatched_at: datetime,
+    workflow: str | None = None,
 ):
-    """Poll the workflow's ``workflow_dispatch`` runs for the one whose run-name
-    carries ``deploy_id``; fall back to the newest run *started by this dispatch*.
-    Returns the id or ``None`` (the dispatch already succeeded — a ``None`` just
-    means the panel can't poll, never that nothing deployed). Bounded attempts ⇒
-    never hangs (R2)."""
+    """Poll ``workflow``'s (default: the deploy workflow) ``workflow_dispatch``
+    runs for the one whose run-name carries ``deploy_id``; fall back to the
+    newest run *started by this dispatch*. Returns the id or ``None`` (the
+    dispatch already succeeded — a ``None`` just means the panel can't poll,
+    never that nothing deployed/seeded). Bounded attempts ⇒ never hangs (R2).
+
+    Shared by both the deploy and seed-tools flows (Admin-Tool-Sync-Plan.md
+    D6) — only the workflow file differs, so it's a parameter rather than a
+    second ~50-line copy of this function."""
     runs_url = (
-        f"{_repo_base()}/actions/workflows/{settings.github_workflow}/runs"
+        f"{_repo_base()}/actions/workflows/{workflow or settings.github_workflow}/runs"
         "?event=workflow_dispatch&per_page=30"
     )
     # Best-effort: this runs AFTER a successful 204 dispatch, so a transient error
@@ -287,6 +294,88 @@ async def deploy_status(run_id: str, _admin=Depends(require_admin)):
             status_code=502, detail="GitHub returned an unexpected status body."
         )
     # Return GitHub's RAW status — app.js matches 'completed'/'success' (§5.3a).
+    return {
+        "status": data.get("status"),
+        "conclusion": data.get("conclusion"),
+        "html_url": data.get("html_url"),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Sync Tools (Admin-Tool-Sync-Plan.md) — a close sibling of the deploy flow
+# above (D6): dispatch seed-tools.yml, resolve its run id, poll to a terminal
+# state. seed.py runs unmodified in that workflow, writing straight to
+# Postgres — this API is never in that write path.
+# --------------------------------------------------------------------------- #
+
+
+@router.post("/seed-tools")
+async def trigger_seed(_admin=Depends(require_admin)):
+    _require_configured()
+    seed_id = secrets.token_hex(8)
+    dispatch_url = (
+        f"{_repo_base()}/actions/workflows/{settings.github_seed_workflow}/dispatches"
+    )
+    payload = {"ref": DISPATCH_REF, "inputs": {"seed_id": seed_id}}
+    # Stamped BEFORE the POST, same reasoning as trigger_deploy: any run
+    # created after this instant may be ours, anything older certainly is not.
+    dispatched_at = datetime.now(UTC)
+    try:
+        async with _make_client() as client:
+            resp = await client.post(dispatch_url, headers=_gh_headers(), json=payload)
+            # workflow_dispatch → 204 No Content on success.
+            if resp.status_code != 204:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"GitHub dispatch failed ({resp.status_code}).",
+                )
+            run_id = await _resolve_run_id(
+                client, seed_id, dispatched_at, workflow=settings.github_seed_workflow
+            )
+    except httpx.HTTPError as exc:
+        # Network/timeout to GitHub — a real, transient failure (NOT 501).
+        raise HTTPException(
+            status_code=502, detail="Could not reach GitHub to start the sync."
+        ) from exc
+    return {"seed_id": seed_id, "run_id": run_id, "status": "queued"}
+
+
+@router.get("/seed-tools/{run_id}")
+async def seed_status(run_id: str, _admin=Depends(require_admin)):
+    _require_configured()
+    url = f"{_repo_base()}/actions/runs/{run_id}"
+    try:
+        async with _make_client() as client:
+            resp = await client.get(url, headers=_gh_headers())
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502, detail="Could not reach GitHub for sync status."
+        ) from exc
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=502, detail=f"GitHub status failed ({resp.status_code})."
+        )
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        logger.warning(
+            "seed status returned an unparseable body",
+            extra={"data": {"event": "seed_status_bad_json", "run_id": run_id}},
+        )
+        raise HTTPException(
+            status_code=502, detail="GitHub returned an unreadable status body."
+        ) from exc
+    if not isinstance(data, dict):
+        logger.warning(
+            "seed status body is %s, expected an object",
+            type(data).__name__,
+            extra={"data": {"event": "seed_status_bad_shape", "run_id": run_id}},
+        )
+        raise HTTPException(
+            status_code=502, detail="GitHub returned an unexpected status body."
+        )
+    # Same raw-status contract as deploy_status — tools.js matches
+    # 'completed'/'success' the same way app.js does.
     return {
         "status": data.get("status"),
         "conclusion": data.get("conclusion"),

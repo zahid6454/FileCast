@@ -1,0 +1,61 @@
+name: Seed Tools
+
+# Admin-triggered tool registry sync (Admin-Tool-Sync-Plan.md). The backend
+# dispatches this via the GitHub REST API with a server-side PAT (same PAT
+# already used for deploy.yml — never a GitHub secret itself), passing a
+# unique seed_id. run-name echoes that id into the run's title so the backend
+# can resolve the run_id from the runs list the same way admin_deploy.py
+# already does for deploy.yml (workflow_dispatch returns 204 with no run id).
+run-name: Seed ${{ inputs.seed_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      seed_id:
+        description: Unique id echoed into run-name for run-id resolution
+        required: false
+        default: manual
+
+# Read-only checkout; the actual write goes straight from seed.py to Postgres
+# via DATABASE_URL_WRITE, not through the GitHub API.
+permissions:
+  contents: read
+
+# No concurrency group shared with pages-deploy (D8) — this workflow never
+# touches Cloudflare Pages, so there is nothing to race against.
+
+jobs:
+  seed:
+    name: Sync tools/*.yaml into the tools table
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements.txt
+
+      # api/requirements.txt, not the root requirements.txt (that one is
+      # build.py's SSG deps) — seed.py imports data.config/data.db/data.models
+      # from api/, which needs sqlalchemy/psycopg/pydantic-settings. seed.py
+      # also does its own `import yaml` to read tools/*.yaml directly, which
+      # api/requirements.txt does not carry (only the root one does, for
+      # build.py) — pulled in explicitly here rather than installing the whole
+      # root file and its unrelated SSG deps.
+      - name: Install seed dependencies
+        run: |
+          pip install -r api/requirements.txt
+          pip install pyyaml
+
+      # DATABASE_URL_WRITE is a write-capable secret, deliberately separate
+      # from deploy.yml's read-only DATABASE_URL (D3). ENVIRONMENT=production
+      # is mandatory, not left to default (D4) — seed.py also seeds two
+      # dev/test accounts gated on environment == "development"; leaving this
+      # unset previously landed test accounts in the live database.
+      - name: Seed tools table
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_WRITE }}
+          ENVIRONMENT: production
+        run: python seed.py
