@@ -1256,7 +1256,23 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-md);
   transition: background var(--transition-base), color var(--transition-base);
 }
-.nav-dropdown__all { font-weight: var(--weight-semibold); color: var(--color-text); }
+/* Unlabeled seam between converters and modification tools (same split as
+   category.html's grid, just a hairline here — no room/need for a heading
+   in a dropdown). Only rendered when both groups are present in the top 10. */
+.nav-dropdown__seam { margin: var(--space-1) var(--space-3); border-top: 1px solid var(--color-border); }
+/* Footer link, not a top item — sits after every tool row with its own
+   divider, so "view the rest" reads as the menu's last stop, not one more
+   option among ten. */
+.nav-dropdown__all {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-1);
+  border-top: 1px solid var(--color-border);
+  font-weight: var(--weight-semibold);
+  color: var(--color-primary);
+}
+.nav-dropdown__all::after { content: '\2192'; margin-left: var(--space-2); }
 /* Neutral-gray tint + text eases to brand blue on hover (transition comes
    from the base rule above). .header__nav a:hover forces white text
    globally (for links directly on the dark top bar), so these need one
@@ -2361,6 +2377,10 @@ img { max-width: 100%; display: block; }
   .nav-dropdown__item { color: #cbd5e1; }
   .header__nav a:hover,
   .nav-dropdown__toggle:hover { color: #ffffff; }
+  /* var(--color-border) is a light-mode gray, invisible on this drawer's
+     fixed dark surface — same reasoning as the hover tint override below. */
+  .nav-dropdown__seam,
+  .nav-dropdown__all { border-top-color: rgba(255, 255, 255, 0.12); }
   /* The desktop neutral-gray hover tint (above, outside this media query)
      is tuned for the light floating menu panel and would be invisible/
      wrong-toned on this drawer's fixed dark surface — same subtle white

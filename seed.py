@@ -130,7 +130,9 @@ def seed_tools(only_new: bool) -> None:
         # Only used in --only-new mode: append new tools after the admin's
         # current ordering instead of the freshly-recomputed YAML index, so a
         # sync can't drop a new tool in the middle of a curated order.
-        next_new_sort_order = max((t.sort_order for t in existing.values()), default=0) + 1
+        next_new_sort_order = (
+            max((t.sort_order for t in existing.values()), default=0) + 1
+        )
         for index, data in enumerate(ordered, start=1):
             tid = data["id"]
             row = existing.get(tid)
