@@ -736,11 +736,25 @@
 
 /* ---- tools tab --------------------------------------------------------- */
 
-/* Sync Tools button row, above the explainer callout. */
+/* Sync Tools button row, below the explainer callout and above the tool list. */
 .admin-tools-actions {
   display: flex;
   justify-content: flex-end;
   margin-bottom: var(--space-3);
+}
+/* Sync Tools dispatches a real production write (unlike Retry/Cancel/Back,
+   the other buttons that reach for --ghost), so it borrows the brand-glow
+   hover the primary buttons use plus a slight lift — like .card:hover's
+   shadow-plus-translateY elevation, which changes neither border-color nor
+   background, only shadow + transform. Scoped to this row only: not a
+   change to --ghost itself (every other ghost button keeps its plain
+   shadow-sm + sunken background + blue focus border), and nothing in
+   style.css or any other page is touched. */
+.admin-tools-actions .admin-btn:hover {
+  background: var(--color-bg-raised);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-brand-hover);
+  transform: translateY(-2px);
 }
 
 /* Explainer callout (how the toggle + ordering map to the live site). */

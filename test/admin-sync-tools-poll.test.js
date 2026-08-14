@@ -48,7 +48,9 @@ const TOOLS_BODY = JSON.stringify({
 });
 
 function load(fetchImpl) {
-  const dom = createDom('<div id="admin-app"><div id="tools-tab"></div></div>');
+  const dom = createDom(
+    '<div id="admin-app"><div id="tools-tab"></div></div><div id="admin-banner-slot"></div>'
+  );
   dom.window.FILECAST = { apiBase: 'https://api.test' };
   dom.window.fetch = fetchImpl;
   const run = installTimers(dom);
@@ -115,6 +117,32 @@ describe('admin/tools.js — Sync Tools status polling', () => {
     // Terminal — no further poll was scheduled.
     await ctx.run(POLL_MS);
     expect(fetchImpl.seedCalls).toHaveLength(2);
+  });
+
+  it('raises the Publish banner on a successful sync, without a duplicate generic toast', async () => {
+    // seed.py writes straight to Postgres — the static site needs a rebuild
+    // to reflect it, same as any other tool mutation, so a completed sync
+    // must surface the same Publish banner toggleTool/persistOrder/
+    // saveSlideout already raise. It must NOT also show app.js's generic
+    // "Saved" toast on top of tools.js's own "Tools synced" one.
+    const fetchImpl = seedFetch([
+      () => makeResponse(200, '{"status":"completed","conclusion":"success"}')
+    ]);
+    const ctx = load(fetchImpl);
+    const container = await renderTools(ctx);
+    syncButton(container).click();
+    await flush();
+    await ctx.run(POLL_MS);
+
+    const bannerSlot = ctx.dom.window.document.getElementById('admin-banner-slot');
+    const publishBtn = bannerSlot.querySelector('button');
+    expect(publishBtn).toBeTruthy();
+    expect(publishBtn.textContent).toBe('Publish');
+
+    const toasts = ctx.dom.window.document.querySelectorAll('.admin-toast__msg');
+    const messages = Array.from(toasts).map((t) => t.textContent);
+    expect(messages).toContain('Tools synced');
+    expect(messages).not.toContain('Saved');
   });
 
   it('shows the Sync Tools button even when the tools list is empty', async () => {
