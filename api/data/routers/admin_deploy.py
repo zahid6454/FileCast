@@ -254,51 +254,73 @@ async def trigger_deploy(_admin=Depends(require_admin)):
     return {"deploy_id": deploy_id, "run_id": run_id, "status": "queued"}
 
 
-@router.get("/deploy/{run_id}")
-async def deploy_status(run_id: str, _admin=Depends(require_admin)):
-    _require_configured()
+async def _fetch_run_status(
+    run_id: str, *, unreachable_error: str, log_prefix: str
+) -> dict:
+    """GET a run's status/conclusion/html_url from GitHub. Shared by
+    ``deploy_status`` and ``seed_status`` (Admin-Tool-Sync-Plan.md D6) — same
+    reasoning as ``_resolve_run_id``'s ``workflow`` parameter: two copies of
+    this error handling is two places for a future fix to land in only one.
+
+    Same bug class _runs_from() exists for, one endpoint down: a bare
+    .json() on an unparseable 200 raises ValueError → an opaque 500, and a
+    body that parses to a non-object then raises AttributeError on .get.
+    Lower stakes than the dispatch path — the frontend's .catch absorbs it
+    and retries — but a 502 naming the cause beats a 500 naming nothing.
+    ``log_prefix`` keeps the two callers' log events distinguishable
+    (``deploy_status_bad_json`` vs. ``seed_status_bad_json``, etc.)."""
     url = f"{_repo_base()}/actions/runs/{run_id}"
     try:
         async with _make_client() as client:
             resp = await client.get(url, headers=_gh_headers())
     except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=502, detail="Could not reach GitHub for deploy status."
-        ) from exc
+        raise HTTPException(status_code=502, detail=unreachable_error) from exc
     if resp.status_code != 200:
         raise HTTPException(
             status_code=502, detail=f"GitHub status failed ({resp.status_code})."
         )
-    # Same bug class _runs_from() exists for, one endpoint down: a bare .json()
-    # on an unparseable 200 raises ValueError → an opaque 500, and a body that
-    # parses to a non-object then raises AttributeError on .get. Lower stakes
-    # than the dispatch path — app.js's .catch absorbs it and now retries — but
-    # a 502 naming the cause beats a 500 naming nothing.
     try:
         data = resp.json()
     except ValueError as exc:
         logger.warning(
-            "deploy status returned an unparseable body",
-            extra={"data": {"event": "deploy_status_bad_json", "run_id": run_id}},
+            "%s status returned an unparseable body",
+            log_prefix,
+            extra={
+                "data": {"event": f"{log_prefix}_status_bad_json", "run_id": run_id}
+            },
         )
         raise HTTPException(
             status_code=502, detail="GitHub returned an unreadable status body."
         ) from exc
     if not isinstance(data, dict):
         logger.warning(
-            "deploy status body is %s, expected an object",
+            "%s status body is %s, expected an object",
+            log_prefix,
             type(data).__name__,
-            extra={"data": {"event": "deploy_status_bad_shape", "run_id": run_id}},
+            extra={
+                "data": {"event": f"{log_prefix}_status_bad_shape", "run_id": run_id}
+            },
         )
         raise HTTPException(
             status_code=502, detail="GitHub returned an unexpected status body."
         )
-    # Return GitHub's RAW status — app.js matches 'completed'/'success' (§5.3a).
+    # Return GitHub's RAW status — the frontend matches 'completed'/'success'
+    # (§5.3a), for both the deploy banner and the Sync Tools button.
     return {
         "status": data.get("status"),
         "conclusion": data.get("conclusion"),
         "html_url": data.get("html_url"),
     }
+
+
+@router.get("/deploy/{run_id}")
+async def deploy_status(run_id: str, _admin=Depends(require_admin)):
+    _require_configured()
+    return await _fetch_run_status(
+        run_id,
+        unreachable_error="Could not reach GitHub for deploy status.",
+        log_prefix="deploy",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -343,41 +365,8 @@ async def trigger_seed(_admin=Depends(require_admin)):
 @router.get("/seed-tools/{run_id}")
 async def seed_status(run_id: str, _admin=Depends(require_admin)):
     _require_configured()
-    url = f"{_repo_base()}/actions/runs/{run_id}"
-    try:
-        async with _make_client() as client:
-            resp = await client.get(url, headers=_gh_headers())
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=502, detail="Could not reach GitHub for sync status."
-        ) from exc
-    if resp.status_code != 200:
-        raise HTTPException(
-            status_code=502, detail=f"GitHub status failed ({resp.status_code})."
-        )
-    try:
-        data = resp.json()
-    except ValueError as exc:
-        logger.warning(
-            "seed status returned an unparseable body",
-            extra={"data": {"event": "seed_status_bad_json", "run_id": run_id}},
-        )
-        raise HTTPException(
-            status_code=502, detail="GitHub returned an unreadable status body."
-        ) from exc
-    if not isinstance(data, dict):
-        logger.warning(
-            "seed status body is %s, expected an object",
-            type(data).__name__,
-            extra={"data": {"event": "seed_status_bad_shape", "run_id": run_id}},
-        )
-        raise HTTPException(
-            status_code=502, detail="GitHub returned an unexpected status body."
-        )
-    # Same raw-status contract as deploy_status — tools.js matches
-    # 'completed'/'success' the same way app.js does.
-    return {
-        "status": data.get("status"),
-        "conclusion": data.get("conclusion"),
-        "html_url": data.get("html_url"),
-    }
+    return await _fetch_run_status(
+        run_id,
+        unreachable_error="Could not reach GitHub for sync status.",
+        log_prefix="seed",
+    )

@@ -117,6 +117,50 @@ describe('admin/tools.js — Sync Tools status polling', () => {
     expect(fetchImpl.seedCalls).toHaveLength(2);
   });
 
+  it('shows the Sync Tools button even when the tools list is empty', async () => {
+    // An empty table is exactly the state that most needs a sync (a fresh,
+    // not-yet-seeded deploy) — the button must not disappear along with the
+    // rest of the tools UI in that case.
+    const ctx = load((url) => {
+      if (url.indexOf('/api/v1/admin/seed-tools') >= 0) {
+        return makeResponse(200, '{"run_id": 42, "status": "queued"}');
+      }
+      return makeResponse(200, '{"tools": []}');
+    });
+    const container = await renderTools(ctx);
+    const btn = syncButton(container);
+    expect(btn).toBeTruthy();
+    expect(btn.textContent).toBe('Sync Tools');
+    expect(container.textContent).toContain('No tools found.');
+  });
+
+  it('does not clobber a different tab if the admin navigated away before the sync finished', async () => {
+    // CONTAINER is app.js's single shared <main> that every tab renders
+    // into. If the admin switches to another tab while a sync is still
+    // running, the eventual success must not blow that tab's content away.
+    const fetchImpl = seedFetch([
+      () => makeResponse(200, '{"status":"completed","conclusion":"success"}')
+    ]);
+    const ctx = load(fetchImpl);
+    const container = await renderTools(ctx);
+    syncButton(container).click();
+    await flush();
+
+    // Simulate app.js's route() rendering a different tab into the same
+    // shared container.
+    container.textContent = '';
+    const otherTabContent = ctx.dom.window.document.createElement('div');
+    otherTabContent.textContent = 'Settings tab content';
+    container.appendChild(otherTabContent);
+
+    await ctx.run(POLL_MS);
+
+    // The other tab's content survives — a stale sync completion did not
+    // overwrite it with the Tools list.
+    expect(container.textContent).toContain('Settings tab content');
+    expect(container.querySelector('.admin-tools')).toBeNull();
+  });
+
   it('says so when the run completed but did not succeed', async () => {
     const ctx = load(
       seedFetch([() => makeResponse(200, '{"status":"completed","conclusion":"failure"}')])

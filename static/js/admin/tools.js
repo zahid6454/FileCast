@@ -94,7 +94,7 @@
           resetSyncButton(btn);
           if (res.conclusion === 'success') {
             ADMIN.toast('Tools synced', 'success');
-            render(CONTAINER); // pick up newly-synced tools, no page reload
+            refreshAfterSync();
           } else {
             ADMIN.toast('Sync failed', 'error');
           }
@@ -113,6 +113,25 @@
           pollSeed(runId, btn, failures + 1);
         }, SEED_POLL_INTERVAL_MS);
       });
+  }
+
+  // A sync can take long enough (checkout + deps + seed.py against Postgres)
+  // that the admin may have navigated to a different tab before it resolves.
+  // CONTAINER is app.js's single shared <main> — EVERY tab renders into that
+  // same node (app.js:route()) — so a bare render(CONTAINER) here would blow
+  // away whatever tab the admin is now looking at (and any unsaved input in
+  // it) the moment this sync happens to finish. Only re-render in place when
+  // the Tools tab is still what's showing (its render() always leaves an
+  // '.admin-tools' wrapper, populated or empty); otherwise just refresh the
+  // shared catalog quietly so the next real visit to Tools is current.
+  function refreshAfterSync() {
+    if (CONTAINER && CONTAINER.querySelector('.admin-tools')) {
+      render(CONTAINER);
+      return;
+    }
+    api.get('/api/v1/tools').then(function (data) {
+      if (ADMIN.catalog) ADMIN.catalog.rebuild((data && data.tools) || []);
+    });
   }
 
   function label(tool) {
@@ -627,15 +646,20 @@
         if (ADMIN.catalog) ADMIN.catalog.rebuild(tools);
         dom.clear(container);
 
+        // The actions row (Sync Tools) renders even with zero tools — an
+        // empty table is exactly the state that most needs a sync, e.g. a
+        // fresh production deploy that hasn't been seeded yet.
+        var wrap = h('div', { class: 'admin-tools' });
+        wrap.appendChild(h('div', { class: 'admin-tools-actions' }, [buildSyncButton()]));
+
         if (tools.length === 0) {
-          container.appendChild(h('div', { class: 'admin-empty' }, 'No tools found.'));
+          wrap.appendChild(h('div', { class: 'admin-empty' }, 'No tools found.'));
+          container.appendChild(wrap);
           return;
         }
 
-        var grouped = groupByCategory(tools);
-        var wrap = h('div', { class: 'admin-tools' });
-        wrap.appendChild(h('div', { class: 'admin-tools-actions' }, [buildSyncButton()]));
         wrap.appendChild(buildCallout());
+        var grouped = groupByCategory(tools);
         grouped.order.forEach(function (cat) {
           var list = h('ul', { class: 'admin-toollist', dataset: { category: cat } });
           grouped.groups[cat].forEach(function (tool) {
