@@ -304,7 +304,7 @@
           {% for tool in sub_tools %}
           <a class="nav-dropdown__item" href="{{ tool.slug }}/">{{ tool.name }}</a>
           {% endfor %}
-          <a class="nav-dropdown__all" href="/{{ cat_data.slug }}/">View All {{ cat_data.tools|length }} Tools</a>
+          <a class="nav-dropdown__all" href="/{{ cat_data.slug }}/">View All {{ cat_data.tools|length }} Tool{{ 's' if cat_data.tools|length != 1 }}</a>
         </div>
       </div>
       {% endfor %}
