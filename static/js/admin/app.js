@@ -319,12 +319,18 @@
   // fetched at runtime by nav.js), so it needs NO static rebuild — don't touch
   // the publish banner. Tool changes (enable/disable, reorder, overlay edits)
   // and site settings DO bake into static pages, so they raise the banner.
+  // opts.silent: the caller already showed its own toast for this change
+  // (e.g. tools.js's "Tools synced") — still raise the Publish banner (a
+  // sync writes straight to Postgres and needs a rebuild to go live, same as
+  // any other tool mutation) but skip the redundant generic "Saved" toast.
   ADMIN.notifySaved = function (opts) {
     if (opts && opts.live) {
       ADMIN.toast('Saved — live now', 'success');
       return;
     }
-    ADMIN.toast('Saved', 'success');
+    if (!(opts && opts.silent)) {
+      ADMIN.toast('Saved', 'success');
+    }
     publishPending = true;
     saveGeneration += 1;
     renderBanner();

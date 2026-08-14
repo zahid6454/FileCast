@@ -95,6 +95,10 @@
           if (res.conclusion === 'success') {
             ADMIN.toast('Tools synced', 'success');
             refreshAfterSync();
+            // seed.py wrote straight to Postgres — the static site won't
+            // reflect it until the next rebuild, same as any other tool
+            // mutation, so raise the same Publish banner they do.
+            if (ADMIN.notifySaved) ADMIN.notifySaved({ silent: true });
           } else {
             ADMIN.toast('Sync failed', 'error');
           }
