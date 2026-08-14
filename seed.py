@@ -12,9 +12,14 @@ Upsert policy (§11): refresh the seed-managed columns
 admin-owned overlay columns ``display_name``/``maintenance_message``/
 ``custom_max_file_size``.
 
+``--only-new`` never touches an existing row's ``sort_order`` (that's the
+admin's manually-curated ordering) and appends newly-discovered tools after
+the current max ``sort_order`` in the DB, in YAML walk order, so a sync never
+reshuffles tools an admin has already arranged.
+
 Usage:
-    python seed.py              # upsert all tools + dev users
-    python seed.py --only-new   # only insert tools not already present
+    python seed.py              # upsert all tools + dev users (resets ordering)
+    python seed.py --only-new   # only insert new tools, appended at the bottom
 """
 
 import argparse
@@ -122,6 +127,10 @@ def seed_tools(only_new: bool) -> None:
     inserted = updated = skipped = 0
     with sync_session() as db:
         existing = {t.id: t for t in db.query(Tool).all()}
+        # Only used in --only-new mode: append new tools after the admin's
+        # current ordering instead of the freshly-recomputed YAML index, so a
+        # sync can't drop a new tool in the middle of a curated order.
+        next_new_sort_order = max((t.sort_order for t in existing.values()), default=0) + 1
         for index, data in enumerate(ordered, start=1):
             tid = data["id"]
             row = existing.get(tid)
@@ -130,7 +139,7 @@ def seed_tools(only_new: bool) -> None:
                     Tool(
                         id=tid,
                         enabled=bool(data.get("enabled", True)),
-                        sort_order=index,
+                        sort_order=next_new_sort_order if only_new else index,
                         category=data.get("category"),
                         name=data.get("name"),
                         input_format=data.get("input_format"),
@@ -138,6 +147,8 @@ def seed_tools(only_new: bool) -> None:
                         updated_at=now,
                     )
                 )
+                if only_new:
+                    next_new_sort_order += 1
                 inserted += 1
             elif only_new:
                 skipped += 1
