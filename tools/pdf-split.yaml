@@ -4,7 +4,7 @@ id: pdf-split
 name: PDF Split
 slug: /convert/pdf-split
 category: document-conversion
-subcategory: pdf-operations
+subcategory: utility
 type: client-side
 input_format: PDF
 output_format: PDF

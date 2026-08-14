@@ -3,7 +3,7 @@ id: bulk-image-compress
 name: Bulk Image Compressor
 slug: /convert/bulk-image-compress
 category: image-conversion
-subcategory: image-operations
+subcategory: utility
 type: client-side
 input_format: Image
 output_format: Image

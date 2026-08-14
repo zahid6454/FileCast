@@ -3,6 +3,7 @@ id: jwt-decoder
 name: JWT Decoder
 slug: /convert/jwt-decoder
 category: developer-tools
+subcategory: utility
 type: client-side
 input_format: JWT
 output_format: JSON

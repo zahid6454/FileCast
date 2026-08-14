@@ -4,6 +4,7 @@ id: pdf-to-png
 name: PDF to PNG Converter
 slug: /convert/pdf-to-png
 category: document-conversion
+subcategory: converter
 type: client-side
 input_format: PDF
 output_format: PNG

@@ -3,6 +3,7 @@ id: uuid-generator
 name: UUID Generator
 slug: /convert/uuid-generator
 category: developer-tools
+subcategory: utility
 type: client-side
 input_format: Count
 output_format: UUID

@@ -3,6 +3,7 @@ id: pptx-to-pdf
 name: "PPTX to PDF Converter"
 slug: /convert/pptx-to-pdf
 category: document-conversion
+subcategory: converter
 type: server-side
 input_format: PPTX
 output_format: PDF

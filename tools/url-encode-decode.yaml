@@ -3,6 +3,7 @@ id: url-encode-decode
 name: URL Encode/Decode
 slug: /convert/url-encode-decode
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: Text
 output_format: URL-Encoded

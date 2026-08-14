@@ -3,6 +3,7 @@ id: jpg-to-webp
 name: JPG to WebP Converter
 slug: /convert/jpg-to-webp
 category: image-conversion
+subcategory: converter
 type: client-side
 input_format: JPG
 output_format: WebP

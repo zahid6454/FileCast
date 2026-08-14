@@ -3,7 +3,7 @@ id: pdf-merge
 name: PDF Merge
 slug: /convert/pdf-merge
 category: document-conversion
-subcategory: pdf-operations
+subcategory: utility
 type: client-side
 input_format: PDF
 output_format: PDF

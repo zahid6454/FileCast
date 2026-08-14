@@ -3,6 +3,7 @@ id: image-to-pdf
 name: Image to PDF Converter
 slug: /convert/image-to-pdf
 category: document-conversion
+subcategory: converter
 type: client-side
 input_format: Image
 output_format: PDF

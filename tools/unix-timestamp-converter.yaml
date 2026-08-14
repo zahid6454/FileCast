@@ -3,6 +3,7 @@ id: unix-timestamp-converter
 name: Unix Timestamp Converter
 slug: /convert/unix-timestamp-converter
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: Timestamp
 output_format: Date

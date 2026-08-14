@@ -33,8 +33,8 @@
     autocomplete="off"
   >
 
-  {% set main_tools = category.tools|selectattr('subcategory', 'undefined')|list %}
-  {% set sub_tools = category.tools|rejectattr('subcategory', 'undefined')|list %}
+  {% set main_tools = category.tools|selectattr('subcategory', 'equalto', 'converter')|list %}
+  {% set sub_tools = category.tools|selectattr('subcategory', 'equalto', 'utility')|list %}
 
   <div class="card-grid card-grid--lg">
     {% for tool in main_tools %}

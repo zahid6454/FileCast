@@ -3,6 +3,7 @@ id: json-to-yaml
 name: JSON to YAML Converter
 slug: /convert/json-to-yaml
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: JSON
 output_format: YAML

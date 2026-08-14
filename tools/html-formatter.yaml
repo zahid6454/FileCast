@@ -3,7 +3,7 @@ id: html-formatter
 name: HTML Formatter
 slug: /convert/html-formatter
 category: developer-tools
-subcategory: developer-operations
+subcategory: utility
 type: client-side
 input_format: HTML
 output_format: HTML

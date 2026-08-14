@@ -3,6 +3,7 @@ id: json-to-typescript
 name: JSON to TypeScript Interface
 slug: /convert/json-to-typescript
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: JSON
 output_format: TypeScript

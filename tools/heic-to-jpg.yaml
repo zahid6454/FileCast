@@ -4,6 +4,7 @@ id: heic-to-jpg
 name: HEIC to JPG Converter
 slug: /convert/heic-to-jpg
 category: image-conversion
+subcategory: converter
 type: client-side
 input_format: HEIC
 output_format: JPG

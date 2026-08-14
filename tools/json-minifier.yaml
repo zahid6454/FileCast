@@ -3,7 +3,7 @@ id: json-minifier
 name: JSON Minifier
 slug: /convert/json-minifier
 category: developer-tools
-subcategory: developer-operations
+subcategory: utility
 type: client-side
 input_format: JSON
 output_format: JSON

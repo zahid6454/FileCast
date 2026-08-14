@@ -3,6 +3,7 @@ id: html-to-text
 name: HTML to Text Converter
 slug: /convert/html-to-text
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: HTML
 output_format: Text

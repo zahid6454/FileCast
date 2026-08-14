@@ -4,6 +4,7 @@ id: docx-to-pdf
 name: "DOCX to PDF Converter"
 slug: /convert/docx-to-pdf
 category: document-conversion
+subcategory: converter
 type: server-side
 input_format: DOCX
 output_format: PDF

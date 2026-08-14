@@ -3,6 +3,7 @@ id: svg-to-png
 name: SVG to PNG Converter
 slug: /convert/svg-to-png
 category: image-conversion
+subcategory: converter
 type: client-side
 input_format: SVG
 output_format: PNG

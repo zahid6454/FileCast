@@ -4,6 +4,7 @@ id: png-to-jpg
 name: PNG to JPG Converter
 slug: /convert/png-to-jpg
 category: image-conversion
+subcategory: converter
 type: client-side
 input_format: PNG
 output_format: JPG

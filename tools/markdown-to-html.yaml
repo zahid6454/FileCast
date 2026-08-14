@@ -3,6 +3,7 @@ id: markdown-to-html
 name: Markdown to HTML Converter
 slug: /convert/markdown-to-html
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: Markdown
 output_format: HTML
