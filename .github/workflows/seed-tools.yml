@@ -54,8 +54,12 @@ jobs:
       # is mandatory, not left to default (D4) — seed.py also seeds two
       # dev/test accounts gated on environment == "development"; leaving this
       # unset previously landed test accounts in the live database.
+      #
+      # --only-new: admin-triggered syncs must never reshuffle an admin's
+      # manual sort_order — only insert tools that aren't in the DB yet,
+      # appended after the current ordering (see seed.py).
       - name: Seed tools table
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_WRITE }}
           ENVIRONMENT: production
-        run: python seed.py
+        run: python seed.py --only-new

@@ -274,20 +274,37 @@
     </a>
 
     {# Category dropdowns — contents server-rendered from nav_categories (each
-       carries its `tools` list), so NO per-page JSON fetch (P21/R4). nav.js only
-       toggles visibility + aria-expanded. Doubles as the mobile drawer. #}
+       carries its `tools` list, already sorted by the admin's sort_order —
+       see build.py's sort_tools()), so NO per-page JSON fetch (P21/R4). nav.js
+       only toggles visibility + aria-expanded. Doubles as the mobile drawer.
+
+       Each menu shows only the top 10 tools (by admin order) instead of the
+       full category — a menu that lists every tool stops scaling once a
+       category passes ~15 entries. The seam below splits that top 10 into
+       converters vs. modification tools (same `subcategory` field
+       category.html already groups by) with a plain hairline, no label — an
+       editorial cue, not a taxonomy lesson. "View All" carries the rest. #}
     <nav class="header__nav" id="nav-drawer">
       {% for cat_id, cat_data in nav_categories.items() %}
+      {% set top_tools = cat_data.tools[:10] %}
+      {% set main_tools = top_tools|selectattr('subcategory', 'undefined')|list %}
+      {% set sub_tools = top_tools|rejectattr('subcategory', 'undefined')|list %}
       <div class="nav-dropdown">
         <button class="nav-dropdown__toggle" type="button" aria-expanded="false" aria-haspopup="true">
           {{ cat_data.nav_label or cat_data.name }}
           <svg class="nav-dropdown__caret" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div class="nav-dropdown__menu">
-          <a class="nav-dropdown__all" href="/{{ cat_data.slug }}/">All {{ cat_data.name }}</a>
-          {% for tool in cat_data.tools %}
+          {% for tool in main_tools %}
           <a class="nav-dropdown__item" href="{{ tool.slug }}/">{{ tool.name }}</a>
           {% endfor %}
+          {% if main_tools and sub_tools %}
+          <div class="nav-dropdown__seam"></div>
+          {% endif %}
+          {% for tool in sub_tools %}
+          <a class="nav-dropdown__item" href="{{ tool.slug }}/">{{ tool.name }}</a>
+          {% endfor %}
+          <a class="nav-dropdown__all" href="/{{ cat_data.slug }}/">View All {{ cat_data.tools|length }} Tool{{ 's' if cat_data.tools|length != 1 }}</a>
         </div>
       </div>
       {% endfor %}
