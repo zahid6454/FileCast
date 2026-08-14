@@ -53,7 +53,7 @@
 
     out = out.replace(/<(br|hr)\s*\/?>/gi, '\n');
     out = out.replace(BLOCK_CLOSE_RE, '\n');
-    out = out.replace(/<[^>]+>/g, '');
+    out = stripTags(out);
 
     out = decodeEntities(out);
 
@@ -71,18 +71,56 @@
     return { text: out, filename: 'stripped.txt' };
   };
 
+  // A plain /<[^>]+>/g regex treats the first ">" after "<" as the tag's
+  // end — but a quoted attribute value can legally contain a literal ">"
+  // (e.g. <a title="a > b">), which cuts the match short and leaks the
+  // rest of the attribute value as visible text. This scans char-by-char
+  // and only treats an unquoted ">" as the real tag boundary.
+  function stripTags(str) {
+    var out = '';
+    var i = 0;
+    var n = str.length;
+    while (i < n) {
+      if (str.charAt(i) !== '<') {
+        out += str.charAt(i);
+        i++;
+        continue;
+      }
+      var j = i + 1;
+      var quote = '';
+      while (j < n) {
+        var c = str.charAt(j);
+        if (quote) {
+          if (c === quote) quote = '';
+        } else if (c === '"' || c === "'") {
+          quote = c;
+        } else if (c === '>') {
+          break;
+        }
+        j++;
+      }
+      i = j + 1; // skip the whole tag, including an unterminated one at EOF
+    }
+    return out;
+  }
+
+  // One combined regex, one pass — three sequential .replace() calls (hex,
+  // then decimal, then named) would feed each pass's OUTPUT into the next
+  // pass's INPUT, so a numeric entity that happens to decode to "&" followed
+  // by text like "amp;" would get re-decoded as a second, unintended named
+  // entity (e.g. "&#38;amp;" should stay "&amp;", like a browser parsing it
+  // once, not fully collapse to a bare "&"). Scanning the original string
+  // exactly once, the way a real HTML parser's tokenizer does, avoids that.
   function decodeEntities(str) {
-    str = str.replace(/&#x([0-9a-fA-F]+);/g, function (_, hex) {
-      return codePointToChar(parseInt(hex, 16));
-    });
-    str = str.replace(/&#(\d+);/g, function (_, dec) {
-      return codePointToChar(parseInt(dec, 10));
-    });
-    str = str.replace(/&([a-zA-Z]+);/g, function (match, name) {
-      var lower = name.toLowerCase();
+    return str.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g, function (match, body) {
+      if (body.charAt(0) === '#') {
+        var isHex = body.charAt(1) === 'x' || body.charAt(1) === 'X';
+        var codePoint = parseInt(body.slice(isHex ? 2 : 1), isHex ? 16 : 10);
+        return codePointToChar(codePoint);
+      }
+      var lower = body.toLowerCase();
       return Object.hasOwn(NAMED_ENTITIES, lower) ? NAMED_ENTITIES[lower] : match;
     });
-    return str;
   }
 
   function codePointToChar(codePoint) {

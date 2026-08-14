@@ -81,7 +81,13 @@
     }
 
     try {
-      return BigInt(sign + literal);
+      // BigInt()'s string grammar only allows a leading sign before a plain
+      // decimal literal, not before a 0x/0b/0o-prefixed one — BigInt('-0xFF')
+      // throws even though BigInt('0xFF') is fine. Parsing the literal
+      // unsigned and negating the resulting BigInt sidesteps that entirely,
+      // so "-0xFF"/"-0b1010"/"-FF" work the same as "-255" does.
+      var value = BigInt(literal);
+      return sign === '-' ? -value : value;
     } catch (e) {
       throw new Error('Line ' + lineNumber + ': "' + raw + '" is not a valid number.');
     }

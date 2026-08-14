@@ -37,6 +37,27 @@ describe('number-base-converter.js — window.convertText', () => {
     expect(text).toContain('Decimal: 255');
   });
 
+  it('handles a negative number with a 0x/0b/0o prefix (BigInt string grammar disallows a signed prefixed literal directly)', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/number-base-converter.js');
+
+    const { text } = dom.window.convertText('-0xFF\n-0b1010\n-0o17');
+    const blocks = text.split('\n\n');
+
+    expect(blocks[0]).toContain('Decimal: -255');
+    expect(blocks[1]).toContain('Decimal: -10');
+    expect(blocks[2]).toContain('Decimal: -15');
+  });
+
+  it('handles a negative bare-hex value with no prefix', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/number-base-converter.js');
+
+    const { text } = dom.window.convertText('-FF');
+
+    expect(text).toContain('Decimal: -255');
+  });
+
   it('preserves the sign for negative numbers across all bases', () => {
     const dom = createDom();
     evalScript(dom, 'converters/number-base-converter.js');

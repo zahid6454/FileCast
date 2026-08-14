@@ -43,6 +43,18 @@ describe('html-to-text.js — window.convertText', () => {
     expect(text).toBe('Tom & Jerry — café ❤');
   });
 
+  it('decodes a numeric entity exactly once, not re-scanning its own output for a further entity (matches a real HTML parser)', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/html-to-text.js');
+
+    // &#38; decodes to "&"; the tool must NOT then treat the following
+    // "amp;" as a second entity to decode — a real browser parses this to
+    // the literal text "&amp;", not a bare "&".
+    const { text } = dom.window.convertText('&#38;amp;');
+
+    expect(text).toBe('&amp;');
+  });
+
   it('strips HTML comments', () => {
     const dom = createDom();
     evalScript(dom, 'converters/html-to-text.js');
@@ -50,6 +62,33 @@ describe('html-to-text.js — window.convertText', () => {
     const { text } = dom.window.convertText('<p>Before<!-- a comment -->After</p>');
 
     expect(text).toBe('BeforeAfter');
+  });
+
+  it('strips a tag whose quoted attribute value contains a literal ">"', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/html-to-text.js');
+
+    const { text } = dom.window.convertText('<a title="a > b">Click here</a>');
+
+    expect(text).toBe('Click here');
+  });
+
+  it('strips a tag with a single-quoted attribute value containing ">"', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/html-to-text.js');
+
+    const { text } = dom.window.convertText("<div data-x='1 > 0'>Content</div>");
+
+    expect(text).toBe('Content');
+  });
+
+  it('drops an unterminated tag at end of input instead of leaking it as text', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/html-to-text.js');
+
+    const { text } = dom.window.convertText('<p>Unterminated <div');
+
+    expect(text).toBe('Unterminated');
   });
 
   it('collapses excessive blank lines', () => {
