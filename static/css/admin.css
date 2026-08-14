@@ -744,10 +744,15 @@
 }
 /* Sync Tools dispatches a real production write (unlike Retry/Cancel/Back,
    the other buttons that reach for --ghost), so it borrows the brand-glow
-   hover the primary buttons use — scoped to this row only, not a change to
-   --ghost itself, which every other ghost button on the page still uses. */
+   hover the primary buttons use plus a slight lift — like .card:hover's
+   shadow-plus-translateY elevation, not a border-color change. Scoped to
+   this row only: not a change to --ghost itself (every other ghost button
+   keeps its plain shadow-sm + blue focus border), and nothing in style.css
+   or any other page is touched. */
 .admin-tools-actions .admin-btn:hover {
+  border-color: var(--color-border);
   box-shadow: var(--shadow-brand-hover);
+  transform: translateY(-2px);
 }
 
 /* Explainer callout (how the toggle + ordering map to the live site). */
