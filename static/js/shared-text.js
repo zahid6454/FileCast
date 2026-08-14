@@ -237,8 +237,14 @@
 
   function downloadOutput() {
     if (!window._convertedText) return;
+    // Gated on the tool's own config, not by sniffing whether the text
+    // happens to start with "data:" — a tool that isn't output_is_data_url
+    // (e.g. Base64 Encode/Decode) can legitimately produce output text that
+    // starts with that literal string, and content-sniffing would silently
+    // download the wrong bytes for it. See showResult()'s image-preview gate
+    // above, which already keys off config.output_is_data_url the same way.
     var blob =
-      (window._convertedText.indexOf('data:') === 0 && dataUrlToBlob(window._convertedText)) ||
+      (window.TOOL_CONFIG.output_is_data_url && dataUrlToBlob(window._convertedText)) ||
       new Blob([window._convertedText], { type: 'text/plain;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');

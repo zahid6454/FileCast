@@ -44,6 +44,18 @@ class FakeTextWorker {
   terminate() {}
 }
 
+class IdentityTextWorker {
+  postMessage(msg) {
+    var self = this;
+    setTimeout(function () {
+      if (self.onmessage) {
+        self.onmessage({ data: { ok: true, result: { text: msg.text, filename: 'output.txt' } } });
+      }
+    }, 0);
+  }
+  terminate() {}
+}
+
 class FakeFailingTextWorker {
   postMessage() {
     var self = this;
@@ -147,5 +159,60 @@ describe('shared-text.js — worker-based conversion', () => {
     await flush();
 
     expect(dom.window.document.getElementById('error-msg').textContent).toContain('unavailable');
+  });
+
+  // Regression: downloadOutput() used to detect a data: URL output by
+  // sniffing whether window._convertedText happened to start with "data:",
+  // instead of checking the tool's own output_is_data_url config — so any
+  // ordinary text tool whose legitimate output text started with the
+  // literal string "data:" (e.g. Base64 Encode/Decode round-tripping a data
+  // URI as plain text) would silently download the wrong, re-decoded bytes
+  // instead of the text actually shown on screen.
+  it('downloads the literal output text for a tool that is not output_is_data_url, even if the text starts with "data:"', async () => {
+    const dom = await setupTextToolPage(IdentityTextWorker);
+    dom.window.TOOL_CONFIG.output_is_data_url = false;
+    const literalOutput = 'data:text/plain;base64,SGVsbG8=';
+
+    const input = dom.window.document.getElementById('text-input');
+    input.value = literalOutput;
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    let capturedBlob = null;
+    dom.window.URL.createObjectURL = (blob) => {
+      capturedBlob = blob;
+      return 'blob:mock/test';
+    };
+    dom.window.document.getElementById('download-btn').click();
+
+    expect(capturedBlob).not.toBeNull();
+    const text = new dom.window.TextDecoder('utf-8').decode(await capturedBlob.arrayBuffer());
+    expect(text).toBe(literalOutput);
+  });
+
+  it('decodes to real binary bytes on download for a tool that IS output_is_data_url', async () => {
+    const dom = await setupTextToolPage(IdentityTextWorker);
+    dom.window.TOOL_CONFIG.output_is_data_url = true;
+    const dataUrl = 'data:text/plain;base64,SGVsbG8=';
+
+    const input = dom.window.document.getElementById('text-input');
+    input.value = dataUrl;
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    let capturedBlob = null;
+    dom.window.URL.createObjectURL = (blob) => {
+      capturedBlob = blob;
+      return 'blob:mock/test';
+    };
+    dom.window.document.getElementById('download-btn').click();
+
+    expect(capturedBlob.type).toBe('text/plain');
+    const text = new dom.window.TextDecoder('utf-8').decode(await capturedBlob.arrayBuffer());
+    expect(text).toBe('Hello');
   });
 });
