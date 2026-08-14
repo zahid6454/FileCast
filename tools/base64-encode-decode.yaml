@@ -1,0 +1,29 @@
+enabled: true
+id: base64-encode-decode
+name: Base64 Encode/Decode
+slug: /convert/base64-encode-decode
+category: developer-tools
+type: client-side
+input_format: Text
+output_format: Base64
+accept_extensions: [.txt]
+output_extension: .txt
+js_module: converters/base64-encode-decode.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Encode / Decode"
+input_placeholder: "Paste text to Base64-encode, or Base64 to decode — auto-detected...\n\nExample:\nHello, World!"
+tagline: "Encode text to Base64, or decode Base64 back to text"
+tagline_long: "Encode or decode Base64 instantly in your browser — auto-detects whether you pasted plain text or Base64, so there's no mode switch to think about."
+meta:
+  title: "Base64 Encode/Decode — Free, No Upload | FileCast"
+  description: "Encode or decode Base64 free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Auto-detects which direction you need."
+  keywords: ["base64 encode", "base64 decode", "base64 converter", "base64 encode decode online", "base64 to text"]
+content:
+  what_is: "content/base64-encode-decode/what-is.md"
+  comparison: "content/base64-encode-decode/comparison.md"
+  when_to_use: "content/base64-encode-decode/when-to-use.md"
+  faq: "content/base64-encode-decode/faq.md"
+related_tools: [url-encode-decode, base64-to-image, jwt-decoder]

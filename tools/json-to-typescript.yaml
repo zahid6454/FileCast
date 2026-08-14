@@ -1,0 +1,29 @@
+enabled: true
+id: json-to-typescript
+name: JSON to TypeScript Interface
+slug: /convert/json-to-typescript
+category: developer-tools
+type: client-side
+input_format: JSON
+output_format: TypeScript
+accept_extensions: [.json]
+output_extension: .ts
+js_module: converters/json-to-typescript.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Generate Interface"
+input_placeholder: "Paste your JSON here...\n\nExample:\n{\"name\":\"Alice\",\"age\":30,\"tags\":[\"admin\",\"user\"]}"
+tagline: "Turn a JSON sample into TypeScript interface definitions"
+tagline_long: "Generate TypeScript interfaces from a JSON sample instantly in your browser — infers types for nested objects and arrays so you don't have to type them by hand."
+meta:
+  title: "JSON to TypeScript Interface — Free, No Upload | FileCast"
+  description: "Convert JSON to TypeScript interfaces free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Infers nested types automatically."
+  keywords: ["json to typescript", "json to interface", "generate typescript types", "json to ts online", "typescript interface generator"]
+content:
+  what_is: "content/json-to-typescript/what-is.md"
+  comparison: "content/json-to-typescript/comparison.md"
+  when_to_use: "content/json-to-typescript/when-to-use.md"
+  faq: "content/json-to-typescript/faq.md"
+related_tools: [json-formatter, json-validator, csv-to-json]

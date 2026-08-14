@@ -1,0 +1,30 @@
+enabled: true
+id: uuid-generator
+name: UUID Generator
+slug: /convert/uuid-generator
+category: developer-tools
+type: client-side
+input_format: Count
+output_format: UUID
+accept_extensions: [.txt]
+output_extension: .txt
+js_module: converters/uuid-generator.js
+js_libs: []
+max_file_size: 1MB
+bulk_support: false
+ui_type: text-input
+action_label: "Generate UUIDs"
+input_default: "5"
+input_placeholder: "How many UUIDs? (1-100)"
+tagline: "Generate random, standards-compliant UUIDs (v4)"
+tagline_long: "Generate cryptographically random UUID v4 values instantly in your browser — pick how many you need and copy or download the list."
+meta:
+  title: "UUID Generator — Free, No Upload | FileCast"
+  description: "Generate random UUIDs (v4) free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Generate 1 to 100 at once."
+  keywords: ["uuid generator", "guid generator", "generate uuid online", "random uuid v4", "unique id generator"]
+content:
+  what_is: "content/uuid-generator/what-is.md"
+  comparison: "content/uuid-generator/comparison.md"
+  when_to_use: "content/uuid-generator/when-to-use.md"
+  faq: "content/uuid-generator/faq.md"
+related_tools: [hash-generator, json-formatter, number-base-converter]

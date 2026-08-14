@@ -1,0 +1,29 @@
+enabled: true
+id: jwt-decoder
+name: JWT Decoder
+slug: /convert/jwt-decoder
+category: developer-tools
+type: client-side
+input_format: JWT
+output_format: JSON
+accept_extensions: [.txt]
+output_extension: .txt
+js_module: converters/jwt-decoder.js
+js_libs: []
+max_file_size: 1MB
+bulk_support: false
+ui_type: text-input
+action_label: "Decode JWT"
+input_placeholder: "Paste a JWT here...\n\nExample:\neyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+tagline: "Decode a JWT's header and payload — no signature verification"
+tagline_long: "Decode a JSON Web Token's header and payload instantly in your browser and see the claims inside. This only decodes — it does not verify the signature, so never trust an unverified token's contents for authorization."
+meta:
+  title: "JWT Decoder — Free, No Upload | FileCast"
+  description: "Decode a JWT's header and payload free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Decode-only, not signature verification."
+  keywords: ["jwt decoder", "decode jwt online", "json web token decoder", "jwt parser", "read jwt payload"]
+content:
+  what_is: "content/jwt-decoder/what-is.md"
+  comparison: "content/jwt-decoder/comparison.md"
+  when_to_use: "content/jwt-decoder/when-to-use.md"
+  faq: "content/jwt-decoder/faq.md"
+related_tools: [base64-encode-decode, unix-timestamp-converter, json-formatter]

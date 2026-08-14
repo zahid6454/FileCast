@@ -1,0 +1,30 @@
+enabled: true
+id: number-base-converter
+name: Number Base Converter
+slug: /convert/number-base-converter
+category: developer-tools
+type: client-side
+input_format: Number
+output_format: Binary/Decimal/Hex/Octal
+accept_extensions: [.txt]
+output_extension: .txt
+js_module: converters/number-base-converter.js
+js_libs: []
+max_file_size: 1MB
+bulk_support: false
+ui_type: text-input
+action_label: "Convert Number"
+input_default: "255"
+input_placeholder: "One number per line — decimal by default, or prefix with 0x/0b/0o...\n\nExample:\n255\n0xFF\n0b11111111\n0o377"
+tagline: "Convert numbers between binary, decimal, hex, and octal"
+tagline_long: "Convert numbers between binary, decimal, hexadecimal, and octal instantly in your browser — auto-detects the base from a 0x/0b/0o prefix, or assumes decimal."
+meta:
+  title: "Number Base Converter — Free, No Upload | FileCast"
+  description: "Convert numbers between binary, decimal, hex, and octal free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits. Handles arbitrarily large numbers."
+  keywords: ["number base converter", "binary to decimal", "hex to decimal", "decimal to binary", "octal converter online"]
+content:
+  what_is: "content/number-base-converter/what-is.md"
+  comparison: "content/number-base-converter/comparison.md"
+  when_to_use: "content/number-base-converter/when-to-use.md"
+  faq: "content/number-base-converter/faq.md"
+related_tools: [hash-generator, uuid-generator, jwt-decoder]
