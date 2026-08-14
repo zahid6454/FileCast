@@ -650,19 +650,23 @@
         if (ADMIN.catalog) ADMIN.catalog.rebuild(tools);
         dom.clear(container);
 
-        // The actions row (Sync Tools) renders even with zero tools — an
-        // empty table is exactly the state that most needs a sync, e.g. a
-        // fresh production deploy that hasn't been seeded yet.
         var wrap = h('div', { class: 'admin-tools' });
-        wrap.appendChild(h('div', { class: 'admin-tools-actions' }, [buildSyncButton()]));
 
         if (tools.length === 0) {
+          // No category card to sit above yet — an empty table is exactly
+          // the state that most needs a sync (e.g. a fresh, unseeded
+          // production deploy), so the button still needs its own spot here.
+          wrap.appendChild(h('div', { class: 'admin-tools-actions' }, [buildSyncButton()]));
           wrap.appendChild(h('div', { class: 'admin-empty' }, 'No tools found.'));
           container.appendChild(wrap);
           return;
         }
 
         wrap.appendChild(buildCallout());
+        // Sits directly above the tool list — the first category is always
+        // Document Conversion (site-config.yaml's category walk order), so
+        // this is the "above the Document Conversion card" spot.
+        wrap.appendChild(h('div', { class: 'admin-tools-actions' }, [buildSyncButton()]));
         var grouped = groupByCategory(tools);
         grouped.order.forEach(function (cat) {
           var list = h('ul', { class: 'admin-toollist', dataset: { category: cat } });
