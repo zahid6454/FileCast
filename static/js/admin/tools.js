@@ -33,7 +33,7 @@
       'button',
       {
         type: 'button',
-        class: 'admin-btn admin-btn--secondary admin-btn--sm',
+        class: 'admin-btn admin-btn--ghost admin-btn--sm',
         disabled: seedInFlight ? true : null
       },
       seedInFlight ? 'Syncing…' : 'Sync Tools'
