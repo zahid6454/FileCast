@@ -736,6 +736,13 @@
 
 /* ---- tools tab --------------------------------------------------------- */
 
+/* Sync Tools button row, above the explainer callout. */
+.admin-tools-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-3);
+}
+
 /* Explainer callout (how the toggle + ordering map to the live site). */
 .admin-callout {
   display: flex;

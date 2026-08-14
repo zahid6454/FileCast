@@ -16,6 +16,124 @@
 
   var CONTAINER = null; // active tab container (for re-render on revert)
 
+  // --- Sync Tools (Admin-Tool-Sync-Plan.md D7) -----------------------------
+  //
+  // Lives here, not in app.js's Publish banner: Publish ships unsaved edits
+  // made in this admin session, while Sync Tools pulls in tools that arrived
+  // through a separate git merge — a different trigger and mental model, so
+  // it gets its own control next to the list it affects. Wired the same way
+  // app.js drives Publish (dispatch → poll to a terminal conclusion), just
+  // scoped to this tab's own button instead of the app-shell banner.
+  var seedInFlight = false;
+  var SEED_POLL_INTERVAL_MS = 3000;
+  var SEED_POLL_MAX_ERRORS = 3;
+
+  function buildSyncButton() {
+    var btn = h(
+      'button',
+      {
+        type: 'button',
+        class: 'admin-btn admin-btn--secondary admin-btn--sm',
+        disabled: seedInFlight ? true : null
+      },
+      seedInFlight ? 'Syncing…' : 'Sync Tools'
+    );
+    btn.addEventListener('click', function () {
+      if (!seedInFlight) fireSeed(btn);
+    });
+    return btn;
+  }
+
+  function resetSyncButton(btn) {
+    seedInFlight = false;
+    btn.disabled = false;
+    btn.textContent = 'Sync Tools';
+  }
+
+  function fireSeed(btn) {
+    seedInFlight = true;
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    api
+      .post('/api/v1/admin/seed-tools', {})
+      .then(function (res) {
+        if (res && res.notImplemented) {
+          resetSyncButton(btn);
+          ADMIN.toast('Sync Tools is not configured yet.', 'info');
+          return;
+        }
+        if (res && res.run_id) {
+          pollSeed(res.run_id, btn);
+        } else {
+          resetSyncButton(btn);
+        }
+      })
+      .catch(function (err) {
+        resetSyncButton(btn);
+        if (err && err.isAuthError) return ADMIN.onAuthError(err);
+        ADMIN.toast('Sync could not start.', 'error');
+      });
+  }
+
+  // Poll the seed run to a terminal state. Same conclusion-not-status contract
+  // as app.js's pollDeploy: GitHub's `status` reaching 'completed' covers
+  // failure/cancelled too, so only `conclusion === 'success'` means the sync
+  // actually ran. A poll error retries a bounded number of times before
+  // giving up, for the same reason app.js bounds it — an invalid run_id 502s
+  // on every attempt, so unbounded retry would poll forever.
+  function pollSeed(runId, btn, errors) {
+    var failures = errors || 0;
+    api
+      .get('/api/v1/admin/seed-tools/' + encodeURIComponent(runId))
+      .then(function (res) {
+        if (res && res.notImplemented) {
+          resetSyncButton(btn);
+          return;
+        }
+        if (res && res.status === 'completed') {
+          resetSyncButton(btn);
+          if (res.conclusion === 'success') {
+            ADMIN.toast('Tools synced', 'success');
+            refreshAfterSync();
+          } else {
+            ADMIN.toast('Sync failed', 'error');
+          }
+          return;
+        }
+        setTimeout(function () {
+          pollSeed(runId, btn, 0);
+        }, SEED_POLL_INTERVAL_MS);
+      })
+      .catch(function () {
+        if (failures + 1 >= SEED_POLL_MAX_ERRORS) {
+          resetSyncButton(btn);
+          return;
+        }
+        setTimeout(function () {
+          pollSeed(runId, btn, failures + 1);
+        }, SEED_POLL_INTERVAL_MS);
+      });
+  }
+
+  // A sync can take long enough (checkout + deps + seed.py against Postgres)
+  // that the admin may have navigated to a different tab before it resolves.
+  // CONTAINER is app.js's single shared <main> — EVERY tab renders into that
+  // same node (app.js:route()) — so a bare render(CONTAINER) here would blow
+  // away whatever tab the admin is now looking at (and any unsaved input in
+  // it) the moment this sync happens to finish. Only re-render in place when
+  // the Tools tab is still what's showing (its render() always leaves an
+  // '.admin-tools' wrapper, populated or empty); otherwise just refresh the
+  // shared catalog quietly so the next real visit to Tools is current.
+  function refreshAfterSync() {
+    if (CONTAINER && CONTAINER.querySelector('.admin-tools')) {
+      render(CONTAINER);
+      return;
+    }
+    api.get('/api/v1/tools').then(function (data) {
+      if (ADMIN.catalog) ADMIN.catalog.rebuild((data && data.tools) || []);
+    });
+  }
+
   function label(tool) {
     return tool.display_name || tool.name || tool.id;
   }
@@ -528,14 +646,20 @@
         if (ADMIN.catalog) ADMIN.catalog.rebuild(tools);
         dom.clear(container);
 
+        // The actions row (Sync Tools) renders even with zero tools — an
+        // empty table is exactly the state that most needs a sync, e.g. a
+        // fresh production deploy that hasn't been seeded yet.
+        var wrap = h('div', { class: 'admin-tools' });
+        wrap.appendChild(h('div', { class: 'admin-tools-actions' }, [buildSyncButton()]));
+
         if (tools.length === 0) {
-          container.appendChild(h('div', { class: 'admin-empty' }, 'No tools found.'));
+          wrap.appendChild(h('div', { class: 'admin-empty' }, 'No tools found.'));
+          container.appendChild(wrap);
           return;
         }
 
-        var grouped = groupByCategory(tools);
-        var wrap = h('div', { class: 'admin-tools' });
         wrap.appendChild(buildCallout());
+        var grouped = groupByCategory(tools);
         grouped.order.forEach(function (cat) {
           var list = h('ul', { class: 'admin-toollist', dataset: { category: cat } });
           grouped.groups[cat].forEach(function (tool) {

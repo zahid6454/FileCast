@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     github_workflow: str = Field(
         default="deploy.yml", validation_alias="FILECAST_GITHUB_WORKFLOW"
     )
+    # Admin-Tool-Sync-Plan.md D5: same reserved-env-var collision as
+    # github_workflow above, so this gets the same FILECAST_-prefixed alias
+    # rather than a bare GITHUB_SEED_WORKFLOW.
+    github_seed_workflow: str = Field(
+        default="seed-tools.yml", validation_alias="FILECAST_GITHUB_SEED_WORKFLOW"
+    )
 
     # Phase 9 §9.2: backend error tracking, separate Sentry project from the
     # frontend one (different platform, own DSN). Empty ⇒ sentry_sdk.init() is
