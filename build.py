@@ -752,7 +752,7 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
     ),
     "unix-timestamp-converter": (
         "Other Ways to Convert a Unix Timestamp",
-        "You can also convert a Unix timestamp using your command line (date -d @<timestamp> on Linux), or a quick snippet in your language of choice. FileCast is useful for a quick, one-off conversion with both directions in one place.",
+        "You can also convert a Unix timestamp using your command line (for example, date -d @1700000000 on Linux), or a quick snippet in your language of choice. FileCast is useful for a quick, one-off conversion with both directions in one place.",
     ),
     "jwt-decoder": (
         "Other Ways to Decode a JWT",
