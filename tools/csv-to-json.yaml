@@ -4,6 +4,7 @@ id: csv-to-json
 name: CSV to JSON Converter
 slug: /convert/csv-to-json
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: CSV
 output_format: JSON

@@ -3,6 +3,7 @@ id: base64-encode-decode
 name: Base64 Encode/Decode
 slug: /convert/base64-encode-decode
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: Text
 output_format: Base64

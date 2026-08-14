@@ -3,6 +3,7 @@ id: xml-to-json
 name: XML to JSON Converter
 slug: /convert/xml-to-json
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: XML
 output_format: JSON

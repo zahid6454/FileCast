@@ -55,6 +55,12 @@ ASSETS_DIR = ROOT / "assets"
 # this field decides a public privacy claim (the Local/Cloud badge); see there.
 VALID_TOOL_TYPES = {"client-side", "server-side"}
 
+# The only accepted values for a tool's `subcategory`. Enforced in load_tools()
+# because base.html/category.html select on these by equality (StrictUndefined),
+# so a missing value crashes every page's build and a typo'd value silently
+# drops the tool from both the nav dropdown and the category grid.
+VALID_SUBCATEGORIES = {"converter", "utility"}
+
 # Footer "Popular Tools" row (O2 report §5.7/§13 #18). Reuses the exact 6 tools
 # the SAME report already named "highest-volume" for the Phase 1 Search
 # Console indexing priority (§13 #1) — traceable back to the report itself
@@ -533,6 +539,18 @@ def load_tools() -> list[dict]:
                 f"  [fail] {yaml_path.name}: 'type' is {tool.get('type')!r}, "
                 f"expected one of {sorted(VALID_TOOL_TYPES)}. This field drives "
                 f"the privacy badge — fix the YAML rather than relaxing this check."
+            )
+        # base.html/category.html select on this by equality to split the nav
+        # dropdown and category grid into converters vs. utility tools. A
+        # missing value crashes StrictUndefined on every page (the nav is
+        # site-wide); a typo'd value silently drops the tool from both.
+        # Fail loudly here instead, at the one place that knows the filename.
+        if tool.get("subcategory") not in VALID_SUBCATEGORIES:
+            raise SystemExit(
+                f"  [fail] {yaml_path.name}: 'subcategory' is {tool.get('subcategory')!r}, "
+                f"expected one of {sorted(VALID_SUBCATEGORIES)}. This field drives "
+                f"the nav dropdown / category page split — fix the YAML rather than "
+                f"relaxing this check."
             )
         if not tool.get("enabled", True):
             print(f"  [skip] {tool['id']} (disabled)")

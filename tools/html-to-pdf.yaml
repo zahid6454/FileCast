@@ -3,6 +3,7 @@ id: html-to-pdf
 name: "HTML to PDF Converter"
 slug: /convert/html-to-pdf
 category: document-conversion
+subcategory: converter
 type: server-side
 input_format: HTML
 output_format: PDF

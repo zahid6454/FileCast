@@ -3,6 +3,7 @@ id: base64-to-image
 name: Base64 to Image Converter
 slug: /convert/base64-to-image
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: Base64
 output_format: Image

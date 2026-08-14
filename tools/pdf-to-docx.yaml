@@ -3,6 +3,7 @@ id: pdf-to-docx
 name: "PDF to DOCX Converter"
 slug: /convert/pdf-to-docx
 category: document-conversion
+subcategory: converter
 type: server-side
 input_format: PDF
 output_format: DOCX

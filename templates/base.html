@@ -280,15 +280,15 @@
 
        Each menu shows only the top 10 tools (by admin order) instead of the
        full category — a menu that lists every tool stops scaling once a
-       category passes ~15 entries. The seam below splits that top 10 into
-       converters vs. modification tools (same `subcategory` field
-       category.html already groups by) with a plain hairline, no label — an
-       editorial cue, not a taxonomy lesson. "View All" carries the rest. #}
+       category passes ~15 entries. The seam below splits that top 10 by the
+       `subcategory` field (same one category.html groups by): 'converter'
+       vs. 'utility', with a plain hairline, no label — an editorial cue, not
+       a taxonomy lesson. "View All" carries the rest. #}
     <nav class="header__nav" id="nav-drawer">
       {% for cat_id, cat_data in nav_categories.items() %}
       {% set top_tools = cat_data.tools[:10] %}
-      {% set main_tools = top_tools|selectattr('subcategory', 'undefined')|list %}
-      {% set sub_tools = top_tools|rejectattr('subcategory', 'undefined')|list %}
+      {% set main_tools = top_tools|selectattr('subcategory', 'equalto', 'converter')|list %}
+      {% set sub_tools = top_tools|selectattr('subcategory', 'equalto', 'utility')|list %}
       <div class="nav-dropdown">
         <button class="nav-dropdown__toggle" type="button" aria-expanded="false" aria-haspopup="true">
           {{ cat_data.nav_label or cat_data.name }}

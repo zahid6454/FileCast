@@ -4,6 +4,7 @@ id: json-to-xml
 name: JSON to XML Converter
 slug: /convert/json-to-xml
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: JSON
 output_format: XML

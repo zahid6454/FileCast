@@ -3,7 +3,7 @@ id: yaml-validator
 name: YAML Validator
 slug: /convert/yaml-validator
 category: developer-tools
-subcategory: developer-operations
+subcategory: utility
 type: client-side
 input_format: YAML
 output_format: YAML

@@ -3,6 +3,7 @@ id: webp-to-png
 name: WebP to PNG Converter
 slug: /convert/webp-to-png
 category: image-conversion
+subcategory: converter
 type: client-side
 input_format: WebP
 output_format: PNG

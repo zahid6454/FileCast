@@ -3,7 +3,7 @@ id: pdf-rotate
 name: PDF Rotate
 slug: /convert/pdf-rotate
 category: document-conversion
-subcategory: pdf-operations
+subcategory: utility
 type: client-side
 input_format: PDF
 output_format: PDF

@@ -3,6 +3,7 @@ id: number-base-converter
 name: Number Base Converter
 slug: /convert/number-base-converter
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: Number
 output_format: Binary/Decimal/Hex/Octal

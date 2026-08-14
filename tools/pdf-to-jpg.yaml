@@ -3,6 +3,7 @@ id: pdf-to-jpg
 name: PDF to JPG Converter
 slug: /convert/pdf-to-jpg
 category: document-conversion
+subcategory: converter
 type: client-side
 input_format: PDF
 output_format: JPG

@@ -4,6 +4,7 @@ id: yaml-to-json
 name: YAML to JSON Converter
 slug: /convert/yaml-to-json
 category: developer-tools
+subcategory: converter
 type: client-side
 input_format: YAML
 output_format: JSON

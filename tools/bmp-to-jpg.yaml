@@ -3,6 +3,7 @@ id: bmp-to-jpg
 name: BMP to JPG Converter
 slug: /convert/bmp-to-jpg
 category: image-conversion
+subcategory: converter
 type: client-side
 input_format: BMP
 output_format: JPG

@@ -3,7 +3,7 @@ id: pdf-compress
 name: "PDF Compressor"
 slug: /convert/pdf-compress
 category: document-conversion
-subcategory: pdf-operations
+subcategory: utility
 type: server-side
 input_format: PDF
 output_format: PDF

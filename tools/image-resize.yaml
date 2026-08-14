@@ -4,7 +4,7 @@ id: image-resize
 name: Image Resizer
 slug: /convert/image-resize
 category: image-conversion
-subcategory: image-operations
+subcategory: utility
 type: client-side
 input_format: Image
 output_format: Image
