@@ -10,7 +10,7 @@ accept_extensions: [.txt]
 output_extension: .txt
 js_module: converters/unix-timestamp-converter.js
 js_libs: []
-max_file_size: 1MB
+max_file_size: 5MB
 bulk_support: false
 ui_type: text-input
 action_label: "Convert Timestamp"

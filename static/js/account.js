@@ -101,13 +101,17 @@
       return node;
     }
     // A wave band: a crest curve closed down to the bottom edge, filled with
-    // the shared spectrum gradient at its own opacity.
-    function band(d, opacity) {
-      return shape('path', {
+    // the shared spectrum gradient. Opacity is set via .style (not the
+    // attribute) so it can hold var(--wave-band-opacity) and repaint at
+    // dark mode's much stronger value — same reason the gradient stops below
+    // use .style for their colors.
+    function band(d) {
+      var node = shape('path', {
         d: d + ' L400,150 L0,150 Z',
-        fill: 'url(#account-wave-spectrum)',
-        opacity: opacity
+        fill: 'url(#account-wave-spectrum)'
       });
+      node.style.setProperty('opacity', 'var(--wave-band-opacity)');
+      return node;
     }
     // The same crest curve traced again as a bare stroke — the contour line.
     function crest(d, opacity) {
@@ -144,10 +148,10 @@
     var crestB = 'M0,48 C70,92 130,38 190,76 C250,108 300,54 350,82 C375,94 390,74 400,64';
     var crestC = 'M0,100 C80,68 140,118 210,88 C280,62 330,108 400,80';
 
-    svg.appendChild(band(crestA, '0.025'));
-    svg.appendChild(band(crestB, '0.025'));
-    svg.appendChild(band(crestC, '0.025'));
-    svg.appendChild(band('M0,122 C90,100 160,132 230,110 C300,88 350,120 400,104', '0.025'));
+    svg.appendChild(band(crestA));
+    svg.appendChild(band(crestB));
+    svg.appendChild(band(crestC));
+    svg.appendChild(band('M0,122 C90,100 160,132 230,110 C300,88 350,120 400,104'));
 
     // The white contour lines were the loudest thing here even at a low fill
     // opacity — a bright stroke against a barely-there fill reads as popping

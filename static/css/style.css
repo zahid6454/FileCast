@@ -41,6 +41,20 @@
   --color-warning: #F59E0B;
   --color-warning-light: #FEF3C7;
 
+  /* Account page stat/empty-state icon badges (fav/conv/upload/member).
+     Light-mode values here; the dark blocks below redefine both fg and bg
+     brighter/more saturated — a flat light-mode hex reads muddy against a
+     dark navy card, so dark mode needs its own, more vivid pair rather than
+     inheriting this one. */
+  --icon-fav-bg: rgba(239, 68, 68, 0.16);
+  --icon-fav-fg: #EF4444;
+  --icon-conv-bg: rgba(16, 185, 129, 0.16);
+  --icon-conv-fg: #10B981;
+  --icon-upload-bg: rgba(37, 99, 235, 0.16);
+  --icon-upload-fg: #2563EB;
+  --icon-member-bg: rgba(245, 158, 11, 0.16);
+  --icon-member-fg: #F59E0B;
+
   /* Text */
   --color-text: #0F172A;
   --color-heading: #334155; /* softer than --color-text for card/heading titles */
@@ -118,6 +132,10 @@
      near-white flattened tint. */
   --wave-tint-blue: #6366f1;
   --wave-tint-green: #2dd4bf;
+  /* Bands sit on a white card here, so a 2.5% tint already reads — dark mode's
+     navy card swallows that same tint almost entirely, so it gets a much
+     stronger value below instead of inheriting this one. */
+  --wave-band-opacity: 0.025;
 
   /* Lighter than --brand-blue on its own (which read too dark as a border) —
      same hue, reduced alpha, not a different color. */
@@ -231,8 +249,26 @@
 
     --wave-tint-blue: #818cf8;
     --wave-tint-green: #5eead4;
+    --wave-band-opacity: 0.14;
 
     --stat-link-border: rgba(96, 165, 250, 0.6);
+
+    /* Brighter, more saturated than the light-mode values — a dark navy card
+       swallows a color's punch, so the icons need more of it to read as
+       vivid rather than muddy. Backgrounds at 0.4 (not 0.25): the lower
+       value blended into the card instead of reading as a lit badge. */
+    --icon-fav-fg: #FF7A87;
+    --icon-fav-bg: rgba(255, 122, 135, 0.4);
+    --icon-conv-fg: #4ADE80;
+    --icon-conv-bg: rgba(74, 222, 128, 0.4);
+    --icon-upload-fg: #7DB8FF;
+    --icon-upload-bg: rgba(125, 184, 255, 0.4);
+    --icon-member-fg: #FCD34D;
+    --icon-member-bg: rgba(252, 211, 77, 0.4);
+    /* Empty-state art (Favorites / Conversion history) is muted 50% in
+       light mode on purpose — full strength here instead, since halving an
+       already-dim dark-mode circle read as barely-there. */
+    --empty-icon-opacity: 0.6;
   }
 }
 :root[data-theme="dark"] {
@@ -279,8 +315,19 @@
 
   --wave-tint-blue: #818cf8;
   --wave-tint-green: #5eead4;
+  --wave-band-opacity: 0.14;
 
   --stat-link-border: rgba(96, 165, 250, 0.6);
+
+  --icon-fav-fg: #FF7A87;
+  --icon-fav-bg: rgba(255, 122, 135, 0.4);
+  --icon-conv-fg: #4ADE80;
+  --icon-conv-bg: rgba(74, 222, 128, 0.4);
+  --icon-upload-fg: #7DB8FF;
+  --icon-upload-bg: rgba(125, 184, 255, 0.4);
+  --icon-member-fg: #FCD34D;
+  --icon-member-bg: rgba(252, 211, 77, 0.4);
+  --empty-icon-opacity: 0.6;
 }
 
 /* --- Reset & Base --- */
@@ -1678,10 +1725,10 @@ img { max-width: 100%; display: block; }
   justify-content: center;
 }
 .account-stat__icon svg { width: 17px; height: 17px; }
-.account-stat__icon--fav { background: var(--color-error-light); color: var(--color-error); }
-.account-stat__icon--conv { background: var(--color-success-light); color: var(--color-success); }
-.account-stat__icon--upload { background: var(--color-primary-light); color: var(--color-primary); }
-.account-stat__icon--member { background: var(--color-warning-light); color: var(--color-warning); }
+.account-stat__icon--fav { background: var(--icon-fav-bg); color: var(--icon-fav-fg); }
+.account-stat__icon--conv { background: var(--icon-conv-bg); color: var(--icon-conv-fg); }
+.account-stat__icon--upload { background: var(--icon-upload-bg); color: var(--icon-upload-fg); }
+.account-stat__icon--member { background: var(--icon-member-bg); color: var(--icon-member-fg); }
 
 .account-field { display: block; margin-bottom: var(--space-3); }
 .account-field__label { display: block; margin-bottom: var(--space-1); font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--color-text-secondary); }
@@ -1812,11 +1859,11 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.5;
+  opacity: var(--empty-icon-opacity, 0.5);
 }
 .account-empty-icon__svg { width: 24px; height: 24px; }
-.account-empty-icon--fav { background: var(--color-error-light); color: var(--color-error); }
-.account-empty-icon--conv { background: var(--color-success-light); color: var(--color-success); }
+.account-empty-icon--fav { background: var(--icon-fav-bg); color: var(--icon-fav-fg); }
+.account-empty-icon--conv { background: var(--icon-conv-bg); color: var(--icon-conv-fg); }
 .account-empty--art .account-empty { margin: 0; max-width: 30ch; }
 
 /* --- Conversion history table --- */
