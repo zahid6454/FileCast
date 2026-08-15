@@ -40,9 +40,9 @@
         var itemContent = trimmed.substring(2);
         if (
           itemContent.trim() === '' ||
-          (itemContent.indexOf(':') !== -1 && !isSimpleValue(itemContent.trim()))
+          (hasMappingColon(itemContent.trim()) && !isSimpleValue(itemContent.trim()))
         ) {
-          if (itemContent.trim() !== '' && itemContent.indexOf(':') !== -1) {
+          if (itemContent.trim() !== '' && hasMappingColon(itemContent.trim())) {
             var tempLines = [rpt(' ', lineIndent + 2) + itemContent.trim()];
             var j = i + 1;
             while (j < lines.length) {
@@ -98,8 +98,18 @@
     if (str.charAt(0) === '"' || str.charAt(0) === "'") return true;
     if (!isNaN(str)) return true;
     if (str === 'true' || str === 'false' || str === 'null') return true;
-    if (str.indexOf(' ') === -1 && str.indexOf(':') === -1) return true;
+    if (str.indexOf(' ') === -1 && !hasMappingColon(str)) return true;
     return false;
+  }
+
+  // A ":" only marks a YAML key/value separator when it's followed by a
+  // space or sits at end of line ("key: value" / "key:") — a bare scalar
+  // like "http://example.com" or "12:30" has a colon that isn't one, and
+  // must not be mistaken for an inline compact mapping (e.g. "- key: value"
+  // list items, handled above).
+  var MAPPING_COLON_RE = /^[^:]*:(\s|$)/;
+  function hasMappingColon(str) {
+    return MAPPING_COLON_RE.test(str);
   }
 
   function parseScalar(str) {
