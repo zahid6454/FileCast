@@ -2296,24 +2296,16 @@ img { max-width: 100%; display: block; }
 .hero-search__option-name { font-weight: var(--weight-semibold); font-size: var(--text-sm); color: var(--color-text); }
 .hero-search__option-meta { font-size: var(--text-xs); color: var(--color-text-muted); }
 
-/* --- How It Works --- */
-.how-it-works { padding: var(--space-8) 0; }
+/* --- How It Works ---
+   Only the --compact variant below has a caller (home.html, R11) — these are
+   just the base properties --compact doesn't override (title/step-title
+   font, step-text color). Non-compact padding/grid/step/icon rules were
+   fully shadowed by --compact and removed rather than kept unreachable. */
 .how-it-works__title { font-family: var(--font-heading); font-size: var(--text-2xl); font-weight: var(--weight-bold); text-align: center; margin-bottom: var(--space-6); }
-.how-it-works__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-6); }
-.how-it-works__step { text-align: center; padding: var(--space-3) var(--space-4); }
-.how-it-works__icon {
-  width: 48px;
-  height: 48px;
-  color: var(--color-primary);
-  margin: 0 auto var(--space-3);
-}
 .how-it-works__step-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); margin-bottom: var(--space-1); }
 /* --color-text-muted on the sunken step background was 4.34:1 — just under
    4.5:1 (P2 §23, axe-core). --color-text-secondary clears it at 6.92:1. */
 .how-it-works__step-text { font-size: var(--text-sm); color: var(--color-text-secondary); }
-@media (min-width: 768px) {
-  .how-it-works__grid { grid-template-columns: repeat(3, 1fr); }
-}
 
 /* --- How It Works, compact/horizontal variant (folded into the hero, R11) ---
    Horizontal 3-up at every width, not just >=768px — the old mobile stack
