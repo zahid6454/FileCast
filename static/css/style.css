@@ -8,6 +8,14 @@
   /* Brand */
   --brand-blue: #2563EB;
   --brand-green: #10B981;
+  /* Same green, contrast-adjusted for a thin stroke/glyph on a plain page
+     background — #10B981 only clears 2.54:1 against white, under the 3:1
+     WCAG 1.4.11 non-text-contrast minimum for a UI icon (the codebase's
+     existing --color-badge-local exists for this same reason, but it's
+     theme-swapped, which would undo the how-it-works icons being fixed
+     across themes). #059669 clears 3:1 against both the light AND dark page
+     background (3.77:1 / 4.74:1), so it stays just as theme-fixed as blue. */
+  --brand-green-icon: #059669;
 
   /* Primary */
   --color-primary: #2563EB;
@@ -146,6 +154,23 @@
      rule. Overridden in the two dark blocks below. */
   --shadow-brand-hover: -4px 2px 8px rgba(37, 99, 235, 0.25), 4px 2px 8px rgba(16, 185, 129, 0.25);
 
+  /* Homepage hero illustration tile surfaces. NOT reused from
+     --color-bg-raised/-sunken: the hero SECTION's own background is
+     --color-bg-raised, so a card gradient built from that pair starts out
+     matching the section behind it. In light mode that's masked by the drop
+     shadow (a light shadow on a light card is a well-worn pattern), but a
+     near-black shadow barely registers on an already-dark surface — the same
+     reason --shadow-md/-lg jump from ~0.1 to ~0.4-0.5 opacity in the dark
+     blocks below, which the illustration's own hand-rolled filters need to
+     match rather than reusing one fixed opacity for both themes. */
+  --hero-tile-top: #FFFFFF;
+  --hero-tile-bottom: var(--color-bg-sunken);
+  --hero-tile-border: var(--color-border);
+  --hero-shadow-1: rgba(15, 23, 42, 0.14);
+  --hero-shadow-2: rgba(15, 23, 42, 0.18);
+  --hero-shadow-1-lg: rgba(15, 23, 42, 0.22);
+  --hero-shadow-2-lg: rgba(15, 23, 42, 0.22);
+
   /* Transitions */
   --transition-fast: 150ms ease;
   --transition-base: 200ms ease;
@@ -247,6 +272,17 @@
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
     --shadow-brand-hover: -4px 2px 10px rgba(96, 165, 250, 0.3), 4px 2px 10px rgba(52, 211, 153, 0.3);
 
+    /* Real elevation jump above --color-bg-raised (#1E293B, the hero
+       section's own background), not the light mode delta reused — see the
+       --hero-tile-top definition in :root for why that would collapse. */
+    --hero-tile-top: #3C4E6C;
+    --hero-tile-bottom: #263449;
+    --hero-tile-border: #4A5D80;
+    --hero-shadow-1: rgba(0, 0, 0, 0.5);
+    --hero-shadow-2: rgba(0, 0, 0, 0.45);
+    --hero-shadow-1-lg: rgba(0, 0, 0, 0.6);
+    --hero-shadow-2-lg: rgba(0, 0, 0, 0.55);
+
     --wave-tint-blue: #818cf8;
     --wave-tint-green: #5eead4;
     --wave-band-opacity: 0.14;
@@ -312,6 +348,14 @@
   --shadow-md: 0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 4px 8px -4px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
   --shadow-brand-hover: -4px 2px 10px rgba(96, 165, 250, 0.3), 4px 2px 10px rgba(52, 211, 153, 0.3);
+
+  --hero-tile-top: #3C4E6C;
+  --hero-tile-bottom: #263449;
+  --hero-tile-border: #4A5D80;
+  --hero-shadow-1: rgba(0, 0, 0, 0.5);
+  --hero-shadow-2: rgba(0, 0, 0, 0.45);
+  --hero-shadow-1-lg: rgba(0, 0, 0, 0.6);
+  --hero-shadow-2-lg: rgba(0, 0, 0, 0.55);
 
   --wave-tint-blue: #818cf8;
   --wave-tint-green: #5eead4;
@@ -2131,10 +2175,75 @@ img { max-width: 100%; display: block; }
 .section--dark { background: var(--color-bg-dark); color: var(--color-text-inverse); }
 
 /* --- Homepage hero (scoped to .hero--home so about/terms/contact are untouched, R11) --- */
-.hero--home { padding: var(--space-12) var(--space-4) var(--space-10); }
+.hero--home { text-align: left; padding: var(--space-12) 0 var(--space-10); }
 .hero--home .hero__title { font-size: var(--text-4xl); }
+/* nowrap, not a &nbsp; in the markup — a test asserts the H1's raw text
+   content is the exact string "Free Online File Converter" for SEO (see
+   test_homepage_h1_is_plain_and_unlinked); an entity would still visually
+   join the words but changes that underlying text. CSS keeps the text
+   untouched and only controls where the line is allowed to break. */
+.hero--home .hero__title .text-brand-green { white-space: nowrap; }
 .hero--home .hero__subtitle { font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-text-secondary); margin-bottom: var(--space-6); }
-.hero--home .hero__search { padding: var(--space-4) var(--space-5); font-size: var(--text-lg); }
+/* Fluid, not tiered — a fixed size (even split by breakpoint) always reads
+   right on some widths and oversized on others, because the bar is
+   width:100% of a column whose own width changes continuously. clamp() ties
+   the font to the viewport directly: ~14px on a phone, scaling up to 16px by
+   ~900px wide and holding there through desktop (never the old 18px, which
+   is what read oversized next to the 14px badges beneath it).
+   The middle term is wrapped in its own calc() — not just `11.5px + 0.5vw`
+   inline — because build.py's CSS minifier (csscompressor) only special-cases
+   whitespace-preservation for calc(), not clamp()/min()/max(). Unwrapped, it
+   collapses to `11.5px+0.5vw`, which is invalid CSS (the spec requires
+   surrounding whitespace around +/- in a math context) and gets the whole
+   declaration dropped post-minify — verified via computed-style in the built
+   output, not just by reading the minified text. */
+/* 600px, not none — width:100% alone stretches the bar to the full hero
+   column, which is fine on phone/tablet (column is already narrow there) but
+   balloons past 700px on wide tablet and desktop, well beyond what the
+   placeholder needs (~410px) or what reads as a proportioned input next to
+   the title/badges above and below it. */
+.hero--home .hero__search { padding: var(--space-3) var(--space-4); font-size: clamp(14px, calc(11.5px + 0.5vw), 16px); max-width: 600px; margin: 0; width: 100%; }
+/* .hero-search (the WRAPPER div) is a site-wide component also used on the
+   404 page, with its own max-width:420px; margin:auto — that centering must
+   be overridden here too, not just the .hero__search input. Matches the
+   input's own 600px cap so the dropdown results list (position:absolute,
+   inset to this wrapper) never renders wider than the input it belongs to. */
+.hero--home .hero-search { max-width: 600px; margin: 0 0 var(--space-6); }
+.hero--home .hero__badges { justify-content: flex-start; }
+
+/* Breakout grid: intentionally wider than the site's normal --max-width
+   (1200px) .container — at that width, on a wide viewport, the two columns
+   stayed squeezed toward the center (validated in design preview). */
+.hero--home .hero__grid {
+  max-width: 1760px;
+  margin: 0 auto;
+  padding: 0 clamp(24px, 6vw, 100px);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(40px, 6vw, 120px);
+  align-items: center;
+}
+/* Base state (mobile/tablet) MUST come before the min-width override below —
+   both rules share the same specificity, so source order decides which wins,
+   and the unconditional rule has to lose once the media query matches. */
+.hero--home .hero__visual {
+  display: none;
+  position: relative;
+  /* vw-scaled with a floor/ceiling, not a bare % of the column — a plain
+     percentage tracks the column's width 1:1, so right where this first
+     turns on (1024px) it was a proportionally tiny ~294px. The floor lifts
+     that low end ~25%; the ceiling keeps ultra-wide screens roughly where
+     they already looked right. */
+  width: clamp(340px, 36vw, 540px);
+  margin-left: auto; /* pushes it toward the right edge of its column */
+  aspect-ratio: 480 / 400;
+}
+.hero--home .hero__visual svg { width: 100%; height: 100%; overflow: visible; }
+@media (min-width: 1024px) {
+  .hero--home .hero__grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .hero--home .hero__visual { display: block; }
+}
+
 .hero__badges {
   display: flex;
   flex-wrap: wrap;
@@ -2187,23 +2296,80 @@ img { max-width: 100%; display: block; }
 .hero-search__option-name { font-weight: var(--weight-semibold); font-size: var(--text-sm); color: var(--color-text); }
 .hero-search__option-meta { font-size: var(--text-xs); color: var(--color-text-muted); }
 
-/* --- How It Works --- */
-.how-it-works { padding: var(--space-8) 0; }
+/* --- How It Works ---
+   Only the --compact variant below has a caller (home.html, R11) — these are
+   just the base properties --compact doesn't override (title/step-title
+   font, step-text color). Non-compact padding/grid/step/icon rules were
+   fully shadowed by --compact and removed rather than kept unreachable. */
 .how-it-works__title { font-family: var(--font-heading); font-size: var(--text-2xl); font-weight: var(--weight-bold); text-align: center; margin-bottom: var(--space-6); }
-.how-it-works__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-6); }
-.how-it-works__step { text-align: center; padding: var(--space-3) var(--space-4); }
-.how-it-works__icon {
-  width: 48px;
-  height: 48px;
-  color: var(--color-primary);
-  margin: 0 auto var(--space-3);
-}
 .how-it-works__step-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); margin-bottom: var(--space-1); }
 /* --color-text-muted on the sunken step background was 4.34:1 — just under
    4.5:1 (P2 §23, axe-core). --color-text-secondary clears it at 6.92:1. */
 .how-it-works__step-text { font-size: var(--text-sm); color: var(--color-text-secondary); }
-@media (min-width: 768px) {
-  .how-it-works__grid { grid-template-columns: repeat(3, 1fr); }
+
+/* --- How It Works, compact/horizontal variant (folded into the hero, R11) ---
+   Horizontal 3-up at every width, not just >=768px — the old mobile stack
+   existed to dodge sentence-length step text wrapping badly at 320-480px,
+   but the copy is down to one short line each now, so that constraint is
+   gone. Icon size and type scale fluidly (clamp) so the row still fits a
+   narrow phone without the titles wrapping. */
+.how-it-works--compact {
+  padding: 0;
+  margin-top: var(--space-8);
+  --hiw-icon: clamp(30px, 8vw, 40px);
+  --hiw-gap: clamp(var(--space-2), 2vw, var(--space-4));
+}
+.how-it-works--compact .how-it-works__title { text-align: left; font-size: var(--text-lg); margin-bottom: var(--space-4); }
+.how-it-works--compact .how-it-works__grid { display: flex; flex-direction: row; align-items: flex-start; gap: var(--hiw-gap); }
+/* flex: 1 1 0, not the default 0 1 auto — otherwise each step sizes to its
+   own text (Upload's copy runs longer than Convert's), so the three columns
+   end up different widths and the connector below (anchored to each step's
+   own box) would be a different length in each gap even though the gap
+   itself is identical. Equal-width columns keep that consistent regardless
+   of how each sentence happens to wrap. */
+.how-it-works--compact .how-it-works__step {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 0;
+  gap: var(--space-1);
+}
+.how-it-works--compact .how-it-works__icon {
+  width: var(--hiw-icon);
+  height: var(--hiw-icon);
+  flex-shrink: 0;
+  margin: 0 0 var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  border: 1.5px solid;
+}
+.how-it-works--compact .how-it-works__icon svg { width: 50%; height: 50%; }
+/* Fixed brand tokens (not theme-swapped, see --brand-blue/--brand-green above)
+   so these render pixel-identical in light and dark mode — an outline ring on
+   a transparent center always sits on whatever the page background already
+   is, so there's no chip fill color that needs to be re-tuned per theme. */
+.how-it-works__icon--upload, .how-it-works__icon--download { border-color: var(--brand-blue); color: var(--brand-blue); }
+.how-it-works__icon--convert { border-color: var(--brand-green-icon); color: var(--brand-green-icon); }
+.how-it-works--compact .how-it-works__step-title { font-size: clamp(13px, 3.2vw, var(--text-lg)); }
+.how-it-works--compact .how-it-works__step-text { font-size: clamp(11px, 2.6vw, var(--text-sm)); line-height: 1.4; }
+/* Connector: a pseudo-element anchored to the icon's own edges, not a
+   separate flex sibling sitting at the (much wider) column boundary — that's
+   what makes it land exactly between the two icon circles regardless of the
+   column's width or how the text below wraps. Runs from this icon's right
+   edge to the exact left edge of the next icon (icon width + one gap). */
+.how-it-works--compact .how-it-works__step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--hiw-icon) / 2);
+  left: var(--hiw-icon);
+  right: calc(-1 * var(--hiw-gap));
+  height: 0;
+  border-top: 1px dashed var(--color-border);
 }
 
 /* --- Per-category "view all" link (replaces .card--more) --- */
@@ -2251,13 +2417,17 @@ img { max-width: 100%; display: block; }
    <head> before the CSS loads, so the band never flashes for someone who
    already has an account (same technique as .account-signin). */
 :root[data-auth="in"] .signin-band { display: none; }
-.signin-band { text-align: center; }
+/* padding matches .why-filecast's own override below (both var(--space-16),
+   not the generic .section 32px) — as adjacent sibling sections they read as
+   one inconsistent rhythm otherwise, especially since this one stacks more
+   content (a lead paragraph why-filecast doesn't have) into less room. */
+.signin-band { text-align: center; padding: var(--space-16) 0; }
 .signin-band__lead { max-width: 44ch; margin: 0 auto var(--space-8); color: var(--color-text-secondary); font-size: var(--text-base); line-height: var(--leading-relaxed); }
 .signin-band__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-8); margin-bottom: var(--space-8); }
 /* Four tiles: stack on mobile, 2×2 on tablet, one row of four on desktop. */
 @media (min-width: 560px) { .signin-band__grid { grid-template-columns: repeat(2, 1fr); } }
 .signin-band__col { text-align: center; }
-.signin-band__icon { width: 32px; height: 32px; color: var(--color-primary); margin: 0 auto var(--space-3); }
+.signin-band__icon { width: 40px; height: 40px; color: var(--color-primary); margin: 0 auto var(--space-3); }
 .signin-band__col-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-heading); margin-bottom: var(--space-2); }
 .signin-band__col-text { font-size: var(--text-sm); color: var(--color-text-muted); line-height: var(--leading-relaxed); }
 @media (min-width: 900px) {
