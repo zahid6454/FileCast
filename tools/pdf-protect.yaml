@@ -1,0 +1,36 @@
+enabled: true
+id: pdf-protect
+name: "PDF Protect"
+slug: /convert/pdf-protect
+category: document-conversion
+subcategory: utility
+type: client-side
+input_format: PDF
+output_format: PDF
+accept_extensions: [.pdf]
+output_extension: .pdf
+js_module: converters/pdf-protect.js
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
+max_file_size: 50MB
+bulk_support: false
+ui_type: standard
+reverse_tool: pdf-unlock
+options:
+  - id: password
+    label: "Password"
+    type: password
+    default: ""
+    placeholder: "Enter a password to lock this PDF"
+tagline: "Add a password to a PDF"
+tagline_long: "Require a password to open a PDF — entirely in your browser, no upload required."
+meta:
+  title: "PDF Protect — Free, No Upload | FileCast"
+  description: "Password-protect a PDF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Require a password to open the file."
+  keywords: ["password protect pdf", "add password to pdf", "encrypt pdf", "lock pdf", "pdf password free"]
+content:
+  what_is: "content/pdf-protect/what-is.md"
+  comparison: "content/pdf-protect/comparison.md"
+  when_to_use: "content/pdf-protect/when-to-use.md"
+  faq: "content/pdf-protect/faq.md"
+related_tools: [pdf-unlock, pdf-watermark, pdf-merge, pdf-split]

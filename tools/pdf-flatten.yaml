@@ -1,0 +1,29 @@
+enabled: true
+id: pdf-flatten
+name: "Flatten PDF"
+slug: /convert/pdf-flatten
+category: document-conversion
+subcategory: utility
+type: client-side
+input_format: PDF
+output_format: PDF
+accept_extensions: [.pdf]
+output_extension: .pdf
+js_module: converters/pdf-flatten.js
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
+max_file_size: 50MB
+bulk_support: false
+ui_type: standard
+tagline: "Turn fillable form fields into static page content"
+tagline_long: "Flatten a PDF's form fields and annotations into permanent, non-editable page content — entirely in your browser, no upload required."
+meta:
+  title: "Flatten PDF — Free, No Upload | FileCast"
+  description: "Flatten a PDF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Locks in filled form fields as static content."
+  keywords: ["flatten pdf", "flatten pdf form", "lock pdf form fields", "pdf flattener", "flatten pdf free"]
+content:
+  what_is: "content/pdf-flatten/what-is.md"
+  comparison: "content/pdf-flatten/comparison.md"
+  when_to_use: "content/pdf-flatten/when-to-use.md"
+  faq: "content/pdf-flatten/faq.md"
+related_tools: [pdf-protect, pdf-to-pdfa, pdf-merge, pdf-crop]

@@ -1,0 +1,57 @@
+enabled: true
+id: pdf-page-numbers
+name: "PDF Page Numbers"
+slug: /convert/pdf-page-numbers
+category: document-conversion
+subcategory: utility
+type: client-side
+input_format: PDF
+output_format: PDF
+accept_extensions: [.pdf]
+output_extension: .pdf
+js_module: converters/pdf-page-numbers.js
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
+max_file_size: 50MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: position
+    label: "Position"
+    type: select
+    default: "bottom-center"
+    choices:
+      - { value: "bottom-center", label: "Bottom Center" }
+      - { value: "bottom-left", label: "Bottom Left" }
+      - { value: "bottom-right", label: "Bottom Right" }
+      - { value: "top-center", label: "Top Center" }
+      - { value: "top-left", label: "Top Left" }
+      - { value: "top-right", label: "Top Right" }
+  - id: startNumber
+    label: "Start at"
+    type: number
+    min: 1
+    max: 9999
+    default: 1
+    placeholder: "1"
+    suffix: ""
+  - id: format
+    label: "Format"
+    type: select
+    default: "n"
+    choices:
+      - { value: "n", label: "1, 2, 3…" }
+      - { value: "page-n", label: "Page 1, Page 2…" }
+      - { value: "page-of-total", label: "Page 1 of N…" }
+tagline: "Add page numbers to every page"
+tagline_long: "Stamp page numbers onto every page of a PDF, in the position and format you choose — entirely in your browser, no upload required."
+meta:
+  title: "PDF Page Numbers — Free, No Upload | FileCast"
+  description: "Add page numbers to a PDF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Choose position, start number, and format."
+  keywords: ["add page numbers to pdf", "pdf page numbers", "number pdf pages", "insert page numbers pdf", "pdf pagination free"]
+content:
+  what_is: "content/pdf-page-numbers/what-is.md"
+  comparison: "content/pdf-page-numbers/comparison.md"
+  when_to_use: "content/pdf-page-numbers/when-to-use.md"
+  faq: "content/pdf-page-numbers/faq.md"
+related_tools: [pdf-watermark, pdf-organize, pdf-merge, pdf-crop]

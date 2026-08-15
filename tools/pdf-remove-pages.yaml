@@ -1,0 +1,35 @@
+enabled: true
+id: pdf-remove-pages
+name: "PDF Remove Pages"
+slug: /convert/pdf-remove-pages
+category: document-conversion
+subcategory: utility
+type: client-side
+input_format: PDF
+output_format: PDF
+accept_extensions: [.pdf]
+output_extension: .pdf
+js_module: converters/pdf-remove-pages.js
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
+max_file_size: 50MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: pages
+    label: "Pages to remove"
+    type: text
+    default: ""
+    placeholder: "e.g. 2, 4-6"
+tagline: "Delete specific pages from a PDF"
+tagline_long: "Delete the pages you list and keep the rest, in their original order — entirely in your browser, no upload required."
+meta:
+  title: "PDF Remove Pages — Free, No Upload | FileCast"
+  description: "Remove pages from a PDF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. List page numbers or ranges to delete."
+  keywords: ["remove pdf pages", "delete pdf pages", "pdf page remover", "pdf page deleter", "remove pdf pages free"]
+content:
+  what_is: "content/pdf-remove-pages/what-is.md"
+  comparison: "content/pdf-remove-pages/comparison.md"
+  when_to_use: "content/pdf-remove-pages/when-to-use.md"
+  faq: "content/pdf-remove-pages/faq.md"
+related_tools: [pdf-extract-pages, pdf-split, pdf-organize, pdf-merge]

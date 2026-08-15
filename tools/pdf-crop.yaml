@@ -1,0 +1,38 @@
+enabled: true
+id: pdf-crop
+name: "PDF Crop"
+slug: /convert/pdf-crop
+category: document-conversion
+subcategory: utility
+type: client-side
+input_format: PDF
+output_format: PDF
+accept_extensions: [.pdf]
+output_extension: .pdf
+js_module: converters/pdf-crop.js
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
+max_file_size: 50MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: margin
+    label: "Margin to trim"
+    type: number
+    min: 0
+    max: 200
+    default: 36
+    placeholder: "36"
+    suffix: "pt"
+tagline: "Trim the margins off every page"
+tagline_long: "Trim an even margin off every page of a PDF, removing excess whitespace — entirely in your browser, no upload required."
+meta:
+  title: "PDF Crop — Free, No Upload | FileCast"
+  description: "Crop a PDF's margins free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Trim whitespace from every page at once."
+  keywords: ["crop pdf", "trim pdf margins", "pdf crop tool", "remove pdf whitespace", "crop pdf free"]
+content:
+  what_is: "content/pdf-crop/what-is.md"
+  comparison: "content/pdf-crop/comparison.md"
+  when_to_use: "content/pdf-crop/when-to-use.md"
+  faq: "content/pdf-crop/faq.md"
+related_tools: [pdf-rotate, pdf-watermark, pdf-flatten, pdf-to-png]
