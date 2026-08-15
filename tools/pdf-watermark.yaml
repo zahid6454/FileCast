@@ -1,0 +1,50 @@
+enabled: true
+id: pdf-watermark
+name: "PDF Watermark"
+slug: /convert/pdf-watermark
+category: document-conversion
+subcategory: utility
+type: client-side
+input_format: PDF
+output_format: PDF
+accept_extensions: [.pdf]
+output_extension: .pdf
+js_module: converters/pdf-watermark.js
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
+max_file_size: 50MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: text
+    label: "Watermark text"
+    type: text
+    default: "CONFIDENTIAL"
+    placeholder: "e.g. CONFIDENTIAL, DRAFT, SAMPLE"
+  - id: opacity
+    label: "Opacity"
+    type: range
+    min: 10
+    max: 90
+    default: 30
+    suffix: "%"
+  - id: fontSize
+    label: "Font size"
+    type: number
+    min: 12
+    max: 120
+    default: 40
+    placeholder: "40"
+    suffix: "pt"
+tagline: "Stamp a text watermark across every page"
+tagline_long: "Add a diagonal text watermark to every page of a PDF — entirely in your browser, no upload required."
+meta:
+  title: "PDF Watermark — Free, No Upload | FileCast"
+  description: "Add a watermark to a PDF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no branding added. Custom text, size, and opacity."
+  keywords: ["watermark pdf", "add watermark to pdf", "pdf watermark tool", "stamp pdf", "watermark pdf free"]
+content:
+  what_is: "content/pdf-watermark/what-is.md"
+  comparison: "content/pdf-watermark/comparison.md"
+  when_to_use: "content/pdf-watermark/when-to-use.md"
+  faq: "content/pdf-watermark/faq.md"
+related_tools: [pdf-page-numbers, pdf-protect, pdf-crop, pdf-merge]

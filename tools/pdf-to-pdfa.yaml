@@ -1,0 +1,38 @@
+enabled: true
+id: pdf-to-pdfa
+name: "PDF to PDF/A"
+slug: /convert/pdf-to-pdfa
+category: document-conversion
+subcategory: utility
+type: client-side
+input_format: PDF
+output_format: PDF/A
+accept_extensions: [.pdf]
+output_extension: .pdf
+js_module: converters/pdf-to-pdfa.js
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
+max_file_size: 50MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: part
+    label: "PDF/A level"
+    type: select
+    default: "2B"
+    choices:
+      - { value: "1B", label: "PDF/A-1B" }
+      - { value: "2B", label: "PDF/A-2B (recommended)" }
+      - { value: "3B", label: "PDF/A-3B" }
+tagline: "Tag a PDF for long-term archiving"
+tagline_long: "Add the PDF/A identification metadata archives and records systems look for — entirely in your browser, no upload required."
+meta:
+  title: "PDF to PDF/A — Free, No Upload | FileCast"
+  description: "Tag a PDF as PDF/A free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits. Adds the metadata archival systems check for."
+  keywords: ["pdf to pdfa", "pdf/a converter", "convert pdf to pdf/a", "archive pdf", "pdf a format free"]
+content:
+  what_is: "content/pdf-to-pdfa/what-is.md"
+  comparison: "content/pdf-to-pdfa/comparison.md"
+  when_to_use: "content/pdf-to-pdfa/when-to-use.md"
+  faq: "content/pdf-to-pdfa/faq.md"
+related_tools: [pdf-flatten, pdf-compress, pdf-merge, pdf-organize]

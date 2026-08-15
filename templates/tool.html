@@ -128,6 +128,9 @@
         <option value="{{ choice.value }}"{% if choice.value == opt.default %} selected{% endif %}>{{ choice.label }}</option>
         {% endfor %}
       </select>
+      {% elif opt.type == 'text' %}
+      <input class="tool-options__input" type="text" id="opt-{{ opt.id }}"
+             value="{{ opt.default or '' }}" placeholder="{{ opt.placeholder or '' }}">
       {% endif %}
     </div>
     {% endfor %}

@@ -796,6 +796,51 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "Other Ways to Generate a QR Code",
         "You can also generate a QR code using your phone's built-in QR creation tools (where available), or a short script using a QR library in your language of choice. FileCast is useful for a quick, one-off QR code without installing anything.",
     ),
+    # Build Action Plan PR 4: 10 PDF page-modification tools, all PDF->PDF
+    # (Modification-type, not conversions), so each gets its own action-phrased
+    # entry the same way pdf-compress/merge/rotate/split do above rather than
+    # the {source}/{target} "PDF" conversion entry, which is for tools that
+    # convert a *different* source format into PDF.
+    "pdf-protect": (
+        "Other Ways to Password-Protect a PDF",
+        "You can also add a password to a PDF using Adobe Acrobat's Protect tool, or Preview on Mac (File → Export as PDF, then check Encrypt and set a password). FileCast is useful when you don't have either installed.",
+    ),
+    "pdf-watermark": (
+        "Other Ways to Add a Watermark to a PDF",
+        "You can also add a watermark using Adobe Acrobat's Watermark tool, or Microsoft Word's Design → Watermark option if you still have the original document. FileCast is useful when you only have the PDF, not the source file.",
+    ),
+    "pdf-page-numbers": (
+        "Other Ways to Add Page Numbers to a PDF",
+        "You can also add page numbers using Adobe Acrobat's Header & Footer tool, or your word processor's built-in page numbering before exporting to PDF. FileCast is useful when you only have the PDF.",
+    ),
+    "pdf-crop": (
+        "Other Ways to Crop a PDF",
+        "You can also crop a PDF's margins using Adobe Acrobat's Crop Pages tool, or by re-exporting from the original document with smaller margins. FileCast is useful when you don't have either option available.",
+    ),
+    "pdf-flatten": (
+        "Other Ways to Flatten a PDF",
+        "You can also flatten a PDF's form fields using Adobe Acrobat's Flatten Fields tool, or by printing the filled form to a virtual PDF printer. FileCast is useful when you don't have Acrobat installed.",
+    ),
+    "pdf-to-pdfa": (
+        "Other Ways to Convert PDF to PDF/A",
+        "You can also convert a PDF to PDF/A using Adobe Acrobat Pro's \"Save As Other → Archive PDF\" tool, or LibreOffice's Export As → PDF/A option. FileCast is useful for quick PDF/A metadata tagging without either installed — for full ISO 19005 compliance verification, a dedicated validator like veraPDF is still the authoritative check.",
+    ),
+    "pdf-extract-pages": (
+        "Other Ways to Extract Pages from a PDF",
+        "You can also extract pages using Preview on Mac (drag page thumbnails into a new document), or Adobe Acrobat's Organize Pages tool. FileCast is useful when you don't have either installed.",
+    ),
+    "pdf-remove-pages": (
+        "Other Ways to Remove Pages from a PDF",
+        "You can also remove pages using Preview on Mac (select thumbnails and press Delete), or Adobe Acrobat's Organize Pages tool. FileCast is useful when you don't have either installed.",
+    ),
+    "pdf-organize": (
+        "Other Ways to Reorder PDF Pages",
+        "You can also reorder pages using Preview on Mac (drag thumbnails into a new order), or Adobe Acrobat's Organize Pages tool. FileCast is useful when you don't have either installed.",
+    ),
+    "pdf-unlock": (
+        "Other Ways to Remove a PDF Password",
+        "You can also remove a PDF password using Adobe Acrobat (open with the password, then Protect → Remove Security), or Preview on Mac (open with the password, then File → Export as PDF without checking Encrypt). FileCast is useful when you don't have either installed.",
+    ),
 }
 
 ALTERNATIVES_GROUP_OVERRIDES = {
@@ -830,6 +875,16 @@ ALTERNATIVES_GROUP_OVERRIDES = {
     "hash-generator": "hash-generator",
     "barcode-generator": "barcode-generator",
     "qr-code-generator": "qr-code-generator",
+    "pdf-protect": "pdf-protect",
+    "pdf-watermark": "pdf-watermark",
+    "pdf-page-numbers": "pdf-page-numbers",
+    "pdf-crop": "pdf-crop",
+    "pdf-flatten": "pdf-flatten",
+    "pdf-to-pdfa": "pdf-to-pdfa",
+    "pdf-extract-pages": "pdf-extract-pages",
+    "pdf-remove-pages": "pdf-remove-pages",
+    "pdf-organize": "pdf-organize",
+    "pdf-unlock": "pdf-unlock",
 }
 
 

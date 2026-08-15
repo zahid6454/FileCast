@@ -1,0 +1,36 @@
+enabled: true
+id: pdf-unlock
+name: "PDF Unlock"
+slug: /convert/pdf-unlock
+category: document-conversion
+subcategory: utility
+type: client-side
+input_format: PDF
+output_format: PDF
+accept_extensions: [.pdf]
+output_extension: .pdf
+js_module: converters/pdf-unlock.js
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
+max_file_size: 50MB
+bulk_support: false
+ui_type: standard
+reverse_tool: pdf-protect
+options:
+  - id: password
+    label: "Password (if known)"
+    type: text
+    default: ""
+    placeholder: "Leave blank if the PDF doesn't require one to open"
+tagline: "Remove a password from a PDF"
+tagline_long: "Remove a password requirement from a PDF you have the right to open — entirely in your browser, no upload required."
+meta:
+  title: "PDF Unlock — Free, No Upload | FileCast"
+  description: "Remove a PDF password free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. For PDFs you have the right to open."
+  keywords: ["unlock pdf", "remove pdf password", "decrypt pdf", "pdf password remover", "unlock pdf free"]
+content:
+  what_is: "content/pdf-unlock/what-is.md"
+  comparison: "content/pdf-unlock/comparison.md"
+  when_to_use: "content/pdf-unlock/when-to-use.md"
+  faq: "content/pdf-unlock/faq.md"
+related_tools: [pdf-protect, pdf-merge, pdf-split, pdf-organize]
