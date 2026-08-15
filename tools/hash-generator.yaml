@@ -1,0 +1,30 @@
+enabled: true
+id: hash-generator
+name: "Hash Generator (MD5/SHA-256)"
+slug: /convert/hash-generator
+category: developer-tools
+subcategory: utility
+type: client-side
+input_format: Text
+output_format: Hash
+accept_extensions: [.txt]
+output_extension: .txt
+js_module: converters/hash-generator.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Generate Hashes"
+input_placeholder: "Type or paste the text you want to hash..."
+tagline: "Generate MD5 and SHA-256 hashes from text"
+tagline_long: "Generate MD5 and SHA-256 hash digests from any text instantly in your browser — for checksums, cache keys, and integrity checks."
+meta:
+  title: "Hash Generator (MD5/SHA-256) — Free, No Upload | FileCast"
+  description: "Generate MD5 and SHA-256 hashes free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Both digests computed at once."
+  keywords: ["hash generator", "md5 generator", "sha256 generator", "md5 hash online", "sha-256 hash online"]
+content:
+  what_is: "content/hash-generator/what-is.md"
+  comparison: "content/hash-generator/comparison.md"
+  when_to_use: "content/hash-generator/when-to-use.md"
+  faq: "content/hash-generator/faq.md"
+related_tools: [uuid-generator, jwt-decoder, base64-encode-decode]

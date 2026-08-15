@@ -1,0 +1,31 @@
+enabled: true
+id: barcode-generator
+name: Barcode Generator
+slug: /convert/barcode-generator
+category: developer-tools
+subcategory: utility
+type: client-side
+input_format: Text
+output_format: Barcode
+accept_extensions: [.txt]
+output_extension: .svg
+output_is_data_url: true
+js_module: converters/barcode-generator.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Generate Barcode"
+input_placeholder: "Type the text or code to encode...\n\nExample: SKU-48213"
+tagline: "Generate a scannable Code 128 barcode from text"
+tagline_long: "Generate a Code 128 barcode from any text instantly in your browser — a scalable SVG, ready for labels and product tags."
+meta:
+  title: "Barcode Generator — Free, No Upload | FileCast"
+  description: "Generate a Code 128 barcode free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Downloads as a scalable SVG."
+  keywords: ["barcode generator", "code 128 generator", "generate barcode online", "free barcode maker", "barcode svg"]
+content:
+  what_is: "content/barcode-generator/what-is.md"
+  comparison: "content/barcode-generator/comparison.md"
+  when_to_use: "content/barcode-generator/when-to-use.md"
+  faq: "content/barcode-generator/faq.md"
+related_tools: [qr-code-generator, hash-generator, uuid-generator]

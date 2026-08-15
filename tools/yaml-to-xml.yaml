@@ -1,0 +1,30 @@
+enabled: true
+id: yaml-to-xml
+name: YAML to XML Converter
+slug: /convert/yaml-to-xml
+category: developer-tools
+subcategory: converter
+type: client-side
+input_format: YAML
+output_format: XML
+accept_extensions: [.yaml, .yml]
+output_extension: .xml
+js_module: converters/yaml-to-xml.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+reverse_tool: xml-to-yaml
+input_placeholder: "Paste your YAML here...\n\nExample:\nname: Alice\nage: 30"
+tagline: "Convert YAML config files to well-formed XML"
+tagline_long: "Convert YAML to XML instantly in your browser — useful when a config-file source needs to feed a system that only reads XML."
+meta:
+  title: "YAML to XML Converter — Free, No Upload | FileCast"
+  description: "Convert YAML to XML free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Produces well-formed XML from any YAML document."
+  keywords: ["yaml to xml", "convert yaml to xml", "yaml xml converter", "yaml to xml online", "yaml converter"]
+content:
+  what_is: "content/yaml-to-xml/what-is.md"
+  comparison: "content/yaml-to-xml/comparison.md"
+  when_to_use: "content/yaml-to-xml/when-to-use.md"
+  faq: "content/yaml-to-xml/faq.md"
+related_tools: [xml-to-yaml, json-to-xml, yaml-to-json, xml-to-json]

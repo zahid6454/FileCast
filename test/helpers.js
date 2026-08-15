@@ -1,3 +1,4 @@
+import { webcrypto } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +20,7 @@ export function createDom(bodyHtml = '', { url = 'http://localhost/' } = {}) {
   polyfillArrayBuffer(dom.window);
   polyfillObjectURL(dom.window);
   polyfillTextCodec(dom.window);
+  polyfillSubtleCrypto(dom.window);
   return dom;
 }
 
@@ -33,6 +35,17 @@ function polyfillTextCodec(win) {
   if (typeof win.TextEncoder === 'function') return;
   win.TextEncoder = NodeTextEncoder;
   win.TextDecoder = NodeTextDecoder;
+}
+
+// jsdom's window.crypto has getRandomValues()/randomUUID() (real browsers'
+// crypto.subtle predates jsdom's implementation) but no `.subtle` at all —
+// Hash Generator's SHA-256 (crypto.subtle.digest) would throw
+// "crypto.subtle is undefined" under evalScript() without this. Node's own
+// webcrypto.subtle is the same spec-compliant SubtleCrypto interface real
+// browsers expose, so it's reused as-is rather than reimplemented.
+function polyfillSubtleCrypto(win) {
+  if (win.crypto && win.crypto.subtle) return;
+  win.crypto.subtle = webcrypto.subtle;
 }
 
 // This jsdom version doesn't implement URL.createObjectURL/revokeObjectURL at

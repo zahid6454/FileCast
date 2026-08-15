@@ -17,6 +17,7 @@ function toolPageHtml() {
     <div id="text-result" class="hidden">
       <div id="result-info"></div>
       <textarea id="text-output"></textarea>
+      <img id="text-image-preview" class="hidden" alt="Converted image preview">
       <button id="copy-btn"></button>
       <button id="download-btn"></button>
     </div>
@@ -214,5 +215,43 @@ describe('shared-text.js — worker-based conversion', () => {
     expect(capturedBlob.type).toBe('text/plain');
     const text = new dom.window.TextDecoder('utf-8').decode(await capturedBlob.arrayBuffer());
     expect(text).toBe('Hello');
+  });
+
+  // output_is_data_url also covers non-image binary output (CSV to Excel's
+  // .xlsx bytes, base64-encoded) — the <img> preview must not try to render
+  // that as a picture just because the tool is output_is_data_url.
+  it('does not show the image preview for a non-image output_is_data_url result', async () => {
+    const dom = await setupTextToolPage(IdentityTextWorker);
+    dom.window.TOOL_CONFIG.output_is_data_url = true;
+    const xlsxDataUrl =
+      'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,UEsD';
+
+    const input = dom.window.document.getElementById('text-input');
+    input.value = xlsxDataUrl;
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const preview = dom.window.document.getElementById('text-image-preview');
+    expect(preview.classList.contains('hidden')).toBe(true);
+    expect(preview.getAttribute('src')).toBeNull();
+  });
+
+  it('shows the image preview for an image output_is_data_url result', async () => {
+    const dom = await setupTextToolPage(IdentityTextWorker);
+    dom.window.TOOL_CONFIG.output_is_data_url = true;
+    const imageDataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+
+    const input = dom.window.document.getElementById('text-input');
+    input.value = imageDataUrl;
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const preview = dom.window.document.getElementById('text-image-preview');
+    expect(preview.classList.contains('hidden')).toBe(false);
+    expect(preview.getAttribute('src')).toBe(imageDataUrl);
   });
 });

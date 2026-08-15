@@ -1,0 +1,29 @@
+enabled: true
+id: tsv-to-csv
+name: TSV to CSV Converter
+slug: /convert/tsv-to-csv
+category: developer-tools
+subcategory: converter
+type: client-side
+input_format: TSV
+output_format: CSV
+accept_extensions: [.tsv, .txt]
+output_extension: .csv
+js_module: converters/tsv-to-csv.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+input_placeholder: "Paste your tab-separated data here...\n\nExample:\nname\tage\tcity\nAlice\t30\tNew York\nBob\t25\tLondon"
+tagline: "Turn tab-separated data into a comma-separated CSV file"
+tagline_long: "Convert TSV (tab-separated values) to standard CSV instantly in your browser — ready for spreadsheets and tools that expect commas."
+meta:
+  title: "TSV to CSV Converter — Free, No Upload | FileCast"
+  description: "Convert TSV to CSV free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Ready to open in Excel or Google Sheets."
+  keywords: ["tsv to csv", "convert tsv to csv", "tab separated to csv", "tsv converter", "tab delimited to comma"]
+content:
+  what_is: "content/tsv-to-csv/what-is.md"
+  comparison: "content/tsv-to-csv/comparison.md"
+  when_to_use: "content/tsv-to-csv/when-to-use.md"
+  faq: "content/tsv-to-csv/faq.md"
+related_tools: [csv-to-json, csv-to-xml, json-to-csv, csv-to-xlsx]
