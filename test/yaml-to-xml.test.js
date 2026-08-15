@@ -48,6 +48,29 @@ describe('yaml-to-xml.js — window.convertText', () => {
     expect(text).toContain('<note>Tom &amp; Jerry &lt;3</note>');
   });
 
+  it('keeps a bare list-item scalar containing a colon as a string, not a nested mapping', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/yaml-to-xml.js');
+
+    const yamlText = 'urls:\n  - http://example.com\n  - https://test.org\n';
+    const { text } = dom.window.convertText(yamlText);
+
+    expect(text).toContain('<item>http://example.com</item>');
+    expect(text).toContain('<item>https://test.org</item>');
+    expect(text).not.toContain('<http>');
+  });
+
+  it('still parses a compact inline mapping list item ("- key: value")', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/yaml-to-xml.js');
+
+    const yamlText = 'people:\n  - name: Alice\n    age: 30\n';
+    const { text } = dom.window.convertText(yamlText);
+
+    expect(text).toContain('<name>Alice</name>');
+    expect(text).toContain('<age>30</age>');
+  });
+
   it('throws when the top-level YAML value is a bare scalar', () => {
     const dom = createDom();
     evalScript(dom, 'converters/yaml-to-xml.js');
