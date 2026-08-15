@@ -776,6 +776,26 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "Other Ways to Decode a JWT",
         "You can also decode a JWT using jwt.io, or a short script using your language's Base64 library — the header and payload are just Base64url-encoded JSON. FileCast is useful for a quick, one-off decode without pasting a token into a third-party site tied to a specific vendor.",
     ),
+    # Build Action Plan PR 3: CSV/XML/YAML conversions reuse the {source}/
+    # {target}-templated CSV/XML/YAML entries above via output_format —
+    # only the 4 bespoke tools below (a new output format, XLSX, plus 3
+    # generators with no "convert X to Y" framing) need their own entry.
+    "XLSX": (
+        "Other Ways to Convert {source} to Excel",
+        "You can also convert {source} to Excel by opening it in Excel or Google Sheets directly (both read CSV natively) and saving or exporting as XLSX. FileCast is useful when you want the .xlsx file itself without opening a spreadsheet app.",
+    ),
+    "hash-generator": (
+        "Other Ways to Generate a Hash",
+        "You can also generate a hash using your command line (sha256sum or md5sum on Mac/Linux, or Get-FileHash in PowerShell), or a short script using your language's built-in hashing library. FileCast is useful for a quick hash of pasted text without opening a terminal.",
+    ),
+    "barcode-generator": (
+        "Other Ways to Generate a Barcode",
+        "You can also generate a Code 128 barcode using a desktop label-printing app, or a short script using a barcode library in your language of choice. FileCast is useful for a quick, one-off barcode without installing anything.",
+    ),
+    "qr-code-generator": (
+        "Other Ways to Generate a QR Code",
+        "You can also generate a QR code using your phone's built-in QR creation tools (where available), or a short script using a QR library in your language of choice. FileCast is useful for a quick, one-off QR code without installing anything.",
+    ),
 }
 
 ALTERNATIVES_GROUP_OVERRIDES = {
@@ -807,6 +827,9 @@ ALTERNATIVES_GROUP_OVERRIDES = {
     "number-base-converter": "number-base-converter",
     "unix-timestamp-converter": "unix-timestamp-converter",
     "jwt-decoder": "jwt-decoder",
+    "hash-generator": "hash-generator",
+    "barcode-generator": "barcode-generator",
+    "qr-code-generator": "qr-code-generator",
 }
 
 

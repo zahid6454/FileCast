@@ -38,8 +38,19 @@ self.onmessage = function (e) {
     if (typeof self.convertText !== 'function') {
       throw new Error('Converter not loaded.');
     }
-    var result = self.convertText(text);
-    self.postMessage({ ok: true, result: result });
+    // Wrapped in Promise.resolve() rather than assumed synchronous — Hash
+    // Generator's SHA-256 support (crypto.subtle.digest) is inherently
+    // async, unlike every other converter here. A plain value resolves
+    // through this identically to before, so the other 12 converters are
+    // unaffected.
+    Promise.resolve(self.convertText(text)).then(
+      function (result) {
+        self.postMessage({ ok: true, result: result });
+      },
+      function (err) {
+        self.postMessage({ ok: false, error: (err && err.message) || 'Conversion failed.' });
+      }
+    );
   } catch (err) {
     self.postMessage({ ok: false, error: (err && err.message) || 'Conversion failed.' });
   }

@@ -171,7 +171,11 @@
     els.textResult.classList.remove('hidden');
 
     if (els.imagePreview) {
-      if (config.output_is_data_url) {
+      // output_is_data_url also covers non-image binary output (CSV to
+      // Excel's .xlsx bytes) — sniffing the data URL's own mime type here,
+      // rather than trusting the config flag alone, keeps an <img> from
+      // trying (and visibly failing) to render a spreadsheet as a picture.
+      if (config.output_is_data_url && /^data:image\//.test(outputText)) {
         els.imagePreview.src = outputText;
         els.imagePreview.classList.remove('hidden');
       } else {

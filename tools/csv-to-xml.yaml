@@ -1,0 +1,29 @@
+enabled: true
+id: csv-to-xml
+name: CSV to XML Converter
+slug: /convert/csv-to-xml
+category: developer-tools
+subcategory: converter
+type: client-side
+input_format: CSV
+output_format: XML
+accept_extensions: [.csv]
+output_extension: .xml
+js_module: converters/csv-to-xml.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+input_placeholder: "Paste your CSV data here...\n\nExample:\nname,age,city\nAlice,30,New York\nBob,25,London"
+tagline: "Turn CSV spreadsheet data into well-formed XML"
+tagline_long: "Convert CSV data to XML format instantly in your browser — each row becomes an XML element, ready for legacy systems and XML-based APIs."
+meta:
+  title: "CSV to XML Converter — Free, No Upload | FileCast"
+  description: "Convert CSV to XML free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Each row becomes a well-formed XML element."
+  keywords: ["csv to xml", "convert csv to xml", "csv xml converter", "csv to xml online", "spreadsheet to xml"]
+content:
+  what_is: "content/csv-to-xml/what-is.md"
+  comparison: "content/csv-to-xml/comparison.md"
+  when_to_use: "content/csv-to-xml/when-to-use.md"
+  faq: "content/csv-to-xml/faq.md"
+related_tools: [csv-to-json, json-to-xml, xml-to-json, tsv-to-csv]

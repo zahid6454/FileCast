@@ -1,0 +1,30 @@
+enabled: true
+id: csv-to-xlsx
+name: "CSV to Excel (XLSX) Converter"
+slug: /convert/csv-to-xlsx
+category: developer-tools
+subcategory: converter
+type: client-side
+input_format: CSV
+output_format: XLSX
+accept_extensions: [.csv]
+output_extension: .xlsx
+output_is_data_url: true
+js_module: converters/csv-to-xlsx.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+input_placeholder: "Paste your CSV data here...\n\nExample:\nname,age,city\nAlice,30,New York\nBob,25,London"
+tagline: "Turn CSV data into a real Excel spreadsheet"
+tagline_long: "Convert CSV data into a genuine .xlsx workbook instantly in your browser — opens directly in Excel, Google Sheets, or LibreOffice Calc."
+meta:
+  title: "CSV to Excel (XLSX) Converter — Free, No Upload | FileCast"
+  description: "Convert CSV to Excel free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Produces a real .xlsx file, not a renamed CSV."
+  keywords: ["csv to excel", "csv to xlsx", "convert csv to excel", "csv to spreadsheet", "csv xlsx converter"]
+content:
+  what_is: "content/csv-to-xlsx/what-is.md"
+  comparison: "content/csv-to-xlsx/comparison.md"
+  when_to_use: "content/csv-to-xlsx/when-to-use.md"
+  faq: "content/csv-to-xlsx/faq.md"
+related_tools: [csv-to-json, tsv-to-csv, csv-to-xml, json-to-csv]

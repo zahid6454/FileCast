@@ -1,0 +1,31 @@
+enabled: true
+id: qr-code-generator
+name: QR Code Generator
+slug: /convert/qr-code-generator
+category: developer-tools
+subcategory: utility
+type: client-side
+input_format: Text
+output_format: QR Code
+accept_extensions: [.txt]
+output_extension: .svg
+output_is_data_url: true
+js_module: converters/qr-code-generator.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: text-input
+action_label: "Generate QR Code"
+input_placeholder: "Type or paste text, a URL, or anything else to encode...\n\nExample: https://example.com"
+tagline: "Generate a scannable QR code from text or a URL"
+tagline_long: "Generate a QR code from any text or URL instantly in your browser — a scalable SVG, ready to print or share."
+meta:
+  title: "QR Code Generator — Free, No Upload | FileCast"
+  description: "Generate a QR code free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Downloads as a scalable SVG."
+  keywords: ["qr code generator", "generate qr code online", "free qr code maker", "qr code svg", "url to qr code"]
+content:
+  what_is: "content/qr-code-generator/what-is.md"
+  comparison: "content/qr-code-generator/comparison.md"
+  when_to_use: "content/qr-code-generator/when-to-use.md"
+  faq: "content/qr-code-generator/faq.md"
+related_tools: [barcode-generator, hash-generator, uuid-generator]
