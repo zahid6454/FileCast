@@ -1826,6 +1826,26 @@ def test_homepage_meta_description_describes_the_product(built):
 
 
 # --------------------------------------------------------------------------- #
+# Homepage hero redesign (R11) — two-column hero + How It Works folded in
+# --------------------------------------------------------------------------- #
+
+
+def test_homepage_how_it_works_step_copy(built):
+    home = (built / "index.html").read_text(encoding="utf-8")
+    # No other coverage touches this section's content — locks in the three
+    # step captions so a future template edit can't silently drop or garble
+    # one.
+    assert "Drop your file in, or browse." in home
+    assert "Most conversions run in your browser." in home
+    assert "No watermarks, no waiting." in home
+
+
+def test_homepage_search_placeholder_has_no_ellipsis(built):
+    home = (built / "index.html").read_text(encoding="utf-8")
+    assert 'placeholder="Search conversion tools (e.g. HEIC, PDF, JSON)"' in home
+
+
+# --------------------------------------------------------------------------- #
 # Open Graph share images (O2 report §13 #7)
 # --------------------------------------------------------------------------- #
 

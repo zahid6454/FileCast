@@ -8,6 +8,14 @@
   /* Brand */
   --brand-blue: #2563EB;
   --brand-green: #10B981;
+  /* Same green, contrast-adjusted for a thin stroke/glyph on a plain page
+     background — #10B981 only clears 2.54:1 against white, under the 3:1
+     WCAG 1.4.11 non-text-contrast minimum for a UI icon (the codebase's
+     existing --color-badge-local exists for this same reason, but it's
+     theme-swapped, which would undo the how-it-works icons being fixed
+     across themes). #059669 clears 3:1 against both the light AND dark page
+     background (3.77:1 / 4.74:1), so it stays just as theme-fixed as blue. */
+  --brand-green-icon: #059669;
 
   /* Primary */
   --color-primary: #2563EB;
@@ -2169,13 +2177,38 @@ img { max-width: 100%; display: block; }
 /* --- Homepage hero (scoped to .hero--home so about/terms/contact are untouched, R11) --- */
 .hero--home { text-align: left; padding: var(--space-12) 0 var(--space-10); }
 .hero--home .hero__title { font-size: var(--text-4xl); }
+/* nowrap, not a &nbsp; in the markup — a test asserts the H1's raw text
+   content is the exact string "Free Online File Converter" for SEO (see
+   test_homepage_h1_is_plain_and_unlinked); an entity would still visually
+   join the words but changes that underlying text. CSS keeps the text
+   untouched and only controls where the line is allowed to break. */
+.hero--home .hero__title .text-brand-green { white-space: nowrap; }
 .hero--home .hero__subtitle { font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-text-secondary); margin-bottom: var(--space-6); }
-.hero--home .hero__search { padding: var(--space-4) var(--space-5); font-size: var(--text-lg); max-width: none; margin: 0; width: 100%; }
+/* Fluid, not tiered — a fixed size (even split by breakpoint) always reads
+   right on some widths and oversized on others, because the bar is
+   width:100% of a column whose own width changes continuously. clamp() ties
+   the font to the viewport directly: ~14px on a phone, scaling up to 16px by
+   ~900px wide and holding there through desktop (never the old 18px, which
+   is what read oversized next to the 14px badges beneath it).
+   The middle term is wrapped in its own calc() — not just `11.5px + 0.5vw`
+   inline — because build.py's CSS minifier (csscompressor) only special-cases
+   whitespace-preservation for calc(), not clamp()/min()/max(). Unwrapped, it
+   collapses to `11.5px+0.5vw`, which is invalid CSS (the spec requires
+   surrounding whitespace around +/- in a math context) and gets the whole
+   declaration dropped post-minify — verified via computed-style in the built
+   output, not just by reading the minified text. */
+/* 600px, not none — width:100% alone stretches the bar to the full hero
+   column, which is fine on phone/tablet (column is already narrow there) but
+   balloons past 700px on wide tablet and desktop, well beyond what the
+   placeholder needs (~410px) or what reads as a proportioned input next to
+   the title/badges above and below it. */
+.hero--home .hero__search { padding: var(--space-3) var(--space-4); font-size: clamp(14px, calc(11.5px + 0.5vw), 16px); max-width: 600px; margin: 0; width: 100%; }
 /* .hero-search (the WRAPPER div) is a site-wide component also used on the
    404 page, with its own max-width:420px; margin:auto — that centering must
-   be overridden here too, not just the .hero__search input, or the search
-   bar stays capped/centered inside the now-left-aligned content column. */
-.hero--home .hero-search { max-width: none; margin: 0 0 var(--space-6); }
+   be overridden here too, not just the .hero__search input. Matches the
+   input's own 600px cap so the dropdown results list (position:absolute,
+   inset to this wrapper) never renders wider than the input it belongs to. */
+.hero--home .hero-search { max-width: 600px; margin: 0 0 var(--space-6); }
 .hero--home .hero__badges { justify-content: flex-start; }
 
 /* Breakout grid: intentionally wider than the site's normal --max-width
@@ -2196,7 +2229,12 @@ img { max-width: 100%; display: block; }
 .hero--home .hero__visual {
   display: none;
   position: relative;
-  width: 70%;
+  /* vw-scaled with a floor/ceiling, not a bare % of the column — a plain
+     percentage tracks the column's width 1:1, so right where this first
+     turns on (1024px) it was a proportionally tiny ~294px. The floor lifts
+     that low end ~25%; the ceiling keeps ultra-wide screens roughly where
+     they already looked right. */
+  width: clamp(340px, 36vw, 540px);
   margin-left: auto; /* pushes it toward the right edge of its column */
   aspect-ratio: 480 / 400;
 }
@@ -2278,57 +2316,68 @@ img { max-width: 100%; display: block; }
 }
 
 /* --- How It Works, compact/horizontal variant (folded into the hero, R11) ---
-   Mobile-first: below 768px this stacks as icon-beside-text rows (same
-   breakpoint the base .how-it-works__grid already used for its own 1-col ->
-   3-col switch) rather than going straight to a 3-across row. A fixed
-   horizontal row at 320-480px, sharing this column with the hero content,
-   doesn't leave enough width for the real sentence-length step text next to
-   two dashed connectors without either wrapping so tight it looks broken or
-   risking horizontal overflow. */
-.how-it-works--compact { padding: 0; margin-top: var(--space-8); }
+   Horizontal 3-up at every width, not just >=768px — the old mobile stack
+   existed to dodge sentence-length step text wrapping badly at 320-480px,
+   but the copy is down to one short line each now, so that constraint is
+   gone. Icon size and type scale fluidly (clamp) so the row still fits a
+   narrow phone without the titles wrapping. */
+.how-it-works--compact {
+  padding: 0;
+  margin-top: var(--space-8);
+  --hiw-icon: clamp(30px, 8vw, 40px);
+  --hiw-gap: clamp(var(--space-2), 2vw, var(--space-4));
+}
 .how-it-works--compact .how-it-works__title { text-align: left; font-size: var(--text-lg); margin-bottom: var(--space-4); }
-.how-it-works--compact .how-it-works__grid { display: flex; flex-direction: column; gap: var(--space-4); }
+.how-it-works--compact .how-it-works__grid { display: flex; flex-direction: row; align-items: flex-start; gap: var(--hiw-gap); }
+/* flex: 1 1 0, not the default 0 1 auto — otherwise each step sizes to its
+   own text (Upload's copy runs longer than Convert's), so the three columns
+   end up different widths and the connector below (anchored to each step's
+   own box) would be a different length in each gap even though the gap
+   itself is identical. Equal-width columns keep that consistent regardless
+   of how each sentence happens to wrap. */
 .how-it-works--compact .how-it-works__step {
-  flex-direction: row;
-  align-items: center;
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
   text-align: left;
   padding: 0;
-  gap: var(--space-3);
+  gap: var(--space-1);
 }
 .how-it-works--compact .how-it-works__icon {
-  width: 40px;
-  height: 40px;
+  width: var(--hiw-icon);
+  height: var(--hiw-icon);
   flex-shrink: 0;
-  margin: 0;
+  margin: 0 0 var(--space-1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
+  border: 1.5px solid;
 }
-.how-it-works--compact .how-it-works__icon svg { width: 20px; height: 20px; }
-.how-it-works__icon--upload, .how-it-works__icon--download { background: var(--color-primary-subtle); color: var(--color-primary); }
-.how-it-works__icon--convert { background: var(--color-success-subtle); color: var(--color-success); }
-.how-it-works--compact .how-it-works__connector { display: none; }
-@media (min-width: 768px) {
-  /* No numbered badges (1/2/3 circles were prototyped and explicitly
-     removed per feedback) — just icon, title, text, with a short dashed
-     connector standing in for the missing arrows between steps. */
-  .how-it-works--compact .how-it-works__grid { flex-direction: row; align-items: flex-start; gap: var(--space-2); }
-  /* flex: 1 1 0, not the default 0 1 auto — otherwise each step sizes to
-     its own text (Upload's copy runs longer than Convert's), so the three
-     columns end up different widths and the fixed-width connectors between
-     them read as uneven spacing even though the connectors themselves are
-     identical. Equal-width columns make the rhythm consistent regardless of
-     how the three sentences happen to wrap. */
-  .how-it-works--compact .how-it-works__step { flex: 1 1 0; min-width: 0; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
-  .how-it-works--compact .how-it-works__icon { margin-bottom: var(--space-1); }
-  .how-it-works--compact .how-it-works__connector {
-    display: block;
-    flex: 0 0 28px;
-    height: 2px;
-    margin-top: 20px;
-    background-image: repeating-linear-gradient(90deg, var(--color-border) 0 6px, transparent 6px 10px);
-  }
+.how-it-works--compact .how-it-works__icon svg { width: 50%; height: 50%; }
+/* Fixed brand tokens (not theme-swapped, see --brand-blue/--brand-green above)
+   so these render pixel-identical in light and dark mode — an outline ring on
+   a transparent center always sits on whatever the page background already
+   is, so there's no chip fill color that needs to be re-tuned per theme. */
+.how-it-works__icon--upload, .how-it-works__icon--download { border-color: var(--brand-blue); color: var(--brand-blue); }
+.how-it-works__icon--convert { border-color: var(--brand-green-icon); color: var(--brand-green-icon); }
+.how-it-works--compact .how-it-works__step-title { font-size: clamp(13px, 3.2vw, var(--text-lg)); }
+.how-it-works--compact .how-it-works__step-text { font-size: clamp(11px, 2.6vw, var(--text-sm)); line-height: 1.4; }
+/* Connector: a pseudo-element anchored to the icon's own edges, not a
+   separate flex sibling sitting at the (much wider) column boundary — that's
+   what makes it land exactly between the two icon circles regardless of the
+   column's width or how the text below wraps. Runs from this icon's right
+   edge to the exact left edge of the next icon (icon width + one gap). */
+.how-it-works--compact .how-it-works__step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--hiw-icon) / 2);
+  left: var(--hiw-icon);
+  right: calc(-1 * var(--hiw-gap));
+  height: 0;
+  border-top: 1px dashed var(--color-border);
 }
 
 /* --- Per-category "view all" link (replaces .card--more) --- */
@@ -2376,13 +2425,17 @@ img { max-width: 100%; display: block; }
    <head> before the CSS loads, so the band never flashes for someone who
    already has an account (same technique as .account-signin). */
 :root[data-auth="in"] .signin-band { display: none; }
-.signin-band { text-align: center; }
+/* padding matches .why-filecast's own override below (both var(--space-16),
+   not the generic .section 32px) — as adjacent sibling sections they read as
+   one inconsistent rhythm otherwise, especially since this one stacks more
+   content (a lead paragraph why-filecast doesn't have) into less room. */
+.signin-band { text-align: center; padding: var(--space-16) 0; }
 .signin-band__lead { max-width: 44ch; margin: 0 auto var(--space-8); color: var(--color-text-secondary); font-size: var(--text-base); line-height: var(--leading-relaxed); }
 .signin-band__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-8); margin-bottom: var(--space-8); }
 /* Four tiles: stack on mobile, 2×2 on tablet, one row of four on desktop. */
 @media (min-width: 560px) { .signin-band__grid { grid-template-columns: repeat(2, 1fr); } }
 .signin-band__col { text-align: center; }
-.signin-band__icon { width: 32px; height: 32px; color: var(--color-primary); margin: 0 auto var(--space-3); }
+.signin-band__icon { width: 40px; height: 40px; color: var(--color-primary); margin: 0 auto var(--space-3); }
 .signin-band__col-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-heading); margin-bottom: var(--space-2); }
 .signin-band__col-text { font-size: var(--text-sm); color: var(--color-text-muted); line-height: var(--leading-relaxed); }
 @media (min-width: 900px) {
