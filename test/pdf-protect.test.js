@@ -29,7 +29,7 @@ class FakeFailingWorker {
 }
 
 function toolPageWithPassword(value) {
-  return createDom(`<input id="opt-password" type="text" value="${value}">`);
+  return createDom(`<input id="opt-password" type="password" autocomplete="off" value="${value}">`);
 }
 
 describe('pdf-protect.js — window.convertFile', () => {

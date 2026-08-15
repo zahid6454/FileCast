@@ -1192,8 +1192,11 @@ img { max-width: 100%; display: block; }
 }
 /* Same reasoning as --range above: a text option (watermark text, a page-range
    string) needs room to actually show what's typed, not the ~half-row a
-   generic flex item would settle for. */
-.tool-options__row--text { flex: 1 1 100%; min-width: 0; }
+   generic flex item would settle for. Password fields get the same width
+   even though there's nothing to visually confirm while typing — the row
+   just shouldn't jump in width relative to its --text sibling. */
+.tool-options__row--text,
+.tool-options__row--password { flex: 1 1 100%; min-width: 0; }
 
 /* --- Responsive grid ladder (§5b): 1 → 2 (480) → 3 (768) → 4 (1024) --- */
 @media (min-width: 480px) {

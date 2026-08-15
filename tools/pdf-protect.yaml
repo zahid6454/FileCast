@@ -19,7 +19,7 @@ reverse_tool: pdf-unlock
 options:
   - id: password
     label: "Password"
-    type: text
+    type: password
     default: ""
     placeholder: "Enter a password to lock this PDF"
 tagline: "Add a password to a PDF"

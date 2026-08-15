@@ -19,7 +19,7 @@ reverse_tool: pdf-protect
 options:
   - id: password
     label: "Password (if known)"
-    type: text
+    type: password
     default: ""
     placeholder: "Leave blank if the PDF doesn't require one to open"
 tagline: "Remove a password from a PDF"
