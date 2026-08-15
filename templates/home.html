@@ -39,58 +39,206 @@
 
 {# ===== Hero (homepage-only enhancements scoped to .hero--home, R11) ===== #}
 <section class="hero hero--home">
-  <h1 class="hero__title"><span class="text-brand-blue">Free Online</span> <span class="text-brand-green">File Converter</span></h1>
-  <p class="hero__subtitle"><a href="/privacy/" class="hero__link text-brand-blue">Your Files Stay Yours</a> — free, private file conversion, no sign-up needed</p>
+  <div class="hero__grid">
+    <div class="hero__content">
+      <h1 class="hero__title"><span class="text-brand-blue">Free Online</span> <span class="text-brand-green">File Converter</span></h1>
+      <p class="hero__subtitle"><a href="/privacy/" class="hero__link text-brand-blue">Your Files Stay Yours</a> — free, private file conversion, no sign-up needed</p>
 
-  {# Client search (P21/P22) — nav.js drives it only where #hero-search exists. #}
-  <div class="hero-search">
-    <input
-      type="search"
-      class="hero__search"
-      id="hero-search"
-      role="combobox"
-      aria-expanded="false"
-      aria-controls="hero-search-results"
-      aria-autocomplete="list"
-      aria-label="Search conversion tools"
-      placeholder="Search conversion tools... (e.g. HEIC, PDF, JSON)"
-      autocomplete="off"
-    >
-    <ul class="hero-search__results hidden" id="hero-search-results" role="listbox" aria-label="Tool search results"></ul>
-  </div>
+      {# Client search (P21/P22) — nav.js drives it only where #hero-search exists. #}
+      <div class="hero-search">
+        <input
+          type="search"
+          class="hero__search"
+          id="hero-search"
+          role="combobox"
+          aria-expanded="false"
+          aria-controls="hero-search-results"
+          aria-autocomplete="list"
+          aria-label="Search conversion tools"
+          placeholder="Search conversion tools... (e.g. HEIC, PDF, JSON)"
+          autocomplete="off"
+        >
+        <ul class="hero-search__results hidden" id="hero-search-results" role="listbox" aria-label="Tool search results"></ul>
+      </div>
 
-  <div class="hero__badges">
-    <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>{{ tools|length }} Free Tools</span>
-    <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Sign-up optional</span>
-    <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>No Limits</span>
-    {# Conversion counter — baked from the DB at build time. Guarded on a floor so
-       it only ever reads as a real trust signal; absent with no DB (P10). #}
-    {% if totals.conversions is not none and totals.conversions >= 1000 %}
-    <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>{{ totals.conversions_display }}+ Files Converted</span>
-    {% endif %}
-  </div>
-</section>
+      <div class="hero__badges">
+        <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>{{ tools|length }} Free Tools</span>
+        <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Sign-up optional</span>
+        <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>No Limits</span>
+        {# Conversion counter — baked from the DB at build time. Guarded on a floor so
+           it only ever reads as a real trust signal; absent with no DB (P10). #}
+        {% if totals.conversions is not none and totals.conversions >= 1000 %}
+        <span class="hero__badge"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>{{ totals.conversions_display }}+ Files Converted</span>
+        {% endif %}
+      </div>
 
-{# ===== How It Works ===== #}
-<section class="section--tinted">
-  <div class="container how-it-works">
-    <h2 class="how-it-works__title"><span class="text-brand-blue">How</span> <span class="text-brand-green">It Works</span></h2>
-    <div class="how-it-works__grid">
-      <div class="how-it-works__step">
-        <svg class="how-it-works__icon" aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg>
-        <div class="how-it-works__step-title">1. Upload</div>
-        <div class="how-it-works__step-text">Drop your file in, or click to browse. Nothing starts until you choose a file.</div>
+      {# ===== How It Works (folded into the hero content column) ===== #}
+      <div class="how-it-works how-it-works--compact">
+        <h2 class="how-it-works__title"><span class="text-brand-blue">How</span> <span class="text-brand-green">It Works</span></h2>
+        <div class="how-it-works__grid">
+          <div class="how-it-works__step">
+            <span class="how-it-works__icon how-it-works__icon--upload"><svg aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg></span>
+            <div class="how-it-works__step-title">1. Upload</div>
+            <div class="how-it-works__step-text">Drop your file in, or click to browse. Nothing starts until you choose a file.</div>
+          </div>
+          <span class="how-it-works__connector" aria-hidden="true"></span>
+          <div class="how-it-works__step">
+            <span class="how-it-works__icon how-it-works__icon--convert"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
+            <div class="how-it-works__step-title">2. Convert</div>
+            <div class="how-it-works__step-text">Most conversions happen right in your browser.</div>
+          </div>
+          <span class="how-it-works__connector" aria-hidden="true"></span>
+          <div class="how-it-works__step">
+            <span class="how-it-works__icon how-it-works__icon--download"><svg aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg></span>
+            <div class="how-it-works__step-title">3. Download</div>
+            <div class="how-it-works__step-text">Save your converted file. No watermarks, no waiting.</div>
+          </div>
+        </div>
       </div>
-      <div class="how-it-works__step">
-        <svg class="how-it-works__icon" aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg>
-        <div class="how-it-works__step-title">2. Convert</div>
-        <div class="how-it-works__step-text">Most conversions happen right in your browser.</div>
-      </div>
-      <div class="how-it-works__step">
-        <svg class="how-it-works__icon" aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg>
-        <div class="how-it-works__step-title">3. Download</div>
-        <div class="how-it-works__step-text">Save your converted file. No watermarks, no waiting.</div>
-      </div>
+    </div>
+
+    {# Decorative only — every format/step it depicts is already conveyed in
+       text above, so the whole illustration is aria-hidden. IDs carry a
+       hero- prefix: this is the only inline <defs> on the page (icons live
+       in the shared sprite, _sprite.html), but the prefix is cheap insurance
+       against a future inline SVG on this page colliding. Fills/shadows read
+       from --hero-* custom properties (style.css) rather than the shared
+       --color-bg-raised/-sunken pair, which the hero SECTION's own
+       background already uses — see the --hero-tile-top comment there. #}
+    <div class="hero__visual" aria-hidden="true">
+      <svg viewBox="0 0 480 400">
+        <defs>
+          <linearGradient id="hero-cardGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="var(--hero-tile-top)"/>
+            <stop offset="1" stop-color="var(--hero-tile-bottom)"/>
+          </linearGradient>
+          <filter id="hero-fsh" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="var(--hero-shadow-1)"/>
+            <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="var(--hero-shadow-2)"/>
+          </filter>
+          <filter id="hero-fsh-lg" x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="var(--hero-shadow-1-lg)"/>
+            <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="var(--hero-shadow-2-lg)"/>
+          </filter>
+          <filter id="hero-fglow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="22"/>
+          </filter>
+          <filter id="hero-fblur-sm" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="6"/>
+          </filter>
+        </defs>
+
+        {# Atmosphere: two soft blurred glows tucked into the empty corners
+           (not directly behind a tile), a dashed guide circle, three sparkles.
+           Kept well inside the viewBox — overflow:visible lets a filter blur a
+           few px past an element's own box, but a glow sized/placed to need
+           much more than that could bleed toward the page edge. #}
+        <circle cx="75" cy="75" r="50" fill="var(--brand-blue)" opacity="0.1" filter="url(#hero-fglow)"/>
+        <circle cx="405" cy="325" r="50" fill="var(--brand-green)" opacity="0.1" filter="url(#hero-fglow)"/>
+        <circle cx="240" cy="190" r="172" fill="none" stroke="var(--color-border)" stroke-width="1.5" stroke-dasharray="3 7" opacity="0.7"/>
+        <path d="M30 190l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="var(--brand-blue)" opacity="0.35"/>
+        <path d="M440 50l2.5 6.5 6.5 2.5-6.5 2.5-2.5 6.5-2.5-6.5-6.5-2.5 6.5-2.5z" fill="var(--brand-green)" opacity="0.35"/>
+        <path d="M440 370l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="var(--color-text-light)" opacity="0.4"/>
+
+        {# --- Format tiles (2 per nav category, symmetric hex ring) ---
+           Geometry: 6 points on a circle of radius 140 around (240,190),
+           computed (not hand-placed) so each card's footprint — including its
+           format-name label, which sits BELOW the card and so extends its
+           real footprint further than the card box alone — clears its
+           neighbours and the center tile with margin. #}
+
+        {# PDF/DOCX — a generic outline document-with-folded-corner + text-line
+           glyph, colored per format (no lettering on the icon itself — the
+           label below the card already names it). Outline only, matching
+           the line-icon language the mountain pictograms and the rest of
+           the site's sprite icons already use — deliberately generic rather
+           than tracing Adobe's/Microsoft's actual trademarked logomarks,
+           which would be a real trademark risk on a commercial site (same
+           convention CloudConvert/Smallpdf/iLovePDF use). #}
+
+        {# Ring rotated 30° from the original hexagon (no vertex at top/bottom
+           any more) so it settles into 3 tiles left / 3 tiles right of the
+           center, each 84x84 like the center tile. Left-column tiles tilt
+           -15°, right-column tiles tilt +15° — a "wings" mirror rather than
+           a uniform spin. Each tile — frame, icon AND its name label — is
+           one rigid rotated unit; the label moved inside the card, under the
+           icon, instead of sitting below it unrotated. #}
+
+        {# PDF — upper left (Document), tilt -15° #}
+        <g transform="rotate(-15 170 69)">
+          <rect x="128" y="27" width="84" height="84" rx="20" fill="url(#hero-cardGrad)" stroke="var(--hero-tile-border)" stroke-width="1.5" filter="url(#hero-fsh)"/>
+          <path d="M158.8,42.7 L174.3,42.7 L181.2,49.6 L181.2,71.3 L158.8,71.3 Z" fill="none" stroke="var(--color-error-solid)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+          <path d="M174.3,42.7 L174.3,49.6 L181.2,49.6" fill="none" stroke="var(--color-error-solid)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+          <line x1="163.2" y1="58.2" x2="176.8" y2="58.2" stroke="var(--color-error-solid)" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="163.2" y1="62" x2="176.8" y2="62" stroke="var(--color-error-solid)" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="163.2" y1="65.7" x2="171.2" y2="65.7" stroke="var(--color-error-solid)" stroke-width="1.8" stroke-linecap="round"/>
+          <text x="170" y="95" text-anchor="middle" font-size="13" font-weight="700" fill="var(--color-error-solid)" font-family="var(--font-heading)">PDF</text>
+        </g>
+
+        {# DOCX — upper right (Document), tilt +15° #}
+        <g transform="rotate(15 310 69)">
+          <rect x="268" y="27" width="84" height="84" rx="20" fill="url(#hero-cardGrad)" stroke="var(--hero-tile-border)" stroke-width="1.5" filter="url(#hero-fsh)"/>
+          <path d="M298.8,42.7 L314.3,42.7 L321.2,49.6 L321.2,71.3 L298.8,71.3 Z" fill="none" stroke="var(--brand-blue)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+          <path d="M314.3,42.7 L314.3,49.6 L321.2,49.6" fill="none" stroke="var(--brand-blue)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+          <line x1="303.2" y1="58.2" x2="316.8" y2="58.2" stroke="var(--brand-blue)" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="303.2" y1="62" x2="316.8" y2="62" stroke="var(--brand-blue)" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="303.2" y1="65.7" x2="311.2" y2="65.7" stroke="var(--brand-blue)" stroke-width="1.8" stroke-linecap="round"/>
+          <text x="310" y="95" text-anchor="middle" font-size="13" font-weight="700" fill="var(--brand-blue)" font-family="var(--font-heading)">DOCX</text>
+        </g>
+
+        {# PNG — left (Image), tilt -15° #}
+        <g transform="rotate(-15 100 190)">
+          <rect x="58" y="148" width="84" height="84" rx="20" fill="url(#hero-cardGrad)" stroke="var(--hero-tile-border)" stroke-width="1.5" filter="url(#hero-fsh)"/>
+          <path d="M83.9,187.9 L93.2,169.3 L98.8,176.8 L105,173 L116.1,187.9 V189.8 H83.9 Z" fill="none" stroke="#0EA5E9" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+          <circle cx="111.2" cy="166.8" r="3.5" fill="none" stroke="#0EA5E9" stroke-width="1.8"/>
+          <text x="100" y="216" text-anchor="middle" font-size="13" font-weight="700" fill="#0EA5E9" font-family="var(--font-heading)">PNG</text>
+        </g>
+
+        {# JPG — right (Image), tilt +15° #}
+        <g transform="rotate(15 380 190)">
+          <rect x="338" y="148" width="84" height="84" rx="20" fill="url(#hero-cardGrad)" stroke="var(--hero-tile-border)" stroke-width="1.5" filter="url(#hero-fsh)"/>
+          <path d="M363.9,187.9 L373.2,169.3 L378.8,176.8 L385,173 L396.1,187.9 V189.8 H363.9 Z" fill="none" stroke="var(--brand-green)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+          <circle cx="391.2" cy="166.8" r="3.5" fill="none" stroke="var(--brand-green)" stroke-width="1.8"/>
+          <text x="380" y="216" text-anchor="middle" font-size="13" font-weight="700" fill="var(--brand-green)" font-family="var(--font-heading)">JPG</text>
+        </g>
+
+        {# JSON — lower left (Developer), tilt -15° #}
+        <g transform="rotate(-15 170 311)">
+          <rect x="128" y="269" width="84" height="84" rx="20" fill="url(#hero-cardGrad)" stroke="var(--hero-tile-border)" stroke-width="1.5" filter="url(#hero-fsh)"/>
+          <text x="170" y="309" text-anchor="middle" font-size="27" font-weight="700" fill="#8B5CF6" font-family="var(--font-mono)">{ }</text>
+          <text x="170" y="337" text-anchor="middle" font-size="13" font-weight="700" fill="#8B5CF6" font-family="var(--font-heading)">JSON</text>
+        </g>
+
+        {# SVG — lower right (Developer), tilt +15° #}
+        <g transform="rotate(15 310 311)">
+          <rect x="268" y="269" width="84" height="84" rx="20" fill="url(#hero-cardGrad)" stroke="var(--hero-tile-border)" stroke-width="1.5" filter="url(#hero-fsh)"/>
+          <text x="310" y="309" text-anchor="middle" font-size="27" font-weight="700" fill="#EA580C" font-family="var(--font-mono)">&lt; &gt;</text>
+          <text x="310" y="337" text-anchor="middle" font-size="13" font-weight="700" fill="#EA580C" font-family="var(--font-heading)">SVG</text>
+        </g>
+
+        {# --- Center tile: FileCast logo mark, raised above the ring. Same
+           theme-adaptive surface as the ring cards (light in light mode, dark
+           in dark mode) rather than a permanently-dark tile — it stays the
+           visual anchor through size and the stronger fsh-lg shadow, not a
+           color break from its surroundings. The bars read
+           var(--color-primary)/var(--color-success) rather than the header's
+           own hardcoded pale hex: those two tokens already resolve to the
+           exact same values on the header's permanently-dark bar, but also
+           give a properly saturated blue/green (matching the H1 text above)
+           here in light mode instead of washing out. --- #}
+        <ellipse cx="240" cy="240" rx="32" ry="6" fill="#000" opacity="0.22" filter="url(#hero-fblur-sm)"/>
+        <g>
+          <rect x="198" y="148" width="84" height="84" rx="20" fill="url(#hero-cardGrad)" stroke="var(--hero-tile-border)" stroke-width="1.5" filter="url(#hero-fsh-lg)"/>
+          <rect x="213" y="166" width="16" height="48" rx="6" fill="var(--color-primary)"/>
+          {# White (like the header's fixed-dark bar) only works because that
+             bar never changes shade. On a tile whose own fill now flips
+             light/dark with the theme, the gap between the bars needs to
+             flip the other way to stay visible: dark-on-white in light mode,
+             light-on-dark in dark mode — exactly what --color-heading does. #}
+          <polygon points="233,182 245,190 233,198" fill="var(--color-heading)"/>
+          <rect x="250" y="166" width="16" height="48" rx="6" fill="var(--color-success)"/>
+        </g>
+      </svg>
     </div>
   </div>
 </section>
