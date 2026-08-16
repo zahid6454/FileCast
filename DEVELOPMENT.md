@@ -126,15 +126,9 @@ debugging — see [VS Code Setup](#vs-code-setup)). On Windows this needs one ex
 step: psycopg's async driver cannot use the default `ProactorEventLoop`, so a plain
 `python -m uvicorn main:app` fails to reach the DB. `api/dev_server.py` sets
 `WindowsSelectorEventLoopPolicy` before importing uvicorn and should be used instead
-of invoking uvicorn directly on Windows.
-
-Unlike the Docker image's entrypoint (`alembic upgrade head && uvicorn ...`),
-`dev_server.py` does **not** run migrations itself — it assumes the schema already
-exists. In practice this is a non-issue, since the normal local flow (starting the
-`api` container at least once via `docker compose --profile dev-only up`) already
-runs migrations against the same Postgres. If you're debugging against a genuinely
-fresh database that the `api` container has never touched, run
-`cd api && alembic upgrade head` first, or `dev_server.py` will fail on missing tables.
+of invoking uvicorn directly on Windows. It also runs `alembic upgrade head` first,
+mirroring the Docker image's `alembic upgrade head && uvicorn ...` entrypoint, so it
+works against a fresh database too — not just one the `api` container already migrated.
 
 ## VS Code Setup
 
