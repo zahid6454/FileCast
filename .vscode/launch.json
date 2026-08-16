@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI: main.py (uvicorn)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/api/dev_server.py",
+      "cwd": "${workspaceFolder}/api",
+      "envFile": "${workspaceFolder}/api/.env",
+      "env": {
+        "GOTENBERG_URL": "http://localhost:3000"
+      },
+      "justMyCode": true
+    }
+  ]
+}
