@@ -1338,10 +1338,11 @@ img { max-width: 100%; display: block; }
 }
 .nav-dropdown__all::after { content: '\2192'; margin-left: var(--space-2); }
 /* Neutral-gray tint + text eases to brand blue on hover (transition comes
-   from the base rule above). .header__nav a:hover forces white text
-   globally (for links directly on the dark top bar), so these need one
-   extra class of specificity to opt back out — white text would be
-   unreadable on this light tint. */
+   from the base rule above). .header__nav a:hover (class+type+:hover) beats
+   a plain .nav-dropdown__item:hover (class+:hover) on specificity alone, so
+   without the .header__nav prefix here that rule would win instead and these
+   items would ease to --color-text on hover rather than brand blue. Same
+   extra-specificity fix as .header__nav .nav-dropdown__item above. */
 .header__nav .nav-dropdown__all:hover,
 .header__nav .nav-dropdown__item:hover { background: var(--color-bg-sunken); color: var(--color-primary); text-decoration: none; }
 
