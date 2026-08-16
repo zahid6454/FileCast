@@ -1018,11 +1018,11 @@ def write_tool_data(tools: list[dict]):
 # default, with no per-template edit.
 
 OG_SIZE = (1200, 630)
-OG_BG = (15, 23, 42)  # --color-bg-dark
+OG_BG = (24, 24, 27)  # --color-bg (dark-mode value)
 OG_BLUE = (37, 99, 235)  # --brand-blue
 OG_GREEN = (16, 185, 129)  # --brand-green
 OG_WHITE = (255, 255, 255)
-OG_MUTED = (148, 163, 184)  # --color-text-muted (dark-mode value)
+OG_MUTED = (161, 161, 170)  # --color-text-muted (dark-mode value)
 OG_MARGIN = 80
 
 

@@ -76,8 +76,6 @@
   --color-bg-page: #F8FAFC;
   --color-bg-raised: #FFFFFF;
   --color-bg-sunken: #F1F5F9;
-  --color-bg-dark: #0F172A;
-  --color-bg-dark-raised: #1E293B;
 
   /* Borders */
   --color-border: #E2E8F0;
@@ -129,6 +127,11 @@
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  /* Sticky header only — needs to read as elevated above a hero card that's
+     the same white as the header itself, so it's tuned stronger than
+     --shadow-sm (which is too faint to separate two same-color surfaces) but
+     without touching that shared token and darkening every card site-wide. */
+  --header-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
   /* Card surfaces (.card, .tool-panel, .account-card) all pull from this one —
      raising it here lifts every card site-wide from a single token. */
   --shadow-md: 0 8px 20px -6px rgba(15, 23, 42, 0.14), 0 4px 8px -4px rgba(15, 23, 42, 0.08);
@@ -249,43 +252,50 @@
     --color-warning: #FBBF24;
     --color-warning-light: #451A03;
 
-    --color-text: #F1F5F9;
-    --color-heading: #F1F5F9;
-    --color-text-secondary: #CBD5E1;
-    --color-text-muted: #94A3B8;
-    --color-text-light: #64748B;
+    --color-text: #F4F4F5;
+    --color-heading: #F4F4F5;
+    --color-text-secondary: #D4D4D8;
+    --color-text-muted: #A1A1AA;
+    --color-text-light: #71717A;
 
-    --color-bg: #0F172A;
-    --color-bg-page: #020617;
-    --color-bg-raised: #1E293B;
-    --color-bg-sunken: #0F172A;
+    --color-bg: #18181B;
+    /* One deliberate step off pure black (zinc-950 would be #09090B) — softer
+       against a bright display without flattening the --color-bg/-raised
+       steps above it. */
+    --color-bg-page: #141414;
+    --color-bg-raised: #27272A;
+    --color-bg-sunken: #18181B;
 
-    --color-border: #334155;
-    /* NOT #1E293B — that is --color-bg-raised, so a "light" border drawn on a
+    --color-border: #3F3F46;
+    /* NOT #27272A — that is --color-bg-raised, so a "light" border drawn on a
        card was invisible (history row separators simply vanished in dark mode).
        Sits between the card and --color-border so it reads as a hairline. */
-    --color-border-light: #283548;
+    --color-border-light: #333338;
     --color-border-focus: #60A5FA;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 4px 8px -4px rgba(0, 0, 0, 0.35);
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+    --header-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
     --shadow-brand-hover: -4px 2px 10px rgba(96, 165, 250, 0.3), 4px 2px 10px rgba(52, 211, 153, 0.3);
 
-    /* Real elevation jump above --color-bg-raised (#1E293B, the hero
+    /* Real elevation jump above --color-bg-raised (#27272A, the hero
        section's own background), not the light mode delta reused — see the
        --hero-tile-top definition in :root for why that would collapse. */
-    --hero-tile-top: #3C4E6C;
-    --hero-tile-bottom: #263449;
-    --hero-tile-border: #4A5D80;
+    --hero-tile-top: #52525B;
+    --hero-tile-bottom: #3F3F46;
+    --hero-tile-border: #71717A;
     --hero-shadow-1: rgba(0, 0, 0, 0.5);
     --hero-shadow-2: rgba(0, 0, 0, 0.45);
     --hero-shadow-1-lg: rgba(0, 0, 0, 0.6);
     --hero-shadow-2-lg: rgba(0, 0, 0, 0.55);
 
+    /* Opacity trimmed from 0.14 — a true-neutral card has no hue of its own
+       to blend the wash into, so the same alpha read more prominent than it
+       did against the old navy --color-bg-raised. */
     --wave-tint-blue: #818cf8;
     --wave-tint-green: #5eead4;
-    --wave-band-opacity: 0.14;
+    --wave-band-opacity: 0.11;
 
     --stat-link-border: rgba(96, 165, 250, 0.6);
 
@@ -328,30 +338,32 @@
   --color-warning: #FBBF24;
   --color-warning-light: #451A03;
 
-  --color-text: #F1F5F9;
-  --color-heading: #F1F5F9;
-  --color-text-secondary: #CBD5E1;
-  --color-text-muted: #94A3B8;
-  --color-text-light: #64748B;
+  --color-text: #F4F4F5;
+  --color-heading: #F4F4F5;
+  --color-text-secondary: #D4D4D8;
+  --color-text-muted: #A1A1AA;
+  --color-text-light: #71717A;
 
-  --color-bg: #0F172A;
-  --color-bg-page: #020617;
-  --color-bg-raised: #1E293B;
-  --color-bg-sunken: #0F172A;
-
-  --color-border: #334155;
+  --color-bg: #18181B;
   /* See the note in the prefers-color-scheme block above. */
-  --color-border-light: #283548;
+  --color-bg-page: #141414;
+  --color-bg-raised: #27272A;
+  --color-bg-sunken: #18181B;
+
+  --color-border: #3F3F46;
+  /* See the note in the prefers-color-scheme block above. */
+  --color-border-light: #333338;
   --color-border-focus: #60A5FA;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 4px 8px -4px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --header-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
   --shadow-brand-hover: -4px 2px 10px rgba(96, 165, 250, 0.3), 4px 2px 10px rgba(52, 211, 153, 0.3);
 
-  --hero-tile-top: #3C4E6C;
-  --hero-tile-bottom: #263449;
-  --hero-tile-border: #4A5D80;
+  --hero-tile-top: #52525B;
+  --hero-tile-bottom: #3F3F46;
+  --hero-tile-border: #71717A;
   --hero-shadow-1: rgba(0, 0, 0, 0.5);
   --hero-shadow-2: rgba(0, 0, 0, 0.45);
   --hero-shadow-1-lg: rgba(0, 0, 0, 0.6);
@@ -359,7 +371,7 @@
 
   --wave-tint-blue: #818cf8;
   --wave-tint-green: #5eead4;
-  --wave-band-opacity: 0.14;
+  --wave-band-opacity: 0.11;
 
   --stat-link-border: rgba(96, 165, 250, 0.6);
 
@@ -420,8 +432,9 @@ img { max-width: 100%; display: block; }
   top: -40px;
   left: var(--space-4);
   z-index: 200;
-  background: var(--color-bg-dark);
-  color: var(--color-text-inverse);
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -461,7 +474,9 @@ img { max-width: 100%; display: block; }
 
 /* --- Header --- */
 .header {
-  background: var(--color-bg-dark);
+  background: var(--color-bg-raised);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--header-shadow);
   height: var(--header-height);
   position: sticky;
   top: 0;
@@ -471,9 +486,17 @@ img { max-width: 100%; display: block; }
   padding: 0 var(--space-6);
 }
 .header__logo { display: flex; align-items: center; gap: var(--space-3); text-decoration: none; }
+/* Brand mark: the two color bars use the theme-swapped primary/success tokens
+   (not the constant --brand-blue/-green) so dark mode keeps the exact bar
+   color it's always had; the ink (triangle + wordmark) tracks --color-text so
+   it stays legible now that the header itself follows the page theme instead
+   of staying permanently dark. */
+.header-logo__blue { fill: var(--color-primary); }
+.header-logo__green { fill: var(--color-success); }
+.header-logo__ink { fill: var(--color-text); }
 .header__nav { margin-left: auto; display: flex; gap: var(--space-5); }
 .header__nav a { color: var(--color-text-muted); font-size: var(--text-sm); font-weight: var(--weight-medium); transition: color var(--transition-base); }
-.header__nav a:hover { color: var(--color-text-inverse); text-decoration: none; }
+.header__nav a:hover { color: var(--color-text); text-decoration: none; }
 /* The processing pill (.badge--local/.badge--cloud) + a privacy link, centered
    on one row. A flex container reads cleaner than the old inline layout, but the
    pill carries `margin-top: auto` for bottom-alignment on the cards — in a flex
@@ -1002,12 +1025,6 @@ img { max-width: 100%; display: block; }
 /* --- Brand Text Colors --- */
 .text-brand-blue { color: var(--color-primary); }
 .text-brand-green { color: var(--color-success); }
-/* --color-primary is tuned for a LIGHT background (the vast majority of
-   usage — headings, body copy). The footer is a fixed dark section
-   regardless of site theme, where that light-bg tuning inverts: --color-primary
-   drops to 3.45:1 there (fails; #60A5FA — the same light blue already used
-   for the header logo mark, base.html — clears 7.0:1). */
-.footer .text-brand-blue { color: #60A5FA; }
 
 /* --- Blue-Green Split Shadow (brand hover effect) --- */
 .hero__search, .category__search, .card, .upload-zone, .text-input-area, .text-output-area {
@@ -1274,27 +1291,18 @@ img { max-width: 100%; display: block; }
   background: none;
   border: none;
   cursor: pointer;
-  /* Post-merge audit fix — the header's dark background (--color-bg-dark) is
-     CONSTANT across both site themes (never redefined under
-     [data-theme="dark"] or prefers-color-scheme), but --color-text-muted and
-     --color-text-light SWAP values between them (by design, for the many
-     places that DO sit on a theme-aware background). That mismatch is why
-     the original P2 §23 fix regressed: switching --color-text-muted (3.75:1
-     here in light mode, the axe-core finding) to --color-text-light "fixed"
-     light mode (6.96:1) by landing on the exact value dark mode's
-     --color-text-light is swapped TO — reintroducing the identical 3.75:1
-     failure, just in the other theme. A fixed, non-variable color is the
-     correct fit for an always-dark surface: #94A3B8 clears 4.5:1 here
-     (6.96:1) regardless of which theme is active, because it isn't tied to
-     either theme's swap. */
-  color: #94A3B8;
+  /* The header now follows the page theme (it used to be a permanently-dark
+     surface, which is why this needed a fixed, non-variable color — see git
+     history for that reasoning if it resurfaces). Plain --color-text-muted is
+     correct now that the background it sits on swaps with it. */
+  color: var(--color-text-muted);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   padding: var(--space-2) 0;
   transition: color var(--transition-base);
 }
-.nav-dropdown__toggle:hover { color: var(--color-text-inverse); }
+.nav-dropdown__toggle:hover { color: var(--color-text); }
 .nav-dropdown__caret { width: 14px; height: 14px; transition: transform var(--transition-fast); }
 .nav-dropdown--open .nav-dropdown__caret { transform: rotate(180deg); }
 .nav-dropdown__menu { display: none; }
@@ -1302,11 +1310,16 @@ img { max-width: 100%; display: block; }
 .nav-dropdown__all, .nav-dropdown__item {
   display: block;
   padding: var(--space-2) var(--space-3);
-  color: var(--color-text-secondary);
   font-size: var(--text-sm);
   border-radius: var(--radius-md);
   transition: background var(--transition-base), color var(--transition-base);
 }
+/* .header__nav a (the top-level "Document/Image/Developer" links) sets a
+   muted color at higher specificity (class+type vs. this rule's single
+   class) and was silently winning over the color above — the menu items
+   rendered at --color-text-muted regardless of what this rule said. Same
+   extra-specificity fix as .header__nav .nav-dropdown__item:hover below. */
+.header__nav .nav-dropdown__all, .header__nav .nav-dropdown__item { color: var(--color-text); }
 /* Unlabeled seam between converters and modification tools (same split as
    category.html's grid, just a hairline here — no room/need for a heading
    in a dropdown). Only rendered when both groups are present in the top 10. */
@@ -1325,10 +1338,11 @@ img { max-width: 100%; display: block; }
 }
 .nav-dropdown__all::after { content: '\2192'; margin-left: var(--space-2); }
 /* Neutral-gray tint + text eases to brand blue on hover (transition comes
-   from the base rule above). .header__nav a:hover forces white text
-   globally (for links directly on the dark top bar), so these need one
-   extra class of specificity to opt back out — white text would be
-   unreadable on this light tint. */
+   from the base rule above). .header__nav a:hover (class+type+:hover) beats
+   a plain .nav-dropdown__item:hover (class+:hover) on specificity alone, so
+   without the .header__nav prefix here that rule would win instead and these
+   items would ease to --color-text on hover rather than brand blue. Same
+   extra-specificity fix as .header__nav .nav-dropdown__item above. */
 .header__nav .nav-dropdown__all:hover,
 .header__nav .nav-dropdown__item:hover { background: var(--color-bg-sunken); color: var(--color-primary); text-decoration: none; }
 
@@ -1377,7 +1391,7 @@ img { max-width: 100%; display: block; }
   font-weight: var(--weight-medium);
   cursor: pointer;
 }
-.user-menu__toggle:hover { color: var(--color-text-inverse); border-color: var(--color-border); }
+.user-menu__toggle:hover { color: var(--color-text); border-color: var(--color-border); }
 .user-menu__avatar {
   width: 28px;
   height: 28px;
@@ -1458,12 +1472,12 @@ img { max-width: 100%; display: block; }
 }
 .theme-switch.is-on .theme-switch__knob { transform: translateX(14px); }
 
-/* Account section pinned to the bottom of the mobile nav drawer (dark surface).
+/* Account section pinned to the bottom of the mobile nav drawer.
    Hidden on desktop, where the header user menu is used instead. */
 .nav-account {
   margin-top: auto;
   padding-top: var(--space-4);
-  border-top: 1px solid var(--color-bg-dark);
+  border-top: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -1477,14 +1491,14 @@ img { max-width: 100%; display: block; }
   background: none;
   border: none;
   border-radius: var(--radius-md);
-  color: #e2e8f0;
+  color: var(--color-text);
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
   text-align: left;
   cursor: pointer;
 }
-.nav-account__link:hover { background: rgba(255, 255, 255, 0.06); text-decoration: none; }
-/* Icons inherit the drawer's light text color (the moon icon reuses
+.nav-account__link:hover { background: var(--color-bg-sunken); text-decoration: none; }
+/* Icons inherit the drawer's text color (the moon icon reuses
    .user-menu__item-icon, so override its muted color inside the drawer). */
 .nav-account__icon,
 .nav-account .user-menu__item-icon { width: 20px; height: 20px; flex-shrink: 0; color: inherit; }
@@ -2107,7 +2121,7 @@ img { max-width: 100%; display: block; }
   color: var(--color-text-muted);
   cursor: pointer;
 }
-.hamburger:hover { color: var(--color-text-inverse); }
+.hamburger:hover { color: var(--color-text); }
 .hamburger__icon { width: 24px; height: 24px; }
 
 /* --- Announcement bar (§6.9) --- */
@@ -2126,7 +2140,10 @@ img { max-width: 100%; display: block; }
 }
 .announcement-bar--info { background: var(--color-primary); }
 .announcement-bar--new { background: var(--color-success); }
-.announcement-bar--maintenance { background: var(--color-warning); color: var(--color-bg-dark); }
+/* Fixed near-black, not a token — this needs to read against --color-warning
+   (bright yellow-orange in both themes) specifically, not against whatever
+   surface it happens to sit on, so it doesn't want to track --color-text. */
+.announcement-bar--maintenance { background: var(--color-warning); color: #18181B; }
 .announcement-bar--warning { background: var(--color-error); }
 .announcement-bar__link { color: inherit; text-decoration: underline; font-weight: var(--weight-semibold); }
 .announcement-bar__link:hover { color: inherit; }
@@ -2172,7 +2189,11 @@ img { max-width: 100%; display: block; }
 
 /* --- Section backgrounds (homepage rhythm) --- */
 .section--tinted { background: var(--color-bg-sunken); }
-.section--dark { background: var(--color-bg-dark); color: var(--color-text-inverse); }
+/* Was pinned to a constant dark surface; now the same --color-bg-raised
+   elevation every other card/panel uses, so it reads as "the other" section
+   treatment ( .section--tinted's sunken counterpart) in both themes instead
+   of a fixed dark band. */
+.section--dark { background: var(--color-bg-raised); color: var(--color-text); }
 
 /* --- Homepage hero (scoped to .hero--home so about/terms/contact are untouched, R11) --- */
 .hero--home { text-align: left; padding: var(--space-12) 0 var(--space-10); }
@@ -2434,13 +2455,13 @@ img { max-width: 100%; display: block; }
   .signin-band__grid { grid-template-columns: repeat(4, 1fr); }
 }
 
-.why-filecast { padding: var(--space-16) 0; }
-.why-filecast__title { font-family: var(--font-heading); font-size: var(--text-2xl); font-weight: var(--weight-bold); text-align: center; color: var(--color-text-inverse); margin-bottom: var(--space-10); }
+.why-filecast { padding: var(--space-10) 0; }
+.why-filecast__title { font-family: var(--font-heading); font-size: var(--text-2xl); font-weight: var(--weight-bold); text-align: center; color: var(--color-heading); margin-bottom: var(--space-6); }
 .why-filecast__grid { display: grid; grid-template-columns: 1fr; gap: var(--space-8); }
 .why-filecast__col { text-align: center; }
 .why-filecast__icon { width: 40px; height: 40px; color: var(--color-success); margin: 0 auto var(--space-3); }
-.why-filecast__col-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-text-inverse); margin-bottom: var(--space-2); }
-.why-filecast__col-text { font-size: var(--text-sm); color: #94A3B8; line-height: var(--leading-relaxed); }
+.why-filecast__col-title { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-heading); margin-bottom: var(--space-2); }
+.why-filecast__col-text { font-size: var(--text-sm); color: var(--color-text-muted); line-height: var(--leading-relaxed); }
 @media (min-width: 768px) {
   .why-filecast__grid { grid-template-columns: repeat(3, 1fr); }
 }
@@ -2474,11 +2495,15 @@ img { max-width: 100%; display: block; }
 
 /* --- Multi-column footer (§6.8) --- */
 .footer {
-  background: var(--color-bg-dark);
-  border-top: none;
+  background: var(--color-bg-sunken);
+  border-top: 1px solid var(--color-border);
   text-align: left;
   padding: var(--space-12) var(--space-4) var(--space-6);
-  color: #94A3B8;
+  /* --color-text-muted (light) is 4.34:1 against --color-bg-sunken — under
+     the 4.5:1 AA minimum (axe-core caught it in CI). --color-text-secondary
+     clears 6.9:1 here in light mode and only gets brighter in dark mode, so
+     it's a safe swap in both directions, not a per-theme override. */
+  color: var(--color-text-secondary);
 }
 .footer__inner {
   display: grid;
@@ -2488,14 +2513,14 @@ img { max-width: 100%; display: block; }
 }
 .footer__logo { font-family: var(--font-heading); font-size: var(--text-xl); font-weight: var(--weight-bold); }
 .footer__tagline { font-size: var(--text-sm); margin-top: var(--space-2); max-width: 32ch; text-wrap: balance; }
-.footer__heading { font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--color-text-inverse); margin-bottom: var(--space-3); text-transform: uppercase; letter-spacing: 0.04em; }
-.footer__col a { display: block; color: #94A3B8; font-size: var(--text-sm); padding: var(--space-1) 0; }
+.footer__heading { font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--color-heading); margin-bottom: var(--space-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.footer__col a { display: block; color: var(--color-text-secondary); font-size: var(--text-sm); padding: var(--space-1) 0; }
 .footer__col a:hover { color: var(--color-primary); text-decoration: none; }
 .footer__bar {
   max-width: var(--max-width);
   margin: 0 auto;
   padding-top: var(--space-6);
-  border-top: 1px solid var(--color-bg-dark-raised);
+  border-top: 1px solid var(--color-border);
   font-size: var(--text-xs);
   text-align: center;
 }
@@ -2530,7 +2555,8 @@ img { max-width: 100%; display: block; }
     flex-direction: column;
     align-items: stretch;
     gap: 0;
-    background: var(--color-bg-dark-raised);
+    background: var(--color-bg-raised);
+    border-left: 1px solid var(--color-border);
     padding: var(--space-4);
     overflow-y: auto;
     z-index: 200;
@@ -2545,25 +2571,10 @@ img { max-width: 100%; display: block; }
   .header__nav--open { transform: translateX(0); visibility: visible; }
   .nav-dropdown__toggle { width: 100%; justify-content: space-between; }
   .nav-dropdown__menu { position: static; box-shadow: none; padding-left: var(--space-3); }
-  /* The drawer is a FIXED dark surface (bg-dark-raised) in both themes, so its
-     links need light text — the default nav tokens are dark-on-light and turn
-     unreadable here (dark-on-dark). See below for the hover treatment. */
-  .header__nav a,
-  .nav-dropdown__toggle,
-  .nav-dropdown__all { color: #e2e8f0; }
-  .nav-dropdown__item { color: #cbd5e1; }
-  .header__nav a:hover,
-  .nav-dropdown__toggle:hover { color: #ffffff; }
-  /* var(--color-border) is a light-mode gray, invisible on this drawer's
-     fixed dark surface — same reasoning as the hover tint override below. */
-  .nav-dropdown__seam,
-  .nav-dropdown__all { border-top-color: rgba(255, 255, 255, 0.12); }
-  /* The desktop neutral-gray hover tint (above, outside this media query)
-     is tuned for the light floating menu panel and would be invisible/
-     wrong-toned on this drawer's fixed dark surface — same subtle white
-     overlay already used for .nav-account__link:hover on dark surfaces. */
-  .header__nav .nav-dropdown__all:hover,
-  .header__nav .nav-dropdown__item:hover { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
+  /* The drawer now follows the page theme like everything else, so the
+     desktop color/hover/border rules above (all theme-aware tokens) already
+     work here unmodified — this block used to re-pin every color to a fixed
+     light-on-dark scheme; that's gone. */
 }
 @media (min-width: 768px) {
   .hamburger { display: none; }
