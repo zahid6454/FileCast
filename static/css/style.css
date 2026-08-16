@@ -1539,7 +1539,10 @@ img { max-width: 100%; display: block; }
 .tool-fav[hidden] { display: none; }
 /* No background or border on hover — the heart itself is the affordance, and a
    grey rounded square around it read as a stray button. */
-.tool-fav:hover { color: var(--color-error); }
+/* --color-error-solid (not --color-error), which stays saturated in dark
+   mode instead of paling toward the text/border tuning — see its definition
+   above. A filled heart icon needs the vivid red in both themes. */
+.tool-fav:hover { color: var(--color-error-solid); }
 .tool-fav:active { transform: scale(0.92); }
 /* `fill` is set here on the host <svg> and INHERITS into the <use> shadow tree —
    see the #icon-heart-toggle comment in _sprite.html for why the symbol must not
@@ -1554,8 +1557,8 @@ img { max-width: 100%; display: block; }
 /* Hover reddens the outline only. Tinting the fill here made an unsaved heart
    look nearly identical to a saved one at 24px — outline vs solid is the only
    unambiguous way to read the two states apart. */
-.tool-fav.is-fav { color: var(--color-error); }
-.tool-fav.is-fav .tool-fav__icon { fill: var(--color-error); }
+.tool-fav.is-fav { color: var(--color-error-solid); }
+.tool-fav.is-fav .tool-fav__icon { fill: var(--color-error-solid); }
 /* One-shot pop when the heart is filled, so saving reads as a deliberate act.
    Driven by .is-pop (set on click, cleared on animationend) rather than .is-fav,
    which would also fire on page load for an already-favorited tool. */
