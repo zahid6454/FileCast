@@ -475,7 +475,6 @@ img { max-width: 100%; display: block; }
 /* --- Header --- */
 .header {
   background: var(--color-bg-raised);
-  border-bottom: 1px solid var(--color-border);
   box-shadow: var(--header-shadow);
   height: var(--header-height);
   position: sticky;
@@ -484,6 +483,17 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   padding: 0 var(--space-6);
+}
+/* Brand-gradient accent line replaces the flat neutral border-bottom, echoing
+   .section__divider so the header reads as branded chrome, not just a bar. */
+.header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-green));
 }
 .header__logo { display: flex; align-items: center; gap: var(--space-3); text-decoration: none; }
 /* Brand mark: the two color bars use the theme-swapped primary/success tokens
