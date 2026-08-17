@@ -1,0 +1,30 @@
+enabled: true
+id: png-to-pdf
+name: "PNG to PDF Converter"
+slug: /convert/png-to-pdf
+category: document-conversion
+subcategory: converter
+type: client-side
+input_format: PNG
+output_format: PDF
+accept_extensions: [.png]
+output_extension: .pdf
+js_module: converters/png-to-pdf.js
+js_libs: [pdf-lib.min.js]
+max_file_size: 20MB
+max_files: 10
+bulk_support: true
+ui_type: multi-file
+convert_label: "Create PDF"
+tagline: "Turn PNG images into a PDF document"
+tagline_long: "Convert one or more PNG images into a single PDF document — entirely in your browser, no upload required."
+meta:
+  title: "PNG to PDF Converter — Free, No Upload | FileCast"
+  description: "Convert PNG to PDF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Combine multiple PNG images into one document."
+  keywords: ["png to pdf", "convert png to pdf", "png to pdf converter", "screenshots to pdf", "png to pdf free"]
+content:
+  what_is: "content/png-to-pdf/what-is.md"
+  comparison: "content/png-to-pdf/comparison.md"
+  when_to_use: "content/png-to-pdf/when-to-use.md"
+  faq: "content/png-to-pdf/faq.md"
+related_tools: [image-to-pdf, jpg-to-pdf, pdf-compress, pdf-to-png]
