@@ -1616,14 +1616,19 @@ def generate_robots(site_config: dict):
     base = (
         site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
     )
-    # Exclude the admin panel and account pages from crawling (Phase 2). The
-    # sitemap already omits them (it only enumerates home/tools/categories/static
-    # pages) — do NOT add them there.
+    # Exclude the admin panel from crawling (Phase 2); account/ is deliberately
+    # NOT disallowed here (GSC "Indexed, though blocked by robots.txt", first
+    # detected 8/11/26): the footer links to /account/ from every page, so
+    # Google discovers the URL regardless of Disallow, but a Disallowed page
+    # can never be fetched — so Googlebot could never see account.html's own
+    # <meta name="robots" content="noindex, nofollow"> and kept indexing the
+    # bare URL. Letting the crawl through lets that noindex tag actually take
+    # effect. The sitemap already omits both admin/ and account/ (it only
+    # enumerates home/tools/categories/static pages) — do NOT add them there.
     content = (
         "User-agent: *\n"
         "Allow: /\n"
         "Disallow: /admin/\n"
-        "Disallow: /account/\n"
         # Only reachable as sw.js's offline fallback (P3 §25) — never linked
         # to and not in the sitemap; nothing for a crawler to index there.
         "Disallow: /offline.html\n"
