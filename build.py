@@ -846,6 +846,8 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
 ALTERNATIVES_GROUP_OVERRIDES = {
     "html-to-pdf": "browser-print-to-pdf",
     "image-to-pdf": "browser-print-to-pdf",
+    "jpg-to-pdf": "browser-print-to-pdf",
+    "png-to-pdf": "browser-print-to-pdf",
     "pdf-compress": "pdf-compress",
     "pdf-merge": "pdf-merge",
     "pdf-rotate": "pdf-rotate",

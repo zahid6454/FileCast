@@ -18,6 +18,7 @@ export function createDom(bodyHtml = '', { url = 'http://localhost/' } = {}) {
     runScripts: 'outside-only'
   });
   polyfillArrayBuffer(dom.window);
+  polyfillBlobText(dom.window);
   polyfillObjectURL(dom.window);
   polyfillTextCodec(dom.window);
   polyfillSubtleCrypto(dom.window);
@@ -75,6 +76,22 @@ function polyfillArrayBuffer(win) {
       reader.onload = () => resolve(reader.result);
       reader.onerror = () => reject(reader.error);
       reader.readAsArrayBuffer(this);
+    });
+  };
+}
+
+// This jsdom version's Blob/File don't implement `.text()` either (same gap
+// as `.arrayBuffer()` above) — txt-to-pdf.js, markdown-to-pdf.js, and
+// markdown-to-docx.js all call `file.text()` as their first step. Built on
+// the same FileReader jsdom does implement, mirroring polyfillArrayBuffer().
+function polyfillBlobText(win) {
+  if (typeof win.Blob.prototype.text === 'function') return;
+  win.Blob.prototype.text = function () {
+    return new Promise((resolve, reject) => {
+      var reader = new win.FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(this);
     });
   };
 }

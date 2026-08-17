@@ -771,6 +771,495 @@ function unlock(bytes, password) {
     });
 }
 
+// --- TXT/Markdown to PDF (Build Action Plan PR 5) --------------------------
+// Neither pdf-lib nor this file had any word-wrap/pagination logic before
+// this — watermark()/pageNumbers() above only ever draw a single line. A
+// plain-text or Markdown document needs real multi-line layout: measure
+// each word with the embedded font, greedily fill lines up to the page's
+// content width, and start a new page when the y cursor runs past the
+// bottom margin.
+
+var PAGE_SIZES = {
+  letter: [612, 792],
+  a4: [595.28, 841.89]
+};
+
+function pageDimensions(pageSize) {
+  return PAGE_SIZES[pageSize] || PAGE_SIZES.letter;
+}
+
+// Breaks a single word wider than maxWidth into character-level pieces that
+// each fit — otherwise one long URL or unbroken token would silently render
+// past the right margin instead of wrapping.
+function breakLongWord(word, font, fontSize, maxWidth) {
+  var pieces = [];
+  var piece = '';
+  for (var i = 0; i < word.length; i++) {
+    var candidate = piece + word[i];
+    if (piece && font.widthOfTextAtSize(candidate, fontSize) > maxWidth) {
+      pieces.push(piece);
+      piece = word[i];
+    } else {
+      piece = candidate;
+    }
+  }
+  if (piece) pieces.push(piece);
+  return pieces;
+}
+
+// Plain-text word wrap. Hard newlines in the source are preserved as line
+// breaks (including blank lines, kept as empty output lines for paragraph
+// spacing). A source line that already fits maxWidth as-is is drawn
+// verbatim — byte for byte, indentation and internal multi-space alignment
+// intact — rather than being run through the word-splitter, which would
+// collapse every run of whitespace to a single space even when no wrapping
+// was needed at all. Only a line that's actually too wide falls back to
+// greedy word-wrapping (which does normalize whitespace between the words
+// it re-joins — unavoidable once a line has to be broken at some point
+// other than where the original whitespace was).
+function wrapText(text, font, fontSize, maxWidth) {
+  var rawLines = text.replace(/\r\n/g, '\n').split('\n');
+  var out = [];
+  rawLines.forEach(function (raw) {
+    if (raw.trim() === '') {
+      out.push('');
+      return;
+    }
+    if (font.widthOfTextAtSize(raw, fontSize) <= maxWidth) {
+      out.push(raw);
+      return;
+    }
+    var words = raw.split(/\s+/).filter(function (w) {
+      return w.length > 0;
+    });
+    var current = '';
+    words.forEach(function (word) {
+      var candidate = current ? current + ' ' + word : word;
+      if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+        current = candidate;
+        return;
+      }
+      if (current) {
+        out.push(current);
+        current = '';
+      }
+      if (font.widthOfTextAtSize(word, fontSize) <= maxWidth) {
+        current = word;
+      } else {
+        var pieces = breakLongWord(word, font, fontSize, maxWidth);
+        for (var i = 0; i < pieces.length - 1; i++) out.push(pieces[i]);
+        current = pieces[pieces.length - 1];
+      }
+    });
+    if (current) out.push(current);
+  });
+  return out;
+}
+
+function txtToPdf(text, options) {
+  options = options || {};
+  if (!text || !text.trim()) {
+    return Promise.reject(new Error('This file has no text to convert.'));
+  }
+  var pageSize = pageDimensions(options.pageSize);
+  var fontSize = options.fontSize && options.fontSize > 0 ? options.fontSize : 11;
+  var margin = 54;
+  var maxWidth = pageSize[0] - margin * 2;
+  var lineHeight = fontSize * 1.4;
+
+  return PDFLib.PDFDocument.create()
+    .then(function (pdfDoc) {
+      return pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica).then(function (font) {
+        var lines = wrapText(text, font, fontSize, maxWidth);
+        var page = pdfDoc.addPage(pageSize);
+        var y = pageSize[1] - margin;
+        lines.forEach(function (line) {
+          if (y - lineHeight < margin) {
+            page = pdfDoc.addPage(pageSize);
+            y = pageSize[1] - margin;
+          }
+          if (line) {
+            page.drawText(line, {
+              x: margin,
+              y: y - fontSize,
+              size: fontSize,
+              font: font,
+              color: PDFLib.rgb(0, 0, 0)
+            });
+          }
+          y -= lineHeight;
+        });
+        return pdfDoc.save();
+      });
+    })
+    .then(function (bytes) {
+      return { bytes: bytes };
+    });
+}
+
+// --- Markdown block/inline parsing ------------------------------------------
+// A dedicated parser rather than reusing markdown-to-html.js's line-scanning
+// state machine directly — that file emits an HTML string, not a structured
+// block/run tree a PDF layout pass can walk. Same line-based approach and
+// the same inline syntax support (bold/italic/code/strikethrough/links/
+// images), retargeted to produce data instead of markup. Also duplicated
+// (rather than shared) in converters/markdown-to-docx.js, matching this
+// codebase's existing convention of self-contained converter/worker files.
+
+// The URL inside a link/image's (...) is matched with one level of balanced
+// nesting allowed — `[^()]+` alone truncates at the first `)`, which breaks
+// on real-world URLs like Wikipedia's
+// https://en.wikipedia.org/wiki/Foo_(bar) that contain their own parens.
+var LINK_URL = '(?:[^()]|\\([^()]*\\))+';
+
+// Alternation order is load-bearing: `***bold italic***` must be tried
+// before `**bold**` before `*italic*`, or the longer marker never matches
+// (a shorter alternative earlier in the list would consume its two/one
+// leading asterisks first, at the same string position, since JS regex
+// alternation picks the first alternative that matches at the current
+// position, not the longest).
+function parseInlineRuns(text) {
+  var runs = [];
+  var pos = 0;
+  var re = new RegExp(
+    '(`[^`]+`)|(\\*\\*\\*[^*]+\\*\\*\\*)|(\\*\\*[^*]+\\*\\*)|(__[^_]+__)|(\\*[^*]+\\*)|(_[^_]+_)|(~~[^~]+~~)|' +
+      '(!\\[[^\\]]*\\]\\(' +
+      LINK_URL +
+      '\\))|(\\[[^\\]]+\\]\\(' +
+      LINK_URL +
+      '\\))',
+    'g'
+  );
+  var match;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > pos) {
+      runs.push({ text: text.slice(pos, match.index), bold: false, italic: false, code: false });
+    }
+    var token = match[0];
+    if (token.charAt(0) === '`') {
+      runs.push({ text: token.slice(1, -1), bold: false, italic: false, code: true });
+    } else if (token.indexOf('***') === 0) {
+      runs.push({ text: token.slice(3, -3), bold: true, italic: true, code: false });
+    } else if (token.indexOf('**') === 0) {
+      runs.push({ text: token.slice(2, -2), bold: true, italic: false, code: false });
+    } else if (token.indexOf('__') === 0) {
+      runs.push({ text: token.slice(2, -2), bold: true, italic: false, code: false });
+    } else if (token.indexOf('~~') === 0) {
+      runs.push({ text: token.slice(2, -2), bold: false, italic: false, code: false });
+    } else if (token.charAt(0) === '*') {
+      runs.push({ text: token.slice(1, -1), bold: false, italic: true, code: false });
+    } else if (token.charAt(0) === '_') {
+      runs.push({ text: token.slice(1, -1), bold: false, italic: true, code: false });
+    } else if (token.charAt(0) === '!') {
+      var imgAlt = /!\[([^\]]*)\]/.exec(token);
+      runs.push({
+        text: '[Image: ' + (imgAlt ? imgAlt[1] : '') + ']',
+        bold: false,
+        italic: false,
+        code: false
+      });
+    } else if (token.charAt(0) === '[') {
+      var linkMatch = new RegExp('\\[([^\\]]+)\\]\\((' + LINK_URL + ')\\)').exec(token);
+      runs.push({
+        text: linkMatch[1] + ' (' + linkMatch[2] + ')',
+        bold: false,
+        italic: false,
+        code: false
+      });
+    }
+    pos = re.lastIndex;
+  }
+  if (pos < text.length) {
+    runs.push({ text: text.slice(pos), bold: false, italic: false, code: false });
+  }
+  return runs;
+}
+
+function parseMarkdownBlocks(md) {
+  var lines = md.replace(/\r\n/g, '\n').split('\n');
+  var blocks = [];
+  var i = 0;
+  while (i < lines.length) {
+    var line = lines[i];
+
+    if (line.trim().indexOf('```') === 0) {
+      var codeLines = [];
+      i++;
+      while (i < lines.length && lines[i].trim() !== '```') {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // skip the closing fence (or run off the end for an unclosed block)
+      blocks.push({ type: 'code', lines: codeLines });
+      continue;
+    }
+
+    if (line.trim().charAt(0) === '>') {
+      var quoteLines = [];
+      while (i < lines.length && lines[i].trim().charAt(0) === '>') {
+        quoteLines.push(lines[i].trim().substring(1).trim());
+        i++;
+      }
+      blocks.push({ type: 'blockquote', runs: parseInlineRuns(quoteLines.join(' ')) });
+      continue;
+    }
+
+    if (line.trim() === '') {
+      i++;
+      continue;
+    }
+
+    var headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      blocks.push({
+        type: 'heading',
+        level: headingMatch[1].length,
+        runs: parseInlineRuns(headingMatch[2].trim())
+      });
+      i++;
+      continue;
+    }
+
+    if (/^---+$/.test(line.trim()) || /^\*\*\*+$/.test(line.trim()) || /^___+$/.test(line.trim())) {
+      blocks.push({ type: 'hr' });
+      i++;
+      continue;
+    }
+
+    var ulMatch = line.match(/^\s*[-*+]\s+(.+)$/);
+    if (ulMatch) {
+      blocks.push({ type: 'listitem', ordered: false, runs: parseInlineRuns(ulMatch[1]) });
+      i++;
+      continue;
+    }
+
+    var olMatch = line.match(/^\s*(\d+)\.\s+(.+)$/);
+    if (olMatch) {
+      blocks.push({
+        type: 'listitem',
+        ordered: true,
+        number: parseInt(olMatch[1], 10),
+        runs: parseInlineRuns(olMatch[2])
+      });
+      i++;
+      continue;
+    }
+
+    // One source line = one paragraph block, matching markdown-to-html.js's
+    // own line-based model rather than merging consecutive lines.
+    blocks.push({ type: 'paragraph', runs: parseInlineRuns(line) });
+    i++;
+  }
+  return blocks;
+}
+
+// Tokenizes styled runs into words (splitting any over-wide word into
+// character-level pieces via breakLongWord) and greedily packs them into
+// lines no wider than maxWidth, tracking each word's font-appropriate
+// x-advance for the draw pass.
+//
+// Each word tracks `spaceBefore` — whether real whitespace preceded it in
+// the source — rather than assuming a space between every token. parseInlineRuns
+// splits the original text at style boundaries (bold/italic/code spans), and
+// those boundaries frequently have NO whitespace on either side (e.g.
+// "**important**." — no space between the bold span and the period). Adding
+// a space between every token regardless would print "important ." instead
+// of "important.". A run's own leading/trailing whitespace (or a run that's
+// pure whitespace, e.g. the plain-text gap between two adjacent styled
+// spans) still correctly produces a real space, tracked via `spaceBeforeNext`
+// carrying across empty/whitespace-only runs to whichever run's first real
+// word comes next.
+function wrapRuns(runs, fontSize, maxWidth, pickFont) {
+  var tokens = [];
+  var spaceBeforeNext = false;
+
+  runs.forEach(function (run) {
+    var font = pickFont(run);
+    // Capturing group keeps whitespace runs as their own array entries,
+    // alternating with word segments (some possibly '' at the ends).
+    var parts = run.text.split(/(\s+)/);
+    parts.forEach(function (part) {
+      if (!part) return;
+      if (/^\s+$/.test(part)) {
+        if (tokens.length > 0) spaceBeforeNext = true;
+        return;
+      }
+      var pieces =
+        font.widthOfTextAtSize(part, fontSize) <= maxWidth
+          ? [part]
+          : breakLongWord(part, font, fontSize, maxWidth);
+      pieces.forEach(function (piece, pieceIndex) {
+        // Only the first piece of a hard-broken word carries the real
+        // spaceBefore flag — the remaining pieces are mid-word character
+        // breaks, never separated by a real space.
+        tokens.push({
+          text: piece,
+          bold: run.bold,
+          italic: run.italic,
+          code: run.code,
+          spaceBefore: pieceIndex === 0 && spaceBeforeNext
+        });
+        spaceBeforeNext = false;
+      });
+    });
+  });
+
+  var spaceWidth = pickFont({}).widthOfTextAtSize(' ', fontSize);
+  var lines = [];
+  var current = [];
+  var currentWidth = 0;
+
+  tokens.forEach(function (tok) {
+    var font = pickFont(tok);
+    var wordWidth = font.widthOfTextAtSize(tok.text, fontSize);
+    var lead = current.length > 0 && tok.spaceBefore ? spaceWidth : 0;
+    if (current.length > 0 && currentWidth + lead + wordWidth > maxWidth) {
+      lines.push(current);
+      current = [];
+      currentWidth = 0;
+      lead = 0; // first token on a new line never gets a leading space
+    }
+    tok.leadSpace = lead;
+    tok.wordWidth = wordWidth;
+    current.push(tok);
+    currentWidth += lead + wordWidth;
+  });
+  if (current.length > 0) lines.push(current);
+  return lines;
+}
+
+var HEADING_SIZES = { 1: 22, 2: 18, 3: 15, 4: 13, 5: 12, 6: 11 };
+
+function markdownToPdf(text, options) {
+  options = options || {};
+  if (!text || !text.trim()) {
+    return Promise.reject(new Error('This file has no content to convert.'));
+  }
+  var pageSize = pageDimensions(options.pageSize);
+  var margin = 54;
+  var maxWidth = pageSize[0] - margin * 2;
+
+  return PDFLib.PDFDocument.create()
+    .then(function (pdfDoc) {
+      return Promise.all([
+        pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica),
+        pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold),
+        pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaOblique),
+        pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBoldOblique),
+        pdfDoc.embedFont(PDFLib.StandardFonts.Courier)
+      ]).then(function (fonts) {
+        var regular = fonts[0],
+          bold = fonts[1],
+          italic = fonts[2],
+          boldItalic = fonts[3],
+          mono = fonts[4];
+
+        function pickFont(run) {
+          if (run.code) return mono;
+          if (run.bold && run.italic) return boldItalic;
+          if (run.bold) return bold;
+          if (run.italic) return italic;
+          return regular;
+        }
+
+        var page = pdfDoc.addPage(pageSize);
+        var y = pageSize[1] - margin;
+
+        function ensureSpace(neededHeight) {
+          if (y - neededHeight < margin) {
+            page = pdfDoc.addPage(pageSize);
+            y = pageSize[1] - margin;
+          }
+        }
+
+        function drawWrappedRuns(runs, opts) {
+          opts = opts || {};
+          var fontSize = opts.fontSize || 11;
+          var indent = opts.indent || 0;
+          var lineHeight = fontSize * 1.4;
+          var lines = wrapRuns(runs, fontSize, maxWidth - indent, pickFont);
+          lines.forEach(function (lineTokens) {
+            ensureSpace(lineHeight);
+            var x = margin + indent;
+            lineTokens.forEach(function (tok) {
+              x += tok.leadSpace;
+              page.drawText(tok.text, {
+                x: x,
+                y: y - fontSize,
+                size: fontSize,
+                font: pickFont(tok),
+                color: PDFLib.rgb(0, 0, 0)
+              });
+              x += tok.wordWidth;
+            });
+            y -= lineHeight;
+          });
+        }
+
+        var blocks = parseMarkdownBlocks(text);
+
+        blocks.forEach(function (block) {
+          if (block.type === 'heading') {
+            var size = HEADING_SIZES[block.level] || 12;
+            var headingRuns = block.runs.map(function (r) {
+              return { text: r.text, bold: true, italic: r.italic, code: r.code };
+            });
+            y -= size * 0.3;
+            drawWrappedRuns(headingRuns, { fontSize: size });
+            y -= size * 0.3;
+          } else if (block.type === 'paragraph') {
+            drawWrappedRuns(block.runs, { fontSize: 11 });
+            y -= 6;
+          } else if (block.type === 'listitem') {
+            var prefix = block.ordered ? block.number + '. ' : String.fromCharCode(8226) + ' ';
+            var itemRuns = [{ text: prefix, bold: false, italic: false, code: false }].concat(
+              block.runs
+            );
+            drawWrappedRuns(itemRuns, { fontSize: 11, indent: 18 });
+          } else if (block.type === 'blockquote') {
+            var quoteRuns = block.runs.map(function (r) {
+              return { text: r.text, bold: r.bold, italic: true, code: r.code };
+            });
+            drawWrappedRuns(quoteRuns, { fontSize: 11, indent: 18 });
+            y -= 6;
+          } else if (block.type === 'code') {
+            var codeSize = 10;
+            var codeLineHeight = codeSize * 1.3;
+            block.lines.forEach(function (raw) {
+              ensureSpace(codeLineHeight);
+              if (raw) {
+                page.drawText(raw, {
+                  x: margin + 12,
+                  y: y - codeSize,
+                  size: codeSize,
+                  font: mono,
+                  color: PDFLib.rgb(0.15, 0.15, 0.15)
+                });
+              }
+              y -= codeLineHeight;
+            });
+            y -= 6;
+          } else if (block.type === 'hr') {
+            ensureSpace(12);
+            y -= 6;
+            page.drawLine({
+              start: { x: margin, y: y },
+              end: { x: pageSize[0] - margin, y: y },
+              thickness: 1,
+              color: PDFLib.rgb(0.7, 0.7, 0.7)
+            });
+            y -= 10;
+          }
+        });
+
+        return pdfDoc.save();
+      });
+    })
+    .then(function (bytes) {
+      return { bytes: bytes };
+    });
+}
+
 self.onmessage = function (e) {
   var msg = e.data || {};
   var result;
@@ -801,6 +1290,10 @@ self.onmessage = function (e) {
       result = protect(msg.file, msg.password);
     } else if (msg.op === 'unlock') {
       result = unlock(msg.file, msg.password);
+    } else if (msg.op === 'txtToPdf') {
+      result = txtToPdf(msg.text, { pageSize: msg.pageSize, fontSize: msg.fontSize });
+    } else if (msg.op === 'markdownToPdf') {
+      result = markdownToPdf(msg.text, { pageSize: msg.pageSize });
     } else {
       throw new Error('Unknown worker operation: ' + msg.op);
     }

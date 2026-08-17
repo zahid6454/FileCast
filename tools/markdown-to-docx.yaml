@@ -1,0 +1,28 @@
+enabled: true
+id: markdown-to-docx
+name: "Markdown to DOCX Converter"
+slug: /convert/markdown-to-docx
+category: document-conversion
+subcategory: converter
+type: client-side
+input_format: Markdown
+output_format: DOCX
+accept_extensions: [.md, .markdown]
+output_extension: .docx
+js_module: converters/markdown-to-docx.js
+js_libs: []
+max_file_size: 5MB
+bulk_support: false
+ui_type: standard
+tagline: "Turn Markdown into an editable Word document"
+tagline_long: "Convert a Markdown (.md) file into an editable .docx Word document — headings, bold, italic, and lists all carry over — entirely in your browser, no upload required."
+meta:
+  title: "Markdown to DOCX Converter — Free, No Upload | FileCast"
+  description: "Convert Markdown to Word free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Produces an editable .docx file."
+  keywords: ["markdown to docx", "markdown to word", "md to docx", "convert markdown to word", "readme to word"]
+content:
+  what_is: "content/markdown-to-docx/what-is.md"
+  comparison: "content/markdown-to-docx/comparison.md"
+  when_to_use: "content/markdown-to-docx/when-to-use.md"
+  faq: "content/markdown-to-docx/faq.md"
+related_tools: [markdown-to-pdf, markdown-to-html, html-to-markdown, docx-to-pdf]

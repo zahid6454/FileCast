@@ -1,0 +1,37 @@
+enabled: true
+id: markdown-to-pdf
+name: "Markdown to PDF Converter"
+slug: /convert/markdown-to-pdf
+category: document-conversion
+subcategory: converter
+type: client-side
+input_format: Markdown
+output_format: PDF
+accept_extensions: [.md, .markdown]
+output_extension: .pdf
+js_module: converters/markdown-to-pdf.js
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
+max_file_size: 5MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: pageSize
+    label: "Page size"
+    type: select
+    default: "letter"
+    choices:
+      - { value: "letter", label: "Letter" }
+      - { value: "a4", label: "A4" }
+tagline: "Render Markdown into a formatted PDF"
+tagline_long: "Convert a Markdown (.md) file into a formatted, paginated PDF — headings, bold, italic, lists, and code blocks all render — entirely in your browser, no upload required."
+meta:
+  title: "Markdown to PDF Converter — Free, No Upload | FileCast"
+  description: "Convert Markdown to PDF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Headings, lists, and formatting all render."
+  keywords: ["markdown to pdf", "md to pdf", "convert markdown to pdf", "markdown to pdf converter", "readme to pdf"]
+content:
+  what_is: "content/markdown-to-pdf/what-is.md"
+  comparison: "content/markdown-to-pdf/comparison.md"
+  when_to_use: "content/markdown-to-pdf/when-to-use.md"
+  faq: "content/markdown-to-pdf/faq.md"
+related_tools: [markdown-to-docx, markdown-to-html, txt-to-pdf, pdf-compress]
