@@ -841,6 +841,15 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "Other Ways to Remove a PDF Password",
         "You can also remove a PDF password using Adobe Acrobat (open with the password, then Protect → Remove Security), or Preview on Mac (open with the password, then File → Export as PDF without checking Encrypt). FileCast is useful when you don't have either installed.",
     ),
+    # Build Action Plan PR 6: PDF to Text needs its own bespoke entry — the
+    # real offline alternative (pdftotext/Acrobat's Export To Text) isn't
+    # shared by any other output format, so it doesn't fit a {source}/
+    # {target}-templated group the way PDF to HTML does (it reuses the
+    # existing, already-templated "HTML" entry above via output_format).
+    "pdf-to-text": (
+        "Other Ways to Convert PDF to Text",
+        "You can also extract plain text from a PDF using Adobe Acrobat's Export To → Text tool, the free pdftotext command-line utility (part of the Poppler suite on Mac/Linux), or by opening the PDF and using Select All then Copy. FileCast is useful when you don't have any of these installed.",
+    ),
 }
 
 ALTERNATIVES_GROUP_OVERRIDES = {
@@ -887,6 +896,7 @@ ALTERNATIVES_GROUP_OVERRIDES = {
     "pdf-remove-pages": "pdf-remove-pages",
     "pdf-organize": "pdf-organize",
     "pdf-unlock": "pdf-unlock",
+    "pdf-to-text": "pdf-to-text",
 }
 
 
