@@ -14,6 +14,7 @@ js_libs: [pdf.min.js]
 max_file_size: 50MB
 bulk_support: false
 ui_type: standard
+reverse_tool: html-to-pdf
 tagline: "Turn a PDF into a standalone HTML page"
 tagline_long: "Convert a PDF's text content into a self-contained HTML file — entirely in your browser, no upload required."
 meta:

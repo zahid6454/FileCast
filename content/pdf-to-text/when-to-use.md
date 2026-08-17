@@ -14,7 +14,7 @@ Copying text directly out of a PDF viewer can bring along stray line breaks, ext
 
 ### Archiving Readable Content Long-Term
 
-Plain text is about as future-proof as file formats get — no proprietary format, no rendering engine required, openable on anything. Keeping a text version alongside the original PDF is a lightweight way to make sure the content stays readable decades from now. Once you have the extracted text, our [Hash Generator](/convert/hash-generator) can produce a checksum so you can confirm later that the copy you archived hasn't changed.
+Plain text is about as future-proof as file formats get — no proprietary format, no rendering engine required, openable on anything. Keeping a text version alongside the original PDF is a lightweight way to make sure the content stays readable decades from now. Once you have the extracted text, our [Hash Generator](/convert/hash-generator/) can produce a checksum so you can confirm later that the copy you archived hasn't changed.
 
 ### Checking Word or Character Counts
 
