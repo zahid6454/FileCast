@@ -1004,7 +1004,9 @@ def test_generate_robots_excludes_admin_account(tmp_path, monkeypatch):
     build.generate_robots({"site": {"base_url": "https://filecast.org"}})
     robots = (tmp_path / "robots.txt").read_text(encoding="utf-8")
     assert "Disallow: /admin/" in robots
-    assert "Disallow: /account/" in robots
+    # account/ is deliberately crawlable so Google can see its own noindex
+    # meta tag (Disallow would hide that tag from Googlebot entirely).
+    assert "Disallow: /account/" not in robots
     # P3 §25 — offline.html is sw.js's fallback target only, never linked to.
     assert "Disallow: /offline.html" in robots
 
@@ -1565,9 +1567,11 @@ def test_full_build_additive_outputs(built):
     assert "noindex, nofollow" in account
     assert "filecast-config" in admin  # CSP-safe API config island
 
-    # robots excludes admin/account; sitemap must NOT list them.
+    # robots excludes admin/ but leaves account/ crawlable (so its own noindex
+    # meta tag can take effect); sitemap must NOT list either.
     robots = (built / "robots.txt").read_text(encoding="utf-8")
-    assert "Disallow: /admin/" in robots and "Disallow: /account/" in robots
+    assert "Disallow: /admin/" in robots
+    assert "Disallow: /account/" not in robots
     sitemap = (built / "sitemap.xml").read_text(encoding="utf-8")
     assert "/admin/" not in sitemap and "/account/" not in sitemap
 
