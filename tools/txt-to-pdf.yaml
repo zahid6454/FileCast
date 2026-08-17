@@ -1,0 +1,46 @@
+enabled: true
+id: txt-to-pdf
+name: "TXT to PDF Converter"
+slug: /convert/txt-to-pdf
+category: document-conversion
+subcategory: converter
+type: client-side
+input_format: TXT
+output_format: PDF
+accept_extensions: [.txt]
+output_extension: .pdf
+js_module: converters/txt-to-pdf.js
+# pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
+worker_libs: [pdf-lib.min.js]
+max_file_size: 5MB
+bulk_support: false
+ui_type: standard
+reverse_tool: pdf-to-text
+options:
+  - id: pageSize
+    label: "Page size"
+    type: select
+    default: "letter"
+    choices:
+      - { value: "letter", label: "Letter" }
+      - { value: "a4", label: "A4" }
+  - id: fontSize
+    label: "Font size"
+    type: number
+    min: 8
+    max: 24
+    default: 11
+    placeholder: "11"
+    suffix: "pt"
+tagline: "Turn plain text into a PDF document"
+tagline_long: "Convert a plain text (.txt) file into a paginated PDF document — entirely in your browser, no upload required."
+meta:
+  title: "TXT to PDF Converter — Free, No Upload | FileCast"
+  description: "Convert TXT to PDF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Choose page size and font size."
+  keywords: ["txt to pdf", "text to pdf", "convert txt to pdf", "text file to pdf", "txt to pdf converter"]
+content:
+  what_is: "content/txt-to-pdf/what-is.md"
+  comparison: "content/txt-to-pdf/comparison.md"
+  when_to_use: "content/txt-to-pdf/when-to-use.md"
+  faq: "content/txt-to-pdf/faq.md"
+related_tools: [pdf-to-text, markdown-to-pdf, pdf-merge, pdf-compress]
