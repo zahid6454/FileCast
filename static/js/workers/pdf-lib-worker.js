@@ -809,14 +809,24 @@ function breakLongWord(word, font, fontSize, maxWidth) {
 
 // Plain-text word wrap. Hard newlines in the source are preserved as line
 // breaks (including blank lines, kept as empty output lines for paragraph
-// spacing); each of those source lines is then greedily word-wrapped to fit
-// maxWidth.
+// spacing). A source line that already fits maxWidth as-is is drawn
+// verbatim — byte for byte, indentation and internal multi-space alignment
+// intact — rather than being run through the word-splitter, which would
+// collapse every run of whitespace to a single space even when no wrapping
+// was needed at all. Only a line that's actually too wide falls back to
+// greedy word-wrapping (which does normalize whitespace between the words
+// it re-joins — unavoidable once a line has to be broken at some point
+// other than where the original whitespace was).
 function wrapText(text, font, fontSize, maxWidth) {
   var rawLines = text.replace(/\r\n/g, '\n').split('\n');
   var out = [];
   rawLines.forEach(function (raw) {
     if (raw.trim() === '') {
       out.push('');
+      return;
+    }
+    if (font.widthOfTextAtSize(raw, fontSize) <= maxWidth) {
+      out.push(raw);
       return;
     }
     var words = raw.split(/\s+/).filter(function (w) {
@@ -896,11 +906,30 @@ function txtToPdf(text, options) {
 // (rather than shared) in converters/markdown-to-docx.js, matching this
 // codebase's existing convention of self-contained converter/worker files.
 
+// The URL inside a link/image's (...) is matched with one level of balanced
+// nesting allowed — `[^()]+` alone truncates at the first `)`, which breaks
+// on real-world URLs like Wikipedia's
+// https://en.wikipedia.org/wiki/Foo_(bar) that contain their own parens.
+var LINK_URL = '(?:[^()]|\\([^()]*\\))+';
+
+// Alternation order is load-bearing: `***bold italic***` must be tried
+// before `**bold**` before `*italic*`, or the longer marker never matches
+// (a shorter alternative earlier in the list would consume its two/one
+// leading asterisks first, at the same string position, since JS regex
+// alternation picks the first alternative that matches at the current
+// position, not the longest).
 function parseInlineRuns(text) {
   var runs = [];
   var pos = 0;
-  var re =
-    /(`[^`]+`)|(\*\*\*[^*]+\*\*\*)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)|(~~[^~]+~~)|(!\[[^\]]*\]\([^)]+\))|(\[[^\]]+\]\([^)]+\))/g;
+  var re = new RegExp(
+    '(`[^`]+`)|(\\*\\*\\*[^*]+\\*\\*\\*)|(\\*\\*[^*]+\\*\\*)|(__[^_]+__)|(\\*[^*]+\\*)|(_[^_]+_)|(~~[^~]+~~)|' +
+      '(!\\[[^\\]]*\\]\\(' +
+      LINK_URL +
+      '\\))|(\\[[^\\]]+\\]\\(' +
+      LINK_URL +
+      '\\))',
+    'g'
+  );
   var match;
   while ((match = re.exec(text)) !== null) {
     if (match.index > pos) {
@@ -930,7 +959,7 @@ function parseInlineRuns(text) {
         code: false
       });
     } else if (token.charAt(0) === '[') {
-      var linkMatch = /\[([^\]]+)\]\(([^)]+)\)/.exec(token);
+      var linkMatch = new RegExp('\\[([^\\]]+)\\]\\((' + LINK_URL + ')\\)').exec(token);
       runs.push({
         text: linkMatch[1] + ' (' + linkMatch[2] + ')',
         bold: false,
@@ -1028,21 +1057,50 @@ function parseMarkdownBlocks(md) {
 // character-level pieces via breakLongWord) and greedily packs them into
 // lines no wider than maxWidth, tracking each word's font-appropriate
 // x-advance for the draw pass.
+//
+// Each word tracks `spaceBefore` — whether real whitespace preceded it in
+// the source — rather than assuming a space between every token. parseInlineRuns
+// splits the original text at style boundaries (bold/italic/code spans), and
+// those boundaries frequently have NO whitespace on either side (e.g.
+// "**important**." — no space between the bold span and the period). Adding
+// a space between every token regardless would print "important ." instead
+// of "important.". A run's own leading/trailing whitespace (or a run that's
+// pure whitespace, e.g. the plain-text gap between two adjacent styled
+// spans) still correctly produces a real space, tracked via `spaceBeforeNext`
+// carrying across empty/whitespace-only runs to whichever run's first real
+// word comes next.
 function wrapRuns(runs, fontSize, maxWidth, pickFont) {
   var tokens = [];
+  var spaceBeforeNext = false;
+
   runs.forEach(function (run) {
-    var words = run.text.split(/\s+/).filter(function (w) {
-      return w.length > 0;
-    });
     var font = pickFont(run);
-    words.forEach(function (word) {
-      if (font.widthOfTextAtSize(word, fontSize) <= maxWidth) {
-        tokens.push({ text: word, bold: run.bold, italic: run.italic, code: run.code });
-      } else {
-        breakLongWord(word, font, fontSize, maxWidth).forEach(function (piece) {
-          tokens.push({ text: piece, bold: run.bold, italic: run.italic, code: run.code });
-        });
+    // Capturing group keeps whitespace runs as their own array entries,
+    // alternating with word segments (some possibly '' at the ends).
+    var parts = run.text.split(/(\s+)/);
+    parts.forEach(function (part) {
+      if (!part) return;
+      if (/^\s+$/.test(part)) {
+        if (tokens.length > 0) spaceBeforeNext = true;
+        return;
       }
+      var pieces =
+        font.widthOfTextAtSize(part, fontSize) <= maxWidth
+          ? [part]
+          : breakLongWord(part, font, fontSize, maxWidth);
+      pieces.forEach(function (piece, pieceIndex) {
+        // Only the first piece of a hard-broken word carries the real
+        // spaceBefore flag — the remaining pieces are mid-word character
+        // breaks, never separated by a real space.
+        tokens.push({
+          text: piece,
+          bold: run.bold,
+          italic: run.italic,
+          code: run.code,
+          spaceBefore: pieceIndex === 0 && spaceBeforeNext
+        });
+        spaceBeforeNext = false;
+      });
     });
   });
 
@@ -1054,16 +1112,17 @@ function wrapRuns(runs, fontSize, maxWidth, pickFont) {
   tokens.forEach(function (tok) {
     var font = pickFont(tok);
     var wordWidth = font.widthOfTextAtSize(tok.text, fontSize);
-    var extra = current.length > 0 ? spaceWidth + wordWidth : wordWidth;
-    if (current.length > 0 && currentWidth + extra > maxWidth) {
+    var lead = current.length > 0 && tok.spaceBefore ? spaceWidth : 0;
+    if (current.length > 0 && currentWidth + lead + wordWidth > maxWidth) {
       lines.push(current);
       current = [];
       currentWidth = 0;
-      extra = wordWidth;
+      lead = 0; // first token on a new line never gets a leading space
     }
-    tok.width = wordWidth + spaceWidth;
+    tok.leadSpace = lead;
+    tok.wordWidth = wordWidth;
     current.push(tok);
-    currentWidth += extra;
+    currentWidth += lead + wordWidth;
   });
   if (current.length > 0) lines.push(current);
   return lines;
@@ -1123,6 +1182,7 @@ function markdownToPdf(text, options) {
             ensureSpace(lineHeight);
             var x = margin + indent;
             lineTokens.forEach(function (tok) {
+              x += tok.leadSpace;
               page.drawText(tok.text, {
                 x: x,
                 y: y - fontSize,
@@ -1130,7 +1190,7 @@ function markdownToPdf(text, options) {
                 font: pickFont(tok),
                 color: PDFLib.rgb(0, 0, 0)
               });
-              x += tok.width;
+              x += tok.wordWidth;
             });
             y -= lineHeight;
           });

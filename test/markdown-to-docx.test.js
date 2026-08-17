@@ -130,4 +130,17 @@ describe('markdown-to-docx.js — window.convertFile', () => {
     expect(doc).toContain('FileCast (https://filecast.org)');
     expect(doc).toContain('[Image: alt text]');
   });
+
+  it('captures the full URL of a link containing a nested parenthesis (e.g. Wikipedia-style)', async () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/markdown-to-docx.js');
+    const bytes = await convert(
+      dom,
+      '[wiki](https://en.wikipedia.org/wiki/Foo_(bar)) trailing text'
+    );
+    const doc = readZipEntry(bytes, 'word/document.xml');
+
+    expect(doc).toContain('wiki (https://en.wikipedia.org/wiki/Foo_(bar))');
+    expect(doc).toContain('trailing text');
+  });
 });

@@ -77,6 +77,27 @@ describe('pdf-lib-worker.js — txtToPdf', () => {
     });
   });
 
+  it('preserves indentation and internal multi-space alignment on a line that already fits', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const drawTextSpy = vi.spyOn(dom.window.PDFLib.PDFPage.prototype, 'drawText');
+    const aligned = '  Name       Age';
+    await dom.window.txtToPdf(aligned, {});
+    // Drawn byte-for-byte as typed — not run through the word-splitter,
+    // which would have collapsed every run of whitespace to a single space
+    // even though this short line never needed to wrap at all.
+    expect(drawTextSpy.mock.calls[0][0]).toBe(aligned);
+  });
+
+  it('normalizes whitespace only for a line that actually needs to wrap', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const drawTextSpy = vi.spyOn(dom.window.PDFLib.PDFPage.prototype, 'drawText');
+    const longLine = new Array(80).fill('lorem').join('   '); // 3 spaces, too long to fit
+    await dom.window.txtToPdf(longLine, { fontSize: 11 });
+    drawTextSpy.mock.calls.forEach((call) => {
+      expect(call[0]).not.toMatch(/ {2,}/); // re-joined with single spaces once wrapped
+    });
+  });
+
   it('breaks a single word wider than the page into pieces that each fit', async () => {
     const dom = loadPdfLibWorkerGlobals();
     const pdfDoc = await dom.window.PDFLib.PDFDocument.create();
@@ -117,6 +138,35 @@ describe('pdf-lib-worker.js — markdownToPdf', () => {
     expect(boldCall[1].font).not.toBe(regularCall[1].font);
     expect(italicCall[1].font).not.toBe(regularCall[1].font);
     expect(boldCall[1].font).not.toBe(italicCall[1].font);
+  });
+
+  it('does not insert a space between a styled span and immediately-adjacent punctuation', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const drawTextSpy = vi.spyOn(dom.window.PDFLib.PDFPage.prototype, 'drawText');
+    await dom.window.markdownToPdf('This is **important**.', {});
+    const calls = drawTextSpy.mock.calls;
+    const boldCall = calls.find((c) => c[0] === 'important');
+    const periodCall = calls.find((c) => c[0] === '.');
+    expect(boldCall).toBeTruthy();
+    expect(periodCall).toBeTruthy();
+    // No real space in the source between "**important**" and "." — the
+    // period must start exactly where "important" ends, not one space-width
+    // later (the bug: every token used to get a space unconditionally).
+    const boldWidth = boldCall[1].font.widthOfTextAtSize('important', boldCall[1].size);
+    expect(periodCall[1].x).toBeCloseTo(boldCall[1].x + boldWidth, 5);
+  });
+
+  it('still inserts a real space between styled spans that do have one in the source', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const drawTextSpy = vi.spyOn(dom.window.PDFLib.PDFPage.prototype, 'drawText');
+    await dom.window.markdownToPdf('Some **bold** words after it.', {});
+    const calls = drawTextSpy.mock.calls;
+    const boldCall = calls.find((c) => c[0] === 'bold');
+    const wordsCall = calls.find((c) => c[0] === 'words');
+    const boldWidth = boldCall[1].font.widthOfTextAtSize('bold', boldCall[1].size);
+    // "words" starts strictly after "bold" ends, with room for a real space —
+    // confirms the space-suppression fix didn't just delete spacing entirely.
+    expect(wordsCall[1].x).toBeGreaterThan(boldCall[1].x + boldWidth);
   });
 
   it('renders a bulleted list item with a bullet prefix', async () => {
@@ -163,5 +213,17 @@ describe('pdf-lib-worker.js — parseMarkdownBlocks/parseInlineRuns', () => {
     const runs = dom.window.parseInlineRuns('[FileCast](https://filecast.org) ![alt text](x.png)');
     expect(runs.map((r) => r.text).join('')).toContain('FileCast (https://filecast.org)');
     expect(runs.map((r) => r.text).join('')).toContain('[Image: alt text]');
+  });
+
+  it('captures the full URL of a link containing a nested parenthesis (e.g. Wikipedia-style)', () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const runs = dom.window.parseInlineRuns(
+      '[wiki](https://en.wikipedia.org/wiki/Foo_(bar)) trailing text'
+    );
+    const joined = runs.map((r) => r.text).join('');
+    // Full URL captured (including its own nested paren), immediately
+    // followed by the link syntax's own closing ")" and the trailing text —
+    // not truncated at the URL's inner ")" the way `[^)]+` alone would.
+    expect(joined).toBe('wiki (https://en.wikipedia.org/wiki/Foo_(bar)) trailing text');
   });
 });
