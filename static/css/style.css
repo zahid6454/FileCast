@@ -1196,7 +1196,7 @@ img { max-width: 100%; display: block; }
 .diff-report {
   max-height: 400px;
   overflow-y: auto;
-  border: 2px solid var(--color-success);
+  border: 2px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-bg);
   font-family: var(--font-mono);
