@@ -16,8 +16,12 @@ function toolPageHtml() {
     <button id="convert-btn"></button>
     <div id="progress" class="hidden"><div id="progress-fill"></div></div>
     <div id="text-result" class="hidden">
+      <div id="diff-summary" class="hidden"></div>
+      <div id="diff-report" class="hidden"></div>
+      <div id="text-output-editor">
+        <textarea id="text-output"></textarea>
+      </div>
       <div id="result-info"></div>
-      <textarea id="text-output"></textarea>
       <button id="copy-btn"></button>
       <button id="download-btn"></button>
     </div>
@@ -39,6 +43,53 @@ class FakeDiffWorker {
           data: {
             ok: true,
             result: { text: msg.textA.length + ' vs ' + msg.textB.length, filename: 'diff.txt' }
+          }
+        });
+      }
+    }, 0);
+  }
+  terminate() {}
+}
+
+class FakeStructuredDiffWorker {
+  postMessage() {
+    var self = this;
+    setTimeout(function () {
+      if (self.onmessage) {
+        self.onmessage({
+          data: {
+            ok: true,
+            result: {
+              text: '2 differences found:\n\n+ $.b: 2 (added)\n~ $.a: 1 → 3\n',
+              filename: 'diff.txt',
+              diffs: [
+                { kind: 'added', path: '$.b', newDesc: '2' },
+                { kind: 'changed', path: '$.a', oldDesc: '1', newDesc: '3' }
+              ],
+              summary: { added: 1, removed: 0, changed: 1 }
+            }
+          }
+        });
+      }
+    }, 0);
+  }
+  terminate() {}
+}
+
+class FakeIdenticalDiffWorker {
+  postMessage() {
+    var self = this;
+    setTimeout(function () {
+      if (self.onmessage) {
+        self.onmessage({
+          data: {
+            ok: true,
+            result: {
+              text: 'No differences — both JSON values are structurally identical.\n',
+              filename: 'diff.txt',
+              diffs: [],
+              summary: { added: 0, removed: 0, changed: 0 }
+            }
           }
         });
       }
@@ -131,6 +182,56 @@ describe('shared-diff.js — two-input worker-based comparison', () => {
     dom.window.document.getElementById('text-input-b').value = 'b';
     dom.window.document.getElementById('text-input-b').dispatchEvent(new dom.window.Event('input'));
     expect(convertBtn.disabled).toBe(false);
+  });
+
+  it('renders a colored summary and report when the converter returns structured diffs', async () => {
+    const dom = await setupDiffToolPage(FakeStructuredDiffWorker);
+    dom.window.document.getElementById('text-input-a').value = '{"a":1}';
+    dom.window.document.getElementById('text-input-a').dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('text-input-b').value = '{"a":3,"b":2}';
+    dom.window.document.getElementById('text-input-b').dispatchEvent(new dom.window.Event('input'));
+
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const doc = dom.window.document;
+    expect(doc.getElementById('diff-summary').classList.contains('hidden')).toBe(false);
+    expect(doc.getElementById('diff-report').classList.contains('hidden')).toBe(false);
+    expect(doc.getElementById('text-output-editor').classList.contains('hidden')).toBe(true);
+
+    const chips = doc.querySelectorAll('#diff-summary .diff-chip');
+    expect(chips.length).toBe(2);
+    expect(chips[0].textContent).toBe('1 added');
+    expect(chips[1].textContent).toBe('1 changed');
+
+    const rows = doc.querySelectorAll('#diff-report .diff-row');
+    expect(rows.length).toBe(2);
+    expect(rows[0].classList.contains('diff-row--added')).toBe(true);
+    expect(rows[1].classList.contains('diff-row--changed')).toBe(true);
+
+    expect(doc.getElementById('a11y-status').textContent).toBe(
+      'Comparison complete. 1 added, 1 changed.'
+    );
+  });
+
+  it('shows a "no differences" chip and no report rows for identical JSON', async () => {
+    const dom = await setupDiffToolPage(FakeIdenticalDiffWorker);
+    dom.window.document.getElementById('text-input-a').value = '{"a":1}';
+    dom.window.document.getElementById('text-input-a').dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('text-input-b').value = '{"a":1}';
+    dom.window.document.getElementById('text-input-b').dispatchEvent(new dom.window.Event('input'));
+
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const doc = dom.window.document;
+    expect(doc.getElementById('diff-summary').classList.contains('hidden')).toBe(false);
+    const chips = doc.querySelectorAll('#diff-summary .diff-chip');
+    expect(chips.length).toBe(1);
+    expect(chips[0].textContent).toBe('No differences');
+    expect(doc.querySelectorAll('#diff-report .diff-row').length).toBe(0);
   });
 
   it('shows an error and never reveals the result panel when the worker reports failure', async () => {

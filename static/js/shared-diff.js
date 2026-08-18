@@ -172,7 +172,10 @@
     window._convertedText = outputText;
     window._convertedFilename = output.filename;
 
+    renderDiffReport(output);
+
     setState('complete');
+    if (els.status) els.status.textContent = 'Comparison complete. ' + summaryToWords(output) + '.';
 
     trackEvent('conversion_completed', {
       tool_id: config.id,
@@ -190,6 +193,104 @@
         status: 'success'
       },
       true
+    );
+  }
+
+  var DIFF_SYMBOL = { added: '+', removed: '-', changed: '~', 'type-changed': '~' };
+  var DIFF_LABEL = { added: 'added', removed: 'removed', changed: 'changed' };
+
+  // Converters may return a structured `diffs`/`summary` alongside the plain
+  // `text` (currently just json-diff.js) — when present, render it as a
+  // colored report instead of the plain textarea, so change type reads at a
+  // glance instead of requiring line-by-line reading of a monochrome list.
+  function renderDiffReport(output) {
+    var hasStructured = Array.isArray(output.diffs);
+    if (!els.diffSummary || !els.diffReport || !els.outputEditor) return;
+
+    els.diffSummary.classList.toggle('hidden', !hasStructured);
+    els.diffReport.classList.toggle('hidden', !hasStructured);
+    els.outputEditor.classList.toggle('hidden', hasStructured);
+    if (!hasStructured) return;
+
+    els.diffSummary.textContent = '';
+    els.diffReport.textContent = '';
+
+    if (output.diffs.length === 0) {
+      var okChip = document.createElement('span');
+      okChip.className = 'diff-chip diff-chip--added';
+      okChip.textContent = 'No differences';
+      els.diffSummary.appendChild(okChip);
+      return;
+    }
+
+    var summary = output.summary || {};
+    appendChip(els.diffSummary, summary.added, 'added');
+    appendChip(els.diffSummary, summary.removed, 'removed');
+    appendChip(els.diffSummary, summary.changed, 'changed');
+
+    for (var i = 0; i < output.diffs.length; i++) {
+      els.diffReport.appendChild(buildDiffRow(output.diffs[i]));
+    }
+  }
+
+  function appendChip(container, count, kind) {
+    if (!count) return;
+    var chip = document.createElement('span');
+    chip.className = 'diff-chip diff-chip--' + kind;
+    chip.textContent = count + ' ' + DIFF_LABEL[kind];
+    container.appendChild(chip);
+  }
+
+  function buildDiffRow(d) {
+    var rowKind = d.kind === 'type-changed' ? 'changed' : d.kind;
+    var row = document.createElement('div');
+    row.className = 'diff-row diff-row--' + rowKind;
+    row.setAttribute('role', 'listitem');
+
+    var symbol = document.createElement('span');
+    symbol.className = 'diff-row__symbol';
+    symbol.textContent = DIFF_SYMBOL[d.kind] || '~';
+    row.appendChild(symbol);
+
+    var path = document.createElement('span');
+    path.className = 'diff-row__path';
+    path.textContent = d.path;
+    row.appendChild(path);
+
+    var value = document.createElement('span');
+    value.className = 'diff-row__value';
+    if (d.kind === 'added') {
+      value.textContent = d.newDesc;
+    } else if (d.kind === 'removed') {
+      value.textContent = d.oldDesc;
+    } else {
+      value.textContent = d.oldDesc + ' → ' + d.newDesc;
+    }
+    row.appendChild(value);
+
+    if (d.kind === 'type-changed') {
+      var badge = document.createElement('span');
+      badge.className = 'diff-row__badge';
+      badge.textContent = 'type changed';
+      row.appendChild(badge);
+    }
+
+    return row;
+  }
+
+  // Short spoken-word summary for the a11y live region, e.g.
+  // "2 added, 1 removed, 2 changed" — read alongside "Comparison complete."
+  function summaryToWords(output) {
+    if (!Array.isArray(output.diffs)) return 'Result ready';
+    if (output.diffs.length === 0) return 'No differences found';
+    var summary = output.summary || {};
+    var parts = [];
+    if (summary.added) parts.push(summary.added + ' added');
+    if (summary.removed) parts.push(summary.removed + ' removed');
+    if (summary.changed) parts.push(summary.changed + ' changed');
+    return (
+      parts.join(', ') ||
+      output.diffs.length + ' difference' + (output.diffs.length === 1 ? '' : 's') + ' found'
     );
   }
 
@@ -259,6 +360,9 @@
     els.progress = document.getElementById('progress');
     els.progressFill = document.getElementById('progress-fill');
     els.textResult = document.getElementById('text-result');
+    els.diffSummary = document.getElementById('diff-summary');
+    els.diffReport = document.getElementById('diff-report');
+    els.outputEditor = document.getElementById('text-output-editor');
     els.outputArea = document.getElementById('text-output');
     els.resultInfo = document.getElementById('result-info');
     els.copyBtn = document.getElementById('copy-btn');
