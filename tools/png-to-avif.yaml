@@ -1,0 +1,39 @@
+enabled: true
+id: png-to-avif
+name: PNG to AVIF Converter
+slug: /convert/png-to-avif
+category: image-conversion
+subcategory: converter
+type: client-side
+input_format: PNG
+output_format: AVIF
+accept_extensions: [.png]
+output_extension: .avif
+js_module: converters/png-to-avif.js
+# AVIF encode runs inside a dedicated Worker via libavif compiled to
+# WebAssembly — see static/js/workers/avif-worker.js.
+worker_libs: [wasm_avif.min.js]
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: quality
+    label: "Quality"
+    type: range
+    min: 10
+    max: 100
+    default: 65
+    suffix: "%"
+reverse_tool: avif-to-png
+tagline: "Smaller images, transparency intact"
+tagline_long: "Convert PNG to AVIF for much smaller files that still keep full transparency — all in your browser."
+meta:
+  title: "PNG to AVIF Converter — Free, No Upload | FileCast"
+  description: "Convert PNG to AVIF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Keeps transparency, cuts file size."
+  keywords: ["png to avif", "convert png to avif", "avif converter", "png to avif transparent", "image optimizer"]
+content:
+  what_is: "content/png-to-avif/what-is.md"
+  comparison: "content/png-to-avif/comparison.md"
+  when_to_use: "content/png-to-avif/when-to-use.md"
+  faq: "content/png-to-avif/faq.md"
+related_tools: [avif-to-png, jpg-to-avif, png-to-webp, image-compress]

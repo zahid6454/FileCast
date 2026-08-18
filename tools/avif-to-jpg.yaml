@@ -1,0 +1,31 @@
+enabled: true
+id: avif-to-jpg
+name: AVIF to JPG Converter
+slug: /convert/avif-to-jpg
+category: image-conversion
+subcategory: converter
+type: client-side
+input_format: AVIF
+output_format: JPG
+accept_extensions: [.avif]
+output_extension: .jpg
+js_module: converters/avif-to-jpg.js
+# AVIF decode runs inside a dedicated Worker via libavif compiled to
+# WebAssembly — see static/js/workers/avif-worker.js.
+worker_libs: [wasm_avif.min.js]
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+reverse_tool: jpg-to-avif
+tagline: "Open next-gen AVIF photos anywhere"
+tagline_long: "Convert AVIF images into JPGs that open in every browser, editor, and device — no more 'unsupported image format' errors."
+meta:
+  title: "AVIF to JPG Converter — Free, No Upload | FileCast"
+  description: "Convert AVIF to JPG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Opens on any device, browser, or editor."
+  keywords: ["avif to jpg", "avif converter", "convert avif", "avif to jpeg", "open avif file"]
+content:
+  what_is: "content/avif-to-jpg/what-is.md"
+  comparison: "content/avif-to-jpg/comparison.md"
+  when_to_use: "content/avif-to-jpg/when-to-use.md"
+  faq: "content/avif-to-jpg/faq.md"
+related_tools: [jpg-to-avif, avif-to-png, avif-to-webp, heic-to-jpg]

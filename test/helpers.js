@@ -171,7 +171,15 @@ export function mockCanvas(win, { blobContent = 'fake-image-data' } = {}) {
     createImageData: function (w, h) {
       return { data: new Uint8ClampedArray(w * h * 4), width: w, height: h };
     },
-    putImageData: vi.fn()
+    putImageData: vi.fn(),
+    // Fully opaque by default (alpha 255 on every pixel) — every real
+    // getImageData() call returns that, and jpg-to-avif/png-to-avif read
+    // this to build the raw RGBA buffer they hand to the AVIF worker.
+    getImageData: function (x, y, w, h) {
+      var data = new Uint8ClampedArray(w * h * 4);
+      for (var i = 3; i < data.length; i += 4) data[i] = 255;
+      return { data: data, width: w, height: h };
+    }
   };
   win.HTMLCanvasElement.prototype.getContext = function () {
     canvasSizes.push({ width: this.width, height: this.height });

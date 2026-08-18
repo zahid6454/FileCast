@@ -1,0 +1,39 @@
+enabled: true
+id: jpg-to-avif
+name: JPG to AVIF Converter
+slug: /convert/jpg-to-avif
+category: image-conversion
+subcategory: converter
+type: client-side
+input_format: JPG
+output_format: AVIF
+accept_extensions: [.jpg, .jpeg]
+output_extension: .avif
+js_module: converters/jpg-to-avif.js
+# AVIF encode runs inside a dedicated Worker via libavif compiled to
+# WebAssembly — see static/js/workers/avif-worker.js.
+worker_libs: [wasm_avif.min.js]
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: quality
+    label: "Quality"
+    type: range
+    min: 10
+    max: 100
+    default: 65
+    suffix: "%"
+reverse_tool: avif-to-jpg
+tagline: "Cut image weight without cutting quality"
+tagline_long: "Convert JPG to AVIF — often 50% smaller than JPEG at the same visual quality — all in your browser."
+meta:
+  title: "JPG to AVIF Converter — Free, No Upload | FileCast"
+  description: "Convert JPG to AVIF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Cuts file size while keeping quality."
+  keywords: ["jpg to avif", "jpeg to avif", "convert jpg to avif", "avif converter", "image optimizer"]
+content:
+  what_is: "content/jpg-to-avif/what-is.md"
+  comparison: "content/jpg-to-avif/comparison.md"
+  when_to_use: "content/jpg-to-avif/when-to-use.md"
+  faq: "content/jpg-to-avif/faq.md"
+related_tools: [avif-to-jpg, png-to-avif, jpg-to-webp, image-compress]
