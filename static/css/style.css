@@ -1221,7 +1221,7 @@ img { max-width: 100%; display: block; }
 .diff-row--removed .diff-row__symbol { color: var(--color-error-hover); }
 .diff-row--changed .diff-row__symbol { color: var(--color-warning); }
 
-.diff-row__path { font-weight: var(--weight-bold); color: var(--color-text); white-space: nowrap; }
+.diff-row__path { font-weight: var(--weight-bold); color: var(--color-text); word-break: break-word; }
 .diff-row__value { color: var(--color-text-muted); word-break: break-word; }
 .diff-row__badge {
   margin-left: auto;
@@ -1233,7 +1233,6 @@ img { max-width: 100%; display: block; }
   font-size: var(--text-xs);
   font-weight: var(--weight-bold);
 }
-
 
 /* --- Multi-file Tool (tool-multi.html) --- */
 .file-list { margin-top: var(--space-4); }
