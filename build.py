@@ -645,6 +645,13 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "Other Ways to Convert {source} to WebP",
         "You can also convert {source} to WebP using an image editor like GIMP or Photoshop, both of which support WebP export. FileCast is useful when you don't have an image editor installed.",
     ),
+    # Build Action Plan PR 7: JPG to AVIF / PNG to AVIF share this entry via
+    # output_format (both target AVIF) — the {source}/{target} templating is
+    # what makes one entry correct for both.
+    "AVIF": (
+        "Other Ways to Convert {source} to AVIF",
+        "You can also convert {source} to AVIF using GIMP (with the AVIF export plugin) or Squoosh, Google's own in-browser image codec playground. FileCast is useful when you want a quick conversion without installing a plugin or leaving this page.",
+    ),
     "HTML": (
         "Other Ways to Convert {source} to HTML",
         "You can also convert {source} to HTML using a word processor's \"Save as Web Page\" export, or a short script using your language's {source} and HTML libraries. FileCast is useful for a one-off conversion without setting either up.",
@@ -1242,6 +1249,27 @@ def process_assets() -> dict:
     lib_src = STATIC_DIR / "lib"
     if lib_src.exists():
         for lib_file in lib_src.rglob("*.js"):
+            content_bytes = lib_file.read_bytes()
+            h = file_hash(content_bytes)
+            rel = lib_file.relative_to(STATIC_DIR / "lib")
+            hashed_name = f"{rel.stem}.{h}{rel.suffix}"
+            out_rel = Path("lib") / rel.parent / hashed_name
+            out_path = DIST / out_rel
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_bytes(content_bytes)
+            rel_key = f"lib/{rel.as_posix()}"
+            asset_map[rel_key] = {
+                "path": out_rel.as_posix(),
+                "sri": sri_hash(content_bytes),
+            }
+
+        # --- Third-party WASM binaries (e.g. libavif) — same hash+SRI
+        # treatment as the JS libs above, just a different extension. Fetched
+        # at runtime by their JS glue's `locateFile` override (see
+        # avif-worker.js), not via a <script> tag, so nothing here loads them
+        # directly — this just makes sure they exist in dist/ under a
+        # content-hashed name.
+        for lib_file in lib_src.rglob("*.wasm"):
             content_bytes = lib_file.read_bytes()
             h = file_hash(content_bytes)
             rel = lib_file.relative_to(STATIC_DIR / "lib")
@@ -1888,8 +1916,16 @@ def generate_headers(site_config: dict):
         site_config.get("cloudflare_analytics", {}).get("token")
     )
 
-    # script-src is NEVER touched here (ledger P6/P7) — no inline script is added.
-    script_src = "'self'"
+    # script-src is NEVER given 'unsafe-inline' or 'unsafe-eval' here (ledger
+    # P6/P7) — no inline script is added. 'wasm-unsafe-eval' is a narrower,
+    # unrelated token (CSP3): it permits compiling/instantiating WebAssembly
+    # modules only, not string eval or inline scripts, and browsers gate WASM
+    # on it even for same-origin .wasm binaries fetched from /lib/. Needed
+    # site-wide (not just on the 5 AVIF tool pages) because this file writes
+    # one CSP for all of dist/ — see the AVIF family's shared libavif WASM
+    # decoder/encoder (static/lib/wasm_avif.min.js + .wasm, static/js/workers/
+    # avif-worker.js).
+    script_src = "'self' 'wasm-unsafe-eval'"
     # connect-src already allows the API origin (data API shares it, F15). Add the
     # Google OAuth token/authorize hosts for Phase 5. img-src gains Google avatars
     # (Phase 5); style-src/font-src gain Google Fonts for the Inter face (Phase 3).

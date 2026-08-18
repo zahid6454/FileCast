@@ -1,0 +1,30 @@
+enabled: true
+id: avif-to-webp
+name: AVIF to WebP Converter
+slug: /convert/avif-to-webp
+category: image-conversion
+subcategory: converter
+type: client-side
+input_format: AVIF
+output_format: WebP
+accept_extensions: [.avif]
+output_extension: .webp
+js_module: converters/avif-to-webp.js
+# AVIF decode runs inside a dedicated Worker via libavif compiled to
+# WebAssembly — see static/js/workers/avif-worker.js.
+worker_libs: [avif_dec.js]
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+tagline: "Switch between next-gen image formats"
+tagline_long: "Convert AVIF images to WebP for the browsers and platforms that support WebP but not AVIF yet — transparency and quality preserved."
+meta:
+  title: "AVIF to WebP Converter — Free, No Upload | FileCast"
+  description: "Convert AVIF to WebP free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Keeps transparency intact."
+  keywords: ["avif to webp", "avif converter", "convert avif", "avif to webp image", "open avif file"]
+content:
+  what_is: "content/avif-to-webp/what-is.md"
+  comparison: "content/avif-to-webp/comparison.md"
+  when_to_use: "content/avif-to-webp/when-to-use.md"
+  faq: "content/avif-to-webp/faq.md"
+related_tools: [avif-to-jpg, avif-to-png, jpg-to-webp, png-to-webp]

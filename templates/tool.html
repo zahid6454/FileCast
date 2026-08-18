@@ -296,7 +296,13 @@
   "pdf_lib_src": {{ ("/" + pdf_lib_asset.path)|tojson }},
   "pdf_lib_worker_src": {{ ("/" + pdf_lib_worker_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.worker_libs is defined and 'utif.min.js' in tool.worker_libs %}{% set utif_asset = assets.get('lib/utif.min.js') %}{% set tiff_worker_asset = assets.get('js/workers/tiff-worker.js') %}{% if utif_asset and tiff_worker_asset %},
   "utif_src": {{ ("/" + utif_asset.path)|tojson }},
-  "tiff_worker_src": {{ ("/" + tiff_worker_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.type == 'server-side' %},
+  "tiff_worker_src": {{ ("/" + tiff_worker_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.worker_libs is defined and 'avif_dec.js' in tool.worker_libs %}{% set avif_dec_lib_asset = assets.get('lib/avif_dec.js') %}{% set avif_dec_wasm_asset = assets.get('lib/avif_dec.wasm') %}{% set avif_worker_asset = assets.get('js/workers/avif-worker.js') %}{% if avif_dec_lib_asset and avif_dec_wasm_asset and avif_worker_asset %},
+  "avif_worker_src": {{ ("/" + avif_worker_asset.path)|tojson }},
+  "avif_dec_lib_src": {{ ("/" + avif_dec_lib_asset.path)|tojson }},
+  "avif_dec_wasm_src": {{ ("/" + avif_dec_wasm_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.worker_libs is defined and 'avif_enc.js' in tool.worker_libs %}{% set avif_enc_lib_asset = assets.get('lib/avif_enc.js') %}{% set avif_enc_wasm_asset = assets.get('lib/avif_enc.wasm') %}{% set avif_worker_asset = assets.get('js/workers/avif-worker.js') %}{% if avif_enc_lib_asset and avif_enc_wasm_asset and avif_worker_asset %},
+  "avif_worker_src": {{ ("/" + avif_worker_asset.path)|tojson }},
+  "avif_enc_lib_src": {{ ("/" + avif_enc_lib_asset.path)|tojson }},
+  "avif_enc_wasm_src": {{ ("/" + avif_enc_wasm_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.type == 'server-side' %},
   "api_base_url": {{ api.base_url|tojson }},
   "api_endpoint": {{ tool.api_endpoint|default('/api/v1/convert/' + tool.id)|tojson }}{% endif %}
 }
