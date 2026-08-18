@@ -33,8 +33,8 @@ function setUp(dom, WorkerClass) {
   dom.window.Worker = WorkerClass;
   dom.window.TOOL_CONFIG = {
     avif_worker_src: '/w.js',
-    avif_lib_src: '/lib.js',
-    avif_wasm_src: '/lib.wasm'
+    avif_enc_lib_src: '/enc.js',
+    avif_enc_wasm_src: '/enc.wasm'
   };
   mockImageLoad(dom.window, { width: 100, height: 80 });
   mockCanvas(dom.window);
@@ -61,7 +61,7 @@ describe('jpg-to-avif.js — window.convertFile', () => {
     expect(blob.type).toBe('image/avif');
   });
 
-  it("sends channels:4, the image's dimensions, and a quantizer derived from the quality slider", async () => {
+  it("sends the image's dimensions and the quality slider value straight through", async () => {
     const dom = createDom('<input id="opt-quality" value="80">');
     let sentMessage = null;
     class CapturingWorker extends FakeAvifEncodeWorker {
@@ -76,14 +76,12 @@ describe('jpg-to-avif.js — window.convertFile', () => {
     await dom.window.convertFile(file);
 
     expect(sentMessage.type).toBe('encode');
-    expect(sentMessage.channels).toBe(4);
     expect(sentMessage.width).toBe(100);
     expect(sentMessage.height).toBe(80);
-    // quality 80 -> quantizer round((100-80)*0.55) = 11
-    expect(sentMessage.quantizer).toBe(11);
+    expect(sentMessage.quality).toBe(80);
   });
 
-  it('falls back to the 65% default quantizer when no slider is present', async () => {
+  it('falls back to the 65% default quality when no slider is present', async () => {
     const dom = createDom();
     let sentMessage = null;
     class CapturingWorker extends FakeAvifEncodeWorker {
@@ -97,8 +95,7 @@ describe('jpg-to-avif.js — window.convertFile', () => {
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
     await dom.window.convertFile(file);
 
-    // quality 65 -> quantizer round((100-65)*0.55) = 19
-    expect(sentMessage.quantizer).toBe(19);
+    expect(sentMessage.quality).toBe(65);
   });
 
   it('rejects with the worker-reported error when AVIF encoding fails', async () => {
@@ -116,8 +113,8 @@ describe('jpg-to-avif.js — window.convertFile', () => {
     dom.window.Worker = FakeAvifEncodeWorker;
     dom.window.TOOL_CONFIG = {
       avif_worker_src: '/w.js',
-      avif_lib_src: '/lib.js',
-      avif_wasm_src: '/lib.wasm'
+      avif_enc_lib_src: '/enc.js',
+      avif_enc_wasm_src: '/enc.wasm'
     };
     mockImageLoad(dom.window, { shouldError: true });
     mockCanvas(dom.window);

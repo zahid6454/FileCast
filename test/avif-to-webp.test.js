@@ -42,8 +42,8 @@ describe('avif-to-webp.js — window.convertFile', () => {
     dom.window.Worker = FakeAvifWorker;
     dom.window.TOOL_CONFIG = {
       avif_worker_src: '/w.js',
-      avif_lib_src: '/lib.js',
-      avif_wasm_src: '/lib.wasm'
+      avif_dec_lib_src: '/lib.js',
+      avif_dec_wasm_src: '/lib.wasm'
     };
     const { ctx, toBlobCalls } = mockCanvas(dom.window);
     evalScript(dom, 'converters/avif-to-webp.js');
@@ -63,8 +63,8 @@ describe('avif-to-webp.js — window.convertFile', () => {
     dom.window.Worker = FakeErroringAvifWorker;
     dom.window.TOOL_CONFIG = {
       avif_worker_src: '/w.js',
-      avif_lib_src: '/lib.js',
-      avif_wasm_src: '/lib.wasm'
+      avif_dec_lib_src: '/lib.js',
+      avif_dec_wasm_src: '/lib.wasm'
     };
     mockCanvas(dom.window);
     evalScript(dom, 'converters/avif-to-webp.js');
@@ -84,8 +84,8 @@ describe('avif-to-webp.js — window.convertFile', () => {
     dom.window.Worker = TrackedWorker;
     dom.window.TOOL_CONFIG = {
       avif_worker_src: '/w.js',
-      avif_lib_src: '/lib.js',
-      avif_wasm_src: '/lib.wasm'
+      avif_dec_lib_src: '/lib.js',
+      avif_dec_wasm_src: '/lib.wasm'
     };
     mockCanvas(dom.window);
     evalScript(dom, 'converters/avif-to-webp.js');

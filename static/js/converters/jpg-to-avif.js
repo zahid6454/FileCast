@@ -12,7 +12,7 @@
 
   window.convertFile = function (file) {
     var config = window.TOOL_CONFIG || {};
-    if (!config.avif_worker_src || !config.avif_lib_src || !config.avif_wasm_src) {
+    if (!config.avif_worker_src || !config.avif_enc_lib_src || !config.avif_enc_wasm_src) {
       return Promise.reject(
         new Error('Conversion is unavailable right now. Please refresh the page.')
       );
@@ -21,18 +21,15 @@
     var quality = 65;
     var slider = document.getElementById('opt-quality');
     if (slider) quality = parseInt(slider.value, 10) || 65;
-    // libavif/AOM quantizer: 0 (best, slow) - 63 (worst, fast). See
-    // avif-worker.js for the matching chroma-subsampling choice.
-    var quantizer = Math.max(0, Math.min(63, Math.round((100 - quality) * 0.55)));
 
     return loadImageData(file).then(function (imageData) {
       return new Promise(function (resolve, reject) {
         var worker = new Worker(
           config.avif_worker_src +
-            '?lib=' +
-            encodeURIComponent(config.avif_lib_src) +
-            '&wasm=' +
-            encodeURIComponent(config.avif_wasm_src)
+            '?enclib=' +
+            encodeURIComponent(config.avif_enc_lib_src) +
+            '&encwasm=' +
+            encodeURIComponent(config.avif_enc_wasm_src)
         );
         activeWorker = worker;
 
@@ -53,9 +50,8 @@
           reject(new Error((err && err.message) || 'Could not encode this image as AVIF.'));
         };
 
-        // Canvas ImageData is always 4 channels (RGBA), even for a JPG
-        // source with no real transparency — the encoder just stores a
-        // uniformly-opaque alpha plane, cheaper than repacking to RGB.
+        // Canvas ImageData is always 4 channels (RGBA) — the encoder always
+        // expects that layout, same as it always hands back RGBA on decode.
         var rgba = imageData.data.buffer;
         worker.postMessage(
           {
@@ -63,8 +59,7 @@
             rgba: rgba,
             width: imageData.width,
             height: imageData.height,
-            channels: 4,
-            quantizer: quantizer
+            quality: quality
           },
           [rgba]
         );

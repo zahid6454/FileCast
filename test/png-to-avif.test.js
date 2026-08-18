@@ -29,8 +29,8 @@ function setUp(dom, WorkerClass) {
   dom.window.Worker = WorkerClass;
   dom.window.TOOL_CONFIG = {
     avif_worker_src: '/w.js',
-    avif_lib_src: '/lib.js',
-    avif_wasm_src: '/lib.wasm'
+    avif_enc_lib_src: '/enc.js',
+    avif_enc_wasm_src: '/enc.wasm'
   };
   mockImageLoad(dom.window, { width: 50, height: 40 });
   mockCanvas(dom.window);
@@ -47,7 +47,7 @@ describe('png-to-avif.js — window.convertFile', () => {
     await expect(dom.window.convertFile(file)).rejects.toThrow(/unavailable right now/i);
   });
 
-  it('encodes via the worker and resolves an AVIF blob, preserving transparency (channels:4)', async () => {
+  it('encodes via the worker and resolves an AVIF blob, preserving transparency (RGBA passthrough)', async () => {
     const dom = createDom();
     let sentMessage = null;
     class CapturingWorker extends FakeAvifEncodeWorker {
@@ -63,14 +63,12 @@ describe('png-to-avif.js — window.convertFile', () => {
 
     expect(blob.type).toBe('image/avif');
     expect(sentMessage.type).toBe('encode');
-    expect(sentMessage.channels).toBe(4);
     expect(sentMessage.width).toBe(50);
     expect(sentMessage.height).toBe(40);
-    // default quality 65 -> quantizer round((100-65)*0.55) = 19
-    expect(sentMessage.quantizer).toBe(19);
+    expect(sentMessage.quality).toBe(65); // default
   });
 
-  it('derives the quantizer from a custom quality slider value', async () => {
+  it('sends a custom quality slider value straight through', async () => {
     const dom = createDom('<input id="opt-quality" value="30">');
     let sentMessage = null;
     class CapturingWorker extends FakeAvifEncodeWorker {
@@ -84,8 +82,7 @@ describe('png-to-avif.js — window.convertFile', () => {
     const file = new dom.window.File([new Uint8Array(10)], 'logo.png', { type: 'image/png' });
     await dom.window.convertFile(file);
 
-    // quality 30 -> quantizer round((100-30)*0.55) = 39
-    expect(sentMessage.quantizer).toBe(39);
+    expect(sentMessage.quality).toBe(30);
   });
 
   it('rejects with the worker-reported error when AVIF encoding fails', async () => {
@@ -103,8 +100,8 @@ describe('png-to-avif.js — window.convertFile', () => {
     dom.window.Worker = FakeAvifEncodeWorker;
     dom.window.TOOL_CONFIG = {
       avif_worker_src: '/w.js',
-      avif_lib_src: '/lib.js',
-      avif_wasm_src: '/lib.wasm'
+      avif_enc_lib_src: '/enc.js',
+      avif_enc_wasm_src: '/enc.wasm'
     };
     mockImageLoad(dom.window, { shouldError: true });
     mockCanvas(dom.window);

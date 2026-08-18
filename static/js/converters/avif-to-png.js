@@ -12,7 +12,7 @@
 
   window.convertFile = function (file) {
     var config = window.TOOL_CONFIG || {};
-    if (!config.avif_worker_src || !config.avif_lib_src || !config.avif_wasm_src) {
+    if (!config.avif_worker_src || !config.avif_dec_lib_src || !config.avif_dec_wasm_src) {
       return Promise.reject(
         new Error('Conversion is unavailable right now. Please refresh the page.')
       );
@@ -22,10 +22,10 @@
       return new Promise(function (resolve, reject) {
         var worker = new Worker(
           config.avif_worker_src +
-            '?lib=' +
-            encodeURIComponent(config.avif_lib_src) +
-            '&wasm=' +
-            encodeURIComponent(config.avif_wasm_src)
+            '?declib=' +
+            encodeURIComponent(config.avif_dec_lib_src) +
+            '&decwasm=' +
+            encodeURIComponent(config.avif_dec_wasm_src)
         );
         activeWorker = worker;
 

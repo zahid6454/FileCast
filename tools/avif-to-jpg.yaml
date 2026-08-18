@@ -12,7 +12,7 @@ output_extension: .jpg
 js_module: converters/avif-to-jpg.js
 # AVIF decode runs inside a dedicated Worker via libavif compiled to
 # WebAssembly — see static/js/workers/avif-worker.js.
-worker_libs: [wasm_avif.min.js]
+worker_libs: [avif_dec.js]
 max_file_size: 20MB
 bulk_support: false
 ui_type: standard
