@@ -70,4 +70,59 @@ describe('ico-to-png.js — window.convertFile', () => {
     const file = new dom.window.File([icoBytes], 'legacy.ico', { type: 'image/x-icon' });
     await expect(dom.window.convertFile(file)).rejects.toThrow(/legacy bmp-format/i);
   });
+
+  it('correctly treats a 0 width/height byte as meaning 256 (the largest entry)', async () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/ico-to-png.js');
+
+    const mediumPng = new Uint8Array([...PNG_SIGNATURE, 9, 9]);
+    const largePng = new Uint8Array([...PNG_SIGNATURE, 7, 7, 7, 7]);
+    // width/height >= 256 is encoded as the byte value 0 — buildFakeIco
+    // mirrors png-to-ico.js's own encoding of that convention.
+    const icoBytes = buildFakeIco([
+      { width: 48, height: 48, data: mediumPng },
+      { width: 256, height: 256, data: largePng }
+    ]);
+
+    const file = new dom.window.File([icoBytes], 'app.ico', { type: 'image/x-icon' });
+    const blob = await dom.window.convertFile(file);
+
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    expect(Array.from(bytes)).toEqual(Array.from(largePng));
+  });
+
+  it('rejects a header that declares zero images', async () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/ico-to-png.js');
+
+    const out = new Uint8Array(6);
+    const view = new DataView(out.buffer);
+    view.setUint16(0, 0, true); // reserved
+    view.setUint16(2, 1, true); // type: icon
+    view.setUint16(4, 0, true); // count = 0
+
+    const file = new dom.window.File([out], 'empty.ico', { type: 'image/x-icon' });
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/not look like a valid ico/i);
+  });
+
+  it('rejects a directory entry whose declared image data runs past the end of the file', async () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/ico-to-png.js');
+
+    // A well-formed 6-byte header + one 16-byte directory entry, but the
+    // entry's bytesInRes claims far more data than the file actually has —
+    // simulates a truncated or corrupted download.
+    const out = new Uint8Array(22);
+    const view = new DataView(out.buffer);
+    view.setUint16(0, 0, true);
+    view.setUint16(2, 1, true);
+    view.setUint16(4, 1, true);
+    out[6] = 32;
+    out[7] = 32;
+    view.setUint32(6 + 8, 1000, true); // bytesInRes — far larger than the file
+    view.setUint32(6 + 12, 22, true); // imageOffset — right after the directory
+
+    const file = new dom.window.File([out], 'corrupt.ico', { type: 'image/x-icon' });
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not read any icon images/i);
+  });
 });
