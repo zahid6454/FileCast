@@ -1,0 +1,29 @@
+enabled: true
+id: tiff-to-png
+name: TIFF to PNG Converter
+slug: /convert/tiff-to-png
+category: image-conversion
+subcategory: converter
+type: client-side
+input_format: TIFF
+output_format: PNG
+accept_extensions: [.tiff, .tif]
+output_extension: .png
+js_module: converters/tiff-to-png.js
+# UTIF decode runs inside a dedicated Worker (P4 §36) — see static/js/workers/tiff-worker.js.
+worker_libs: [utif.min.js]
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+tagline: "Lossless scans and photos with transparency preserved"
+tagline_long: "Turn large TIFF files from scanners and cameras into lossless PNGs with full quality and transparency preserved."
+meta:
+  title: "TIFF to PNG Converter — Free, No Upload | FileCast"
+  description: "Convert TIFF to PNG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Keeps full quality and transparency intact."
+  keywords: ["tiff to png", "tif to png", "convert tiff to png", "tiff converter", "tiff to png free"]
+content:
+  what_is: "content/tiff-to-png/what-is.md"
+  comparison: "content/tiff-to-png/comparison.md"
+  when_to_use: "content/tiff-to-png/when-to-use.md"
+  faq: "content/tiff-to-png/faq.md"
+related_tools: [tiff-to-jpg, heic-to-png, gif-to-png, png-to-jpg]

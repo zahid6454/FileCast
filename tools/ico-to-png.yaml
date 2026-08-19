@@ -1,0 +1,29 @@
+enabled: true
+id: ico-to-png
+name: ICO to PNG Converter
+slug: /convert/ico-to-png
+category: image-conversion
+subcategory: converter
+type: client-side
+input_format: ICO
+output_format: PNG
+accept_extensions: [.ico]
+output_extension: .png
+js_module: converters/ico-to-png.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+reverse_tool: png-to-ico
+tagline: "Extract a favicon or app icon as an editable image"
+tagline_long: "Pull the largest embedded image out of an ICO favicon or Windows icon file and save it as a standard PNG you can open and edit anywhere."
+meta:
+  title: "ICO to PNG Converter — Free, No Upload | FileCast"
+  description: "Convert ICO to PNG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Extracts the largest icon image."
+  keywords: ["ico to png", "convert ico to png", "favicon to png", "icon converter", "extract icon image"]
+content:
+  what_is: "content/ico-to-png/what-is.md"
+  comparison: "content/ico-to-png/comparison.md"
+  when_to_use: "content/ico-to-png/when-to-use.md"
+  faq: "content/ico-to-png/faq.md"
+related_tools: [png-to-ico, svg-to-png, webp-to-png, png-to-jpg]

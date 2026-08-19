@@ -1,0 +1,28 @@
+enabled: true
+id: heic-to-webp
+name: HEIC to WebP Converter
+slug: /convert/heic-to-webp
+category: image-conversion
+subcategory: converter
+type: client-side
+input_format: HEIC
+output_format: WebP
+accept_extensions: [.heic, .heif]
+output_extension: .webp
+js_module: converters/heic-to-webp.js
+js_libs: [heic2any.min.js]
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+tagline: "iPhone photos to a modern, web-optimized format"
+tagline_long: "Convert Apple's HEIC photos into WebP files — small like the original, but supported by every modern browser and website."
+meta:
+  title: "HEIC to WebP Converter — Free, No Upload | FileCast"
+  description: "Convert HEIC to WebP free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Small files that work on the web."
+  keywords: ["heic to webp", "heif to webp", "convert heic to webp", "heic converter", "iphone photo converter"]
+content:
+  what_is: "content/heic-to-webp/what-is.md"
+  comparison: "content/heic-to-webp/comparison.md"
+  when_to_use: "content/heic-to-webp/when-to-use.md"
+  faq: "content/heic-to-webp/faq.md"
+related_tools: [heic-to-jpg, heic-to-png, png-to-webp, avif-to-webp]

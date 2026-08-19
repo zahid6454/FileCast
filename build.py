@@ -645,6 +645,13 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "Other Ways to Convert {source} to WebP",
         "You can also convert {source} to WebP using an image editor like GIMP or Photoshop, both of which support WebP export. FileCast is useful when you don't have an image editor installed.",
     ),
+    # Build Action Plan PR 8: png-to-ico is the only tool targeting ICO, but
+    # this still uses {source}/{target} placeholders for consistency with
+    # every other entry in this table.
+    "ICO": (
+        "Other Ways to Convert {source} to ICO",
+        "You can also create an ICO favicon using an image editor like GIMP (File → Export As → .ico) or an OS icon-conversion utility. FileCast is useful when you want a quick conversion without installing a plugin.",
+    ),
     # Build Action Plan PR 7: JPG to AVIF / PNG to AVIF share this entry via
     # output_format (both target AVIF) — the {source}/{target} templating is
     # what makes one entry correct for both.
