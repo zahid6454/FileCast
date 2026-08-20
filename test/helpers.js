@@ -166,8 +166,21 @@ export function mockCanvas(win, { blobContent = 'fake-image-data' } = {}) {
   var canvasSizes = [];
   var ctx = {
     fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
     fillRect: vi.fn(),
+    strokeRect: vi.fn(),
+    clearRect: vi.fn(),
     drawImage: vi.fn(),
+    // No-op transform stubs — needed by converters that rotate/flip/mask via
+    // ctx.save()/translate()/rotate()/scale()/restore() (image-rotate-flip.js,
+    // image-cropper.js). Existing converters never call these, so adding them
+    // here doesn't change any other test's behavior.
+    save: vi.fn(),
+    restore: vi.fn(),
+    translate: vi.fn(),
+    rotate: vi.fn(),
+    scale: vi.fn(),
     createImageData: function (w, h) {
       return { data: new Uint8ClampedArray(w * h * 4), width: w, height: h };
     },

@@ -1,0 +1,28 @@
+enabled: true
+id: image-exif-remover
+name: Image EXIF/Metadata Remover
+slug: /convert/image-exif-remover
+category: image-conversion
+subcategory: utility
+type: client-side
+input_format: Image
+output_format: Image
+accept_extensions: [.jpg, .jpeg, .png, .webp]
+output_extension: .jpg
+js_module: converters/image-exif-remover.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+tagline: "Strip camera, GPS, and editing metadata from your photos"
+tagline_long: "Remove EXIF, GPS location, and other hidden metadata from JPG, PNG, and WebP images before sharing them — entirely in your browser, with no quality loss."
+meta:
+  title: "Image EXIF/Metadata Remover — Free, No Upload | FileCast"
+  description: "Remove EXIF and GPS metadata from a photo free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Lossless, no re-encoding."
+  keywords: ["remove exif data", "strip metadata from photo", "remove gps from photo", "exif remover", "delete image metadata", "scrub photo metadata"]
+content:
+  what_is: "content/image-exif-remover/what-is.md"
+  comparison: "content/image-exif-remover/comparison.md"
+  when_to_use: "content/image-exif-remover/when-to-use.md"
+  faq: "content/image-exif-remover/faq.md"
+related_tools: [image-compress, image-resize, pdf-protect]

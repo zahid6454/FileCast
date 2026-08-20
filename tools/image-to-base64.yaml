@@ -1,0 +1,29 @@
+enabled: true
+id: image-to-base64
+name: Image to Base64 Converter
+slug: /convert/image-to-base64
+category: image-conversion
+subcategory: converter
+type: client-side
+input_format: Image
+output_format: Base64
+accept_extensions: [.jpg, .jpeg, .png, .webp, .gif, .bmp, .svg]
+output_extension: .txt
+js_module: converters/image-to-base64.js
+js_libs: []
+max_file_size: 10MB
+bulk_support: false
+ui_type: standard
+tagline: "Turn an image into a copy-paste-ready Base64 string"
+tagline_long: "Convert a JPG, PNG, WebP, GIF, BMP, or SVG into a Base64-encoded data URL you can paste directly into CSS, HTML, or JSON — all in your browser."
+meta:
+  title: "Image to Base64 Converter — Free, No Upload | FileCast"
+  description: "Convert an image to Base64 free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Get a ready-to-use data URL instantly."
+  keywords: ["image to base64", "convert image to base64", "base64 encode image", "image to data url", "png to base64", "jpg to base64"]
+content:
+  what_is: "content/image-to-base64/what-is.md"
+  comparison: "content/image-to-base64/comparison.md"
+  when_to_use: "content/image-to-base64/when-to-use.md"
+  faq: "content/image-to-base64/faq.md"
+reverse_tool: base64-to-image
+related_tools: [base64-to-image, base64-encode-decode, image-compress]

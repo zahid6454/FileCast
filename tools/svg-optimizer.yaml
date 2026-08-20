@@ -1,0 +1,28 @@
+enabled: true
+id: svg-optimizer
+name: SVG Optimizer/Minifier
+slug: /convert/svg-optimizer
+category: image-conversion
+subcategory: utility
+type: client-side
+input_format: SVG
+output_format: SVG
+accept_extensions: [.svg]
+output_extension: .svg
+js_module: converters/svg-optimizer.js
+js_libs: []
+max_file_size: 10MB
+bulk_support: false
+ui_type: standard
+tagline: "Strip editor cruft and comments out of an SVG file"
+tagline_long: "Remove comments, empty metadata, editor-specific attributes, and insignificant whitespace from an SVG — smaller files, same visual output, all in your browser."
+meta:
+  title: "SVG Optimizer/Minifier — Free, No Upload | FileCast"
+  description: "Optimize and minify an SVG file free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Smaller files, same visuals."
+  keywords: ["svg optimizer", "minify svg", "svg minifier online", "reduce svg file size", "clean up svg", "svgo alternative"]
+content:
+  what_is: "content/svg-optimizer/what-is.md"
+  comparison: "content/svg-optimizer/comparison.md"
+  when_to_use: "content/svg-optimizer/when-to-use.md"
+  faq: "content/svg-optimizer/faq.md"
+related_tools: [svg-to-jpg, svg-to-png, css-js-minifier]
