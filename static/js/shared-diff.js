@@ -14,6 +14,7 @@
   var formatBytes = FC.formatBytes;
   var trackEvent = FC.trackEvent;
   var postConversion = FC.postConversion;
+  var reportError = FC.reportError;
   // Falls back to a no-op when text-editor-gutter.js isn't loaded (e.g. unit
   // tests that eval this file standalone) rather than assuming it's always present.
   var refreshLineNumbers = FC.refreshLineNumbers || function () {};
@@ -122,7 +123,8 @@
     els.progressFill.style.width = '';
 
     function onFailure(message) {
-      showError(message || 'Comparison failed. Please check your input and try again.');
+      var msg = message || 'Comparison failed. Please check your input and try again.';
+      showError(msg);
       trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
       postConversion(
         {
@@ -133,6 +135,12 @@
         },
         false
       );
+      reportError({
+        tool_id: config.id,
+        error_type: 'conversion_error',
+        error_message: msg,
+        browser: navigator.userAgent
+      });
     }
 
     var worker = new Worker(

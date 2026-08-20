@@ -18,6 +18,7 @@
   var formatBytes = FC.formatBytes;
   var trackEvent = FC.trackEvent;
   var postConversion = FC.postConversion;
+  var reportError = FC.reportError;
   var getExtension = FC.getExtension;
   var generateOutputFilename = FC.generateOutputFilename;
 
@@ -246,7 +247,8 @@
         })
         .catch(function (err) {
           if (cancelledThisRun) return;
-          showError(err.message || 'Processing failed. One or more files may be corrupted.');
+          var msg = err.message || 'Processing failed. One or more files may be corrupted.';
+          showError(msg);
           setState('selected');
           trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
           postConversion(
@@ -258,6 +260,12 @@
             },
             false
           );
+          reportError({
+            tool_id: config.id,
+            error_type: 'conversion_error',
+            error_message: msg,
+            browser: navigator.userAgent
+          });
         });
       return;
     }
@@ -300,8 +308,15 @@
           processNext();
         })
         .catch(function (err) {
-          results.push({ success: false, error: err.message || 'Failed', originalName: file.name });
+          var msg = err.message || 'Failed';
+          results.push({ success: false, error: msg, originalName: file.name });
           updateFileItem(idx, 'file-list__item--error', 'Failed');
+          reportError({
+            tool_id: config.id,
+            error_type: 'conversion_error',
+            error_message: msg,
+            browser: navigator.userAgent
+          });
           current++;
           processNext();
         });

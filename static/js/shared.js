@@ -25,6 +25,7 @@
   var formatBytes = FC.formatBytes;
   var trackEvent = FC.trackEvent;
   var postConversion = FC.postConversion;
+  var reportError = FC.reportError;
   var getExtension = FC.getExtension;
   var generateOutputFilename = FC.generateOutputFilename;
 
@@ -356,6 +357,12 @@
           },
           false
         );
+        reportError({
+          tool_id: config.id,
+          error_type: 'conversion_error',
+          error_message: msg,
+          browser: navigator.userAgent
+        });
       });
   }
 
