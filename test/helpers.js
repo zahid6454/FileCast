@@ -105,7 +105,17 @@ export function evalScript(dom, relPath) {
 }
 
 // Let queued microtasks/promise chains (e.g. fetch().then().then()) settle.
+// Three rounds, not two: the AVIF converters' cancelConversion tests chain a
+// FileReader-based Blob.arrayBuffer() read (helpers.js's own
+// polyfillArrayBuffer) before the Worker even gets created, and under a
+// loaded CI runner two rounds occasionally weren't enough for that read to
+// resolve before the test called cancelConversion() — a real, if rare,
+// flake (`activeWorker` still null, so terminate() never gets called), not
+// a bug in the converter itself. flush() has no callers relying on an exact tick
+// count (it exists purely to "wait until settled"), so one more round is a
+// safe fix for every caller, not just those tests.
 export async function flush() {
+  await new Promise((r) => setTimeout(r, 0));
   await new Promise((r) => setTimeout(r, 0));
   await new Promise((r) => setTimeout(r, 0));
 }

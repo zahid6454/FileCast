@@ -79,6 +79,90 @@ describe('pdf-lib-worker.js — Standard Security Handler primitives', () => {
   });
 });
 
+describe('pdf-lib-worker.js — resolveCryptoParams() (V4 crypt filter resolution)', () => {
+  // pypdf's own high-level PdfWriter.encrypt() API (used to generate the
+  // fixtures in test/pdf-unlock-encryption-levels.test.js) always sets
+  // StmF === StrF, so no real-world fixture generated that way ever
+  // exercises a document whose streams and strings use *different* crypt
+  // filters — a legal, if uncommon, V4 document (e.g. AES-128 streams with
+  // plaintext strings). These build the Encrypt dictionary by hand instead,
+  // to check the parsing/resolution logic in isolation without needing a
+  // full valid encrypted document round trip.
+  function buildEncryptDict(dom, cfEntries) {
+    var PDFLib = dom.window.PDFLib;
+    return PDFLib.PDFDocument.create().then(function (doc) {
+      return doc.context.obj(
+        Object.assign(
+          {
+            Filter: PDFLib.PDFName.of('Standard'),
+            V: 4,
+            R: 4,
+            Length: 128,
+            O: PDFLib.PDFHexString.of('00'.repeat(32)),
+            U: PDFLib.PDFHexString.of('00'.repeat(32)),
+            P: -4
+          },
+          cfEntries
+        )
+      );
+    });
+  }
+
+  it('resolves different ciphers for streams vs. strings (StmF=AESV2, StrF=Identity)', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const PDFLib = dom.window.PDFLib;
+    const encryptDict = await buildEncryptDict(dom, {
+      CF: {
+        StdCF: {
+          CFM: PDFLib.PDFName.of('AESV2'),
+          Length: 16,
+          AuthEvent: PDFLib.PDFName.of('DocOpen')
+        },
+        IdentityCF: { CFM: PDFLib.PDFName.of('Identity') }
+      },
+      StmF: PDFLib.PDFName.of('StdCF'),
+      StrF: PDFLib.PDFName.of('IdentityCF')
+    });
+
+    const params = dom.window.resolveCryptoParams(encryptDict);
+
+    expect(params.streamCipher).toBe('AES');
+    expect(params.stringCipher).toBe('Identity');
+    expect(params.keyLengthBytes).toBe(16);
+  });
+
+  it('resolves a plain RC4 crypt filter under V4 (StmF=StrF=V2, no AES)', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const PDFLib = dom.window.PDFLib;
+    const encryptDict = await buildEncryptDict(dom, {
+      CF: { StdCF: { CFM: PDFLib.PDFName.of('V2'), AuthEvent: PDFLib.PDFName.of('DocOpen') } },
+      StmF: PDFLib.PDFName.of('StdCF'),
+      StrF: PDFLib.PDFName.of('StdCF')
+    });
+
+    const params = dom.window.resolveCryptoParams(encryptDict);
+
+    expect(params.streamCipher).toBe('RC4');
+    expect(params.stringCipher).toBe('RC4');
+    // No AESV2 stream filter present, so this falls back to the top-level
+    // /Length (bits) rather than a crypt filter's own /Length (bytes) —
+    // see resolveCryptoParams's own comment on this precedence.
+    expect(params.keyLengthBytes).toBe(16);
+  });
+
+  it('treats a missing StmF/StrF as Identity (no encryption for that class)', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const encryptDict = await buildEncryptDict(dom, {
+      CF: {}
+    });
+
+    const params = dom.window.resolveCryptoParams(encryptDict);
+
+    expect(params.streamCipher).toBe('Identity');
+    expect(params.stringCipher).toBe('Identity');
+  });
+});
+
 describe('pdf-lib-worker.js — protect() / unlock()', () => {
   async function makeTestPdf(dom) {
     // No explicit page-size array here: a plain `[w, h]` literal created in

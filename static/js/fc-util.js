@@ -65,6 +65,26 @@
       });
   };
 
+  // Fire-and-forget failure-detail reporting (POST /api/v1/errors) — public,
+  // anonymous, rate-limited server-side. The admin panel's "Failures" stat
+  // card (fed by postConversion above) only ever sees a bare per-tool-per-
+  // day counter, so admins could see failures were happening but not *why*;
+  // this feeds the separate "Recent errors" feed (admin/dom.js), which
+  // already renders error_message/error_type/browser safely but had no
+  // client caller until now. Call alongside postConversion(..., false) at
+  // every conversion-failure site.
+  FC.reportError = function (payload) {
+    var apiBase = window.FILECAST && window.FILECAST.apiBase;
+    if (!apiBase) return;
+    fetch(apiBase.replace(/\/$/, '') + '/api/v1/errors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(function () {
+      /* silent — progressive enhancement, matches postConversion */
+    });
+  };
+
   // Custom Sentry context for the conversion in flight (P2 §24). Called at
   // conversion_started from shared.js/shared-multi.js/shared-text.js, so an
   // uncaught error during THIS conversion (Sentry auto-captures those; nothing

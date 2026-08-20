@@ -18,10 +18,10 @@ ui_type: standard
 reverse_tool: pdf-protect
 options:
   - id: password
-    label: "Password (if known)"
+    label: "Password"
     type: password
     default: ""
-    placeholder: "Leave blank if the PDF doesn't require one to open"
+    placeholder: "Type password here..."
 tagline: "Remove a password from a PDF"
 tagline_long: "Remove a password requirement from a PDF you have the right to open — entirely in your browser, no upload required."
 meta:

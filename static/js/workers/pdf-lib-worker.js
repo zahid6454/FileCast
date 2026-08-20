@@ -633,6 +633,469 @@ function computeObjectKey(fileKey, objectNumber, generationNumber) {
   return hash.subarray(0, Math.min(fileKey.length + 5, 16));
 }
 
+// --- PDF Standard Security Handler, revisions 3+ (RC4-128/AES-128/AES-256) -
+// unlock() needs to read PDFs *other* tools encrypted, which routinely use
+// stronger settings than the R2/40-bit handler above (protect() only ever
+// writes R2, so none of this is reachable from there). V/R meaning per
+// ISO 32000-1 §7.6.1 Table 20 and ISO 32000-2 §7.6.1 Table 20:
+//   V=1/R=2  RC4, 40-bit fixed key           (handled above)
+//   V=2/R=3  RC4, variable key length (/Length, usually 128-bit)
+//   V=4/R=4  crypt filters (/CF): RC4 or AES-128 (AESV2), per-stream/string
+//   V=5/R=5  AES-256, deprecated pre-ISO ("Acrobat X") key derivation
+//   V=5/R=6  AES-256, ISO 32000-2 Algorithm 2.B "hardened" key derivation
+// Cross-checked against pypdf 6.x's own AlgV4/AlgV5 implementation of these
+// same algorithms during development — see
+// test/pdf-unlock-encryption-levels.test.js, which unlocks pypdf-encrypted
+// fixtures at every level above.
+
+// Algorithm 2 (revisions 3+): same shape as computeFileKey above but with a
+// variable key length and the 50-round rehash loop, plus the R4
+// metadata-not-encrypted branch.
+function computeFileKeyR3Plus(
+  passwordBytes,
+  oValue,
+  permissionsP,
+  idBytes,
+  keyLengthBytes,
+  encryptMetadataFalse
+) {
+  var pBytes = new Uint8Array(4);
+  var pUnsigned = permissionsP >>> 0;
+  pBytes[0] = pUnsigned & 0xff;
+  pBytes[1] = (pUnsigned >>> 8) & 0xff;
+  pBytes[2] = (pUnsigned >>> 16) & 0xff;
+  pBytes[3] = (pUnsigned >>> 24) & 0xff;
+  var chunks = [padPassword(passwordBytes), oValue, pBytes, idBytes];
+  if (encryptMetadataFalse) chunks.push(new Uint8Array([0xff, 0xff, 0xff, 0xff]));
+  var digest = md5(concatBytes(chunks));
+  for (var i = 0; i < 50; i++) {
+    digest = md5(digest.subarray(0, keyLengthBytes));
+  }
+  return digest.subarray(0, keyLengthBytes);
+}
+
+// Algorithm 5 (revisions 3+): only the first 16 bytes are ever compared
+// during authentication (Algorithm 6), so this returns just those 16 rather
+// than the full 32-byte U entry shape (the trailing 16 bytes are defined as
+// "arbitrary padding" by the spec and never checked).
+function computeUValueR3Plus(fileKey, idBytes) {
+  var hash = md5(concatBytes([PDF_PASSWORD_PAD, idBytes]));
+  var result = rc4(fileKey, hash);
+  for (var i = 1; i <= 19; i++) {
+    var xoredKey = new Uint8Array(fileKey.length);
+    for (var b = 0; b < fileKey.length; b++) xoredKey[b] = fileKey[b] ^ i;
+    result = rc4(xoredKey, result);
+  }
+  return result;
+}
+
+// Algorithm 1, generalized: computeObjectKey above hardcodes n=5 (that
+// handler is always V=1/R=2); this variant takes the file key's own length
+// as n and optionally appends the "sAlT" bytes AES needs (Algorithm 1 step
+// b) — RC4 and AES-128 crypt filters derive *different* per-object keys
+// from the same file key when a document mixes them (e.g.
+// StmF=AESV2/StrF=V2), one MD5 call with the suffix, one without.
+function computeObjectKeyExt(fileKey, objectNumber, generationNumber, useAesSalt) {
+  var extra = new Uint8Array(useAesSalt ? 9 : 5);
+  extra[0] = objectNumber & 0xff;
+  extra[1] = (objectNumber >>> 8) & 0xff;
+  extra[2] = (objectNumber >>> 16) & 0xff;
+  extra[3] = generationNumber & 0xff;
+  extra[4] = (generationNumber >>> 8) & 0xff;
+  if (useAesSalt) {
+    extra[5] = 0x73;
+    extra[6] = 0x41;
+    extra[7] = 0x6c;
+    extra[8] = 0x54;
+  }
+  var hash = md5(concatBytes([fileKey, extra]));
+  return hash.subarray(0, Math.min(fileKey.length + 5, 16));
+}
+
+// --- AES / SHA primitives for AES-128 (V4) and AES-256 (V5/R5/R6) ----------
+// Layered on the browser's own SubtleCrypto rather than hand-rolled (unlike
+// RC4/MD5 above, which predate SubtleCrypto's relevant coverage and are
+// simple enough to hand-roll safely) — hash-generator.js already does the
+// same for its own SHA-2 digests. SubtleCrypto only exposes *padded*
+// AES-CBC encrypt/decrypt (PKCS#7), which is exactly what ordinary PDF
+// string/stream encryption uses, but two of R5/R6's own key-derivation
+// steps need *unpadded* CBC — see aesEcbEncryptBlock/
+// aesCbcDecryptNoPadding/aesCbcNoPaddingEncryptTruncated below for how
+// that's built out of the padded primitive anyway.
+
+function sha2Digest(algo, dataBytes) {
+  return crypto.subtle.digest(algo, dataBytes).then(function (buf) {
+    return new Uint8Array(buf);
+  });
+}
+
+function importAesKey(keyBytes, usage) {
+  return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-CBC' }, false, [usage]);
+}
+
+// Ordinary PDF string/stream AES decryption (ISO 32000-1 §7.6.2 Algorithm 1
+// step d / ISO 32000-2 Algorithm 3.1a): a random 16-byte IV stored as the
+// first 16 bytes of the blob, then standard PKCS#7-padded CBC ciphertext.
+function aesCbcDecryptBytes(keyBytes, blob) {
+  if (blob.length <= 16) {
+    return Promise.resolve(new Uint8Array(0));
+  }
+  var iv = blob.subarray(0, 16);
+  var ciphertext = blob.subarray(16);
+  if (ciphertext.length % 16 !== 0) {
+    return Promise.reject(new Error('This PDF has malformed AES-encrypted content.'));
+  }
+  return importAesKey(keyBytes, 'decrypt')
+    .then(function (key) {
+      return crypto.subtle.decrypt({ name: 'AES-CBC', iv: iv }, key, ciphertext);
+    })
+    .then(function (plain) {
+      return new Uint8Array(plain);
+    });
+}
+
+// A single-block (16-byte) raw AES-ECB encryption, built from SubtleCrypto's
+// CBC-with-a-zero-IV: encrypting one exact block under CBC with IV=0 is
+// bitwise identical to ECB-encrypting that block (XOR-with-IV is a no-op),
+// so the first 16 bytes of the (padded) CBC output are the raw ECB result —
+// the trailing padding block SubtleCrypto appends is simply discarded.
+// SubtleCrypto has no raw ECB mode of its own; the key-unwrap step below
+// needs exactly this one primitive to build unpadded CBC decryption out of
+// SubtleCrypto's padded-only CBC decrypt.
+function aesEcbEncryptBlock(keyBytes, block16) {
+  var zeroIv = new Uint8Array(16);
+  return importAesKey(keyBytes, 'encrypt')
+    .then(function (key) {
+      return crypto.subtle.encrypt({ name: 'AES-CBC', iv: zeroIv }, key, block16);
+    })
+    .then(function (buf) {
+      return new Uint8Array(buf).subarray(0, 16);
+    });
+}
+
+// Unpadded AES-CBC decryption of an exact multiple of 16 bytes (needed for
+// unwrapping the 32-byte UE value into the file encryption key — ISO
+// 32000-2 §7.6.4.3.3 step 4 explicitly uses CBC "with no padding").
+// SubtleCrypto's decrypt always validates/strips PKCS#7 padding and throws
+// on ciphertext that doesn't end in a valid pad block, which arbitrary
+// (non-padded) ciphertext essentially never does. Worked around by
+// appending one extra block that — by construction, using the ECB
+// primitive above and the *same* key — decrypts to a full block of value
+// 0x10 (valid PKCS#7 padding meaning "the whole last block was padding"),
+// so SubtleCrypto's own padding removal strips exactly that extra block
+// and leaves the real plaintext untouched.
+function aesCbcDecryptNoPadding(keyBytes, ciphertext, ivBytes) {
+  var lastBlock = ciphertext.subarray(ciphertext.length - 16);
+  var padBlock = new Uint8Array(16);
+  for (var i = 0; i < 16; i++) padBlock[i] = 0x10 ^ lastBlock[i];
+  return aesEcbEncryptBlock(keyBytes, padBlock).then(function (extraBlock) {
+    var extended = concatBytes([ciphertext, extraBlock]);
+    return importAesKey(keyBytes, 'decrypt')
+      .then(function (key) {
+        return crypto.subtle.decrypt({ name: 'AES-CBC', iv: ivBytes }, key, extended);
+      })
+      .then(function (plain) {
+        return new Uint8Array(plain);
+      });
+  });
+}
+
+// The mirror image of the above, for Algorithm 2.B's own inner encryption
+// step (unpadded AES-128-CBC of a buffer whose length is always a multiple
+// of 16 — see calculateHashV5): encrypt with SubtleCrypto's padded CBC,
+// then discard the trailing padding block it appended, keeping only the
+// first dataBytes.length bytes (unaffected by whatever padding SubtleCrypto
+// chose, since CBC only chains forward).
+function aesCbcNoPaddingEncryptTruncated(keyBytes, ivBytes, dataBytes) {
+  return importAesKey(keyBytes, 'encrypt')
+    .then(function (key) {
+      return crypto.subtle.encrypt({ name: 'AES-CBC', iv: ivBytes }, key, dataBytes);
+    })
+    .then(function (buf) {
+      return new Uint8Array(buf).subarray(0, dataBytes.length);
+    });
+}
+
+// ISO 32000-2 §7.6.4.3.4 Algorithm 2.B — the R6 "hardened hash", also
+// covers R5's simpler one-shot SHA-256 (a deprecated pre-ISO Adobe
+// extension, implemented identically here except it skips the hardening
+// loop entirely). `udata` is always empty here since this file only ever
+// authenticates the *user* password (the owner-password variant appends
+// the 48-byte U value; not needed — protect()/unlock() have never
+// supported an owner password distinct from the user password). Password
+// normalization: real-world SASLprep (RFC 4013) is not applied — only
+// matters for passwords containing exotic Unicode (which a bank account
+// number or typical user password won't); plain UTF-8 encoding is also
+// pypdf's own fallback when SASLprep isn't available.
+function calculateHashV5(revision, passwordBytes, saltBytes) {
+  return sha2Digest('SHA-256', concatBytes([passwordBytes, saltBytes])).then(function (k) {
+    if (revision < 6) {
+      return k;
+    }
+    return hardenedHashRound(passwordBytes, k, 0);
+  });
+}
+
+function hardenedHashRound(passwordBytes, k, round) {
+  var block = concatBytes([passwordBytes, k]);
+  var repeated = new Array(64).fill(block);
+  var k1 = concatBytes(repeated);
+  var aesKey = k.subarray(0, 16);
+  var aesIv = k.subarray(16, 32);
+  return aesCbcNoPaddingEncryptTruncated(aesKey, aesIv, k1).then(function (e) {
+    var sum = 0;
+    for (var i = 0; i < 16; i++) sum += e[i];
+    var algo = ['SHA-256', 'SHA-384', 'SHA-512'][sum % 3];
+    return sha2Digest(algo, e).then(function (newK) {
+      var nextRound = round + 1;
+      if (nextRound >= 64 && e[e.length - 1] <= nextRound - 32) {
+        return newK.subarray(0, 32);
+      }
+      return hardenedHashRound(passwordBytes, newK, nextRound);
+    });
+  });
+}
+
+function decryptObjectBytes(cipherName, key, data) {
+  if (cipherName === 'Identity') {
+    return Promise.resolve(data);
+  }
+  if (cipherName === 'RC4') {
+    return Promise.resolve(rc4(key, data));
+  }
+  if (cipherName === 'AES') {
+    return aesCbcDecryptBytes(key, data);
+  }
+  return Promise.reject(
+    new Error('This PDF uses an encryption method this tool cannot unlock yet.')
+  );
+}
+
+// Reads V/R/Length/CF/StmF/StrF/EncryptMetadata off the Encrypt dictionary
+// and boils them down to what unlock() actually needs: the key length in
+// bytes and which cipher ('RC4' | 'AES' | 'Identity') applies to streams
+// vs. strings respectively — these can differ within one document (e.g.
+// StmF=AESV2/StrF=Identity leaves strings in plaintext). Key-length
+// precedence mirrors pypdf's own reader (cross-checked against
+// pypdf._encryption.Encryption.read during development): the crypt
+// filter's own /Length (in bytes) wins only when the *stream* filter is
+// AESV2; every other case falls back to the top-level /Length (in bits).
+function resolveCryptoParams(encryptDict) {
+  var V = encryptDict.has(PDFLib.PDFName.of('V'))
+    ? encryptDict.get(PDFLib.PDFName.of('V')).asNumber()
+    : 0;
+  var R = encryptDict.get(PDFLib.PDFName.of('R')).asNumber();
+  var lengthBits = encryptDict.has(PDFLib.PDFName.of('Length'))
+    ? encryptDict.get(PDFLib.PDFName.of('Length')).asNumber()
+    : 40;
+  var encryptMetadata = encryptDict.has(PDFLib.PDFName.of('EncryptMetadata'))
+    ? encryptDict.get(PDFLib.PDFName.of('EncryptMetadata')).asBoolean()
+    : true;
+
+  if (V === 1) {
+    return {
+      V: V,
+      R: R,
+      keyLengthBytes: 5,
+      streamCipher: 'RC4',
+      stringCipher: 'RC4',
+      encryptMetadata: true
+    };
+  }
+  if (V === 2) {
+    return {
+      V: V,
+      R: R,
+      keyLengthBytes: Math.floor(lengthBits / 8),
+      streamCipher: 'RC4',
+      stringCipher: 'RC4',
+      encryptMetadata: encryptMetadata
+    };
+  }
+  if (V === 4) {
+    var cf = encryptDict.has(PDFLib.PDFName.of('CF'))
+      ? encryptDict.get(PDFLib.PDFName.of('CF'))
+      : null;
+    var resolveFilterName = function (nameKey) {
+      if (!encryptDict.has(PDFLib.PDFName.of(nameKey))) return 'Identity';
+      return encryptDict.get(PDFLib.PDFName.of(nameKey)).decodeText();
+    };
+    var resolveCipher = function (filterName) {
+      if (filterName === 'Identity' || !cf) return 'Identity';
+      var filterDict = cf.get(PDFLib.PDFName.of(filterName));
+      if (!filterDict || !filterDict.has(PDFLib.PDFName.of('CFM'))) return 'Identity';
+      var cfm = filterDict.get(PDFLib.PDFName.of('CFM')).decodeText();
+      if (cfm === 'AESV2') return 'AES';
+      if (cfm === 'V2') return 'RC4';
+      return 'Identity';
+    };
+    var stmFilterName = resolveFilterName('StmF');
+    var strFilterName = resolveFilterName('StrF');
+    var streamCipher = resolveCipher(stmFilterName);
+    var stringCipher = resolveCipher(strFilterName);
+
+    var keyLengthBytes = Math.floor(lengthBits / 8);
+    if (streamCipher === 'AES' && cf) {
+      var stmFilterDict = cf.get(PDFLib.PDFName.of(stmFilterName));
+      keyLengthBytes =
+        stmFilterDict && stmFilterDict.has(PDFLib.PDFName.of('Length'))
+          ? stmFilterDict.get(PDFLib.PDFName.of('Length')).asNumber()
+          : 16;
+    }
+    return {
+      V: V,
+      R: R,
+      keyLengthBytes: keyLengthBytes,
+      streamCipher: streamCipher,
+      stringCipher: stringCipher,
+      encryptMetadata: encryptMetadata
+    };
+  }
+  if (V === 5) {
+    return {
+      V: V,
+      R: R,
+      keyLengthBytes: 32,
+      streamCipher: 'AES',
+      stringCipher: 'AES',
+      encryptMetadata: encryptMetadata
+    };
+  }
+  return null;
+}
+
+function transformDictStringsAsync(dict, key, cipherName) {
+  var entries = dict.entries();
+  var chain = Promise.resolve();
+  entries.forEach(function (entry) {
+    var k = entry[0];
+    var v = entry[1];
+    chain = chain.then(function () {
+      if (v instanceof PDFLib.PDFString || v instanceof PDFLib.PDFHexString) {
+        return decryptObjectBytes(cipherName, key, v.asBytes()).then(function (newBytes) {
+          dict.set(k, PDFLib.PDFHexString.of(bytesToHex(newBytes)));
+        });
+      }
+      if (v instanceof PDFLib.PDFDict) {
+        return transformDictStringsAsync(v, key, cipherName);
+      }
+      if (v instanceof PDFLib.PDFArray) {
+        return transformArrayStringsAsync(v, key, cipherName);
+      }
+      return undefined;
+    });
+  });
+  return chain;
+}
+
+function transformArrayStringsAsync(arr, key, cipherName) {
+  var chain = Promise.resolve();
+  var size = arr.size();
+  for (var i = 0; i < size; i++) {
+    (function (index) {
+      chain = chain.then(function () {
+        var v = arr.get(index);
+        if (v instanceof PDFLib.PDFString || v instanceof PDFLib.PDFHexString) {
+          return decryptObjectBytes(cipherName, key, v.asBytes()).then(function (newBytes) {
+            arr.set(index, PDFLib.PDFHexString.of(bytesToHex(newBytes)));
+          });
+        }
+        if (v instanceof PDFLib.PDFDict) {
+          return transformDictStringsAsync(v, key, cipherName);
+        }
+        if (v instanceof PDFLib.PDFArray) {
+          return transformArrayStringsAsync(v, key, cipherName);
+        }
+        return undefined;
+      });
+    })(i);
+  }
+  return chain;
+}
+
+// Async sibling of transformDocumentObjects() below, used by unlock() for
+// every revision (R2 included, to avoid two parallel implementations of the
+// same walk): AES decryption goes through SubtleCrypto (Promise-based), and
+// a document can legitimately use a different cipher for streams than for
+// the strings inside that same object's dict (StmF vs. StrF), so each gets
+// its own per-object key. Walks objects sequentially (like merge()'s own
+// file-by-file chain above) rather than in parallel — this already runs
+// once per document, not once per object across many documents, so
+// throughput isn't a concern, and sequential keeps mutation order
+// deterministic.
+//
+// `encryptRef` is excluded from the walk: the Encrypt dictionary's own O/
+// U/OE/UE strings are never actually encrypted (Algorithm 1 only applies
+// to the document's *content*), but at this point in unlock() it's still a
+// reachable indirect object like any other — RC4 would silently mangle
+// those bytes into an unreferenced, harmless orphan (protect()'s R2 path
+// never hits this at all, since it registers Encrypt only after
+// transforming), but AES-CBC's padding check throws outright on
+// essentially-random ciphertext, which real PDFs with a V4/V5 Encrypt
+// dictionary hit on every unlock without this guard.
+function decryptDocumentObjectsAsync(context, params, fileKey, encryptRef) {
+  var indirectObjects = context.enumerateIndirectObjects();
+  var chain = Promise.resolve();
+  indirectObjects.forEach(function (pair) {
+    var ref = pair[0];
+    var obj = pair[1];
+    if (
+      encryptRef &&
+      ref.objectNumber === encryptRef.objectNumber &&
+      ref.generationNumber === encryptRef.generationNumber
+    ) {
+      return;
+    }
+    chain = chain.then(function () {
+      var streamKey =
+        params.V === 5
+          ? fileKey
+          : computeObjectKeyExt(
+              fileKey,
+              ref.objectNumber,
+              ref.generationNumber,
+              params.streamCipher === 'AES'
+            );
+      var stringKey =
+        params.V === 5
+          ? fileKey
+          : computeObjectKeyExt(
+              fileKey,
+              ref.objectNumber,
+              ref.generationNumber,
+              params.stringCipher === 'AES'
+            );
+
+      if (obj instanceof PDFLib.PDFStream) {
+        return decryptObjectBytes(params.streamCipher, streamKey, obj.getContents()).then(
+          function (newContents) {
+            return transformDictStringsAsync(obj.dict, stringKey, params.stringCipher).then(
+              function () {
+                context.assign(ref, PDFLib.PDFRawStream.of(obj.dict, newContents));
+              }
+            );
+          }
+        );
+      }
+      if (obj instanceof PDFLib.PDFDict) {
+        return transformDictStringsAsync(obj, stringKey, params.stringCipher);
+      }
+      if (obj instanceof PDFLib.PDFArray) {
+        return transformArrayStringsAsync(obj, stringKey, params.stringCipher);
+      }
+      if (obj instanceof PDFLib.PDFString || obj instanceof PDFLib.PDFHexString) {
+        return decryptObjectBytes(params.stringCipher, stringKey, obj.asBytes()).then(
+          function (newBytes) {
+            context.assign(ref, PDFLib.PDFHexString.of(bytesToHex(newBytes)));
+          }
+        );
+      }
+      return undefined;
+    });
+  });
+  return chain;
+}
+
 // Walks every indirect object in the document, RC4-encrypting (or, called
 // again with the same key, decrypting — RC4 is its own inverse) each string
 // and stream in place. Streams are normalized to a fresh PDFRawStream with
@@ -726,6 +1189,55 @@ function protect(bytes, password) {
     });
 }
 
+// Authenticates `candidate` against a V1/V2/V4 (RC4/AES-128, MD5-based)
+// Encrypt dictionary and resolves the file encryption key, or null if the
+// password didn't match — Algorithm 2 + Algorithm 4 (R2) / Algorithm 5
+// (R3+), per computeFileKeyR3Plus/computeUValueR3Plus above.
+function authenticateLegacy(encryptDict, params, candidate, idBytes) {
+  var oValue = encryptDict.get(PDFLib.PDFName.of('O')).asBytes();
+  var uValue = encryptDict.get(PDFLib.PDFName.of('U')).asBytes();
+  var p = encryptDict.get(PDFLib.PDFName.of('P')).asNumber();
+  var encryptMetadataFalse = params.R >= 4 && !params.encryptMetadata;
+
+  var fileKey =
+    params.R === 2
+      ? computeFileKey(candidate, oValue, p, idBytes)
+      : computeFileKeyR3Plus(
+          candidate,
+          oValue,
+          p,
+          idBytes,
+          params.keyLengthBytes,
+          encryptMetadataFalse
+        );
+  var computedU = params.R === 2 ? computeUValue(fileKey) : computeUValueR3Plus(fileKey, idBytes);
+  var compareLength = params.R === 2 ? 32 : 16;
+  var matches =
+    bytesToHex(computedU.subarray(0, compareLength)) ===
+    bytesToHex(uValue.subarray(0, compareLength));
+
+  return Promise.resolve(matches ? fileKey : null);
+}
+
+// Authenticates `candidate` against a V5 (AES-256, R5/R6) Encrypt
+// dictionary and resolves the file encryption key by unwrapping UE, or
+// null if the password didn't match — ISO 32000-2 §7.6.4.3.3.
+function authenticateV5(encryptDict, params, candidate) {
+  var uValue = encryptDict.get(PDFLib.PDFName.of('U')).asBytes();
+  var ueValue = encryptDict.get(PDFLib.PDFName.of('UE')).asBytes();
+  var validationSalt = uValue.subarray(32, 40);
+  var keySalt = uValue.subarray(40, 48);
+
+  return calculateHashV5(params.R, candidate, validationSalt).then(function (hash) {
+    if (bytesToHex(hash.subarray(0, 32)) !== bytesToHex(uValue.subarray(0, 32))) {
+      return null;
+    }
+    return calculateHashV5(params.R, candidate, keySalt).then(function (intermediateKey) {
+      return aesCbcDecryptNoPadding(intermediateKey, ueValue, new Uint8Array(16));
+    });
+  });
+}
+
 function unlock(bytes, password) {
   return PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
     .then(function (pdfDoc) {
@@ -735,36 +1247,44 @@ function unlock(bytes, password) {
         throw new Error('This PDF is not password-protected.');
       }
       var encryptDict = context.lookup(encryptRef);
-      if (
-        encryptDict.get(PDFLib.PDFName.of('Filter')).decodeText() !== 'Standard' ||
-        encryptDict.get(PDFLib.PDFName.of('V')).asNumber() > 2
-      ) {
+      if (encryptDict.get(PDFLib.PDFName.of('Filter')).decodeText() !== 'Standard') {
         throw new Error(
           'This PDF uses a newer or non-standard encryption method this tool cannot unlock yet.'
         );
       }
-      var oValue = encryptDict.get(PDFLib.PDFName.of('O')).asBytes();
-      var uValue = encryptDict.get(PDFLib.PDFName.of('U')).asBytes();
-      var p = encryptDict.get(PDFLib.PDFName.of('P')).asNumber();
+      var params = resolveCryptoParams(encryptDict);
+      var supported =
+        params &&
+        [1, 2, 4, 5].indexOf(params.V) !== -1 &&
+        (params.V !== 5 || [5, 6].indexOf(params.R) !== -1);
+      if (!supported) {
+        throw new Error(
+          'This PDF uses a newer or non-standard encryption method this tool cannot unlock yet.'
+        );
+      }
+
+      var candidate = passwordToBytes(password || '');
       var idArray = context.trailerInfo.ID;
       var idBytes = idArray ? idArray.get(0).asBytes() : new Uint8Array(0);
 
-      var candidate = passwordToBytes(password || '');
-      var fileKey = computeFileKey(candidate, oValue, p, idBytes);
-      var computedU = computeUValue(fileKey);
-      var matches = bytesToHex(computedU) === bytesToHex(uValue);
+      var authenticate =
+        params.V === 5
+          ? authenticateV5(encryptDict, params, candidate)
+          : authenticateLegacy(encryptDict, params, candidate, idBytes);
 
-      if (!matches) {
-        if (!password) {
-          throw new Error('This PDF requires a password to unlock.');
+      return authenticate.then(function (fileKey) {
+        if (!fileKey) {
+          if (!password) {
+            throw new Error('This PDF requires a password to unlock.');
+          }
+          throw new Error('Incorrect password.');
         }
-        throw new Error('Incorrect password.');
-      }
 
-      transformDocumentObjects(context, fileKey);
-      delete context.trailerInfo.Encrypt;
-
-      return pdfDoc.save({ useObjectStreams: false });
+        return decryptDocumentObjectsAsync(context, params, fileKey, encryptRef).then(function () {
+          delete context.trailerInfo.Encrypt;
+          return pdfDoc.save({ useObjectStreams: false });
+        });
+      });
     })
     .then(function (bytes) {
       return { bytes: bytes };
