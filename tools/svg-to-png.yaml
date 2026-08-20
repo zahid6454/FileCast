@@ -14,6 +14,7 @@ js_libs: []
 max_file_size: 20MB
 bulk_support: false
 ui_type: standard
+reverse_tool: png-to-svg
 tagline: "Turn vector logos and icons into shareable images"
 tagline_long: "Convert scalable vector graphics into PNG images you can use in presentations, social media, documents, and print."
 meta:

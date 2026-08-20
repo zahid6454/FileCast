@@ -12,6 +12,7 @@ output_extension: .pdf
 max_file_size: 25MB
 bulk_support: false
 ui_type: standard
+reverse_tool: pdf-to-xlsx
 tagline: "Convert Excel spreadsheets to PDF"
 tagline_long: "Convert Excel spreadsheets to PDF format — files are encrypted in transit, processed securely, and deleted immediately."
 api_endpoint: /api/v1/convert/xlsx-to-pdf

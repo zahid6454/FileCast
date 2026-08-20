@@ -11,6 +11,11 @@ MAGIC_BYTES = {
     "pptx": [(b"PK\x03\x04", 0), (b"PK\x05\x06", 0)],
     "pdf": [(b"%PDF", 0)],
     "html": [],  # validated by content inspection
+    # EPUB is a ZIP container (same signature as the OOXML formats above);
+    # matches the same shallow container-format check this codebase already
+    # applies to docx/xlsx/pptx rather than parsing the "mimetype" entry.
+    "epub": [(b"PK\x03\x04", 0), (b"PK\x05\x06", 0)],
+    "png": [(b"\x89PNG\r\n\x1a\n", 0)],
 }
 
 ALLOWED_EXTENSIONS = {
@@ -20,6 +25,10 @@ ALLOWED_EXTENSIONS = {
     "html-to-pdf": {".html", ".htm"},
     "pdf-compress": {".pdf"},
     "pdf-to-docx": {".pdf"},
+    "pdf-to-xlsx": {".pdf"},
+    "pdf-to-pptx": {".pdf"},
+    "epub-to-pdf": {".epub"},
+    "png-to-svg": {".png"},
 }
 
 COMPRESS_QUALITIES = {"screen", "ebook", "printer", "prepress"}
@@ -87,7 +96,7 @@ def validate_upload(
         )
 
     file_type = ext.lstrip(".")
-    if file_type in ("docx", "xlsx", "pptx", "pdf"):
+    if file_type in ("docx", "xlsx", "pptx", "pdf", "epub", "png"):
         if not check_magic_bytes(content, file_type):
             raise ValidationError(
                 "This file appears to be damaged or is not a valid "

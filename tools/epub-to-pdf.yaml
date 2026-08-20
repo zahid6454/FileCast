@@ -1,0 +1,27 @@
+enabled: true
+id: epub-to-pdf
+name: "EPUB to PDF Converter"
+slug: /convert/epub-to-pdf
+category: document-conversion
+subcategory: converter
+type: server-side
+input_format: EPUB
+output_format: PDF
+accept_extensions: [.epub]
+output_extension: .pdf
+max_file_size: 25MB
+bulk_support: false
+ui_type: standard
+api_endpoint: /api/v1/convert/epub-to-pdf
+tagline: "Convert EPUB ebooks to PDF for printing and universal reading"
+tagline_long: "Convert EPUB ebooks to PDF for printing or reading on any device — files are encrypted in transit, processed securely, and deleted immediately."
+meta:
+  title: "EPUB to PDF Converter — Free & Secure | FileCast"
+  description: "Convert EPUB to PDF free online — your file is encrypted, converted, and deleted instantly. No sign-up, no limits, no watermarks. Print or read on any device."
+  keywords: ["epub to pdf", "convert epub to pdf", "ebook to pdf", "epub to pdf converter", "epub to pdf free"]
+content:
+  what_is: "content/epub-to-pdf/what-is.md"
+  comparison: "content/epub-to-pdf/comparison.md"
+  when_to_use: "content/epub-to-pdf/when-to-use.md"
+  faq: "content/epub-to-pdf/faq.md"
+related_tools: [docx-to-pdf, pdf-compress, txt-to-pdf, markdown-to-pdf]

@@ -1,0 +1,28 @@
+enabled: true
+id: pdf-to-pptx
+name: "PDF to PowerPoint (PPTX) Converter"
+slug: /convert/pdf-to-pptx
+category: document-conversion
+subcategory: converter
+type: server-side
+input_format: PDF
+output_format: PPTX
+accept_extensions: [.pdf]
+output_extension: .pptx
+max_file_size: 25MB
+bulk_support: false
+ui_type: standard
+reverse_tool: pptx-to-pdf
+api_endpoint: /api/v1/convert/pdf-to-pptx
+tagline: "Turn PDF pages into an editable slide deck"
+tagline_long: "Turn each PDF page into a PowerPoint slide — files are encrypted in transit, processed securely, and deleted immediately."
+meta:
+  title: "PDF to PowerPoint (PPTX) Converter — Free & Secure | FileCast"
+  description: "Convert PDF to PowerPoint free online — encrypted, converted, and deleted instantly. No sign-up, no limits, no watermarks. Each page becomes its own slide."
+  keywords: ["pdf to powerpoint", "pdf to pptx", "convert pdf to powerpoint", "pdf to ppt free", "pdf to pptx converter"]
+content:
+  what_is: "content/pdf-to-pptx/what-is.md"
+  comparison: "content/pdf-to-pptx/comparison.md"
+  when_to_use: "content/pdf-to-pptx/when-to-use.md"
+  faq: "content/pdf-to-pptx/faq.md"
+related_tools: [pptx-to-pdf, pdf-to-docx, pdf-to-xlsx, pdf-compress]

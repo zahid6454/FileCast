@@ -891,6 +891,28 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "Other Ways to Optimize an SVG",
         "You can also optimize an SVG using SVGO's own command-line tool or its web-based playground, or your code editor's SVG-cleanup extension if it has one. FileCast is useful for a quick, one-off cleanup without installing anything.",
     ),
+    # Build Action Plan PR 10: pdf-to-pptx is the first tool to output PPTX,
+    # so it needs its own {source}/{target}-templated entry, the same way
+    # XLSX's entry above was added when csv-to-xlsx first targeted it.
+    "PPTX": (
+        "Other Ways to Convert {source} to PowerPoint",
+        "You can also convert {source} to PowerPoint by opening it in Adobe Acrobat and using Export To → Microsoft PowerPoint, or by taking a screenshot of each page and pasting it onto a slide yourself. FileCast is useful when you want a real .pptx file without either of those steps.",
+    ),
+    # png-to-svg is the first tool to output SVG from a raster source (the
+    # existing SVG tools all take SVG as *input*), so it needs its own
+    # {source}/{target}-templated entry too.
+    "SVG": (
+        "Other Ways to Convert {source} to SVG",
+        "You can also vectorize {source} using Adobe Illustrator's Image Trace feature, Inkscape's free Trace Bitmap tool, or a dedicated online vectorizer. FileCast is useful when you want a quick trace without installing a full vector editor.",
+    ),
+    # epub-to-pdf reuses output_format "PDF" by default, but the generic PDF
+    # entry above ("Word, PowerPoint, or Excel... Save As PDF") doesn't fit an
+    # ebook source — none of those apps open EPUB. A dedicated, honest entry
+    # instead (see ALTERNATIVES_GROUP_OVERRIDES below).
+    "epub-to-pdf": (
+        "Other Ways to Convert EPUB to PDF",
+        "You can also convert an EPUB to PDF using Calibre's free ebook converter, or by opening it in Adobe Digital Editions and printing to PDF. FileCast is useful when you don't have either installed.",
+    ),
 }
 
 ALTERNATIVES_GROUP_OVERRIDES = {
@@ -943,6 +965,7 @@ ALTERNATIVES_GROUP_OVERRIDES = {
     "image-rotate-flip": "image-rotate-flip",
     "image-cropper": "image-cropper",
     "svg-optimizer": "svg-optimizer",
+    "epub-to-pdf": "epub-to-pdf",
 }
 
 
