@@ -1015,6 +1015,26 @@ img { max-width: 100%; display: block; }
   border: 1px solid var(--color-border);
 }
 
+/* --- Image Cropper (interactive selection canvas, built by
+   converters/image-cropper.js — the only tool with a drag-to-select UI) --- */
+.image-cropper {
+  margin-top: var(--space-4);
+  text-align: center;
+}
+.image-cropper__canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  cursor: move;
+  touch-action: none; /* let pointer drags resize/move the selection instead of scrolling the page */
+}
+.image-cropper__hint {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 /* --- Privacy Page --- */
 .privacy-section { margin-bottom: var(--space-8); }
 .privacy-section h2 { font-size: var(--text-xl); font-weight: var(--weight-bold); margin-bottom: var(--space-3); }

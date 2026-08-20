@@ -27,4 +27,5 @@ content:
   comparison: "content/base64-to-image/comparison.md"
   when_to_use: "content/base64-to-image/when-to-use.md"
   faq: "content/base64-to-image/faq.md"
+reverse_tool: image-to-base64
 related_tools: [base64-encode-decode, image-compress, image-resize]

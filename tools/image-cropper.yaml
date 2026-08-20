@@ -1,0 +1,28 @@
+enabled: true
+id: image-cropper
+name: Image Cropper
+slug: /convert/image-cropper
+category: image-conversion
+subcategory: utility
+type: client-side
+input_format: Image
+output_format: Image
+accept_extensions: [.jpg, .jpeg, .png, .webp]
+output_extension: .jpg
+js_module: converters/image-cropper.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+tagline: "Drag to select exactly the part of the photo you want"
+tagline_long: "Crop a JPG, PNG, or WebP image with a draggable, resizable selection box — see exactly what you're keeping before you download, all in your browser."
+meta:
+  title: "Image Cropper — Free, No Upload | FileCast"
+  description: "Crop an image free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Drag to select the exact area you want to keep."
+  keywords: ["crop image", "image cropper online", "crop photo", "crop jpg", "crop png", "image crop tool"]
+content:
+  what_is: "content/image-cropper/what-is.md"
+  comparison: "content/image-cropper/comparison.md"
+  when_to_use: "content/image-cropper/when-to-use.md"
+  faq: "content/image-cropper/faq.md"
+related_tools: [image-resize, pdf-crop, image-compress]

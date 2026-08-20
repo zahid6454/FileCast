@@ -864,6 +864,33 @@ ALTERNATIVES: dict[str, tuple[str, str]] = {
         "Other Ways to Convert PDF to Text",
         "You can also extract plain text from a PDF using Adobe Acrobat's Export To → Text tool, the free pdftotext command-line utility (part of the Poppler suite on Mac/Linux), or by opening the PDF and using Select All then Copy. FileCast is useful when you don't have any of these installed.",
     ),
+    # Build Action Plan PR 9: 5 Image tools, one Conversion (image-to-base64,
+    # output_format "Base64" — no shared group exists for that format, so it
+    # gets its own id-keyed entry the same way base64-to-image does above)
+    # and 4 Modification tools (input_format == output_format, so none of
+    # them fit the {source}/{target} conversion phrasing either) — each gets
+    # its own action-phrased entry, the same way the PDF page-modification
+    # tools in PR 4 do.
+    "image-to-base64": (
+        "Other Ways to Convert an Image to Base64",
+        "You can also convert an image to Base64 using your command line (base64 on Mac/Linux, or certutil -encode on Windows), or a short script in your language of choice — most have a built-in Base64 library. FileCast is useful for a quick, one-off conversion with a ready-to-paste data URL.",
+    ),
+    "image-exif-remover": (
+        "Other Ways to Remove Photo Metadata",
+        "You can also strip EXIF/GPS metadata using your OS's own file properties dialog (Windows: Properties → Details → Remove Properties; Mac: many apps strip it on export), or a command-line tool like exiftool. FileCast is useful when you want a quick, lossless strip without installing anything.",
+    ),
+    "image-rotate-flip": (
+        "Other Ways to Rotate or Flip an Image",
+        "You can also rotate or flip an image using your device's built-in photo viewer (File → Rotate/Flip, or similar), or an image editor like GIMP or Photoshop. FileCast is useful when you want a quick fix without opening a separate app.",
+    ),
+    "image-cropper": (
+        "Other Ways to Crop an Image",
+        "You can also crop an image using your device's built-in photo viewer or Photos app, or an image editor like GIMP or Photoshop. FileCast is useful when you want a quick crop without opening a separate app.",
+    ),
+    "svg-optimizer": (
+        "Other Ways to Optimize an SVG",
+        "You can also optimize an SVG using SVGO's own command-line tool or its web-based playground, or your code editor's SVG-cleanup extension if it has one. FileCast is useful for a quick, one-off cleanup without installing anything.",
+    ),
 }
 
 ALTERNATIVES_GROUP_OVERRIDES = {
@@ -911,6 +938,11 @@ ALTERNATIVES_GROUP_OVERRIDES = {
     "pdf-organize": "pdf-organize",
     "pdf-unlock": "pdf-unlock",
     "pdf-to-text": "pdf-to-text",
+    "image-to-base64": "image-to-base64",
+    "image-exif-remover": "image-exif-remover",
+    "image-rotate-flip": "image-rotate-flip",
+    "image-cropper": "image-cropper",
+    "svg-optimizer": "svg-optimizer",
 }
 
 

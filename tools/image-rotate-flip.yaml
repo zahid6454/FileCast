@@ -1,0 +1,46 @@
+enabled: true
+id: image-rotate-flip
+name: Image Rotate/Flip
+slug: /convert/image-rotate-flip
+category: image-conversion
+subcategory: utility
+type: client-side
+input_format: Image
+output_format: Image
+accept_extensions: [.jpg, .jpeg, .png, .webp]
+output_extension: .jpg
+js_module: converters/image-rotate-flip.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+options:
+  - id: rotate
+    label: "Rotate"
+    type: select
+    default: "0"
+    choices:
+      - { value: "0", label: "No rotation" }
+      - { value: "90", label: "90° clockwise" }
+      - { value: "180", label: "180°" }
+      - { value: "270", label: "270° clockwise (90° counter-clockwise)" }
+  - id: flip
+    label: "Flip"
+    type: select
+    default: "none"
+    choices:
+      - { value: "none", label: "No flip" }
+      - { value: "horizontal", label: "Horizontal (mirror)" }
+      - { value: "vertical", label: "Vertical (upside-down)" }
+tagline: "Rotate or mirror an image to fix its orientation"
+tagline_long: "Rotate a JPG, PNG, or WebP image in 90° steps and flip it horizontally or vertically — combine both in one pass, all in your browser."
+meta:
+  title: "Image Rotate/Flip — Free, No Upload | FileCast"
+  description: "Rotate or flip an image free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Fix sideways or mirrored photos in seconds."
+  keywords: ["rotate image", "flip image", "mirror image online", "rotate photo 90 degrees", "flip image horizontally", "image orientation fix"]
+content:
+  what_is: "content/image-rotate-flip/what-is.md"
+  comparison: "content/image-rotate-flip/comparison.md"
+  when_to_use: "content/image-rotate-flip/when-to-use.md"
+  faq: "content/image-rotate-flip/faq.md"
+related_tools: [image-resize, image-compress, pdf-rotate]
