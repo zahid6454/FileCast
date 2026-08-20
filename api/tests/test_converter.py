@@ -6,8 +6,10 @@ The success path mocks the Gotenberg call so no container is required.
 
 import asyncio
 import io
+import zipfile
 
 import converter
+import pytest
 
 
 async def test_convert_rejects_wrong_extension(client):
@@ -142,15 +144,57 @@ async def test_epub_to_pdf_rejects_empty_file(client):
     assert r.json()["error_type"] == "empty_file"
 
 
+def _make_minimal_epub_bytes(chapters=None):
+    """A genuinely valid, minimal EPUB — container.xml -> OPF manifest/spine
+    -> XHTML chapters — not just a ZIP-signature stub. Needed because
+    epub-to-pdf actually parses this structure now (see
+    _flatten_epub_to_html_sync), unlike docx/xlsx/pptx-to-pdf, which only
+    ever check the ZIP magic bytes before handing the whole file to
+    Gotenberg unopened.
+    """
+    if chapters is None:
+        chapters = [("chap1.xhtml", "<h1>Chapter 1</h1><p>Hello EPUB.</p>")]
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("mimetype", "application/epub+zip", zipfile.ZIP_STORED)
+        z.writestr(
+            "META-INF/container.xml",
+            '<?xml version="1.0"?>'
+            '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+            '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+            'media-type="application/oebps-package+xml"/></rootfiles></container>',
+        )
+        items = "".join(
+            f'<item id="c{i}" href="{href}" media-type="application/xhtml+xml"/>'
+            for i, (href, _) in enumerate(chapters)
+        )
+        spine = "".join(f'<itemref idref="c{i}"/>' for i in range(len(chapters)))
+        z.writestr(
+            "OEBPS/content.opf",
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0">'
+            f"<manifest>{items}</manifest><spine>{spine}</spine></package>",
+        )
+        for href, body in chapters:
+            z.writestr(
+                f"OEBPS/{href}",
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>x</title></head>'
+                f"<body>{body}</body></html>",
+            )
+    return buf.getvalue()
+
+
 async def test_epub_to_pdf_success_with_mocked_gotenberg(client, monkeypatch):
-    async def fake_libreoffice(content, filename, extra_form=None):
+    async def fake_chromium(content, filename):
         return b"%PDF-1.4 fake pdf bytes"
 
-    monkeypatch.setattr(converter, "_convert_libreoffice", fake_libreoffice)
-    valid_epub = b"PK\x03\x04" + b"\x00" * 200  # passes magic-byte check
+    monkeypatch.setattr(converter, "_convert_chromium_html", fake_chromium)
     r = await client.post(
         "/api/v1/convert/epub-to-pdf",
-        files={"file": ("book.epub", valid_epub, "application/epub+zip")},
+        files={
+            "file": ("book.epub", _make_minimal_epub_bytes(), "application/epub+zip")
+        },
     )
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
@@ -493,6 +537,95 @@ def test_trace_png_to_svg_downscales_oversized_images():
     svg_bytes = converter._trace_png_to_svg_sync(buf.getvalue())
     svg_text = svg_bytes.decode("utf-8")
     assert 'width="1500" height="500"' in svg_text
+
+
+def test_flatten_epub_to_html_orders_chapters_and_inserts_page_breaks():
+    # epub-to-pdf does NOT reuse _convert_libreoffice (confirmed live against
+    # production: two independent spec-compliant EPUBs both failed through
+    # Gotenberg's LibreOffice route — it has no built-in EPUB import filter).
+    # This flattens the EPUB's own manifest/spine into one HTML document fed
+    # to the already-proven Chromium route instead.
+    epub_bytes = _make_minimal_epub_bytes(
+        chapters=[
+            ("c1.xhtml", "<h1>One</h1>"),
+            ("c2.xhtml", "<h1>Two</h1>"),
+        ]
+    )
+    html = converter._flatten_epub_to_html_sync(epub_bytes).decode("utf-8")
+    assert html.index("<h1>One</h1>") < html.index("<h1>Two</h1>")
+    assert "page-break-before:always" in html
+    # First chapter must not itself force a break (nothing precedes it).
+    assert html.index("<h1>One</h1>") < html.index("page-break-before")
+
+
+def test_flatten_epub_to_html_inlines_images_as_data_uris():
+    png_1x1 = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0"
+        b"\x00\x00\x03\x01\x01\x00\x18\xdd\x8d\xb0\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("mimetype", "application/epub+zip", zipfile.ZIP_STORED)
+        z.writestr(
+            "META-INF/container.xml",
+            '<?xml version="1.0"?>'
+            '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+            '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+            'media-type="application/oebps-package+xml"/></rootfiles></container>',
+        )
+        z.writestr(
+            "OEBPS/content.opf",
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0">'
+            '<manifest><item id="c1" href="chap1.xhtml" media-type="application/xhtml+xml"/></manifest>'
+            '<spine><itemref idref="c1"/></spine></package>',
+        )
+        z.writestr(
+            "OEBPS/chap1.xhtml",
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+            '<img src="images/cover.png"/></body></html>',
+        )
+        z.writestr("OEBPS/images/cover.png", png_1x1)
+
+    html = converter._flatten_epub_to_html_sync(buf.getvalue()).decode("utf-8")
+    assert "data:image/png;base64," in html
+    assert "images/cover.png" not in html  # rewritten, not left as a dead relative link
+
+
+def test_flatten_epub_to_html_rejects_doctype_in_control_files():
+    # Guards the only server-side arbitrary-XML parsing in this codebase
+    # against entity-expansion ("billion laughs") DoS — a real EPUB
+    # container.xml never legitimately declares a DOCTYPE.
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("mimetype", "application/epub+zip", zipfile.ZIP_STORED)
+        z.writestr(
+            "META-INF/container.xml",
+            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY x "y">]>'
+            '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+            '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+            'media-type="application/oebps-package+xml"/></rootfiles></container>',
+        )
+    with pytest.raises(ValueError, match="DOCTYPE"):
+        converter._flatten_epub_to_html_sync(buf.getvalue())
+
+
+def test_flatten_epub_to_html_rejects_zip_bomb(monkeypatch):
+    # A small compressed file can still declare a huge uncompressed size —
+    # every member gets read into memory during flattening, so this must be
+    # bounded before any read happens, not discovered partway through one.
+    # Shrinks the real 200MB limit down to a few bytes rather than actually
+    # generating a huge payload, so the test stays fast and cheap while
+    # still exercising the real guard.
+    monkeypatch.setattr(converter, "EPUB_MAX_UNCOMPRESSED_BYTES", 10)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("mimetype", "application/epub+zip", zipfile.ZIP_STORED)
+        z.writestr("OEBPS/over_the_limit.bin", b"x" * 20)
+    with pytest.raises(ValueError, match="limit"):
+        converter._flatten_epub_to_html_sync(buf.getvalue())
 
 
 async def test_metrics_endpoint_shape(admin_client):
