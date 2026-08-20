@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -345,6 +346,75 @@ async def _convert_pdf2docx(content: bytes, filename: str) -> bytes:
     return await loop.run_in_executor(None, _convert_pdf2docx_sync, content)
 
 
+# pdfplumber's default table-detection ("lines" strategy) only finds tables
+# with real ruled/bordered grid lines. Most real-world "tables" people
+# actually want extracted — bank statements, invoices, whitespace-aligned
+# reports — have no ruling at all, so the lines strategy finds nothing on
+# them and every row would otherwise collapse into the plain-text fallback
+# (one unsplit line per row, exactly the "not really a spreadsheet" outcome
+# this tool exists to avoid). Tried second, only when the lines strategy
+# finds nothing, since the text strategy has its own false-positive risk
+# (it can mis-split large standalone headings into spurious "columns").
+_PDF_TO_XLSX_TEXT_TABLE_SETTINGS = {
+    "vertical_strategy": "text",
+    "horizontal_strategy": "text",
+}
+
+# openpyxl auto-detects any string value starting with "=" as a live Excel
+# formula (confirmed directly: Cell._bind_value sets data_type="f", which
+# serializes as a real <f> element) — so writing untrusted PDF text straight
+# into a cell lets a crafted PDF plant a formula (e.g. =WEBSERVICE(...) or
+# =HYPERLINK(...)) that runs the moment the converted file is opened in
+# Excel, no macro warning involved (CWE-1236).
+#
+# Deliberately just "=", not the usual CSV-injection "=+-@" prefix set:
+# verified directly that openpyxl does NOT auto-formula-type "+"/"-"/"@"
+# (only "=" flips data_type to "f") — and "-" is the single most common
+# leading character in exactly the data this tool extracts (negative
+# amounts on a bank statement or invoice), so blanket-sanitizing it would
+# silently corrupt real numbers into text on every debit line. _XLSX_NUMERIC_RE
+# below also means genuine numbers never reach this sanitizer as strings at
+# all — they're converted to a real int/float first, sidestepping the
+# question entirely for the common case.
+_XLSX_FORMULA_TRIGGER_CHARS = ("=",)
+
+_XLSX_NUMERIC_RE = re.compile(r"^[+-]?\d+(\.\d+)?$")
+
+
+def _sanitize_xlsx_cell(value):
+    if isinstance(value, str) and value.startswith(_XLSX_FORMULA_TRIGGER_CHARS):
+        return "'" + value
+    return value
+
+
+def _coerce_xlsx_numeric(value: str):
+    """A number extracted as text ("-4.50", "1,234") stays text in the
+    output cell unless converted — and a text cell doesn't participate in
+    Excel's own SUM/sort/filter the way this tool's own content promises
+    ("Formulas, sums, sorting, filtering"). Narrow on purpose: plain digits,
+    an optional leading sign, an optional single decimal point, optional
+    comma thousands separators — not currency symbols or accounting-style
+    parenthesized negatives, which would mean guessing at ambiguous formats
+    rather than a real fix.
+    """
+    stripped = value.strip().replace(",", "")
+    if not _XLSX_NUMERIC_RE.match(stripped):
+        return value
+    try:
+        return int(stripped) if "." not in stripped else float(stripped)
+    except ValueError:
+        return value
+
+
+def _prepare_xlsx_cell_value(value):
+    if isinstance(value, str):
+        numeric = _coerce_xlsx_numeric(value)
+        if not isinstance(numeric, str):
+            return numeric
+        return _sanitize_xlsx_cell(value)
+    return value
+
+
 def _convert_pdf_to_xlsx_sync(content: bytes) -> bytes:
     """PDF -> XLSX. No Gotenberg/LibreOffice route does this (LibreOffice's
     PDF import produces a Draw/Writer document, not spreadsheet cells), so
@@ -367,18 +437,34 @@ def _convert_pdf_to_xlsx_sync(content: bytes) -> bytes:
             for page_num, page in enumerate(pdf.pages, start=1):
                 ws = wb.create_sheet(title=f"Page {page_num}")
                 tables = page.extract_tables()
+                if not tables:
+                    tables = page.extract_tables(
+                        table_settings=_PDF_TO_XLSX_TEXT_TABLE_SETTINGS
+                    )
                 if tables:
                     row_cursor = 1
                     for table in tables:
                         for row in table:
+                            # The text strategy emits fully-blank spacer rows
+                            # between detected lines (gaps in the page it
+                            # couldn't assign to a real row) — skip those
+                            # rather than writing empty rows into the sheet.
+                            if not any(cell for cell in row):
+                                continue
                             for col_idx, cell in enumerate(row, start=1):
-                                ws.cell(row=row_cursor, column=col_idx, value=cell)
+                                ws.cell(
+                                    row=row_cursor,
+                                    column=col_idx,
+                                    value=_prepare_xlsx_cell_value(cell),
+                                )
                             row_cursor += 1
                         row_cursor += 1  # blank row between tables on the same page
                 else:
                     text = page.extract_text() or ""
                     for row_idx, line in enumerate(text.splitlines(), start=1):
-                        ws.cell(row=row_idx, column=1, value=line)
+                        ws.cell(
+                            row=row_idx, column=1, value=_prepare_xlsx_cell_value(line)
+                        )
 
         if not wb.sheetnames:
             wb.create_sheet(title="Sheet1")
@@ -925,6 +1011,15 @@ async def epub_to_pdf(
 # already bounds per-request cost independent of this cap (see the tracer
 # above); this just keeps very large uploads from queuing up in the first
 # place. Matches the tool's own YAML max_file_size (client-side check).
+#
+# Deliberately flat for every user tier, unlike every other Cloud route:
+# min(_max_size_for(user), PNG_TO_SVG_MAX_UPLOAD) below means a signed-in
+# user's usual ×2 allowance (_max_size_for) is capped right back down to
+# this constant. That's intentional, not an accidental side effect of
+# min() — the cap here is driven by tracing's CPU/memory cost per byte,
+# which doesn't get cheaper because the uploader has an account, unlike the
+# other Cloud tools' cap (mostly abuse/queue-fairness, where trusting a
+# signed-in user with more headroom makes sense).
 PNG_TO_SVG_MAX_UPLOAD = 10 * 1024 * 1024
 
 
