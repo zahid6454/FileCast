@@ -33,12 +33,16 @@ window.convertFile = function (file) {
     }
 
     var imageBytes = new Uint8Array(buffer, best.imageOffset, best.bytesInRes);
+    // Full 8-byte PNG signature, not just the 4-byte "\x89PNG" prefix — the
+    // remaining 4 bytes (\r\n\x1a\n) exist specifically to catch line-ending
+    // and EOF-transform corruption, so checking all 8 is the correct check
+    // even though no other 4-byte-prefix format could plausibly collide here.
+    var PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
     var isPng =
-      imageBytes.length >= 8 &&
-      imageBytes[0] === 0x89 &&
-      imageBytes[1] === 0x50 &&
-      imageBytes[2] === 0x4e &&
-      imageBytes[3] === 0x47;
+      imageBytes.length >= PNG_SIGNATURE.length &&
+      PNG_SIGNATURE.every(function (byte, i) {
+        return imageBytes[i] === byte;
+      });
 
     if (!isPng) {
       throw new Error(
