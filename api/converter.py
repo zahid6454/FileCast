@@ -502,6 +502,27 @@ async def _convert_pdf_to_xlsx(content: bytes, filename: str) -> bytes:
     return await loop.run_in_executor(None, _convert_pdf_to_xlsx_sync, content)
 
 
+# PDF's MediaBox is spec-legal up to 14,400x14,400pt (200x200in), and a
+# near-blank page declaring that size costs almost nothing in file bytes —
+# confirmed directly: a single blank 3000x3000pt page is a 520-byte PDF, but
+# rendering it at a flat 150 DPI with no cap allocates a 112MB pixmap in
+# ~20ms; scaling to the spec maximum extrapolates to gigabytes for one page.
+# This runs inside the same shared thread-pool executor every other
+# conversion route uses (loop.run_in_executor(None, ...)), so an unbounded
+# render can OOM the whole API process, not just this one request. Mirrors
+# PNG_TO_SVG_MAX_DIMENSION's role for the tracer below: bound the actual
+# rendered-pixel cost per page, independent of the page's declared size —
+# not just the already-capped upload byte count, which this cheaply defeats.
+PDF_TO_PPTX_TARGET_DPI = 150
+PDF_TO_PPTX_MAX_RASTER_DIMENSION = 3000  # px, longest side of any one page's render
+
+# PowerPoint's own practical maximum custom slide size (each axis). Without
+# this, an unusually large but entirely legitimate page — a wide
+# engineering-drawing PDF, say — could produce a .pptx PowerPoint itself
+# refuses to open, independent of anything hostile.
+PPTX_MAX_SLIDE_EMU = 56 * 914400  # 56in, per axis
+
+
 def _convert_pdf_to_pptx_sync(content: bytes) -> bytes:
     """PDF -> PPTX. Same "no Gotenberg route for this direction" reasoning as
     XLSX above. Renders each page to an image (PyMuPDF) and places it on its
@@ -522,17 +543,26 @@ def _convert_pdf_to_pptx_sync(content: bytes) -> bytes:
             if doc.page_count == 0:
                 raise RuntimeError("PDF has no pages")
 
-            zoom = 150 / 72  # 150 DPI; PDF's native unit is 72 DPI
-            matrix = fitz.Matrix(zoom, zoom)
-
             prs = Presentation()
             first_rect = doc[0].rect
-            prs.slide_width = Emu(int(first_rect.width / 72 * 914400))
-            prs.slide_height = Emu(int(first_rect.height / 72 * 914400))
+            prs.slide_width = Emu(
+                min(int(first_rect.width / 72 * 914400), PPTX_MAX_SLIDE_EMU)
+            )
+            prs.slide_height = Emu(
+                min(int(first_rect.height / 72 * 914400), PPTX_MAX_SLIDE_EMU)
+            )
             blank_layout = prs.slide_layouts[6]
 
             for page in doc:
-                pix = page.get_pixmap(matrix=matrix)
+                # Target DPI first, but never let the rendered raster exceed
+                # the pixel-dimension cap regardless of this page's own
+                # declared size — independent of the slide EMU size above,
+                # since the image is scaled to fit the slide either way.
+                zoom = PDF_TO_PPTX_TARGET_DPI / 72
+                longest_pt = max(page.rect.width, page.rect.height)
+                if longest_pt * zoom > PDF_TO_PPTX_MAX_RASTER_DIMENSION:
+                    zoom = PDF_TO_PPTX_MAX_RASTER_DIMENSION / longest_pt
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
                 img_bytes = pix.tobytes("png")
 
                 img_aspect = pix.width / pix.height

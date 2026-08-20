@@ -416,6 +416,52 @@ def test_pdf_to_pptx_letterboxes_mismatched_aspect_ratio_page():
     assert abs(pic.top - (prs.slide_height - pic.height) / 2) <= 1
 
 
+def test_pdf_to_pptx_bounds_raster_dimension_for_oversized_pages():
+    # PDF's MediaBox is spec-legal up to 14,400x14,400pt, and a near-blank
+    # page declaring that size costs almost nothing in file bytes — a fixed
+    # 150 DPI render with no cap would allocate gigabytes for a single such
+    # page (confirmed directly: 522 bytes -> a 6250x6250px raster, ~112MB,
+    # in ~20ms at 3000x3000pt; scaling further explodes from there).
+    # PDF_TO_PPTX_MAX_RASTER_DIMENSION must bound the actual rendered pixel
+    # count regardless of the page's declared size.
+    import fitz
+    from PIL import Image
+    from pptx import Presentation
+
+    doc = fitz.open()
+    doc.new_page(width=10000, height=10000)  # spec-legal, tiny file, huge page
+    content = doc.tobytes()
+    doc.close()
+    assert len(content) < 1024  # confirms this is cheap for an attacker to send
+
+    pptx_bytes = converter._convert_pdf_to_pptx_sync(content)
+    prs = Presentation(io.BytesIO(pptx_bytes))
+    pic = list(list(prs.slides)[0].shapes)[0]
+    embedded_img = Image.open(io.BytesIO(pic.image.blob))
+    assert max(embedded_img.size) <= converter.PDF_TO_PPTX_MAX_RASTER_DIMENSION
+
+
+def test_pdf_to_pptx_slide_size_capped_at_powerpoint_maximum():
+    # An oversized page also can't drive the deck's own EMU size past what
+    # PowerPoint itself allows for a custom slide size, independent of the
+    # raster cap above (the embedded image is scaled to fit the slide either
+    # way, so a smaller slide with an oversized page's raster would still be
+    # a valid, openable file even without this — but an uncapped slide size
+    # wouldn't be).
+    import fitz
+    from pptx import Presentation
+
+    doc = fitz.open()
+    doc.new_page(width=10000, height=10000)
+    content = doc.tobytes()
+    doc.close()
+
+    pptx_bytes = converter._convert_pdf_to_pptx_sync(content)
+    prs = Presentation(io.BytesIO(pptx_bytes))
+    assert prs.slide_width == converter.PPTX_MAX_SLIDE_EMU
+    assert prs.slide_height == converter.PPTX_MAX_SLIDE_EMU
+
+
 def _make_ring_png_bytes():
     from PIL import Image, ImageDraw
 
