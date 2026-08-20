@@ -1,0 +1,28 @@
+enabled: true
+id: gif-to-png
+name: GIF to PNG Converter
+slug: /convert/gif-to-png
+category: image-conversion
+subcategory: converter
+type: client-side
+input_format: GIF
+output_format: PNG
+accept_extensions: [.gif]
+output_extension: .png
+js_module: converters/gif-to-png.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+tagline: "Save the first frame with transparency intact"
+tagline_long: "Extract a still image from any GIF and save it as a lossless PNG — keeps transparent areas intact for logos, stickers, and icons."
+meta:
+  title: "GIF to PNG Converter — Free, No Upload | FileCast"
+  description: "Convert GIF to PNG free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Keeps transparency fully intact."
+  keywords: ["gif to png", "convert gif to png", "gif converter", "gif to png free", "image converter"]
+content:
+  what_is: "content/gif-to-png/what-is.md"
+  comparison: "content/gif-to-png/comparison.md"
+  when_to_use: "content/gif-to-png/when-to-use.md"
+  faq: "content/gif-to-png/faq.md"
+related_tools: [gif-to-jpg, png-to-jpg, webp-to-png, svg-to-png]

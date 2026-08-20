@@ -1,0 +1,29 @@
+enabled: true
+id: png-to-ico
+name: PNG to ICO Converter (Favicon Generator)
+slug: /convert/png-to-ico
+category: image-conversion
+subcategory: converter
+type: client-side
+input_format: PNG
+output_format: ICO
+accept_extensions: [.png]
+output_extension: .ico
+js_module: converters/png-to-ico.js
+js_libs: []
+max_file_size: 20MB
+bulk_support: false
+ui_type: standard
+reverse_tool: ico-to-png
+tagline: "Turn a logo into a ready-to-use favicon"
+tagline_long: "Generate a multi-size ICO favicon from a single PNG — includes 16x16, 32x32, 48x48, and 256x256 sizes in one file, ready to drop into any website."
+meta:
+  title: "PNG to ICO Converter — Free, No Upload | FileCast"
+  description: "Convert PNG to ICO free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Generates a ready-to-use multi-size favicon."
+  keywords: ["png to ico", "favicon generator", "convert png to ico", "ico converter", "make a favicon"]
+content:
+  what_is: "content/png-to-ico/what-is.md"
+  comparison: "content/png-to-ico/comparison.md"
+  when_to_use: "content/png-to-ico/when-to-use.md"
+  faq: "content/png-to-ico/faq.md"
+related_tools: [ico-to-png, svg-to-png, png-to-jpg, png-to-webp]
