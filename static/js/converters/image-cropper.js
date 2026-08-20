@@ -106,19 +106,29 @@
     resetBtnEl.addEventListener('click', hideCropUI);
   }
 
+  // Tracks the most recently picked file so a slower-decoding image from an
+  // earlier pick can't win a race against a faster one picked right after it
+  // — without this, image A's onload firing after image B's would silently
+  // replace an in-progress session for B with A's, while shared.js's own
+  // file-name/size display (updated synchronously per pick) still shows B.
+  var pendingFile = null;
+
   function loadImageForCrop(file) {
     if (!file.type || file.type.indexOf('image/') !== 0) {
       hideCropUI();
       return;
     }
+    pendingFile = file;
     var img = new Image();
     var url = URL.createObjectURL(file);
     img.onload = function () {
       URL.revokeObjectURL(url);
+      if (pendingFile !== file) return; // superseded by a later selection
       buildSession(file, img);
     };
     img.onerror = function () {
       URL.revokeObjectURL(url);
+      if (pendingFile !== file) return;
       hideCropUI();
     };
     img.src = url;

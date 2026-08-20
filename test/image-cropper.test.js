@@ -105,6 +105,98 @@ describe('image-cropper.js — window.convertFile', () => {
     expect(lastDraw.slice(1)).toEqual([40, 30, 360, 270, 0, 0, 360, 270]);
   });
 
+  it('moves the selection without resizing it when dragging inside the box', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    const canvasEl = dom.window.document.querySelector('.image-cropper__canvas');
+    // Default selection is x=40, y=30, w=320, h=240 — (100, 100) is well inside it.
+    firePointer(canvasEl, dom.window, 'pointerdown', 100, 100);
+    firePointer(canvasEl, dom.window, 'pointermove', 120, 115); // +20, +15
+    firePointer(canvasEl, dom.window, 'pointerup', 120, 115);
+
+    const blob = await dom.window.convertFile(file);
+
+    expect(blob.type).toBe('image/jpeg');
+    // Size is unchanged (320x240) — only the position moved.
+    expect(canvasSizes[canvasSizes.length - 1]).toEqual({ width: 320, height: 240 });
+    const lastDraw = ctx.drawImage.mock.calls[ctx.drawImage.mock.calls.length - 1];
+    expect(lastDraw.slice(1)).toEqual([60, 45, 320, 240, 0, 0, 320, 240]);
+  });
+
+  it('clamps a resize to the minimum crop size instead of collapsing to zero', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    const { canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    const canvasEl = dom.window.document.querySelector('.image-cropper__canvas');
+    // Default bottom-right handle is at (360, 270) — drag it all the way past the opposite corner.
+    firePointer(canvasEl, dom.window, 'pointerdown', 360, 270);
+    firePointer(canvasEl, dom.window, 'pointermove', 0, 0);
+    firePointer(canvasEl, dom.window, 'pointerup', 0, 0);
+
+    await dom.window.convertFile(file);
+
+    expect(canvasSizes[canvasSizes.length - 1]).toEqual({ width: 20, height: 20 });
+  });
+
+  it('ignores a slower, superseded image load when a second file is picked before the first resolves', async () => {
+    const dom = toolPage();
+    mockCanvas(dom.window);
+
+    // A custom Image mock that never auto-fires onload — this test fires the
+    // two pending loads manually, out of pick order, to reproduce image A
+    // (picked first) resolving AFTER image B (picked second).
+    const pending = [];
+    dom.window.Image = function () {
+      const img = { onload: null, onerror: null, naturalWidth: 0, naturalHeight: 0 };
+      let src = '';
+      Object.defineProperty(img, 'src', {
+        get: () => src,
+        set: (v) => {
+          src = v;
+          pending.push(img);
+        }
+      });
+      return img;
+    };
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const fileA = new dom.window.File([new Uint8Array(10)], 'slow.jpg', { type: 'image/jpeg' });
+    const fileB = new dom.window.File([new Uint8Array(10)], 'fast.jpg', { type: 'image/jpeg' });
+
+    selectFile(dom, fileA); // starts loading A
+    selectFile(dom, fileB); // starts loading B before A resolves
+    expect(pending.length).toBe(2);
+
+    // B (picked second) resolves first...
+    pending[1].naturalWidth = 200;
+    pending[1].naturalHeight = 100;
+    pending[1].onload();
+
+    // ...then A (picked first, but slower) resolves late. Without the
+    // pendingFile guard, this would silently overwrite the session built for
+    // B — while shared.js's own file-name display still shows "fast.jpg".
+    pending[0].naturalWidth = 900;
+    pending[0].naturalHeight = 900;
+    pending[0].onload();
+
+    const canvasEl = dom.window.document.querySelector('.image-cropper__canvas');
+    expect(canvasEl.width).toBe(200);
+    expect(canvasEl.height).toBe(100);
+  });
+
   it('sets TOOL_CONFIG.output_extension to match the input format', async () => {
     const dom = createDom();
     dom.window.TOOL_CONFIG = { id: 'image-cropper' };

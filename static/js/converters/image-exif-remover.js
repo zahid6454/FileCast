@@ -161,9 +161,15 @@
   // WebP — RIFF container. Drop EXIF/XMP chunks and patch the RIFF size
   // field (bytes 4-7) to match the new total, since unlike PNG chunks a
   // RIFF file's overall length is declared once at the top, not implied by
-  // an end marker.
+  // an end marker. If the file has a VP8X (extended format) chunk, its
+  // flags byte also declares which optional chunks are present — leaving
+  // its EXIF/XMP bits set after the chunks themselves are gone would make
+  // the output non-conformant with the WebP container spec, so those two
+  // bits are cleared too.
   // ---------------------------------------------------------------------
   var STRIP_WEBP_CHUNKS = { EXIF: true, 'XMP ': true };
+  var VP8X_EXIF_FLAG = 0x08;
+  var VP8X_XMP_FLAG = 0x04;
 
   function stripWebpMetadata(buffer) {
     var view = new DataView(buffer);
@@ -193,6 +199,8 @@
       out.push(new Uint8Array(buffer, offset, buffer.byteLength - offset));
     }
 
+    clearVp8xMetadataFlags(out);
+
     var restLength = 0;
     for (var i = 1; i < out.length; i++) restLength += out[i].byteLength;
 
@@ -201,5 +209,24 @@
     out[0] = header;
 
     return out;
+  }
+
+  function clearVp8xMetadataFlags(out) {
+    for (var i = 1; i < out.length; i++) {
+      var chunk = out[i];
+      // 'VP8X' fourCC, plus at least 1 flags byte past the 8-byte chunk header.
+      if (
+        chunk.byteLength >= 9 &&
+        chunk[0] === 0x56 &&
+        chunk[1] === 0x50 &&
+        chunk[2] === 0x38 &&
+        chunk[3] === 0x58
+      ) {
+        var copy = new Uint8Array(chunk); // copy — this array is a view onto the source buffer
+        copy[8] &= ~(VP8X_EXIF_FLAG | VP8X_XMP_FLAG);
+        out[i] = copy;
+        return;
+      }
+    }
   }
 })();
