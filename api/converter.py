@@ -1,6 +1,7 @@
 """Conversion routes — Gotenberg for documents, Ghostscript for PDF compress."""
 
 import asyncio
+import io
 import json
 import os
 import subprocess
@@ -344,6 +345,296 @@ async def _convert_pdf2docx(content: bytes, filename: str) -> bytes:
     return await loop.run_in_executor(None, _convert_pdf2docx_sync, content)
 
 
+def _convert_pdf_to_xlsx_sync(content: bytes) -> bytes:
+    """PDF -> XLSX. No Gotenberg/LibreOffice route does this (LibreOffice's
+    PDF import produces a Draw/Writer document, not spreadsheet cells), so
+    this is a pure-Python step in the same shape as pdf2docx above: read
+    in-memory (pdfplumber/openpyxl both support file-like objects directly,
+    so no temp files are needed here), one sheet per PDF page. A page with a
+    detected table gets real cells; a page without one still gets its plain
+    extracted text (one line per row) rather than being silently dropped —
+    honest about pages that don't contain a real table, not a failure.
+    """
+    import pdfplumber
+    from openpyxl import Workbook
+
+    start = time.time()
+    try:
+        wb = Workbook()
+        wb.remove(wb.active)
+
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            for page_num, page in enumerate(pdf.pages, start=1):
+                ws = wb.create_sheet(title=f"Page {page_num}")
+                tables = page.extract_tables()
+                if tables:
+                    row_cursor = 1
+                    for table in tables:
+                        for row in table:
+                            for col_idx, cell in enumerate(row, start=1):
+                                ws.cell(row=row_cursor, column=col_idx, value=cell)
+                            row_cursor += 1
+                        row_cursor += 1  # blank row between tables on the same page
+                else:
+                    text = page.extract_text() or ""
+                    for row_idx, line in enumerate(text.splitlines(), start=1):
+                        ws.cell(row=row_idx, column=1, value=line)
+
+        if not wb.sheetnames:
+            wb.create_sheet(title="Sheet1")
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        output = buf.getvalue()
+        p2x_ms = round((time.time() - start) * 1000, 1)
+        logger.info(
+            "pdf-to-xlsx OK: %sms",
+            p2x_ms,
+            extra={
+                "data": {
+                    "event": "pdf_to_xlsx_call",
+                    "p2x_ms": p2x_ms,
+                    "p2x_input_bytes": len(content),
+                    "p2x_output_bytes": len(output),
+                }
+            },
+        )
+        return output
+    except Exception:
+        logger.error(
+            "pdf-to-xlsx failed",
+            exc_info=True,
+            extra={
+                "data": {"event": "pdf_to_xlsx_error", "p2x_input_bytes": len(content)}
+            },
+        )
+        raise
+
+
+async def _convert_pdf_to_xlsx(content: bytes, filename: str) -> bytes:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _convert_pdf_to_xlsx_sync, content)
+
+
+def _convert_pdf_to_pptx_sync(content: bytes) -> bytes:
+    """PDF -> PPTX. Same "no Gotenberg route for this direction" reasoning as
+    XLSX above. Renders each page to an image (PyMuPDF) and places it on its
+    own slide (python-pptx) — preserves the page's exact visual appearance,
+    at the cost of the slide's text not being separately editable, which is
+    disclosed in the tool's own FAQ rather than left as a surprise. The deck
+    is sized to the first page's aspect ratio; any page with a different
+    aspect ratio is letterboxed (not stretched) to avoid distorting it.
+    """
+    import fitz  # PyMuPDF
+    from pptx import Presentation
+    from pptx.util import Emu
+
+    start = time.time()
+    try:
+        doc = fitz.open(stream=content, filetype="pdf")
+        try:
+            if doc.page_count == 0:
+                raise RuntimeError("PDF has no pages")
+
+            zoom = 150 / 72  # 150 DPI; PDF's native unit is 72 DPI
+            matrix = fitz.Matrix(zoom, zoom)
+
+            prs = Presentation()
+            first_rect = doc[0].rect
+            prs.slide_width = Emu(int(first_rect.width / 72 * 914400))
+            prs.slide_height = Emu(int(first_rect.height / 72 * 914400))
+            blank_layout = prs.slide_layouts[6]
+
+            for page in doc:
+                pix = page.get_pixmap(matrix=matrix)
+                img_bytes = pix.tobytes("png")
+
+                img_aspect = pix.width / pix.height
+                slide_aspect = prs.slide_width / prs.slide_height
+                if img_aspect > slide_aspect:
+                    draw_w = prs.slide_width
+                    draw_h = int(draw_w / img_aspect)
+                else:
+                    draw_h = prs.slide_height
+                    draw_w = int(draw_h * img_aspect)
+                left = (prs.slide_width - draw_w) // 2
+                top = (prs.slide_height - draw_h) // 2
+
+                slide = prs.slides.add_slide(blank_layout)
+                slide.shapes.add_picture(
+                    io.BytesIO(img_bytes), left, top, width=draw_w, height=draw_h
+                )
+        finally:
+            doc.close()
+
+        buf = io.BytesIO()
+        prs.save(buf)
+        output = buf.getvalue()
+        p2p_ms = round((time.time() - start) * 1000, 1)
+        logger.info(
+            "pdf-to-pptx OK: %sms",
+            p2p_ms,
+            extra={
+                "data": {
+                    "event": "pdf_to_pptx_call",
+                    "p2p_ms": p2p_ms,
+                    "p2p_input_bytes": len(content),
+                    "p2p_output_bytes": len(output),
+                }
+            },
+        )
+        return output
+    except Exception:
+        logger.error(
+            "pdf-to-pptx failed",
+            exc_info=True,
+            extra={
+                "data": {"event": "pdf_to_pptx_error", "p2p_input_bytes": len(content)}
+            },
+        )
+        raise
+
+
+async def _convert_pdf_to_pptx(content: bytes, filename: str) -> bytes:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _convert_pdf_to_pptx_sync, content)
+
+
+# PNG to SVG (Vectorize) — a genuinely new server-side capability, not a
+# reuse of the Gotenberg/LibreOffice document pipeline the other 3 Cloud
+# tools in this PR build on. No potrace/vtracer dependency: this hand-rolls
+# color-quantize + contour-trace + polygon-simplify on top of Pillow/OpenCV,
+# the same "own the well-specified algorithm, lean on a vetted library for
+# the primitives" approach this codebase already uses for MD5, RC4, Code 128,
+# QR, and the ICO container — chosen over potrace (monochrome-only output)
+# and vtracer (a Rust-toolchain risk for this image, with no guaranteed
+# prebuilt wheel for this target).
+PNG_TO_SVG_MAX_DIMENSION = 1500  # px, longest side, after decode
+PNG_TO_SVG_PALETTE_SIZE = 16
+PNG_TO_SVG_MIN_CONTOUR_AREA = 6  # px^2 — drops single/few-pixel noise fragments
+
+
+def _contour_to_svg_path_d(contour) -> str:
+    import cv2
+
+    # 1.0px simplification tolerance: smooths jagged pixel-grid edges from
+    # the mask boundary without losing the shape's real corners.
+    approx = cv2.approxPolyDP(contour, 1.0, True)
+    points = approx.reshape(-1, 2)
+    if len(points) < 3:
+        return ""
+    d = f"M {points[0][0]} {points[0][1]} "
+    d += " ".join(f"L {x} {y}" for x, y in points[1:])
+    d += " Z"
+    return d
+
+
+def _trace_png_to_svg_sync(content: bytes) -> bytes:
+    import cv2
+    import numpy as np
+    from PIL import Image
+
+    start = time.time()
+    try:
+        img = Image.open(io.BytesIO(content)).convert("RGBA")
+
+        # Bound tracing cost independent of the (already size-capped) upload:
+        # a small, heavily-compressed PNG can still decode to a huge pixel grid.
+        w, h = img.size
+        if max(w, h) > PNG_TO_SVG_MAX_DIMENSION:
+            scale = PNG_TO_SVG_MAX_DIMENSION / max(w, h)
+            img = img.resize(
+                (max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS
+            )
+            w, h = img.size
+
+        # This tracer's SVG output has no alpha channel, so flatten
+        # transparency onto a white background rather than leave it
+        # undefined per-pixel.
+        background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+        flattened = Image.alpha_composite(background, img).convert("RGB")
+
+        quantized = flattened.quantize(
+            colors=PNG_TO_SVG_PALETTE_SIZE, method=Image.MEDIANCUT
+        )
+        palette = quantized.getpalette()
+        indexed = np.array(quantized)
+
+        paths: list[str] = []
+        for color_index in range(PNG_TO_SVG_PALETTE_SIZE):
+            mask = (indexed == color_index).astype(np.uint8)
+            if not mask.any():
+                continue
+            r, g, b = palette[color_index * 3 : color_index * 3 + 3]
+            hex_color = f"#{r:02x}{g:02x}{b:02x}"
+
+            contours, hierarchy = cv2.findContours(
+                mask * 255, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE
+            )
+            if hierarchy is None:
+                continue
+            hierarchy = hierarchy[0]
+
+            # RETR_CCOMP gives each outer contour and its direct hole
+            # children (e.g. the inside of an "O") as separate entries —
+            # group them so one <path fill-rule="evenodd"> per outer shape
+            # renders holes correctly instead of filling them in solid.
+            children_by_parent: dict[int, list[int]] = {}
+            top_level: list[int] = []
+            for i, (_next, _prev, _child, parent) in enumerate(hierarchy):
+                if parent == -1:
+                    top_level.append(i)
+                else:
+                    children_by_parent.setdefault(parent, []).append(i)
+
+            for outer_idx in top_level:
+                if cv2.contourArea(contours[outer_idx]) < PNG_TO_SVG_MIN_CONTOUR_AREA:
+                    continue
+                subpaths = [_contour_to_svg_path_d(contours[outer_idx])]
+                for hole_idx in children_by_parent.get(outer_idx, []):
+                    subpaths.append(_contour_to_svg_path_d(contours[hole_idx]))
+                d = " ".join(p for p in subpaths if p)
+                if d:
+                    paths.append(
+                        f'<path d="{d}" fill="{hex_color}" fill-rule="evenodd"/>'
+                    )
+
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
+            f'width="{w}" height="{h}">\n' + "\n".join(paths) + "\n</svg>\n"
+        )
+        output = svg.encode("utf-8")
+        trace_ms = round((time.time() - start) * 1000, 1)
+        logger.info(
+            "png-to-svg OK: %sms",
+            trace_ms,
+            extra={
+                "data": {
+                    "event": "png_to_svg_call",
+                    "trace_ms": trace_ms,
+                    "trace_input_bytes": len(content),
+                    "trace_output_bytes": len(output),
+                    "trace_path_count": len(paths),
+                }
+            },
+        )
+        return output
+    except Exception:
+        logger.error(
+            "png-to-svg failed",
+            exc_info=True,
+            extra={
+                "data": {"event": "png_to_svg_error", "trace_input_bytes": len(content)}
+            },
+        )
+        raise
+
+
+async def _trace_png_to_svg(content: bytes, filename: str) -> bytes:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _trace_png_to_svg_sync, content)
+
+
 def _safe_filename(filename: str, ext: str = ".pdf") -> str:
     base = filename.rsplit(".", 1)[0] if "." in filename else filename
     safe = "".join(c for c in base if c.isalnum() or c in " ._-")
@@ -586,6 +877,69 @@ async def pdf_to_docx(
         output_ext=".docx",
         output_mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         max_size=_max_size_for(user),
+    )
+
+
+@router.post("/convert/pdf-to-xlsx")
+async def pdf_to_xlsx(
+    file: UploadFile = File(...),
+    user: User | None = Depends(current_user_for_convert),
+):
+    return await _handle_conversion(
+        file,
+        "pdf-to-xlsx",
+        _convert_pdf_to_xlsx,
+        output_ext=".xlsx",
+        output_mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        max_size=_max_size_for(user),
+    )
+
+
+@router.post("/convert/pdf-to-pptx")
+async def pdf_to_pptx(
+    file: UploadFile = File(...),
+    user: User | None = Depends(current_user_for_convert),
+):
+    return await _handle_conversion(
+        file,
+        "pdf-to-pptx",
+        _convert_pdf_to_pptx,
+        output_ext=".pptx",
+        output_mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        max_size=_max_size_for(user),
+    )
+
+
+@router.post("/convert/epub-to-pdf")
+async def epub_to_pdf(
+    file: UploadFile = File(...),
+    user: User | None = Depends(current_user_for_convert),
+):
+    return await _handle_conversion(
+        file, "epub-to-pdf", _convert_libreoffice, max_size=_max_size_for(user)
+    )
+
+
+# Smaller than the 25MB every other Cloud tool allows — tracing is more
+# CPU-intensive than a document conversion, and PNG_TO_SVG_MAX_DIMENSION
+# already bounds per-request cost independent of this cap (see the tracer
+# above); this just keeps very large uploads from queuing up in the first
+# place. Matches the tool's own YAML max_file_size (client-side check).
+PNG_TO_SVG_MAX_UPLOAD = 10 * 1024 * 1024
+
+
+@router.post("/convert/png-to-svg")
+async def png_to_svg(
+    file: UploadFile = File(...),
+    user: User | None = Depends(current_user_for_convert),
+):
+    return await _handle_conversion(
+        file,
+        "png-to-svg",
+        _trace_png_to_svg,
+        output_ext=".svg",
+        output_mime="image/svg+xml",
+        max_size=min(_max_size_for(user), PNG_TO_SVG_MAX_UPLOAD),
     )
 
 

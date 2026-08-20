@@ -49,6 +49,161 @@ async def test_convert_success_with_mocked_gotenberg(client, monkeypatch):
     assert r.content == b"%PDF-1.4 fake pdf bytes"
 
 
+async def test_pdf_to_xlsx_rejects_wrong_extension(client):
+    r = await client.post(
+        "/api/v1/convert/pdf-to-xlsx",
+        files={"file": ("notes.txt", b"hello world", "text/plain")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "wrong_format"
+
+
+async def test_pdf_to_xlsx_rejects_empty_file(client):
+    r = await client.post(
+        "/api/v1/convert/pdf-to-xlsx",
+        files={"file": ("empty.pdf", b"", "application/pdf")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "empty_file"
+
+
+async def test_pdf_to_xlsx_success_with_mocked_conversion(client, monkeypatch):
+    async def fake_convert(content, filename):
+        return b"fake xlsx bytes"
+
+    monkeypatch.setattr(converter, "_convert_pdf_to_xlsx", fake_convert)
+    valid_pdf = b"%PDF-1.4" + b"\x00" * 200
+    r = await client.post(
+        "/api/v1/convert/pdf-to-xlsx",
+        files={"file": ("report.pdf", valid_pdf, "application/pdf")},
+    )
+    assert r.status_code == 200
+    assert (
+        r.headers["content-type"]
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert r.headers["content-disposition"] == 'attachment; filename="report.xlsx"'
+    assert r.content == b"fake xlsx bytes"
+
+
+async def test_pdf_to_pptx_rejects_wrong_extension(client):
+    r = await client.post(
+        "/api/v1/convert/pdf-to-pptx",
+        files={"file": ("notes.txt", b"hello world", "text/plain")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "wrong_format"
+
+
+async def test_pdf_to_pptx_rejects_empty_file(client):
+    r = await client.post(
+        "/api/v1/convert/pdf-to-pptx",
+        files={"file": ("empty.pdf", b"", "application/pdf")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "empty_file"
+
+
+async def test_pdf_to_pptx_success_with_mocked_conversion(client, monkeypatch):
+    async def fake_convert(content, filename):
+        return b"fake pptx bytes"
+
+    monkeypatch.setattr(converter, "_convert_pdf_to_pptx", fake_convert)
+    valid_pdf = b"%PDF-1.4" + b"\x00" * 200
+    r = await client.post(
+        "/api/v1/convert/pdf-to-pptx",
+        files={"file": ("deck.pdf", valid_pdf, "application/pdf")},
+    )
+    assert r.status_code == 200
+    assert (
+        r.headers["content-type"]
+        == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    )
+    assert r.headers["content-disposition"] == 'attachment; filename="deck.pptx"'
+    assert r.content == b"fake pptx bytes"
+
+
+async def test_epub_to_pdf_rejects_wrong_extension(client):
+    r = await client.post(
+        "/api/v1/convert/epub-to-pdf",
+        files={"file": ("notes.txt", b"hello world", "text/plain")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "wrong_format"
+
+
+async def test_epub_to_pdf_rejects_empty_file(client):
+    r = await client.post(
+        "/api/v1/convert/epub-to-pdf",
+        files={"file": ("empty.epub", b"", "application/epub+zip")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "empty_file"
+
+
+async def test_epub_to_pdf_success_with_mocked_gotenberg(client, monkeypatch):
+    async def fake_libreoffice(content, filename, extra_form=None):
+        return b"%PDF-1.4 fake pdf bytes"
+
+    monkeypatch.setattr(converter, "_convert_libreoffice", fake_libreoffice)
+    valid_epub = b"PK\x03\x04" + b"\x00" * 200  # passes magic-byte check
+    r = await client.post(
+        "/api/v1/convert/epub-to-pdf",
+        files={"file": ("book.epub", valid_epub, "application/epub+zip")},
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.headers["content-disposition"] == 'attachment; filename="book.pdf"'
+    assert r.content == b"%PDF-1.4 fake pdf bytes"
+
+
+async def test_png_to_svg_rejects_wrong_extension(client):
+    r = await client.post(
+        "/api/v1/convert/png-to-svg",
+        files={"file": ("notes.txt", b"hello world", "text/plain")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "wrong_format"
+
+
+async def test_png_to_svg_rejects_empty_file(client):
+    r = await client.post(
+        "/api/v1/convert/png-to-svg",
+        files={"file": ("empty.png", b"", "image/png")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "empty_file"
+
+
+async def test_png_to_svg_rejects_oversized_file(client):
+    # png-to-svg caps uploads at 10MB, below the 25MB other Cloud tools
+    # allow (tracing is more CPU-intensive) — proves that lower cap is
+    # actually enforced, not just the shared default.
+    oversized = b"\x89PNG\r\n\x1a\n" + b"\x00" * (10 * 1024 * 1024 + 1)
+    r = await client.post(
+        "/api/v1/convert/png-to-svg",
+        files={"file": ("huge.png", oversized, "image/png")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "too_large"
+
+
+async def test_png_to_svg_success_with_mocked_conversion(client, monkeypatch):
+    async def fake_trace(content, filename):
+        return b"<svg>fake</svg>"
+
+    monkeypatch.setattr(converter, "_trace_png_to_svg", fake_trace)
+    valid_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 200
+    r = await client.post(
+        "/api/v1/convert/png-to-svg",
+        files={"file": ("logo.png", valid_png, "image/png")},
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/svg+xml"
+    assert r.headers["content-disposition"] == 'attachment; filename="logo.svg"'
+    assert r.content == b"<svg>fake</svg>"
+
+
 async def test_metrics_endpoint_shape(admin_client):
     r = await admin_client.get("/api/v1/metrics")
     assert r.status_code == 200

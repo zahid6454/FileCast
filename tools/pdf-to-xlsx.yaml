@@ -1,0 +1,28 @@
+enabled: true
+id: pdf-to-xlsx
+name: "PDF to Excel (XLSX) Converter"
+slug: /convert/pdf-to-xlsx
+category: document-conversion
+subcategory: converter
+type: server-side
+input_format: PDF
+output_format: XLSX
+accept_extensions: [.pdf]
+output_extension: .xlsx
+max_file_size: 25MB
+bulk_support: false
+ui_type: standard
+reverse_tool: xlsx-to-pdf
+api_endpoint: /api/v1/convert/pdf-to-xlsx
+tagline: "Extract tables from a PDF into a real spreadsheet"
+tagline_long: "Extract tables and text from a PDF into a genuine Excel workbook — files are encrypted in transit, processed securely, and deleted immediately."
+meta:
+  title: "PDF to Excel (XLSX) Converter — Free & Secure | FileCast"
+  description: "Convert PDF to Excel free online — encrypted, extracted, and deleted instantly. No sign-up, no limits, no watermarks. Pulls real tables into editable cells."
+  keywords: ["pdf to excel", "pdf to xlsx", "convert pdf to excel", "pdf to excel free", "pdf table extractor"]
+content:
+  what_is: "content/pdf-to-xlsx/what-is.md"
+  comparison: "content/pdf-to-xlsx/comparison.md"
+  when_to_use: "content/pdf-to-xlsx/when-to-use.md"
+  faq: "content/pdf-to-xlsx/faq.md"
+related_tools: [xlsx-to-pdf, pdf-to-docx, pdf-to-pptx, pdf-compress]

@@ -12,6 +12,7 @@ output_extension: .pdf
 max_file_size: 25MB
 bulk_support: false
 ui_type: standard
+reverse_tool: pdf-to-pptx
 tagline: "Convert PowerPoint presentations to PDF"
 tagline_long: "Convert PowerPoint presentations to PDF format — files are encrypted in transit, processed securely, and deleted immediately."
 api_endpoint: /api/v1/convert/pptx-to-pdf

@@ -1,0 +1,28 @@
+enabled: true
+id: png-to-svg
+name: "PNG to SVG Converter (Vectorize)"
+slug: /convert/png-to-svg
+category: image-conversion
+subcategory: converter
+type: server-side
+input_format: PNG
+output_format: SVG
+accept_extensions: [.png]
+output_extension: .svg
+max_file_size: 10MB
+bulk_support: false
+ui_type: standard
+reverse_tool: svg-to-png
+api_endpoint: /api/v1/convert/png-to-svg
+tagline: "Vectorize a PNG into a scalable SVG"
+tagline_long: "Trace a PNG's color regions into scalable vector paths — files are encrypted in transit, processed securely, and deleted immediately."
+meta:
+  title: "PNG to SVG Converter — Free & Secure | FileCast"
+  description: "Convert PNG to SVG free online — encrypted, traced, and deleted instantly. No sign-up, no limits, no watermarks. Best for logos, icons, and flat artwork."
+  keywords: ["png to svg", "convert png to svg", "vectorize image", "png vectorizer", "image to vector"]
+content:
+  what_is: "content/png-to-svg/what-is.md"
+  comparison: "content/png-to-svg/comparison.md"
+  when_to_use: "content/png-to-svg/when-to-use.md"
+  faq: "content/png-to-svg/faq.md"
+related_tools: [svg-to-png, svg-to-jpg, svg-optimizer, png-to-ico]
