@@ -2492,41 +2492,43 @@ img { max-width: 100%; display: block; }
 }
 
 /* --- Per-category "view all" tile (replaces .card--more / .view-all-link):
-       a dashed-border card sized like its tool_card siblings, placed as the
-       grid's last item so "see more" carries the same visual weight as the
-       tools next to it instead of trailing below the grid as a text link. --- */
+       Material Design's "filled" card variant — a solid, neutral surface
+       (not white, not brand-colored) with the same border weight and
+       elevation as its .card siblings, stretched to the row's full height
+       like every other card (never shrunk/centered — that disconnects it
+       from the row's top/bottom edges and reads as a layout bug, not a
+       design choice). The count is sized up and the divider gives the
+       content its own internal structure, so it fills the shared card
+       height with the same confidence as a name + tagline + badge does. --- */
 .card--ghost {
   background: var(--color-bg-sunken);
-  border: 1.5px dashed var(--color-border);
-  box-shadow: none;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1);
-  color: var(--color-text-muted);
-}
-.card--ghost:hover {
-  border-color: var(--color-primary);
-  border-style: solid;
-  background: var(--color-primary-subtle);
-  box-shadow: var(--shadow-sm);
+  gap: var(--space-2);
 }
 .card--ghost__count {
   font-family: var(--font-heading);
-  font-size: var(--text-2xl);
+  font-size: var(--text-3xl);
   font-weight: var(--weight-bold);
   color: var(--color-primary);
   line-height: 1;
 }
+.card--ghost__divider {
+  width: 28px;
+  height: 1px;
+  background: var(--color-border);
+}
 .card--ghost__label {
-  font-size: var(--text-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  color: var(--color-text-muted);
-  margin-top: var(--space-1);
+  color: var(--color-heading);
 }
 .card--ghost__arrow {
   width: 16px;
   height: 16px;
-  margin-top: var(--space-2);
   color: var(--color-primary);
   transition: transform var(--transition-fast);
 }

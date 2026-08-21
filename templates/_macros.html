@@ -198,15 +198,15 @@
 {%- endmacro %}
 
 {# view_all_card(cat_data, remaining) — the homepage grid's overflow tile: a
-   dashed-border card, shaped and sized like tool_card's siblings, that links
-   to the full category page. Sits inside .card-grid as its last item (not a
-   link trailing below the grid) so "see more" carries the same visual weight
-   as the tools next to it. #}
+   card shaped and sized like tool_card's siblings (same height, same
+   elevation), that links to the full category page. Sits inside .card-grid
+   as its last item (not a link trailing below the grid) so "see more"
+   carries the same visual weight as the tools next to it. #}
 {% macro view_all_card(cat_data, remaining) -%}
 <a class="card card--ghost" href="/{{ cat_data.slug }}/" aria-label="View all {{ cat_data.name }} ({{ cat_data.tools|length }} tools)">
   <span class="card--ghost__count">+{{ remaining }}</span>
-  <span class="card--ghost__label">View All</span>
-  <svg class="card--ghost__arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg>
+  <span class="card--ghost__divider"></span>
+  <span class="card--ghost__label">View All <svg class="card--ghost__arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg></span>
 </a>
 {%- endmacro %}
 
