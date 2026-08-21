@@ -266,9 +266,17 @@ export async function installApi(page, state) {
 
     // --- messages (contact-page inbox) ---
     if (path.endsWith('/admin/messages') && method === 'GET') {
-      const status = new URL(req.url()).searchParams.get('status');
+      const params = new URL(req.url()).searchParams;
+      const status = params.get('status');
+      const limit = Number(params.get('limit')) || 25;
+      const offset = Number(params.get('offset')) || 0;
       const filtered = status ? state.messages.filter((m) => m.status === status) : state.messages;
-      return json({ messages: filtered });
+      const page = filtered.slice(offset, offset + limit);
+      return json({
+        messages: page,
+        total: filtered.length,
+        has_more: offset + limit < filtered.length
+      });
     }
     const msgMatch = path.match(/\/admin\/messages\/(\d+)$/);
     if (msgMatch && method === 'PUT') {

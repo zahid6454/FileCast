@@ -26,15 +26,15 @@
   <form id="contact-form" class="contact-form">
     <div class="contact-form__field">
       <label class="contact-form__label" for="contact-title">Subject</label>
-      <input class="contact-form__input" type="text" id="contact-title" name="title" maxlength="200" required>
+      <input class="contact-form__input" type="text" id="contact-title" name="title" maxlength="200" placeholder="What's this about?" required>
     </div>
     <div class="contact-form__field">
       <label class="contact-form__label" for="contact-body">Message</label>
-      <textarea class="contact-form__textarea" id="contact-body" name="body" rows="6" maxlength="5000" required></textarea>
+      <textarea class="contact-form__textarea" id="contact-body" name="body" rows="6" maxlength="5000" placeholder="Tell us what's going on — tool name, browser, and what you expected vs. what happened, if it's a bug." required></textarea>
     </div>
     <div class="contact-form__field">
       <label class="contact-form__label" for="contact-email">Email <span class="contact-form__hint">(optional &mdash; only if you'd like a reply)</span></label>
-      <input class="contact-form__input" type="email" id="contact-email" name="email">
+      <input class="contact-form__input" type="email" id="contact-email" name="email" placeholder="you@example.com">
     </div>
     {# Honeypot: display:none (see .contact-form__hp) removes it from the
        accessibility tree and makes it unfocusable outright — real visitors,
@@ -47,18 +47,6 @@
     <button class="btn btn--primary" type="submit" id="contact-submit">Send message</button>
     <p class="contact-form__status" id="contact-status" role="status" aria-live="polite"></p>
   </form>
-
-  {# Always-rendered, not conditional on JS. The sitewide <noscript> banner
-     (base.html) only covers JS fully disabled — it says nothing if contact.js
-     specifically fails to run (an ad-blocker/extension targeting it, an SRI
-     hash mismatch failing closed, a network blip) while the rest of the page
-     works fine. Unlike the old mailto card this replaced, the form itself has
-     no non-JS fallback (no action/method — a native submit would GET this
-     same page with the fields as a query string and silently do nothing), so
-     this line is the one guaranteed-to-work path back to support. #}
-  <p class="contact-form__fallback">
-    Form not working, or prefer email? Write to <a href="mailto:support@filecast.org">support@filecast.org</a> directly.
-  </p>
 
   <div class="privacy-section">
     <h2>Reporting a problem</h2>
