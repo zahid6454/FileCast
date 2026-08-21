@@ -20,24 +20,38 @@
 
   {# GitHub Issues card removed (P1 §13) — it pointed at
      github.com/zahid6454/FileCast/issues, but the repo is private, so every
-     visitor hit a 404. Email is the only public contact channel until there's
-     a reason to open the repo (or build an in-app feedback form — see the
-     P2 §18 feedback-widget redesign, which covers per-tool feedback; this
-     page is general contact and doesn't need to wait on that). #}
-  <div class="card-grid card-grid--lg u-mb-8">
-    <a class="card card--lg" href="mailto:support@filecast.org">
-      <strong>Email</strong>
-      <div class="card__desc">support@filecast.org &mdash; general questions, feedback, bug reports, or anything else</div>
-    </a>
-  </div>
+     visitor hit a 404. The mailto card that used to sit here is gone too —
+     replaced by this in-house form (title + body, stored in the messages
+     table) so submissions don't depend on the visitor's own mail client. #}
+  <form id="contact-form" class="contact-form">
+    <div class="contact-form__field">
+      <label class="contact-form__label" for="contact-title">Subject</label>
+      <input class="contact-form__input" type="text" id="contact-title" name="title" maxlength="200" required>
+    </div>
+    <div class="contact-form__field">
+      <label class="contact-form__label" for="contact-body">Message</label>
+      <textarea class="contact-form__textarea" id="contact-body" name="body" rows="6" maxlength="5000" required></textarea>
+    </div>
+    <div class="contact-form__field">
+      <label class="contact-form__label" for="contact-email">Email <span class="contact-form__hint">(optional &mdash; only if you'd like a reply)</span></label>
+      <input class="contact-form__input" type="email" id="contact-email" name="email">
+    </div>
+    {# Honeypot: display:none (see .contact-form__hp) removes it from the
+       accessibility tree and makes it unfocusable outright — real visitors,
+       sighted or using assistive tech, never see, hear, or reach it. Bots
+       that fill every <input> found while parsing the raw HTML still do. #}
+    <div class="contact-form__hp">
+      <label for="contact-website">Leave this field blank</label>
+      <input type="text" id="contact-website" name="website" autocomplete="off">
+    </div>
+    <button class="btn btn--primary" type="submit" id="contact-submit">Send message</button>
+    <p class="contact-form__status" id="contact-status" role="status" aria-live="polite"></p>
+  </form>
 
   <div class="privacy-section">
     <h2>Reporting a problem</h2>
     <p>
-      If you're reporting a problem with a specific tool, include the tool name and a description of what went wrong. Screenshots help, but never send the file you were converting &mdash; we don't need it and don't want it.
-    </p>
-    <p>
-      For bug reports, please include your browser name and version, the tool you were using, and a description of what happened versus what you expected.
+      If you're reporting a problem with a specific tool, include the tool name, your browser name and version, and a description of what happened versus what you expected. This form doesn't support attachments &mdash; describe what you're seeing instead of sending a screenshot, and never paste the file you were converting into the message &mdash; we don't need it and don't want it.
     </p>
   </div>
 
@@ -49,4 +63,11 @@
   </div>
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% set contact_js = assets.get('js/contact.js') %}
+{% if contact_js %}
+<script src="/{{ contact_js.path }}" integrity="{{ contact_js.sri }}" crossorigin="anonymous" defer></script>
+{% endif %}
 {% endblock %}

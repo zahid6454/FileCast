@@ -2,7 +2,10 @@
 
 Deletes stale ``user_conversions`` and ``errors`` rows (retention promise D5 —
 actually DELETE, not filter-on-read) and expired ``sessions``. Anonymous
-aggregates (``conversions``) and anonymous ``ratings`` are retained. Idempotent.
+aggregates (``conversions``), anonymous ``ratings``, ``rating_feedback``, and
+contact-page ``messages`` are retained — the last two are deliberately
+excluded: they're actionable feedback/support requests, not diagnostic noise,
+and purging them could discard something nobody has read yet. Idempotent.
 
     python -m data.tasks purge          one-shot
     python -m data.tasks purge --loop   run forever, once per interval

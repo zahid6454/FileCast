@@ -1422,6 +1422,12 @@
 .admin-errrow__dl {
   margin: 0 0 var(--space-3);
 }
+/* Messages tab reuses .admin-errrow__msg's block/background/padding but
+   swaps the mono font for sans — a contact message is prose, not a stack
+   trace, and mono makes a paragraph noticeably harder to read. */
+.admin-errrow__msg--prose {
+  font-family: var(--font-sans);
+}
 .admin-errrow__drow {
   display: flex;
   gap: var(--space-3);

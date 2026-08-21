@@ -68,7 +68,7 @@
   <script src="/{{ filecast_config_js.path }}" integrity="{{ filecast_config_js.sri }}" crossorigin="anonymous" defer></script>
   {% endif %}
 
-  {% for mod in ['js/admin/dom.js', 'js/admin/api.js', 'js/admin/dashboard.js', 'js/admin/tools.js', 'js/admin/announcements.js', 'js/admin/users.js', 'js/admin/errors.js', 'js/admin/settings.js', 'js/admin/app.js'] %}
+  {% for mod in ['js/admin/dom.js', 'js/admin/api.js', 'js/admin/dashboard.js', 'js/admin/tools.js', 'js/admin/announcements.js', 'js/admin/users.js', 'js/admin/errors.js', 'js/admin/messages.js', 'js/admin/settings.js', 'js/admin/app.js'] %}
   {% set asset = assets.get(mod) %}
   {% if asset %}
   <script src="/{{ asset.path }}" integrity="{{ asset.sri }}" crossorigin="anonymous" defer></script>

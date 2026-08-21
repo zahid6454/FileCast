@@ -328,3 +328,38 @@ class Error(Base):
         Index("ix_errors_created_at", "created_at"),
         Index("ix_errors_tool_id", "tool_id"),
     )
+
+
+class Message(Base):
+    """Contact-page submission. Anonymous or attributed to a signed-in user.
+
+    Retained, never purged — unlike ``Error``/``UserConversion``, these are
+    unread support requests, not diagnostic noise. Deliberately excluded from
+    ``tasks.purge_expired()``; do not add it there without an explicit product
+    decision to discard un-actioned contact messages.
+
+    ``email`` is optional free text, not tied to ``user_id`` — an anonymous
+    sender can leave one so support can reply; a signed-in sender's account
+    email is reachable via ``user_id`` instead, so leaving it blank there is
+    fine too.
+    """
+
+    __tablename__ = "messages"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str | None] = mapped_column(String, nullable=True)
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    user_agent: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="new")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_messages_created_at", "created_at"),
+        Index("ix_messages_status", "status"),
+    )
