@@ -1480,6 +1480,15 @@
   flex-direction: column;
   gap: var(--space-2);
 }
+/* .admin-errrow's own border-left is a permanent red (errors.js's rows are
+   always errors) — these override it so a message's left edge follows its
+   own read/unread status instead. */
+.admin-msgrow--unread {
+  border-left-color: var(--color-error);
+}
+.admin-msgrow--read {
+  border-left-color: var(--color-success);
+}
 .admin-msg-emptyrow {
   list-style: none;
 }

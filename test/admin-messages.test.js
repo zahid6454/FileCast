@@ -141,6 +141,28 @@ describe('admin/messages.js', () => {
     expect(badges.find((b) => b.classList.contains('admin-badge--read')).textContent).toBe('Read');
   });
 
+  it("gives read and unread rows distinct left-edge classes, not the errors tab's always-red one", async () => {
+    // .admin-errrow (shared with errors.js) hardcodes a permanent red left
+    // border — a message row needs its OWN status-driven modifier class on
+    // top of it, or every message stays visually red regardless of status.
+    const state = { messages: [msg(1, { status: 'new' }), msg(2, { status: 'read' })] };
+    const dom = load(stateRoute(state));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const rows = Array.from(c.querySelectorAll('.admin-errrow'));
+    expect(rows).toHaveLength(2);
+    expect(rows.some((r) => r.classList.contains('admin-msgrow--unread'))).toBe(true);
+    expect(rows.some((r) => r.classList.contains('admin-msgrow--read'))).toBe(true);
+    expect(
+      rows.some(
+        (r) =>
+          r.classList.contains('admin-msgrow--unread') && r.classList.contains('admin-msgrow--read')
+      )
+    ).toBe(false);
+  });
+
   it('preserves typed search text across a status-filter change, and requests the right status', async () => {
     const state = { messages: [msg(1, { status: 'new' }), msg(2, { status: 'read' })] };
     const calls = [];

@@ -137,7 +137,13 @@
       EXPANDED_ID = open ? null : m.id;
     });
 
-    return h('li', { class: 'admin-errrow' }, [summary, detail]);
+    // .admin-errrow is shared with errors.js, whose rows are ALWAYS red down
+    // the left edge (every error is, well, an error) — reused here for the
+    // card layout, but a message's left edge must flip with its own status
+    // instead of staying permanently red regardless of read/unread.
+    var rowClass =
+      'admin-errrow ' + (m.status === 'read' ? 'admin-msgrow--read' : 'admin-msgrow--unread');
+    return h('li', { class: rowClass }, [summary, detail]);
   }
 
   function clearSearch() {
