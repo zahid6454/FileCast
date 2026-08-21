@@ -158,12 +158,44 @@ async def test_admin_list_respects_limit_bounds(client, admin_client):
     assert len(data["messages"]) == 3
 
 
+async def test_admin_list_paginates_with_total_and_has_more(client, admin_client):
+    for i in range(3):
+        await client.post("/api/v1/messages", json={"title": str(i), "body": "b"})
+    data = (await admin_client.get("/api/v1/admin/messages?limit=2&offset=0")).json()
+    assert len(data["messages"]) == 2
+    assert data["total"] == 3
+    assert data["has_more"] is True
+    data = (await admin_client.get("/api/v1/admin/messages?limit=2&offset=2")).json()
+    assert len(data["messages"]) == 1
+    assert data["total"] == 3
+    assert data["has_more"] is False
+
+
+async def test_admin_list_offset_past_end_still_reports_total(client, admin_client):
+    # When offset lands at or past the last matching row, the windowed query
+    # returns zero rows — total then has to come from the separate COUNT
+    # fallback (see list_messages) rather than the window function, which has
+    # nothing to ride along on. That fallback path must still report the real
+    # total, not silently report 0.
+    for i in range(3):
+        await client.post("/api/v1/messages", json={"title": str(i), "body": "b"})
+    data = (await admin_client.get("/api/v1/admin/messages?limit=2&offset=10")).json()
+    assert data["messages"] == []
+    assert data["total"] == 3
+    assert data["has_more"] is False
+
+
 async def test_admin_filters_by_status(client, admin_client):
     await client.post("/api/v1/messages", json={"title": "t", "body": "b"})
-    data = (await admin_client.get("/api/v1/admin/messages?status=archived")).json()
+    data = (await admin_client.get("/api/v1/admin/messages?status=read")).json()
     assert data["messages"] == []
+    # The zero-rows COUNT fallback must scope to the filter too — a message
+    # existing under a different status must not inflate "read"'s total.
+    assert data["total"] == 0
+    assert data["has_more"] is False
     data = (await admin_client.get("/api/v1/admin/messages?status=new")).json()
     assert len(data["messages"]) == 1
+    assert data["total"] == 1
 
 
 async def test_admin_invalid_status_filter_rejected(admin_client):

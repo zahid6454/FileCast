@@ -17,7 +17,7 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
@@ -32,7 +32,7 @@ _MAX_BODY = 5000
 # string with no length bound would otherwise let title/body's truncation
 # discipline get bypassed through this field instead.
 _MAX_EMAIL = 320
-_VALID_STATUSES = {"new", "read", "archived"}
+_VALID_STATUSES = {"new", "read"}
 
 # Same permissive pattern as staff.py's invite email check — reject obvious
 # junk, not attempt real deliverability validation.
@@ -96,25 +96,42 @@ def _message_dict(m: Message) -> dict:
 @router.get("/admin/messages")
 async def list_messages(
     status: str | None = None,
-    limit: int = 200,
+    limit: int = 25,
+    offset: int = 0,
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
     limit = max(1, min(limit, 500))
+    offset = max(0, offset)
     # id as a tiebreaker: created_at is a server_default now(), which two
     # requests in quick succession can land on the same microsecond,
     # otherwise leaving ties in an arbitrary (and test-flaky) DB-chosen order.
     stmt = (
-        select(Message)
+        select(Message, func.count().over().label("total"))
         .order_by(Message.created_at.desc(), Message.id.desc())
-        .limit(limit)
+        .offset(offset)
+        .limit(limit + 1)
     )
     if status is not None:
         if status not in _VALID_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status")
         stmt = stmt.where(Message.status == status)
-    rows = (await db.execute(stmt)).scalars().all()
-    return {"messages": [_message_dict(m) for m in rows]}
+    result = list(await db.execute(stmt))
+    if result:
+        total = result[0].total
+    else:
+        count_stmt = select(func.count()).select_from(Message)
+        if status is not None:
+            count_stmt = count_stmt.where(Message.status == status)
+        total = (await db.execute(count_stmt)).scalar_one()
+    rows = [r[0] for r in result]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return {
+        "messages": [_message_dict(m) for m in rows],
+        "total": total,
+        "has_more": has_more,
+    }
 
 
 class StatusBody(BaseModel):

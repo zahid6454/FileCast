@@ -733,6 +733,14 @@
   background: var(--color-error-light);
   color: var(--color-error-hover);
 }
+.admin-badge--unread {
+  background: var(--color-error-light);
+  color: var(--color-error-hover);
+}
+.admin-badge--read {
+  background: var(--color-success-light);
+  color: var(--color-success-hover);
+}
 
 /* ---- tools tab --------------------------------------------------------- */
 
@@ -1444,6 +1452,36 @@
   color: var(--color-text);
   font-size: var(--text-sm);
   word-break: break-word;
+}
+
+/* ---- messages tab ------------------------------------------------------- */
+
+/* Search styled after the public search bars (category/hero), not the
+   compact .admin-input default — this is the box a person actually reads
+   results in, not a small settings field. */
+.admin-msgsearch {
+  max-width: 360px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
+}
+.admin-msgsearch:focus {
+  border-color: var(--color-border-focus);
+}
+.admin-msgfilter {
+  max-width: 160px;
+}
+.admin-msglist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.admin-msg-emptyrow {
+  list-style: none;
 }
 
 /* ---- responsive -------------------------------------------------------- */
