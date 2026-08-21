@@ -9,6 +9,15 @@
     var form = document.getElementById('contact-form');
     if (!form) return;
 
+    // The mailto fallback (templates/contact.html) is visible by default in
+    // raw HTML precisely so a visitor still has an escape hatch if this
+    // script never reaches this line — SRI mismatch, an ad-blocker/extension
+    // targeting contact.js specifically, a network blip — cases the sitewide
+    // <noscript> banner says nothing about since JS as a whole isn't
+    // disabled. Reaching here means the JS-powered form is live, so hide it.
+    var fallbackEl = document.getElementById('contact-fallback');
+    if (fallbackEl) fallbackEl.hidden = true;
+
     var titleEl = document.getElementById('contact-title');
     var bodyEl = document.getElementById('contact-body');
     var emailEl = document.getElementById('contact-email');
