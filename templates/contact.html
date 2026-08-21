@@ -48,6 +48,18 @@
     <p class="contact-form__status" id="contact-status" role="status" aria-live="polite"></p>
   </form>
 
+  {# Visible by default (no JS involved in showing it) — contact.js hides it
+     as soon as init() confirms #contact-form is present and takes over.
+     Covers not just JS-fully-disabled (base.html's <noscript> banner already
+     handles that) but contact.js specifically failing to run — an ad-blocker/
+     extension targeting it, an SRI hash mismatch failing closed, a network
+     blip — while the rest of the page works and nothing else would tell the
+     visitor the form is dead. No email server involved: this is a plain
+     mailto: link the visitor's own mail client handles. #}
+  <p class="contact-form__fallback" id="contact-fallback">
+    Form not working, or prefer email? Write to <a href="mailto:support@filecast.org">support@filecast.org</a> directly.
+  </p>
+
   <div class="privacy-section">
     <h2>Reporting a problem</h2>
     <p>
