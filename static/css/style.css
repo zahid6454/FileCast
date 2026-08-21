@@ -2492,16 +2492,20 @@ img { max-width: 100%; display: block; }
 }
 
 /* --- Per-category "view all" tile (replaces .card--more / .view-all-link):
-       Material's "filled" grey (--color-bg-sunken) sat only ~7 units of
-       luminance from the PAGE background (--color-bg-page), so the tile's
-       edge all but vanished against the page instead of popping the way
-       every white sibling card does. Switched to "outlined": the same white
-       background every tool card already uses (proven contrast against the
-       page) with a colored border standing in for the filled surface. Full
-       row height/elevation like its siblings — never shrunk/centered, which
-       disconnects it from the row's top/bottom edges. --- */
+       white background — same as every tool card, already proven against
+       the page (a solid neutral fill sat too close in luminance to the page
+       background and nearly vanished). Distinguished by a two-tone border
+       instead of a single accent color: blue on top/left, green on
+       bottom/right, the same pairing as the logo mark and the gradient
+       under every section title, meeting at a soft diagonal in the two
+       mixed corners. Full row height/elevation like its siblings — never
+       shrunk/centered, which disconnects it from the row's top/bottom
+       edges. --- */
 .card--ghost {
-  border: 1.5px solid var(--color-primary);
+  border-top: 1.5px solid var(--color-primary);
+  border-left: 1.5px solid var(--color-primary);
+  border-right: 1.5px solid var(--color-success);
+  border-bottom: 1.5px solid var(--color-success);
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
