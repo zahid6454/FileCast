@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tool_card %}
+{% from "_macros.html" import tool_card, view_all_card %}
 
 {% block title %}{{ site.name }} — {{ site.tagline }}{% endblock %}
 {% block meta_description %}{{ site.description }}{% endblock %}
@@ -247,19 +247,20 @@
   <section class="section" id="{{ cat_data.slug }}">
     <h2 class="section__title">{% set words = cat_data.name.split() %}<span class="text-brand-blue">{{ words[0] }}</span> <span class="text-brand-green">{{ words[1:] | join(' ') }}</span></h2>
     <div class="section__divider"></div>
-    <div class="card-grid">
-      {# Show the first four tools of the category in the admin-controlled order
-         (build.py has already applied the global sort_order; disabled tools are
-         dropped upstream). The admin panel's "Shown on the homepage" divider
-         mirrors this exact rule, so reordering there moves tools here (R14). #}
-      {% set homepage_tools = cat_data.tools[:4] %}
+    {# Show the first four tools of the category in the admin-controlled order
+       (build.py has already applied the global sort_order; disabled tools are
+       dropped upstream). The admin panel's "Shown on the homepage" divider
+       mirrors this exact rule, so reordering there moves tools here (R14). #}
+    {% set homepage_tools = cat_data.tools[:4] %}
+    {% set remaining = cat_data.tools|length - homepage_tools|length %}
+    <div class="card-grid{% if remaining > 0 %} card-grid--has-more{% endif %}">
       {% for tool in homepage_tools %}
       {{ tool_card(tool, cat_id) }}
       {% endfor %}
+      {% if remaining > 0 %}
+      {{ view_all_card(cat_data, remaining) }}
+      {% endif %}
     </div>
-    {% if cat_data.tools|length > homepage_tools|length %}
-    <a class="view-all-link" href="/{{ cat_data.slug }}/">View all {{ cat_data.name }} ({{ cat_data.tools|length }}) →</a>
-    {% endif %}
   </section>
   {% endfor %}
 </div>

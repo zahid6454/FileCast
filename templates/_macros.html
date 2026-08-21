@@ -197,6 +197,19 @@
 </a>
 {%- endmacro %}
 
+{# view_all_card(cat_data, remaining) — the homepage grid's overflow tile: a
+   dashed-border card, shaped and sized like tool_card's siblings, that links
+   to the full category page. Sits inside .card-grid as its last item (not a
+   link trailing below the grid) so "see more" carries the same visual weight
+   as the tools next to it. #}
+{% macro view_all_card(cat_data, remaining) -%}
+<a class="card card--ghost" href="/{{ cat_data.slug }}/" aria-label="View all {{ cat_data.name }} ({{ cat_data.tools|length }} tools)">
+  <span class="card--ghost__count">+{{ remaining }}</span>
+  <span class="card--ghost__label">View All</span>
+  <svg class="card--ghost__arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg>
+</a>
+{%- endmacro %}
+
 {# tool_card_lg(tool, cat_id) — the LARGE card used on category.html, for both
    its main-tools and sub-tools grids (was duplicated verbatim between the
    two before this — exactly the drift ad_slot()'s docstring above warns

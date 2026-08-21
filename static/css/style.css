@@ -1363,6 +1363,9 @@ img { max-width: 100%; display: block; }
 @media (min-width: 1024px) {
   .card-grid { grid-template-columns: repeat(4, 1fr); }
   .card-grid--lg { grid-template-columns: repeat(3, 1fr); }
+  /* Categories with a view-all tile get a 5th column so the 4 tools + tile
+     stay on one row instead of the tile wrapping alone onto a second row. */
+  .card-grid--has-more { grid-template-columns: repeat(5, 1fr); }
 }
 
 /* ============================================================
@@ -2488,15 +2491,46 @@ img { max-width: 100%; display: block; }
   border-top: 1px dashed var(--color-border);
 }
 
-/* --- Per-category "view all" link (replaces .card--more) --- */
-.view-all-link {
-  display: inline-block;
-  margin-top: var(--space-3);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  color: var(--color-primary);
+/* --- Per-category "view all" tile (replaces .card--more / .view-all-link):
+       a dashed-border card sized like its tool_card siblings, placed as the
+       grid's last item so "see more" carries the same visual weight as the
+       tools next to it instead of trailing below the grid as a text link. --- */
+.card--ghost {
+  background: var(--color-bg-sunken);
+  border: 1.5px dashed var(--color-border);
+  box-shadow: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
 }
-.view-all-link:hover { text-decoration: none; opacity: 0.85; }
+.card--ghost:hover {
+  border-color: var(--color-primary);
+  border-style: solid;
+  background: var(--color-primary-subtle);
+  box-shadow: var(--shadow-sm);
+}
+.card--ghost__count {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+  line-height: 1;
+}
+.card--ghost__label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
+  margin-top: var(--space-1);
+}
+.card--ghost__arrow {
+  width: 16px;
+  height: 16px;
+  margin-top: var(--space-2);
+  color: var(--color-primary);
+  transition: transform var(--transition-fast);
+}
+.card--ghost:hover .card--ghost__arrow { transform: translateX(3px); }
 
 /* --- Enhanced tool card inner structure (own classes; base .card stays
        content-agnostic so plain related-tools cards don't break, R12) --- */
