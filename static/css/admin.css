@@ -1430,12 +1430,6 @@
 .admin-errrow__dl {
   margin: 0 0 var(--space-3);
 }
-/* Messages tab reuses .admin-errrow__msg's block/background/padding but
-   swaps the mono font for sans — a contact message is prose, not a stack
-   trace, and mono makes a paragraph noticeably harder to read. */
-.admin-errrow__msg--prose {
-  font-family: var(--font-sans);
-}
 .admin-errrow__drow {
   display: flex;
   gap: var(--space-3);
@@ -1479,6 +1473,110 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+/* Own class family, not a reuse of .admin-errrow — a message isn't an error,
+   and errrow's left edge is unconditionally red (every row there genuinely
+   is an error). A message row's left edge is status-driven instead, so it
+   needs to be a first-class part of its own base styling, not a color
+   patched on top of a borrowed default. */
+.admin-msgrow {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.admin-msgrow--unread {
+  border-left: 3px solid var(--color-error);
+}
+.admin-msgrow--read {
+  border-left: 3px solid var(--color-success);
+}
+/* The whole summary line is a button — reset it, lay it out as one row. */
+.admin-msgrow__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-text);
+}
+.admin-msgrow__summary:hover {
+  background: var(--color-bg-sunken);
+}
+.admin-msgrow__summary:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
+.admin-msgrow__tool {
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+/* Sans, not errrow__snippet's mono — a contact message is prose, not a
+   stack trace. */
+.admin-msgrow__snippet {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-msgrow__time {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.admin-msgrow__chev {
+  color: var(--color-text-light);
+  transition: transform var(--transition-fast);
+  flex-shrink: 0;
+}
+.admin-msgrow__summary[aria-expanded='true'] .admin-msgrow__chev {
+  transform: rotate(90deg);
+}
+.admin-msgrow__detail {
+  padding: 0 var(--space-4) var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+}
+.admin-msgrow__msg {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  background: var(--color-bg-sunken);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin: var(--space-3) 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.admin-msgrow__dl {
+  margin: 0 0 var(--space-3);
+}
+.admin-msgrow__drow {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+.admin-msgrow__drow dt {
+  width: 96px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.admin-msgrow__drow dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  word-break: break-word;
 }
 .admin-msg-emptyrow {
   list-style: none;
