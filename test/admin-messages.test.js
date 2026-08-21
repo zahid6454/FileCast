@@ -142,16 +142,17 @@ describe('admin/messages.js', () => {
   });
 
   it("gives read and unread rows distinct left-edge classes, not the errors tab's always-red one", async () => {
-    // .admin-errrow (shared with errors.js) hardcodes a permanent red left
-    // border — a message row needs its OWN status-driven modifier class on
-    // top of it, or every message stays visually red regardless of status.
+    // .admin-msgrow is its own class family (not a reuse of errors.js's
+    // .admin-errrow, which hardcodes a permanent red left border since every
+    // row there genuinely is an error) — a message row's edge is status-
+    // driven instead.
     const state = { messages: [msg(1, { status: 'new' }), msg(2, { status: 'read' })] };
     const dom = load(stateRoute(state));
     const c = dom.window.document.getElementById('c');
     dom.window.ADMIN.tabs.messages.render(c);
     await flush();
 
-    const rows = Array.from(c.querySelectorAll('.admin-errrow'));
+    const rows = Array.from(c.querySelectorAll('.admin-msgrow'));
     expect(rows).toHaveLength(2);
     expect(rows.some((r) => r.classList.contains('admin-msgrow--unread'))).toBe(true);
     expect(rows.some((r) => r.classList.contains('admin-msgrow--read'))).toBe(true);
@@ -296,7 +297,7 @@ describe('admin/messages.js', () => {
 
     findButton(c.querySelector('.admin-msgpager'), 'Next').click();
     await flush();
-    expect(c.querySelectorAll('.admin-errrow')).toHaveLength(1);
+    expect(c.querySelectorAll('.admin-msgrow')).toHaveLength(1);
 
     // Marking the sole message on page 2 as read removes it from the "new"
     // filter entirely, emptying the page the admin is currently viewing.
@@ -305,7 +306,7 @@ describe('admin/messages.js', () => {
 
     // Auto-recovered to page 1, which still has the other 25 unread rows —
     // not stranded on a dangling, now-nonexistent page 2.
-    expect(c.querySelectorAll('.admin-errrow')).toHaveLength(25);
+    expect(c.querySelectorAll('.admin-msgrow')).toHaveLength(25);
     expect(c.querySelector('.admin-pager')).toBeNull(); // exactly one page now
   });
 

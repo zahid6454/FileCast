@@ -66,7 +66,7 @@
   }
 
   function detailRow(term, value) {
-    return h('div', { class: 'admin-errrow__drow' }, [h('dt', term), h('dd', value || '—')]);
+    return h('div', { class: 'admin-msgrow__drow' }, [h('dt', term), h('dd', value || '—')]);
   }
 
   function row(m) {
@@ -100,9 +100,9 @@
     }
 
     var expanded = m.id === EXPANDED_ID;
-    var detail = h('div', { class: 'admin-errrow__detail', hidden: !expanded }, [
-      h('p', { class: 'admin-errrow__msg admin-errrow__msg--prose' }, m.body || '(empty message)'),
-      h('dl', { class: 'admin-errrow__dl' }, [
+    var detail = h('div', { class: 'admin-msgrow__detail', hidden: !expanded }, [
+      h('p', { class: 'admin-msgrow__msg' }, m.body || '(empty message)'),
+      h('dl', { class: 'admin-msgrow__dl' }, [
         detailRow('Reply email', m.email),
         detailRow('Sender', m.user_id ? 'Signed-in user (' + m.user_id + ')' : 'Anonymous'),
         detailRow('Message #', m.id != null ? String(m.id) : null),
@@ -115,7 +115,7 @@
       'button',
       {
         type: 'button',
-        class: 'admin-errrow__summary',
+        class: 'admin-msgrow__summary',
         'aria-expanded': expanded ? 'true' : 'false'
       },
       [
@@ -124,10 +124,10 @@
           { class: 'admin-badge admin-badge--' + (STATUS_BADGE[m.status] || 'inactive') },
           STATUS_LABEL[m.status] || m.status
         ),
-        h('span', { class: 'admin-errrow__tool' }, m.title || '(no subject)'),
-        h('span', { class: 'admin-errrow__snippet' }, m.body || ''),
-        h('time', { class: 'admin-errrow__time' }, fmtDate(m.created_at)),
-        h('span', { class: 'admin-errrow__chev', 'aria-hidden': 'true' }, '▸')
+        h('span', { class: 'admin-msgrow__tool' }, m.title || '(no subject)'),
+        h('span', { class: 'admin-msgrow__snippet' }, m.body || ''),
+        h('time', { class: 'admin-msgrow__time' }, fmtDate(m.created_at)),
+        h('span', { class: 'admin-msgrow__chev', 'aria-hidden': 'true' }, '▸')
       ]
     );
     summary.addEventListener('click', function () {
@@ -137,13 +137,13 @@
       EXPANDED_ID = open ? null : m.id;
     });
 
-    // .admin-errrow is shared with errors.js, whose rows are ALWAYS red down
-    // the left edge (every error is, well, an error) — reused here for the
-    // card layout, but a message's left edge must flip with its own status
-    // instead of staying permanently red regardless of read/unread.
-    var rowClass =
-      'admin-errrow ' + (m.status === 'read' ? 'admin-msgrow--read' : 'admin-msgrow--unread');
-    return h('li', { class: rowClass }, [summary, detail]);
+    // A message row's left edge is status-driven (unread=red, read=green) —
+    // unlike errors.js's rows, which are always red because every row there
+    // genuinely is an error. Messages get their own class family (below)
+    // rather than borrowing errrow's, so that distinction is structural, not
+    // a color patched on top of a mismatched default.
+    var statusClass = m.status === 'read' ? 'admin-msgrow--read' : 'admin-msgrow--unread';
+    return h('li', { class: 'admin-msgrow ' + statusClass }, [summary, detail]);
   }
 
   function clearSearch() {
