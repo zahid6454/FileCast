@@ -62,19 +62,19 @@ test.describe('auth gate (D6)', () => {
     await expect(page.locator('.admin-signin__devblock')).toHaveCount(0);
   });
 
-  test('admin → full panel with all six tabs', async ({ page }) => {
+  test('admin → full panel with all seven tabs', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/');
     await expect(page.locator('.admin-topbar__brand')).toBeVisible();
-    await expect(page.locator('.admin-tabs__link')).toHaveCount(6);
+    await expect(page.locator('.admin-tabs__link')).toHaveCount(7);
   });
 
   test('mid-session 401/403 drops back to the sign-in gate (R8)', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#tools');
-    await expect(page.locator('.admin-tabs__link')).toHaveCount(6);
+    await expect(page.locator('.admin-tabs__link')).toHaveCount(7);
 
     // Session expires mid-session: /me now 401 and any mutation 403.
     state.me = { status: 401 };
@@ -684,7 +684,15 @@ test('the whole admin session produces no JS exceptions or console errors', asyn
   const problems = collectProblems(page);
   const state = makeState();
   await installApi(page, state);
-  for (const hash of ['#dashboard', '#tools', '#announcements', '#users', '#errors', '#settings']) {
+  for (const hash of [
+    '#dashboard',
+    '#tools',
+    '#announcements',
+    '#users',
+    '#errors',
+    '#messages',
+    '#settings'
+  ]) {
     await page.goto('/admin/' + hash);
     await expect(page.locator('.admin-main')).toBeVisible();
   }
