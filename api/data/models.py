@@ -1,5 +1,5 @@
-"""SQLAlchemy 2.0 models — 9 domain tables (ledger §4) + a ``sessions`` table
-for DB-backed auth. Proper Postgres types throughout (``timestamptz``,
+"""SQLAlchemy 2.0 models — domain tables (ledger §4) plus a ``sessions``
+table for DB-backed auth. Proper Postgres types throughout (``timestamptz``,
 ``Boolean``, identity PKs, ``JSONB``).
 """
 

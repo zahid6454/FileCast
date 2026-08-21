@@ -1069,6 +1069,9 @@ img { max-width: 100%; display: block; }
 .contact-form__status { font-size: var(--text-sm); min-height: 1.25em; }
 .contact-form__status--success { color: var(--color-success); }
 .contact-form__status--error { color: var(--color-error-solid); }
+.contact-form__fallback { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-8); }
+.contact-form__fallback a { color: var(--color-text-muted); text-decoration: underline; text-underline-offset: 2px; }
+.contact-form__fallback a:hover { color: var(--color-primary); }
 /* Honeypot. Deliberately display:none, NOT the off-screen-clip trick
    .sr-only uses — that technique keeps content in the accessibility tree
    (that's the whole point of .sr-only), which here would mean a screen

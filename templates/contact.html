@@ -48,6 +48,18 @@
     <p class="contact-form__status" id="contact-status" role="status" aria-live="polite"></p>
   </form>
 
+  {# Always-rendered, not conditional on JS. The sitewide <noscript> banner
+     (base.html) only covers JS fully disabled — it says nothing if contact.js
+     specifically fails to run (an ad-blocker/extension targeting it, an SRI
+     hash mismatch failing closed, a network blip) while the rest of the page
+     works fine. Unlike the old mailto card this replaced, the form itself has
+     no non-JS fallback (no action/method — a native submit would GET this
+     same page with the fields as a query string and silently do nothing), so
+     this line is the one guaranteed-to-work path back to support. #}
+  <p class="contact-form__fallback">
+    Form not working, or prefer email? Write to <a href="mailto:support@filecast.org">support@filecast.org</a> directly.
+  </p>
+
   <div class="privacy-section">
     <h2>Reporting a problem</h2>
     <p>
