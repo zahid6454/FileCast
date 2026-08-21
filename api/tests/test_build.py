@@ -1853,6 +1853,50 @@ def test_homepage_search_placeholder_has_no_ellipsis(built):
 
 
 # --------------------------------------------------------------------------- #
+# Homepage "view all" overflow tile — a card__ghost tile inside .card-grid
+# (replaces the old text link trailing below the grid) linking to the
+# category page, for any category with more than HOMEPAGE_CAP (4) enabled
+# tools. Every real category currently exceeds 4, so only the "tile present"
+# branch is exercised here; the "tile absent" branch (`remaining <= 0`) is a
+# plain `tools[:4]` slice that can never underflow, verified by reading
+# home.html rather than by seeding a synthetic small category.
+# --------------------------------------------------------------------------- #
+
+
+def test_homepage_view_all_tile_shows_remaining_count_and_links_to_category(built):
+    home = (built / "index.html").read_text(encoding="utf-8")
+    # document-conversion has more than 4 enabled tools today, so its section
+    # must carry a ghost tile: the 5-column grid modifier, a link to the
+    # category page, and an aria-label naming the category and its full tool
+    # count (not the "+N" shown visually, which would read as a confusing
+    # non-sequitur to a screen reader if left to the card's own text content).
+    section = home.split('id="document-conversion"')[1].split("</section>")[0]
+    assert "card-grid--has-more" in section
+
+    tag = re.search(
+        r'<a class="card card--ghost" href="(/document-conversion/)" '
+        r'aria-label="View all Document Conversion \(\d+ tools\)">',
+        section,
+    )
+    assert tag, section
+    tile = section[tag.end() :].split("</a>")[0]
+    assert re.search(r'card--ghost__count">\+\d+<', tile)
+
+
+def test_homepage_view_all_tile_count_matches_hidden_tool_count(built):
+    # The visible "+N" must equal (total enabled tools in the category) - 4,
+    # not just "some positive number" — this is the number a user is being
+    # promised will be on the category page.
+    home = (built / "index.html").read_text(encoding="utf-8")
+    section = home.split('id="image-conversion"')[1].split("</section>")[0]
+    total = int(
+        re.search(r"View all Image Conversion \((\d+) tools\)", section).group(1)
+    )
+    shown = int(re.search(r'card--ghost__count">\+(\d+)<', section).group(1))
+    assert shown == total - 4
+
+
+# --------------------------------------------------------------------------- #
 # Open Graph share images (O2 report §13 #7)
 # --------------------------------------------------------------------------- #
 
