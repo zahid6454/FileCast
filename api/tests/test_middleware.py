@@ -46,6 +46,18 @@ async def test_errors_rate_limited_at_60(client):
     assert codes[-1] == 429
 
 
+async def test_messages_rate_limited_at_10(client):
+    codes = []
+    for _ in range(11):
+        codes.append(
+            (
+                await client.post("/api/v1/messages", json={"title": "t", "body": "b"})
+            ).status_code
+        )
+    assert codes.count(200) == 10
+    assert codes[-1] == 429
+
+
 async def test_conversions_higher_budget_than_errors(client):
     # 61 conversion tracking posts must NOT be rate limited (budget is 120)
     codes = [

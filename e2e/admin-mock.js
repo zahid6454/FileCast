@@ -136,6 +136,28 @@ export function makeState(overrides = {}) {
       { tool_id: 'img-a', yes: 4, no: 1 },
       { tool_id: 'doc-a', yes: 3, no: 0 }
     ],
+    messages: overrides.messages || [
+      {
+        id: 1,
+        title: 'Cannot download my file',
+        body: '<img src=x onerror="window.__xss=1"> the PDF merge tool hangs at 90%',
+        email: 'visitor@example.com',
+        user_id: null,
+        user_agent: 'Firefox',
+        status: 'new',
+        created_at: '2026-07-13T10:00:00Z'
+      },
+      {
+        id: 2,
+        title: 'Feature request',
+        body: 'Would love a HEIC to WebP converter.',
+        email: null,
+        user_id: 'u1',
+        user_agent: 'Chrome',
+        status: 'read',
+        created_at: '2026-07-13T11:00:00Z'
+      }
+    ],
     // Phase 7 Site Settings singleton (integrations off, YAML-mirrored copy).
     siteSettings: overrides.siteSettings || {
       site_name: 'FileCast',
@@ -241,6 +263,20 @@ export async function installApi(page, state) {
     if (path.endsWith('/stats/dashboard')) return json(state.dashboard);
     if (path.endsWith('/stats/conversions')) return json({ days: 30, series: state.series });
     if (path.endsWith('/stats/errors')) return json({ errors: state.errors });
+
+    // --- messages (contact-page inbox) ---
+    if (path.endsWith('/admin/messages') && method === 'GET') {
+      const status = new URL(req.url()).searchParams.get('status');
+      const filtered = status ? state.messages.filter((m) => m.status === status) : state.messages;
+      return json({ messages: filtered });
+    }
+    const msgMatch = path.match(/\/admin\/messages\/(\d+)$/);
+    if (msgMatch && method === 'PUT') {
+      const m = state.messages.find((x) => x.id === Number(msgMatch[1]));
+      if (!m) return json({ detail: 'Message not found' }, 404);
+      Object.assign(m, body());
+      return json(m);
+    }
 
     // --- ratings (bulk) ---
     if (path.endsWith('/ratings') && method === 'GET') {

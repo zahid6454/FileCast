@@ -58,6 +58,10 @@ PATH_LIMITS: list[tuple[str, int]] = [
     ("/api/v1/conversions", 120),
     ("/api/v1/ratings", 30),
     ("/api/v1/errors", 60),
+    # Contact-page submissions — deliberately stricter than ratings/errors,
+    # which fire automatically as a byproduct of normal tool use. A real
+    # visitor sends at most a handful of these per hour.
+    ("/api/v1/messages", 10),
     # Public, unauthenticated, DB-touching read (/announcements/active).
     ("/api/v1/announcements", 120),
     # Authenticated write; also size/key-guarded in the router.
