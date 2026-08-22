@@ -67,6 +67,9 @@ describe('admin/dashboard.js', () => {
     const requestedUrls = [];
     const dom = load((url) => {
       requestedUrls.push(url);
+      if (url.includes('/stats/errors')) {
+        return makeResponse(200, { errors: [{ tool_id: 'jpg-to-png', error_message: 'boom' }] });
+      }
       return defaultRoutes(url);
     });
     const c = dom.window.document.getElementById('c');
@@ -77,6 +80,16 @@ describe('admin/dashboard.js', () => {
     const viewAll = c.querySelector('.admin-card__action');
     expect(viewAll).not.toBeNull();
     expect(viewAll.getAttribute('href')).toBe('#errors');
+  });
+
+  it('recent errors: hides "View all" when there are no errors to page into', async () => {
+    const dom = load(defaultRoutes); // defaultRoutes returns { errors: [] }
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.dashboard.render(c);
+    await flush();
+
+    expect(c.querySelector('.admin-card__action')).toBeNull();
+    expect(c.textContent).toContain('No errors');
   });
 
   it('ratings table caps at the top 10 by total votes', async () => {
@@ -100,7 +113,7 @@ describe('admin/dashboard.js', () => {
     expect(c.textContent).not.toContain('tool-0');
   });
 
-  it('conversion chart dots carry a native tooltip with date/count/failures', async () => {
+  it('conversion chart dots expose date/count/failures via a hover tooltip', async () => {
     const dom = load((url) => {
       if (url.includes('/stats/conversions')) {
         return makeResponse(200, { series: [{ date: '2026-07-10', count: 5, failures: 1 }] });
@@ -111,9 +124,20 @@ describe('admin/dashboard.js', () => {
     dom.window.ADMIN.tabs.dashboard.render(c);
     await flush();
 
-    const title = c.querySelector('.admin-chart__hit title');
-    expect(title).not.toBeNull();
-    expect(title.textContent).toBe('2026-07-10: 5 conversions, 1 failure');
+    const hit = c.querySelector('.admin-chart__hit');
+    expect(hit).not.toBeNull();
+    expect(hit.getAttribute('aria-label')).toBe('2026-07-10: 5 conversions, 1 failure');
+
+    const tip = c.querySelector('.admin-chart__tooltip');
+    expect(tip).not.toBeNull();
+    expect(tip.classList.contains('is-visible')).toBe(false);
+
+    hit.dispatchEvent(new dom.window.Event('pointerenter'));
+    expect(tip.classList.contains('is-visible')).toBe(true);
+    expect(tip.textContent).toBe('2026-07-10: 5 conversions, 1 failure');
+
+    hit.dispatchEvent(new dom.window.Event('pointerleave'));
+    expect(tip.classList.contains('is-visible')).toBe(false);
   });
 
   it('degrades only the failed widget when one of the 4 calls fails (R12)', async () => {
