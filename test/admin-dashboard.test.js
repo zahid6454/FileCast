@@ -20,7 +20,8 @@ const DASHBOARD_STATS = {
   total_users: 5,
   total_ratings: 20,
   yes_ratings: 15,
-  top_tools: [{ tool_id: 'jpg-to-png', count: 42 }]
+  total_unique_visitors: 55,
+  top_tools: [{ tool_id: 'jpg-to-png', count: 42, visitors: 30 }]
 };
 
 function load(routeFor) {
@@ -59,6 +60,60 @@ describe('admin/dashboard.js', () => {
     expect(values).toContain('100'); // total_conversions
     expect(values).toContain('10'); // total_failures
     expect(values).toContain('5'); // total_users
+    expect(values).toContain('55'); // total_unique_visitors
+  });
+
+  it('recent errors: fetches only 10 and links out to the full #errors tab', async () => {
+    const requestedUrls = [];
+    const dom = load((url) => {
+      requestedUrls.push(url);
+      return defaultRoutes(url);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.dashboard.render(c);
+    await flush();
+
+    expect(requestedUrls.some((u) => u.includes('/stats/errors?limit=10'))).toBe(true);
+    const viewAll = c.querySelector('.admin-card__action');
+    expect(viewAll).not.toBeNull();
+    expect(viewAll.getAttribute('href')).toBe('#errors');
+  });
+
+  it('ratings table caps at the top 10 by total votes', async () => {
+    const manyRatings = Array.from({ length: 15 }, (_, i) => ({
+      tool_id: 'tool-' + i,
+      yes: i, // tool-14 has the most votes (14), tool-0 the fewest (0)
+      no: 0
+    }));
+    const dom = load((url) => {
+      if (url.includes('/ratings')) return makeResponse(200, manyRatings);
+      return defaultRoutes(url);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.dashboard.render(c);
+    await flush();
+
+    const rows = c.querySelectorAll('.admin-ratings tbody tr');
+    expect(rows.length).toBe(10);
+    // Highest-vote tool sorts first; a tool outside the top 10 (0 votes) is dropped.
+    expect(rows[0].textContent).toContain('tool-14');
+    expect(c.textContent).not.toContain('tool-0');
+  });
+
+  it('conversion chart dots carry a native tooltip with date/count/failures', async () => {
+    const dom = load((url) => {
+      if (url.includes('/stats/conversions')) {
+        return makeResponse(200, { series: [{ date: '2026-07-10', count: 5, failures: 1 }] });
+      }
+      return defaultRoutes(url);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.dashboard.render(c);
+    await flush();
+
+    const title = c.querySelector('.admin-chart__hit title');
+    expect(title).not.toBeNull();
+    expect(title.textContent).toBe('2026-07-10: 5 conversions, 1 failure');
   });
 
   it('degrades only the failed widget when one of the 4 calls fails (R12)', async () => {
