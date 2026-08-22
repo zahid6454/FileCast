@@ -14,7 +14,7 @@ it steals it from whoever held it), and a disabled tool can never hold one.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,7 +31,10 @@ class ToolUpdate(BaseModel):
     display_name: str | None = None
     maintenance_message: str | None = None
     custom_max_file_size: str | None = None
-    featured_slot: int | None = None
+    # 4 homepage seats per category (home.html) — out-of-range is rejected at
+    # the boundary rather than silently persisted (build.py's dedup wouldn't
+    # crash on it, but that's not the same as the value being valid).
+    featured_slot: int | None = Field(default=None, ge=1, le=4)
 
 
 class ReorderBody(BaseModel):
@@ -81,9 +84,13 @@ async def update_tool(
     for key, value in fields.items():
         setattr(tool, key, value)
 
-    # A disabled tool can never hold a homepage seat, regardless of what else
-    # this same patch also tried to set.
-    if fields.get("enabled") is False:
+    # A disabled tool can never hold a homepage seat. Checked against the
+    # tool's RESULTING state, not just whether this patch set `enabled: false`
+    # — an already-disabled tool patched with only `{"featured_slot": N}`
+    # (nothing stops a raw API call, even though the admin UI dims the picker
+    # for disabled rows) must not silently steal a slot out from under an
+    # enabled tool that's actually visible on the homepage.
+    if not tool.enabled:
         tool.featured_slot = None
 
     # A slot has exactly one owner per category — claiming it steals it from

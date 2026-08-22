@@ -155,6 +155,46 @@ async def test_disable_wins_over_a_simultaneous_slot_assignment(
     assert row.enabled is False and row.featured_slot is None
 
 
+async def test_already_disabled_tool_cannot_acquire_a_slot(
+    admin_client, seeded_tools, db
+):
+    # PR review finding: checking only whether THIS request set enabled=false
+    # misses a tool that's already disabled — a raw `{"featured_slot": N}` PUT
+    # (the admin UI dims the picker for disabled rows, but nothing stops a
+    # direct API call) must not silently steal the slot from an enabled tool
+    # that's actually visible on the homepage.
+    db.add(
+        Tool(
+            id="png-to-jpg",
+            enabled=True,
+            sort_order=3,
+            category="image-conversion",
+            name="PNG to JPG",
+            input_format="PNG",
+            output_format="JPG",
+            featured_slot=2,
+        )
+    )
+    await db.commit()
+    await admin_client.put("/api/v1/tools/jpg-to-png", json={"enabled": False})
+
+    r = await admin_client.put("/api/v1/tools/jpg-to-png", json={"featured_slot": 2})
+    assert r.status_code == 200
+
+    rows = {t.id: t.featured_slot for t in (await db.execute(select(Tool))).scalars()}
+    assert rows["jpg-to-png"] is None  # never acquired the seat
+    assert rows["png-to-jpg"] == 2  # untouched — nothing to steal from it
+
+
+async def test_featured_slot_rejects_out_of_range_values(admin_client, seeded_tools):
+    assert (
+        await admin_client.put("/api/v1/tools/jpg-to-png", json={"featured_slot": 0})
+    ).status_code == 422
+    assert (
+        await admin_client.put("/api/v1/tools/jpg-to-png", json={"featured_slot": 5})
+    ).status_code == 422
+
+
 async def test_clearing_a_featured_slot_does_not_steal(admin_client, seeded_tools, db):
     # Explicitly nulling a slot is not "claiming a slot" — it must not run the
     # steal logic against whatever else happens to already be at slot None.
