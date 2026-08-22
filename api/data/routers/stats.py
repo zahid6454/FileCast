@@ -29,11 +29,20 @@ async def dashboard(
     yes_ratings = (
         await db.execute(select(func.count(Rating.id)).where(Rating.vote == "yes"))
     ).scalar_one()
+    # Summed across days, so a returning visitor on two different days counts
+    # twice here — a reach estimate, not a lifetime distinct-visitor count.
+    total_unique_visitors = (
+        await db.execute(select(func.coalesce(func.sum(Conversion.unique_visitors), 0)))
+    ).scalar_one()
 
     # Top tools by all-time count.
     top_tools = (
         await db.execute(
-            select(Conversion.tool_id, func.sum(Conversion.count).label("n"))
+            select(
+                Conversion.tool_id,
+                func.sum(Conversion.count).label("n"),
+                func.sum(Conversion.unique_visitors).label("visitors"),
+            )
             .group_by(Conversion.tool_id)
             .order_by(func.sum(Conversion.count).desc())
             .limit(10)
@@ -46,7 +55,10 @@ async def dashboard(
         "total_users": int(total_users),
         "total_ratings": int(total_ratings),
         "yes_ratings": int(yes_ratings),
-        "top_tools": [{"tool_id": t, "count": int(n)} for t, n in top_tools],
+        "total_unique_visitors": int(total_unique_visitors),
+        "top_tools": [
+            {"tool_id": t, "count": int(n), "visitors": int(v)} for t, n, v in top_tools
+        ],
     }
 
 

@@ -187,7 +187,7 @@
       gap = 8,
       labelW = 150,
       barMax = 320,
-      W = labelW + barMax + 60;
+      W = labelW + barMax + 110;
     var H = tools.length * (rowH + gap) + gap;
     var maxCount = Math.max.apply(
       null,
@@ -227,11 +227,13 @@
           rx: 3
         })
       );
+      var valueText =
+        typeof t.visitors === 'number' ? t.count + ' (' + t.visitors + 'v)' : String(t.count);
       frame.appendChild(
         svg(
           'text',
           { class: 'admin-chart__barvalue', x: labelW + w + 6, y: y + rowH / 2 + 4 },
-          String(t.count)
+          valueText
         )
       );
     });
@@ -249,6 +251,12 @@
         String(data.total_failures),
         pct(data.total_failures, attempts) + ' of attempts',
         'error'
+      ),
+      statCard(
+        'Unique visitors',
+        String(data.total_unique_visitors),
+        'anonymous + signed-in, by day',
+        null
       ),
       statCard('Users', String(data.total_users), null, 'success'),
       statCard(
