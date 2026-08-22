@@ -1468,7 +1468,6 @@
    a11y behavior, just with its own arrow swapped for a custom one. */
 .admin-msgfilter {
   width: 100%;
-  max-width: none;
   padding-right: var(--space-6);
   appearance: none;
   cursor: pointer;

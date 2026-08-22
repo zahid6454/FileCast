@@ -412,10 +412,17 @@
   // badges always reflect the whole inbox, not just the active filter).
   // Best-effort: a failure here just leaves the badges showing their last
   // known values (or blank on first load) rather than derailing the tab.
+  var COUNTS_SEQ = 0;
   function loadCounts() {
+    // Same stale-response guard as loadMessages()'s REQUEST_SEQ: two mark-
+    // read/unread clicks fired close together each start their own
+    // loadCounts(), and without this the earlier request landing after the
+    // later one would paint a superseded, wrong total over the current one.
+    var seq = ++COUNTS_SEQ;
     api
       .get('/api/v1/admin/messages/counts')
       .then(function (data) {
+        if (seq !== COUNTS_SEQ) return;
         COUNTS = data || { new: 0, read: 0 };
         renderCounts();
       })

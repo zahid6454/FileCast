@@ -333,6 +333,70 @@ describe('admin/messages.js', () => {
     expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('1 read');
   });
 
+  it('marking a message read updates the count badges, not just the row', async () => {
+    const state = { messages: [msg(1, { status: 'new' }), msg(2, { status: 'new' })] };
+    const dom = load(stateRoute(state));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const counts = c.querySelector('.admin-msgcounts');
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('2 unread');
+
+    findButton(c, 'Mark read').click();
+    await flush();
+
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('1 unread');
+    expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('1 read');
+  });
+
+  it('a stale counts response never overwrites a newer one (mirrors the loadMessages REQUEST_SEQ guard)', async () => {
+    const state = { messages: [msg(1, { status: 'new' }), msg(2, { status: 'new' })] };
+    const pendingCounts = [];
+    const dom = load((url, opts) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith('/admin/messages/counts')) {
+        // Snapshot the count NOW (request time), like a real server would —
+        // resolution is deferred separately below.
+        const counts = { new: 0, read: 0 };
+        state.messages.forEach((m) => {
+          counts[m.status] = (counts[m.status] || 0) + 1;
+        });
+        return new Promise((resolve) => {
+          pendingCounts.push({ resolve: () => resolve(makeResponse(200, counts)) });
+        });
+      }
+      return stateRoute(state)(url, opts);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+    pendingCounts[0].resolve(); // initial load's counts fetch
+    await flush();
+
+    const counts = c.querySelector('.admin-msgcounts');
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('2 unread');
+
+    // Mark message 1 read, let it fully settle (its own loadCounts() request
+    // — pendingCounts[1], snapshotting "1 unread" — is left unresolved), then
+    // mark message 2 read too (pendingCounts[2], snapshotting "0 unread").
+    findButton(c, 'Mark read').click();
+    await flush();
+    findButton(c, 'Mark read').click();
+    await flush();
+
+    expect(pendingCounts).toHaveLength(3);
+    // Resolve the NEWER request first, then let the STALE one arrive late —
+    // the badge must keep reflecting the newer, correct total.
+    pendingCounts[2].resolve();
+    await flush();
+    pendingCounts[1].resolve();
+    await flush();
+
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('0 unread');
+    expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('2 read');
+  });
+
   it('re-entering the tab reuses cached state instead of refetching', async () => {
     const state = { messages: [msg(1, { status: 'new' })] };
     const calls = [];
