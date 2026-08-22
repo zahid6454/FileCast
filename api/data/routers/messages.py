@@ -134,6 +134,20 @@ async def list_messages(
     }
 
 
+@router.get("/admin/messages/counts")
+async def message_counts(
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    # Independent of whatever status filter the inbox view has active — the
+    # unread/read totals badge always reflects the whole inbox.
+    stmt = select(Message.status, func.count()).group_by(Message.status)
+    counts = {"new": 0, "read": 0}
+    for status, count in await db.execute(stmt):
+        counts[status] = count
+    return counts
+
+
 class StatusBody(BaseModel):
     status: str
 

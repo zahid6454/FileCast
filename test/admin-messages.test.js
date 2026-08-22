@@ -40,6 +40,13 @@ function stateRoute(state) {
   return function (url, opts) {
     const u = new URL(url);
     const method = ((opts && opts.method) || 'GET').toUpperCase();
+    if (u.pathname.endsWith('/admin/messages/counts') && method === 'GET') {
+      const counts = { new: 0, read: 0 };
+      state.messages.forEach((m) => {
+        counts[m.status] = (counts[m.status] || 0) + 1;
+      });
+      return makeResponse(200, counts);
+    }
     if (u.pathname.endsWith('/admin/messages') && method === 'GET') {
       const status = u.searchParams.get('status');
       const limit = Number(u.searchParams.get('limit')) || 25;
@@ -237,24 +244,27 @@ describe('admin/messages.js', () => {
     });
     const c = dom.window.document.getElementById('c');
     dom.window.ADMIN.tabs.messages.render(c);
-    // Resolve the initial (unfiltered) load so the toolbar exists.
+    // render() fires the messages list (pending[0]) and the counts badge
+    // fetch (pending[1]) in parallel — resolve just the list so the toolbar
+    // exists; the counts call is left dangling, irrelevant to this test.
     pending[0].resolve();
     await flush();
 
     const filter = c.querySelector('.admin-msgfilter');
     // Fire two filter changes back-to-back before either resolves: the first
-    // ('new') is the stale one, the second ('read') is what the admin
-    // actually landed on and should win regardless of arrival order.
+    // ('new', pending[2]) is the stale one, the second ('read', pending[3])
+    // is what the admin actually landed on and should win regardless of
+    // arrival order.
     filter.value = 'new';
     filter.dispatchEvent(new dom.window.Event('change'));
     filter.value = 'read';
     filter.dispatchEvent(new dom.window.Event('change'));
 
-    expect(pending).toHaveLength(3);
+    expect(pending).toHaveLength(4);
     // Resolve the NEWER request first, then the STALE one arrives late.
-    pending[2].resolve();
+    pending[3].resolve();
     await flush();
-    pending[1].resolve();
+    pending[2].resolve();
     await flush();
 
     // Must still reflect the 'read' filter — the late 'new' response must
@@ -263,7 +273,7 @@ describe('admin/messages.js', () => {
     expect(c.textContent).not.toContain('Unread one');
   });
 
-  it('marking a message read PUTs the status and reloads while keeping the toolbar', async () => {
+  it('marking a message read PUTs the status, toasts a specific message, and reloads while keeping the toolbar', async () => {
     const state = { messages: [msg(1, { status: 'new' })] };
     const dom = load(stateRoute(state));
     const c = dom.window.document.getElementById('c');
@@ -276,10 +286,76 @@ describe('admin/messages.js', () => {
     await flush();
 
     expect(state.messages[0].status).toBe('read');
-    expect(dom.window.ADMIN.notifySaved).toHaveBeenCalled();
+    // A specific toast, not the generic notifySaved({live:true}) "Saved —
+    // live now" every other tab's live mutation reuses.
+    expect(dom.window.ADMIN.toast).toHaveBeenCalledWith('Marked as read', 'success');
+    expect(dom.window.ADMIN.notifySaved).not.toHaveBeenCalled();
     // Toolbar preserved (same search node), row now shows "Read".
     expect(c.querySelector('.admin-msgsearch')).toBe(search);
     expect(c.querySelector('.admin-badge--read').textContent).toBe('Read');
+  });
+
+  it('marking a message unread toasts the unread-specific message', async () => {
+    const state = { messages: [msg(1, { status: 'read' })] };
+    const dom = load(stateRoute(state));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    findButton(c, 'Mark unread').click();
+    await flush();
+
+    expect(state.messages[0].status).toBe('new');
+    expect(dom.window.ADMIN.toast).toHaveBeenCalledWith('Marked as unread', 'success');
+  });
+
+  it('renders inbox-wide unread/read count badges independent of the active filter', async () => {
+    const state = {
+      messages: [msg(1, { status: 'new' }), msg(2, { status: 'new' }), msg(3, { status: 'read' })]
+    };
+    const dom = load(stateRoute(state));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const counts = c.querySelector('.admin-msgcounts');
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('2 unread');
+    expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('1 read');
+
+    // Switching to the "Read" filter narrows the list but must not narrow
+    // the badges — they stay inbox-wide.
+    const filter = c.querySelector('.admin-msgfilter');
+    filter.value = 'read';
+    filter.dispatchEvent(new dom.window.Event('change'));
+    await flush();
+
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('2 unread');
+    expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('1 read');
+  });
+
+  it('re-entering the tab reuses cached state instead of refetching', async () => {
+    const state = { messages: [msg(1, { status: 'new' })] };
+    const calls = [];
+    const dom = load((url, opts) => {
+      calls.push(url);
+      return stateRoute(state)(url, opts);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const search = c.querySelector('.admin-msgsearch');
+    search.value = 'kept across switch';
+    search.dispatchEvent(new dom.window.Event('input'));
+
+    const callsBeforeReentry = calls.length;
+    // Simulate leaving and returning to the tab: a fresh container, same
+    // render() call.
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    expect(calls.length).toBe(callsBeforeReentry); // no new network calls
+    expect(c.querySelector('.admin-msgsearch').value).toBe('kept across switch');
   });
 
   it('steps back a page when a status change empties the current filtered page', async () => {
