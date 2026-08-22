@@ -1729,6 +1729,55 @@ def generate_robots(site_config: dict):
 
 
 # ---------------------------------------------------------------------------
+# Step 16a: Generate llms.txt (https://llmstxt.org) — a plain-Markdown index
+# for AI assistants (ChatGPT, Perplexity, Claude, etc.) deciding what on the
+# site is worth reading or citing, the same role robots.txt plays for
+# crawlers deciding what's fetchable. Built from the same tools/categories
+# data as the sitemap, so it can't drift out of sync with the real site.
+# ---------------------------------------------------------------------------
+
+
+def generate_llms_txt(
+    site_config: dict, tools: list[dict], categories_with_tools: dict
+):
+    base = (
+        site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
+    )
+    site = site_config.get("site", {})
+
+    lines = [
+        f"# {site.get('name', 'FileCast')}",
+        "",
+        f"> {site.get('description', '')}",
+    ]
+
+    for cat_data in categories_with_tools.values():
+        lines.append("")
+        lines.append(f"## {cat_data['name']}")
+        lines.append("")
+        if cat_data.get("description"):
+            lines.append(cat_data["description"])
+            lines.append("")
+        for tool in cat_data["tools"]:
+            slug = tool.get("slug", f"/convert/{tool['id']}").strip("/")
+            desc = tool.get("tagline") or tool.get("meta", {}).get("description", "")
+            lines.append(f"- [{tool['name']}]({base}/{slug}/): {desc}")
+
+    lines.append("")
+    lines.append("## Optional")
+    lines.append("")
+    for segment, label in (
+        ("about", "About"),
+        ("privacy", "Privacy Policy"),
+        ("contact", "Contact"),
+    ):
+        lines.append(f"- [{label}]({base}/{segment}/)")
+
+    (DIST / "llms.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("  [ok] llms.txt")
+
+
+# ---------------------------------------------------------------------------
 # Step 16b: Generate manifest.json (P2 §19 — PWA basics)
 # ---------------------------------------------------------------------------
 
@@ -2455,11 +2504,12 @@ def build():
 
     # 15-19. Generate support files
     print(
-        "[11/11] Generating sitemap, robots.txt, manifest.json, sw.js, "
-        "_headers, _redirects"
+        "[11/11] Generating sitemap, robots.txt, llms.txt, manifest.json, "
+        "sw.js, _headers, _redirects"
     )
     generate_sitemap(site_config, tools, categories_with_tools)
     generate_robots(site_config)
+    generate_llms_txt(site_config, tools, categories_with_tools)
     generate_manifest(site_config)
     # Second-resolution, not date.today() — CACHE_VERSION must actually change
     # on every build (see generate_service_worker()'s docstring), and two
