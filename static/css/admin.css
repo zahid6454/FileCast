@@ -1450,21 +1450,60 @@
 
 /* ---- messages tab ------------------------------------------------------- */
 
-/* Search styled after the public search bars (category/hero), not the
-   compact .admin-input default — this is the box a person actually reads
-   results in, not a small settings field. */
+/* Plain .admin-input sizing (not the bigger public hero/category search
+   bar this used to copy) — every other admin tab's search box is this size,
+   and matching it here is also what makes this box's height line up with
+   .admin-msgfilter below, which was never given the bigger treatment. */
 .admin-msgsearch {
   max-width: 360px;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-base);
 }
-.admin-msgsearch:focus {
-  border-color: var(--color-border-focus);
+.admin-msgfilter-wrap {
+  position: relative;
+  display: inline-flex;
+  max-width: 200px;
 }
+/* Re-skinned toward the site nav's dropdown look (same caret glyph, see
+   caretIcon() in messages.js) rather than the browser's default select
+   chrome — a native <select> stays underneath for its built-in keyboard/
+   a11y behavior, just with its own arrow swapped for a custom one. */
 .admin-msgfilter {
-  max-width: 160px;
+  width: 100%;
+  padding-right: var(--space-6);
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.admin-msgfilter__caret {
+  position: absolute;
+  top: 50%;
+  right: var(--space-3);
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+.admin-msgcounts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+.admin-msgcounts__badge {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.admin-msgcounts__badge--unread {
+  background: var(--color-error-light);
+  color: var(--color-error-hover);
+}
+.admin-msgcounts__badge--read {
+  background: var(--color-success-light);
+  color: var(--color-success-hover);
 }
 .admin-msglist {
   list-style: none;

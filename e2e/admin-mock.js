@@ -265,6 +265,13 @@ export async function installApi(page, state) {
     if (path.endsWith('/stats/errors')) return json({ errors: state.errors });
 
     // --- messages (contact-page inbox) ---
+    if (path.endsWith('/admin/messages/counts') && method === 'GET') {
+      const counts = { new: 0, read: 0 };
+      state.messages.forEach((m) => {
+        counts[m.status] = (counts[m.status] || 0) + 1;
+      });
+      return json(counts);
+    }
     if (path.endsWith('/admin/messages') && method === 'GET') {
       const params = new URL(req.url()).searchParams;
       const status = params.get('status');

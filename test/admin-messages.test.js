@@ -40,6 +40,13 @@ function stateRoute(state) {
   return function (url, opts) {
     const u = new URL(url);
     const method = ((opts && opts.method) || 'GET').toUpperCase();
+    if (u.pathname.endsWith('/admin/messages/counts') && method === 'GET') {
+      const counts = { new: 0, read: 0 };
+      state.messages.forEach((m) => {
+        counts[m.status] = (counts[m.status] || 0) + 1;
+      });
+      return makeResponse(200, counts);
+    }
     if (u.pathname.endsWith('/admin/messages') && method === 'GET') {
       const status = u.searchParams.get('status');
       const limit = Number(u.searchParams.get('limit')) || 25;
@@ -237,24 +244,27 @@ describe('admin/messages.js', () => {
     });
     const c = dom.window.document.getElementById('c');
     dom.window.ADMIN.tabs.messages.render(c);
-    // Resolve the initial (unfiltered) load so the toolbar exists.
+    // render() fires the messages list (pending[0]) and the counts badge
+    // fetch (pending[1]) in parallel — resolve just the list so the toolbar
+    // exists; the counts call is left dangling, irrelevant to this test.
     pending[0].resolve();
     await flush();
 
     const filter = c.querySelector('.admin-msgfilter');
     // Fire two filter changes back-to-back before either resolves: the first
-    // ('new') is the stale one, the second ('read') is what the admin
-    // actually landed on and should win regardless of arrival order.
+    // ('new', pending[2]) is the stale one, the second ('read', pending[3])
+    // is what the admin actually landed on and should win regardless of
+    // arrival order.
     filter.value = 'new';
     filter.dispatchEvent(new dom.window.Event('change'));
     filter.value = 'read';
     filter.dispatchEvent(new dom.window.Event('change'));
 
-    expect(pending).toHaveLength(3);
+    expect(pending).toHaveLength(4);
     // Resolve the NEWER request first, then the STALE one arrives late.
-    pending[2].resolve();
+    pending[3].resolve();
     await flush();
-    pending[1].resolve();
+    pending[2].resolve();
     await flush();
 
     // Must still reflect the 'read' filter — the late 'new' response must
@@ -263,7 +273,7 @@ describe('admin/messages.js', () => {
     expect(c.textContent).not.toContain('Unread one');
   });
 
-  it('marking a message read PUTs the status and reloads while keeping the toolbar', async () => {
+  it('marking a message read PUTs the status, toasts a specific message, and reloads while keeping the toolbar', async () => {
     const state = { messages: [msg(1, { status: 'new' })] };
     const dom = load(stateRoute(state));
     const c = dom.window.document.getElementById('c');
@@ -276,10 +286,181 @@ describe('admin/messages.js', () => {
     await flush();
 
     expect(state.messages[0].status).toBe('read');
-    expect(dom.window.ADMIN.notifySaved).toHaveBeenCalled();
+    // A specific toast, not the generic notifySaved({live:true}) "Saved —
+    // live now" every other tab's live mutation reuses.
+    expect(dom.window.ADMIN.toast).toHaveBeenCalledWith('Marked as read', 'success');
+    expect(dom.window.ADMIN.notifySaved).not.toHaveBeenCalled();
     // Toolbar preserved (same search node), row now shows "Read".
     expect(c.querySelector('.admin-msgsearch')).toBe(search);
     expect(c.querySelector('.admin-badge--read').textContent).toBe('Read');
+  });
+
+  it('marking a message unread toasts the unread-specific message', async () => {
+    const state = { messages: [msg(1, { status: 'read' })] };
+    const dom = load(stateRoute(state));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    findButton(c, 'Mark unread').click();
+    await flush();
+
+    expect(state.messages[0].status).toBe('new');
+    expect(dom.window.ADMIN.toast).toHaveBeenCalledWith('Marked as unread', 'success');
+  });
+
+  it('renders inbox-wide unread/read count badges independent of the active filter', async () => {
+    const state = {
+      messages: [msg(1, { status: 'new' }), msg(2, { status: 'new' }), msg(3, { status: 'read' })]
+    };
+    const dom = load(stateRoute(state));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const counts = c.querySelector('.admin-msgcounts');
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('2 unread');
+    expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('1 read');
+
+    // Switching to the "Read" filter narrows the list but must not narrow
+    // the badges — they stay inbox-wide.
+    const filter = c.querySelector('.admin-msgfilter');
+    filter.value = 'read';
+    filter.dispatchEvent(new dom.window.Event('change'));
+    await flush();
+
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('2 unread');
+    expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('1 read');
+  });
+
+  it('marking a message read updates the count badges, not just the row', async () => {
+    const state = { messages: [msg(1, { status: 'new' }), msg(2, { status: 'new' })] };
+    const dom = load(stateRoute(state));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const counts = c.querySelector('.admin-msgcounts');
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('2 unread');
+
+    findButton(c, 'Mark read').click();
+    await flush();
+
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('1 unread');
+    expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('1 read');
+  });
+
+  it('a stale counts response never overwrites a newer one (mirrors the loadMessages REQUEST_SEQ guard)', async () => {
+    const state = { messages: [msg(1, { status: 'new' }), msg(2, { status: 'new' })] };
+    const pendingCounts = [];
+    const dom = load((url, opts) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith('/admin/messages/counts')) {
+        // Snapshot the count NOW (request time), like a real server would —
+        // resolution is deferred separately below.
+        const counts = { new: 0, read: 0 };
+        state.messages.forEach((m) => {
+          counts[m.status] = (counts[m.status] || 0) + 1;
+        });
+        return new Promise((resolve) => {
+          pendingCounts.push({ resolve: () => resolve(makeResponse(200, counts)) });
+        });
+      }
+      return stateRoute(state)(url, opts);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+    pendingCounts[0].resolve(); // initial load's counts fetch
+    await flush();
+
+    const counts = c.querySelector('.admin-msgcounts');
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('2 unread');
+
+    // Mark message 1 read, let it fully settle (its own loadCounts() request
+    // — pendingCounts[1], snapshotting "1 unread" — is left unresolved), then
+    // mark message 2 read too (pendingCounts[2], snapshotting "0 unread").
+    findButton(c, 'Mark read').click();
+    await flush();
+    findButton(c, 'Mark read').click();
+    await flush();
+
+    expect(pendingCounts).toHaveLength(3);
+    // Resolve the NEWER request first, then let the STALE one arrive late —
+    // the badge must keep reflecting the newer, correct total.
+    pendingCounts[2].resolve();
+    await flush();
+    pendingCounts[1].resolve();
+    await flush();
+
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('0 unread');
+    expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('2 read');
+  });
+
+  it('re-entering the tab reuses the cached list but still retries counts', async () => {
+    const state = { messages: [msg(1, { status: 'new' })] };
+    const calls = [];
+    const dom = load((url, opts) => {
+      calls.push(url);
+      return stateRoute(state)(url, opts);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const search = c.querySelector('.admin-msgsearch');
+    search.value = 'kept across switch';
+    search.dispatchEvent(new dom.window.Event('input'));
+
+    const listCalls = () => calls.filter((u) => !u.includes('/counts')).length;
+    const countsCalls = () => calls.filter((u) => u.includes('/counts')).length;
+    const listCallsBeforeReentry = listCalls();
+    const countsCallsBeforeReentry = countsCalls();
+    // Simulate leaving and returning to the tab: a fresh container, same
+    // render() call.
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    expect(listCalls()).toBe(listCallsBeforeReentry); // list: no new network calls
+    // Counts DO retry on every re-entry, deliberately — otherwise a single
+    // failed counts fetch on the very first load would leave the badges
+    // blank for the rest of the session, since LOADED has no per-field retry
+    // flag the way loadMessages() does (see render()'s cache-hit branch).
+    expect(countsCalls()).toBeGreaterThan(countsCallsBeforeReentry);
+    expect(c.querySelector('.admin-msgsearch').value).toBe('kept across switch');
+  });
+
+  it("recovers the count badges on tab re-entry after the first load's counts fetch failed", async () => {
+    const state = { messages: [msg(1, { status: 'new' }), msg(2, { status: 'read' })] };
+    var failCounts = true;
+    const dom = load((url, opts) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith('/admin/messages/counts')) {
+        if (failCounts) return makeResponse(500, {});
+        const counts = { new: 0, read: 0 };
+        state.messages.forEach((m) => {
+          counts[m.status] = (counts[m.status] || 0) + 1;
+        });
+        return makeResponse(200, counts);
+      }
+      return stateRoute(state)(url, opts);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    // The list loaded fine, but counts failed — badges stay empty, not stuck
+    // showing wrong/zero numbers.
+    expect(c.querySelector('.admin-msgcounts').children.length).toBe(0);
+
+    // Simulate leaving and returning to the tab once the backend recovers.
+    failCounts = false;
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const counts = c.querySelector('.admin-msgcounts');
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('1 unread');
+    expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('1 read');
   });
 
   it('steps back a page when a status change empties the current filtered page', async () => {

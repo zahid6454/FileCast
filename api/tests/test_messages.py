@@ -203,6 +203,33 @@ async def test_admin_invalid_status_filter_rejected(admin_client):
     assert r.status_code == 400
 
 
+async def test_counts_requires_admin(client, user_client):
+    assert (await client.get("/api/v1/admin/messages/counts")).status_code == 401
+    assert (await user_client.get("/api/v1/admin/messages/counts")).status_code == 403
+
+
+async def test_counts_reports_new_and_read_independent_of_each_other(
+    client, admin_client
+):
+    for _ in range(2):
+        await client.post("/api/v1/messages", json={"title": "t", "body": "b"})
+    await client.post("/api/v1/messages", json={"title": "t", "body": "b"})
+    msg_id = (await admin_client.get("/api/v1/admin/messages")).json()["messages"][0][
+        "id"
+    ]
+    await admin_client.put(f"/api/v1/admin/messages/{msg_id}", json={"status": "read"})
+
+    data = (await admin_client.get("/api/v1/admin/messages/counts")).json()
+    assert data == {"new": 2, "read": 1}
+
+
+async def test_counts_zero_for_empty_inbox(admin_client):
+    assert (await admin_client.get("/api/v1/admin/messages/counts")).json() == {
+        "new": 0,
+        "read": 0,
+    }
+
+
 async def test_admin_updates_status(client, admin_client):
     await client.post("/api/v1/messages", json={"title": "t", "body": "b"})
     msg_id = (await admin_client.get("/api/v1/admin/messages")).json()["messages"][0][
