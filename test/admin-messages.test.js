@@ -397,7 +397,7 @@ describe('admin/messages.js', () => {
     expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('2 read');
   });
 
-  it('re-entering the tab reuses cached state instead of refetching', async () => {
+  it('re-entering the tab reuses the cached list but still retries counts', async () => {
     const state = { messages: [msg(1, { status: 'new' })] };
     const calls = [];
     const dom = load((url, opts) => {
@@ -412,14 +412,55 @@ describe('admin/messages.js', () => {
     search.value = 'kept across switch';
     search.dispatchEvent(new dom.window.Event('input'));
 
-    const callsBeforeReentry = calls.length;
+    const listCalls = () => calls.filter((u) => !u.includes('/counts')).length;
+    const countsCalls = () => calls.filter((u) => u.includes('/counts')).length;
+    const listCallsBeforeReentry = listCalls();
+    const countsCallsBeforeReentry = countsCalls();
     // Simulate leaving and returning to the tab: a fresh container, same
     // render() call.
     dom.window.ADMIN.tabs.messages.render(c);
     await flush();
 
-    expect(calls.length).toBe(callsBeforeReentry); // no new network calls
+    expect(listCalls()).toBe(listCallsBeforeReentry); // list: no new network calls
+    // Counts DO retry on every re-entry, deliberately — otherwise a single
+    // failed counts fetch on the very first load would leave the badges
+    // blank for the rest of the session, since LOADED has no per-field retry
+    // flag the way loadMessages() does (see render()'s cache-hit branch).
+    expect(countsCalls()).toBeGreaterThan(countsCallsBeforeReentry);
     expect(c.querySelector('.admin-msgsearch').value).toBe('kept across switch');
+  });
+
+  it("recovers the count badges on tab re-entry after the first load's counts fetch failed", async () => {
+    const state = { messages: [msg(1, { status: 'new' }), msg(2, { status: 'read' })] };
+    var failCounts = true;
+    const dom = load((url, opts) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith('/admin/messages/counts')) {
+        if (failCounts) return makeResponse(500, {});
+        const counts = { new: 0, read: 0 };
+        state.messages.forEach((m) => {
+          counts[m.status] = (counts[m.status] || 0) + 1;
+        });
+        return makeResponse(200, counts);
+      }
+      return stateRoute(state)(url, opts);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    // The list loaded fine, but counts failed — badges stay empty, not stuck
+    // showing wrong/zero numbers.
+    expect(c.querySelector('.admin-msgcounts').children.length).toBe(0);
+
+    // Simulate leaving and returning to the tab once the backend recovers.
+    failCounts = false;
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const counts = c.querySelector('.admin-msgcounts');
+    expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('1 unread');
+    expect(counts.querySelector('.admin-msgcounts__badge--read').textContent).toBe('1 read');
   });
 
   it('steps back a page when a status change empties the current filtered page', async () => {

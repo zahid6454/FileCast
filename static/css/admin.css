@@ -1469,6 +1469,8 @@
 .admin-msgfilter {
   width: 100%;
   padding-right: var(--space-6);
+  -webkit-appearance: none;
+  -moz-appearance: none;
   appearance: none;
   cursor: pointer;
 }

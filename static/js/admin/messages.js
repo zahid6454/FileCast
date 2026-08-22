@@ -457,7 +457,13 @@
     if (LOADED) {
       // Tab re-entry: reuse the last-loaded page/filter/search rather than
       // refetching and resetting them — see LOADED's declaration above.
+      // loadCounts() still fires unconditionally, though: it's cheap and
+      // independent of the cached list, and without it a single transient
+      // failure on the very first load would leave COUNTS null (and the
+      // badges permanently blank) for the rest of the session — LOADED has
+      // no equivalent "retry next time" flag the way loadMessages() does.
       renderShell();
+      loadCounts();
       return;
     }
     EXPANDED_ID = null; // fresh tab entry — start with every row collapsed
