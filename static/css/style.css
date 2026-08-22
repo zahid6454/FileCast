@@ -1403,6 +1403,11 @@ img { max-width: 100%; display: block; }
 @media (min-width: 1024px) {
   .card-grid { grid-template-columns: repeat(4, 1fr); }
   .card-grid--lg { grid-template-columns: repeat(3, 1fr); }
+  /* Category pages specifically (not every --lg grid — about.html's 2-3
+     "How It Works" cards would leave a visibly empty 4th column) opt into a
+     4th column via this second modifier, which wins over --lg above on
+     source order at equal specificity. Room for more tools as categories grow. */
+  .card-grid--cols4 { grid-template-columns: repeat(4, 1fr); }
   /* Categories with a view-all tile get a 5th column so the 4 tools + tile
      stay on one row instead of the tile wrapping alone onto a second row. */
   .card-grid--has-more { grid-template-columns: repeat(5, 1fr); }

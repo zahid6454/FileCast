@@ -1453,36 +1453,102 @@
 /* Plain .admin-input sizing (not the bigger public hero/category search
    bar this used to copy) — every other admin tab's search box is this size,
    and matching it here is also what makes this box's height line up with
-   .admin-msgfilter below, which was never given the bigger treatment. */
+   the .admin-dropdown__toggle filter button next to it (same padding). */
 .admin-msgsearch {
   max-width: 360px;
 }
-.admin-msgfilter-wrap {
+/* Matches the public search bars' focus treatment (.hero__search:focus,
+   .category__search:focus in style.css) — .admin-input:focus only carries a
+   border-color change, so without this the messages search box was the one
+   input site-wide with no brand-shadow feedback on focus. */
+.admin-msgsearch:focus {
+  box-shadow: var(--shadow-brand-hover);
+}
+
+/* ---- generic admin dropdown (toggle + floating menu) --------------------
+   Same shape as the site nav's category dropdown (.nav-dropdown__toggle /
+   .nav-dropdown__menu in style.css): a real button + a hand-built floating
+   panel, not a restyled native <select>. A native select's own open list is
+   OS-rendered and can never pick up a border-radius/shadow/hover-tint, which
+   is why the previous version of this control (appearance:none over a real
+   <select>) could never actually match the nav menu's look. Generic so any
+   future admin filter can reuse it. */
+.admin-dropdown {
   position: relative;
   display: inline-flex;
-  max-width: 200px;
 }
-/* Re-skinned toward the site nav's dropdown look (same caret glyph, see
-   caretIcon() in messages.js) rather than the browser's default select
-   chrome — a native <select> stays underneath for its built-in keyboard/
-   a11y behavior, just with its own arrow swapped for a custom one. */
-.admin-msgfilter {
-  width: 100%;
-  padding-right: var(--space-6);
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
+.admin-dropdown__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  white-space: nowrap;
   cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-base);
 }
-.admin-msgfilter__caret {
-  position: absolute;
-  top: 50%;
-  right: var(--space-3);
+.admin-dropdown__toggle:hover {
+  border-color: var(--color-border-focus);
+}
+.admin-dropdown__toggle:focus-visible {
+  outline: none;
+  border-color: var(--color-border-focus);
+  box-shadow: var(--shadow-brand-hover);
+}
+.admin-dropdown__caret {
   width: 14px;
   height: 14px;
-  transform: translateY(-50%);
+  flex-shrink: 0;
   color: var(--color-text-muted);
-  pointer-events: none;
+  transition: transform var(--transition-fast);
+}
+.admin-dropdown--open .admin-dropdown__caret {
+  transform: rotate(180deg);
+}
+.admin-dropdown__menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  min-width: 160px;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-1);
+  z-index: 130;
+}
+.admin-dropdown--open > .admin-dropdown__menu {
+  display: block;
+}
+.admin-dropdown__item {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+.admin-dropdown__item:hover,
+.admin-dropdown__item:focus-visible {
+  outline: none;
+  background: var(--color-bg-sunken);
+  color: var(--color-primary);
+}
+.admin-dropdown__item[aria-selected='true'] {
+  color: var(--color-primary);
+  font-weight: var(--weight-semibold);
 }
 .admin-msgcounts {
   display: flex;

@@ -117,6 +117,19 @@ function findButton(root, text) {
   return Array.from(root.querySelectorAll('button')).find((b) => b.textContent === text);
 }
 
+// The status filter is a custom toggle+menu dropdown (admin-dropdown), not a
+// native <select> — opening it is a real click on the toggle, and picking an
+// option is a click on that option's own button, scoped to .admin-dropdown__item
+// so it never matches the toggle itself (whose own label text can equal an
+// option's label, e.g. both read "Unread" right after that option is picked).
+function selectFilter(root, label) {
+  root.querySelector('.admin-msgfilter .admin-dropdown__toggle').click();
+  const item = Array.from(root.querySelectorAll('.admin-msgfilter .admin-dropdown__item')).find(
+    (b) => b.textContent === label
+  );
+  item.click();
+}
+
 describe('admin/messages.js', () => {
   it('registers on ADMIN.tabs with a render function', () => {
     const dom = load(stateRoute({ messages: [] }));
@@ -185,15 +198,84 @@ describe('admin/messages.js', () => {
     const search = c.querySelector('.admin-msgsearch');
     search.value = 'hello';
 
-    const filter = c.querySelector('.admin-msgfilter');
-    filter.value = 'read';
-    filter.dispatchEvent(new dom.window.Event('change'));
+    selectFilter(c, 'Read');
     await flush();
 
     expect(calls[calls.length - 1]).toContain('status=read');
     // Same input node, never rebuilt — the value the admin typed survives.
     expect(c.querySelector('.admin-msgsearch')).toBe(search);
     expect(c.querySelector('.admin-msgsearch').value).toBe('hello');
+  });
+
+  it('opens and closes the status-filter menu on toggle click, tracking aria-expanded', async () => {
+    const dom = load(stateRoute({ messages: [msg(1)] }));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const wrap = c.querySelector('.admin-msgfilter');
+    const toggle = wrap.querySelector('.admin-dropdown__toggle');
+    expect(wrap.classList.contains('admin-dropdown--open')).toBe(false);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    toggle.click();
+    expect(wrap.classList.contains('admin-dropdown--open')).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+
+    toggle.click();
+    expect(wrap.classList.contains('admin-dropdown--open')).toBe(false);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('closes the status-filter menu on an outside click, Escape, and focus leaving it', async () => {
+    const dom = load(stateRoute({ messages: [msg(1)] }));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const wrap = c.querySelector('.admin-msgfilter');
+    const toggle = wrap.querySelector('.admin-dropdown__toggle');
+    const search = c.querySelector('.admin-msgsearch');
+    const isOpen = () => wrap.classList.contains('admin-dropdown--open');
+
+    toggle.click();
+    expect(isOpen()).toBe(true);
+    search.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    expect(isOpen()).toBe(false);
+
+    toggle.click();
+    expect(isOpen()).toBe(true);
+    dom.window.document.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+    expect(isOpen()).toBe(false);
+
+    // Tab-away: focus lands outside the dropdown without any click at all —
+    // the click-outside listener alone would miss this.
+    toggle.click();
+    expect(isOpen()).toBe(true);
+    search.focus();
+    expect(isOpen()).toBe(false);
+  });
+
+  it('selecting a status option updates the toggle label and aria-selected state', async () => {
+    const dom = load(stateRoute({ messages: [msg(1)] }));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.messages.render(c);
+    await flush();
+
+    const wrap = c.querySelector('.admin-msgfilter');
+    expect(wrap.querySelector('.admin-msgfilter__label').textContent).toBe('All');
+
+    selectFilter(c, 'Unread');
+    await flush();
+
+    expect(wrap.querySelector('.admin-msgfilter__label').textContent).toBe('Unread');
+    const items = Array.from(wrap.querySelectorAll('.admin-dropdown__item'));
+    expect(items.find((i) => i.textContent === 'Unread').getAttribute('aria-selected')).toBe(
+      'true'
+    );
+    expect(items.find((i) => i.textContent === 'All').getAttribute('aria-selected')).toBe('false');
   });
 
   it('preserves typed search text across pagination and requests the right offset', async () => {
@@ -213,9 +295,10 @@ describe('admin/messages.js', () => {
     // LIMIT is 25 and only 3 messages exist, so there's no next page in the
     // real UI — drive PAGE forward directly the way a "Next" click would, by
     // exercising the pager's own DOM once has_more is true for this fixture.
+    // Every generated message defaults to status 'new', so filtering down to
+    // "Unread" refetches under the new fixture without dropping any of them.
     state.messages = Array.from({ length: 30 }, (_, i) => msg(i + 1));
-    const filter = c.querySelector('.admin-msgfilter');
-    filter.dispatchEvent(new dom.window.Event('change')); // refetch under the new fixture
+    selectFilter(c, 'Unread');
     await flush();
 
     const next = findButton(c.querySelector('.admin-msgpager'), 'Next');
@@ -250,15 +333,12 @@ describe('admin/messages.js', () => {
     pending[0].resolve();
     await flush();
 
-    const filter = c.querySelector('.admin-msgfilter');
     // Fire two filter changes back-to-back before either resolves: the first
     // ('new', pending[2]) is the stale one, the second ('read', pending[3])
     // is what the admin actually landed on and should win regardless of
     // arrival order.
-    filter.value = 'new';
-    filter.dispatchEvent(new dom.window.Event('change'));
-    filter.value = 'read';
-    filter.dispatchEvent(new dom.window.Event('change'));
+    selectFilter(c, 'Unread');
+    selectFilter(c, 'Read');
 
     expect(pending).toHaveLength(4);
     // Resolve the NEWER request first, then the STALE one arrives late.
@@ -324,9 +404,7 @@ describe('admin/messages.js', () => {
 
     // Switching to the "Read" filter narrows the list but must not narrow
     // the badges — they stay inbox-wide.
-    const filter = c.querySelector('.admin-msgfilter');
-    filter.value = 'read';
-    filter.dispatchEvent(new dom.window.Event('change'));
+    selectFilter(c, 'Read');
     await flush();
 
     expect(counts.querySelector('.admin-msgcounts__badge--unread').textContent).toBe('2 unread');
@@ -471,9 +549,7 @@ describe('admin/messages.js', () => {
     dom.window.ADMIN.tabs.messages.render(c);
     await flush();
 
-    const filter = c.querySelector('.admin-msgfilter');
-    filter.value = 'new';
-    filter.dispatchEvent(new dom.window.Event('change'));
+    selectFilter(c, 'Unread');
     await flush();
 
     findButton(c.querySelector('.admin-msgpager'), 'Next').click();
