@@ -1612,6 +1612,13 @@ def test_full_build_additive_outputs(built):
     sitemap = (built / "sitemap.xml").read_text(encoding="utf-8")
     assert "/admin/" not in sitemap and "/account/" not in sitemap
 
+    # llms.txt (GEO) mirrors sitemap's privacy scope — no admin/account leak —
+    # and links a real tool page under its real category heading.
+    llms = (built / "llms.txt").read_text(encoding="utf-8")
+    assert "/admin/" not in llms and "/account/" not in llms
+    assert "## Image Conversion" in llms
+    assert "[PNG to JPG Converter](https://filecast.org/convert/png-to-jpg/)" in llms
+
     # Existing converter page still carries a working TOOL_CONFIG island.
     page = (built / "convert" / "png-to-jpg" / "index.html").read_text(encoding="utf-8")
     assert 'id="tool-config"' in page
