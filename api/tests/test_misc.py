@@ -95,6 +95,8 @@ async def test_stats_dashboard_aggregates(admin_client):
     assert d["total_conversions"] == 1
     assert d["total_users"] >= 1
     assert isinstance(d["top_tools"], list)
+    assert d["total_unique_visitors"] == 1
+    assert d["top_tools"][0] == {"tool_id": "jpg-to-png", "count": 1, "visitors": 1}
 
 
 # --- errors ---
