@@ -1014,6 +1014,40 @@ def test_generate_robots_excludes_admin_account(tmp_path, monkeypatch):
     assert "Disallow: /offline.html" in robots
 
 
+def test_generate_llms_txt_lists_tools_by_category(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    config = {"site": {"base_url": "https://filecast.org", "name": "FileCast"}}
+    tools = [
+        {
+            "id": "avif-to-jpg",
+            "name": "AVIF to JPG Converter",
+            "slug": "/convert/avif-to-jpg",
+            "category": "image-conversion",
+            "tagline": "Open next-gen AVIF photos anywhere",
+            "meta": {"description": "fallback description"},
+        }
+    ]
+    categories = {
+        "image-conversion": {
+            "id": "image-conversion",
+            "name": "Image Conversion",
+            "slug": "image-conversion",
+            "description": "Convert between image formats.",
+            "tools": tools,
+        }
+    }
+    build.generate_llms_txt(config, tools, categories)
+    llms = (tmp_path / "llms.txt").read_text(encoding="utf-8")
+    assert llms.startswith("# FileCast")
+    assert "## Image Conversion" in llms
+    assert (
+        "- [AVIF to JPG Converter](https://filecast.org/convert/avif-to-jpg/): "
+        "Open next-gen AVIF photos anywhere" in llms
+    )
+    assert "## Optional" in llms
+    assert "https://filecast.org/privacy/" in llms
+
+
 # --------------------------------------------------------------------------- #
 # generate_service_worker — P3 §25 (offline support)
 # --------------------------------------------------------------------------- #
@@ -1577,6 +1611,13 @@ def test_full_build_additive_outputs(built):
     assert "Disallow: /account/" not in robots
     sitemap = (built / "sitemap.xml").read_text(encoding="utf-8")
     assert "/admin/" not in sitemap and "/account/" not in sitemap
+
+    # llms.txt (GEO) mirrors sitemap's privacy scope — no admin/account leak —
+    # and links a real tool page under its real category heading.
+    llms = (built / "llms.txt").read_text(encoding="utf-8")
+    assert "/admin/" not in llms and "/account/" not in llms
+    assert "## Image Conversion" in llms
+    assert "[PNG to JPG Converter](https://filecast.org/convert/png-to-jpg/)" in llms
 
     # Existing converter page still carries a working TOOL_CONFIG island.
     page = (built / "convert" / "png-to-jpg" / "index.html").read_text(encoding="utf-8")
