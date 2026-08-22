@@ -103,6 +103,7 @@ def test_fetch_tool_overrides_reads_db():
         "enabled": True,
         "display_name": "PNG->JPG",
         "sort_order": 3,
+        "featured_slot": None,
         "maintenance_message": "brb",
         "custom_max_file_size": "50MB",
     }
@@ -753,6 +754,7 @@ def test_apply_overrides_fields():
                 "display_name": "New Name",
                 "custom_max_file_size": "50MB",
                 "sort_order": 7,
+                "featured_slot": 2,
                 "maintenance_message": "down for maintenance",
             }
         },
@@ -763,7 +765,19 @@ def test_apply_overrides_fields():
     # R3: bytes must be recomputed, not left at the YAML value.
     assert t["max_file_size_bytes"] == build.parse_file_size("50MB")
     assert t["sort_order"] == 7
+    assert t["featured_slot"] == 2
     assert t["maintenance_message"] == "down for maintenance"
+
+
+def test_apply_overrides_no_featured_slot_leaves_it_unset():
+    # A tool an admin never assigned a homepage seat carries no featured_slot
+    # key at all, same as an unseeded sort_order — attach_homepage_tools()
+    # relies on `.get()` treating that as "not featured," not a crash.
+    tools = [_tool()]
+    out = build.apply_tool_overrides(
+        tools, {"png-to-jpg": {"enabled": True, "sort_order": 1}}
+    )
+    assert "featured_slot" not in out[0]
 
 
 def test_apply_absent_tool_unchanged():
@@ -811,6 +825,94 @@ def test_sort_unseeded_go_to_end_stably():
 def test_sort_no_db_preserves_filename_order():
     tools = [_tool(id="a"), _tool(id="b"), _tool(id="c")]
     assert [t["id"] for t in build.sort_tools(tools)] == ["a", "b", "c"]
+
+
+# --------------------------------------------------------------------------- #
+# attach_homepage_tools — homepage curation via featured_slot, independent of
+# sort_order (admin-panel redesign: homepage/dropdown decoupling)
+# --------------------------------------------------------------------------- #
+
+
+def _grouped(tools: list[dict]) -> dict:
+    categories = [
+        {
+            "id": "image-conversion",
+            "slug": "image-conversion",
+            "name": "Image Conversion",
+        }
+    ]
+    grouped = build.group_tools_by_category(tools, categories)
+    build.attach_homepage_tools(grouped)
+    return grouped
+
+
+def test_homepage_tools_ordered_by_slot_not_sort_order():
+    tools = [
+        _tool(id="a", sort_order=1, featured_slot=3),
+        _tool(id="b", sort_order=2, featured_slot=1),
+        _tool(id="c", sort_order=3),  # no slot → not featured
+    ]
+    grouped = _grouped(tools)
+    assert [t["id"] for t in grouped["image-conversion"]["homepage_tools"]] == [
+        "b",
+        "a",
+    ]
+
+
+def test_homepage_tools_capped_at_four_even_with_more_slotted():
+    tools = [
+        _tool(id=str(i), sort_order=i, featured_slot=(i % 4) + 1) for i in range(1, 7)
+    ]
+    grouped = _grouped(tools)
+    assert len(grouped["image-conversion"]["homepage_tools"]) <= 4
+
+
+def test_homepage_tools_dedupes_a_shared_slot_by_sort_order():
+    # Data corruption / a category-reassignment race could leave two tools
+    # claiming the same slot — keep the lower sort_order, don't render both.
+    tools = [
+        _tool(id="late", sort_order=5, featured_slot=1),
+        _tool(id="early", sort_order=2, featured_slot=1),
+    ]
+    grouped = _grouped(tools)
+    assert [t["id"] for t in grouped["image-conversion"]["homepage_tools"]] == ["early"]
+
+
+def test_homepage_tools_falls_back_to_position_when_nothing_slotted():
+    # A category nobody has curated yet (fresh install, no-DB path, or every
+    # slotted tool got disabled) must not render an empty grid — P10: DB-down
+    # has to look like a working build, not a broken one.
+    tools = [_tool(id="a", sort_order=1), _tool(id="b", sort_order=2)]
+    grouped = _grouped(tools)
+    assert [t["id"] for t in grouped["image-conversion"]["homepage_tools"]] == [
+        "a",
+        "b",
+    ]
+
+
+def test_homepage_tools_partial_curation_does_not_fall_back():
+    # The instant ANY tool in a category has a slot, the fallback stops
+    # applying to it entirely — an admin who assigns 2 of 4 seats gets exactly
+    # 2 cards, not 2 explicit + 2 filled in by position.
+    tools = [
+        _tool(id="a", sort_order=1, featured_slot=1),
+        _tool(id="b", sort_order=2),
+        _tool(id="c", sort_order=3),
+    ]
+    grouped = _grouped(tools)
+    assert [t["id"] for t in grouped["image-conversion"]["homepage_tools"]] == ["a"]
+
+
+def test_full_category_list_untouched_by_homepage_slots():
+    # The dropdown/category-page order (cat_data['tools']) must stay
+    # sort_order-ordered and full-length regardless of featured_slot — the
+    # homepage's "View all" tile depends on this length being the true total.
+    tools = [
+        _tool(id="a", sort_order=1, featured_slot=2),
+        _tool(id="b", sort_order=2),
+    ]
+    grouped = _grouped(tools)
+    assert [t["id"] for t in grouped["image-conversion"]["tools"]] == ["a", "b"]
 
 
 # --------------------------------------------------------------------------- #

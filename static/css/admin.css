@@ -880,7 +880,107 @@
   font-weight: var(--weight-normal);
 }
 
-/* Labeled divider marking the homepage cutoff within a category. */
+/* tool row dimming when disabled (enable/disable is the one shared control;
+   the slot picker below is dimmed via this, not a second toggle). */
+.admin-tool--disabled {
+  opacity: 0.6;
+}
+.admin-tool--disabled .admin-slotpicker {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Homepage slot picker: 1-4, click to feature a tool in that seat — a slot
+   has one owner per category, independent of this row's dropdown position. */
+.admin-slotpicker {
+  display: inline-flex;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 3px;
+  background: var(--color-bg-sunken);
+  border-radius: var(--radius-md);
+}
+.admin-slotpicker__btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.admin-slotpicker__btn:hover {
+  border-color: var(--color-primary-light);
+}
+.admin-slotpicker__btn.is-active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+/* Read-only "Homepage shows" strip — sits between the category title and its
+   tool list, recomputed live from the slot pickers below (never a second
+   source of truth). */
+.admin-homepage-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-sunken);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+}
+.admin-homepage-preview__label {
+  flex-shrink: 0;
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.admin-homepage-preview__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: 1;
+}
+.admin-homepage-preview__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-2) 2px 4px;
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+}
+.admin-homepage-preview__chip-num {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: var(--weight-bold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.admin-homepage-preview__empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Labeled divider marking the nav dropdown's cutoff within a category. */
 .admin-tool-divider {
   display: flex;
   align-items: center;

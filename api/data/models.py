@@ -44,6 +44,13 @@ class Tool(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     display_name: Mapped[str | None] = mapped_column(String, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Homepage curation, independent of sort_order (which still drives the nav
+    # dropdown + category page). 1-4, unique per category, admin-assigned only —
+    # NOT related to the tool-YAML `homepage_order` field seed.py reads (that one
+    # only seeds sort_order's initial within-category position). NULL = no
+    # homepage seat. update_tool() enforces one-owner-per-slot and clears this on
+    # disable; seed.py clears it on a category change (admin-panel-redesign notes).
+    featured_slot: Mapped[int | None] = mapped_column(Integer, nullable=True)
     maintenance_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     custom_max_file_size: Mapped[str | None] = mapped_column(String, nullable=True)
     # seed-managed display metadata (mirrored from YAML)

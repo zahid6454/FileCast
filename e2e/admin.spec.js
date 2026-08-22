@@ -273,7 +273,8 @@ test.describe('tools', () => {
           maintenance_message: null,
           custom_max_file_size: null,
           input_format: 'CSV',
-          output_format: 'JSON'
+          output_format: 'JSON',
+          featured_slot: null
         }
       ]
     });
@@ -282,36 +283,129 @@ test.describe('tools', () => {
     await expect(page.locator('.admin-toolgroup__title')).toHaveText('Developer Tools');
   });
 
-  test('marks the homepage cutoff with a labeled divider', async ({ page }) => {
-    const state = makeState();
+  test('marks the dropdown cutoff with a labeled divider', async ({ page }) => {
+    // Image and document together have 5 tools, well under the 10-tool cap —
+    // so with the default fixture there's nothing to cut off yet. Fixture is
+    // 5 tools total, so build a category with more than 10 to see the line.
+    const state = makeState({
+      tools: Array.from({ length: 12 }, (_, i) => ({
+        id: 'img-' + i,
+        enabled: true,
+        sort_order: i + 1,
+        category: 'image',
+        name: 'Image ' + i,
+        display_name: null,
+        maintenance_message: null,
+        custom_max_file_size: null,
+        input_format: 'A',
+        output_format: 'B',
+        featured_slot: null
+      }))
+    });
     await installApi(page, state);
     await page.goto('/admin/#tools');
-    // Image has 2 enabled tools then a disabled one → a divider after the two.
     await expect(
       page.locator('.admin-toollist[data-category="image"] .admin-tool-divider')
     ).toHaveCount(1);
-    await expect(page.getByText('Shown on the homepage').first()).toBeVisible();
+    await expect(page.getByText('Shown in dropdown').first()).toBeVisible();
   });
 
-  test('divider recomputes live when a toggle changes homepage membership (no reload)', async ({
+  test('clicking a homepage slot features a tool independent of its dropdown position', async ({
     page
   }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#tools');
 
-    const divider = page.locator('.admin-toollist[data-category="image"] .admin-tool-divider');
-    // 2 enabled + 1 disabled → a divider sits after the two.
-    await expect(divider).toHaveCount(1);
+    // img-b sits second in the dropdown order but can still take homepage slot 1.
+    const row = page.locator('.admin-tool[data-tool-id="img-b"]');
+    await row.locator('.admin-slotpicker__btn', { hasText: '1' }).click();
 
-    // Enable the disabled tool → 3 enabled ≤ cap, nothing below the line, so the
-    // divider must vanish immediately (recomputed from the DOM, not a re-fetch).
-    await page.locator('.admin-tool[data-tool-id="img-c"] .admin-switch').click();
-    await expect(divider).toHaveCount(0);
+    await expect.poll(() => state.tools.find((t) => t.id === 'img-b').featured_slot).toBe(1);
+    const preview = page.locator(
+      '.admin-toolgroup:has(.admin-toollist[data-category="image"]) .admin-homepage-preview__chip'
+    );
+    await expect(preview).toContainText('Image B');
 
-    // Disable it again → the line returns live.
-    await page.locator('.admin-tool[data-tool-id="img-c"] .admin-switch').click();
-    await expect(divider).toHaveCount(1);
+    // Clicking the same active slot again clears it.
+    await row.locator('.admin-slotpicker__btn.is-active').click();
+    await expect.poll(() => state.tools.find((t) => t.id === 'img-b').featured_slot).toBeNull();
+  });
+
+  test('assigning an already-taken slot steals it from the previous holder', async ({ page }) => {
+    const state = makeState({
+      tools: [
+        {
+          id: 'img-a',
+          enabled: true,
+          sort_order: 1,
+          category: 'image',
+          name: 'Image A',
+          display_name: null,
+          maintenance_message: null,
+          custom_max_file_size: null,
+          input_format: 'A',
+          output_format: 'B',
+          featured_slot: 1
+        },
+        {
+          id: 'img-b',
+          enabled: true,
+          sort_order: 2,
+          category: 'image',
+          name: 'Image B',
+          display_name: null,
+          maintenance_message: null,
+          custom_max_file_size: null,
+          input_format: 'A',
+          output_format: 'B',
+          featured_slot: null
+        }
+      ]
+    });
+    await installApi(page, state);
+    await page.goto('/admin/#tools');
+
+    await page
+      .locator('.admin-tool[data-tool-id="img-b"] .admin-slotpicker__btn', { hasText: '1' })
+      .click();
+
+    await expect
+      .poll(() =>
+        page.locator('.admin-tool[data-tool-id="img-a"] .admin-slotpicker__btn.is-active').count()
+      )
+      .toBe(0);
+    await expect.poll(() => state.tools.find((t) => t.id === 'img-a').featured_slot).toBeNull();
+    await expect.poll(() => state.tools.find((t) => t.id === 'img-b').featured_slot).toBe(1);
+  });
+
+  test('disabling a featured tool clears its homepage slot', async ({ page }) => {
+    const state = makeState({
+      tools: [
+        {
+          id: 'img-a',
+          enabled: true,
+          sort_order: 1,
+          category: 'image',
+          name: 'Image A',
+          display_name: null,
+          maintenance_message: null,
+          custom_max_file_size: null,
+          input_format: 'A',
+          output_format: 'B',
+          featured_slot: 2
+        }
+      ]
+    });
+    await installApi(page, state);
+    await page.goto('/admin/#tools');
+
+    await page.locator('.admin-tool[data-tool-id="img-a"] .admin-switch').click();
+
+    await expect.poll(() => state.tools.find((t) => t.id === 'img-a').featured_slot).toBeNull();
+    await expect(
+      page.locator('.admin-tool[data-tool-id="img-a"] .admin-slotpicker__btn.is-active')
+    ).toHaveCount(0);
   });
 
   test('slide-out edits a display name → PUT /tools/{id}', async ({ page }) => {
