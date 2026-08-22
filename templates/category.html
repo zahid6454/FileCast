@@ -36,7 +36,7 @@
   {% set main_tools = category.tools|selectattr('subcategory', 'equalto', 'converter')|list %}
   {% set sub_tools = category.tools|selectattr('subcategory', 'equalto', 'utility')|list %}
 
-  <div class="card-grid card-grid--lg">
+  <div class="card-grid card-grid--lg card-grid--cols4">
     {% for tool in main_tools %}
     {{ tool_card_lg(tool, category.name|lower) }}
     {% endfor %}
@@ -44,7 +44,7 @@
 
   {% if sub_tools %}
   <div class="section__divider u-mt-8 u-mb-8"></div>
-  <div class="card-grid card-grid--lg">
+  <div class="card-grid card-grid--lg card-grid--cols4">
     {% for tool in sub_tools %}
     {{ tool_card_lg(tool, category.name|lower) }}
     {% endfor %}

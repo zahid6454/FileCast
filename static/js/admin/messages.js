@@ -56,6 +56,46 @@
 
   var STATUS_BADGE = { new: 'unread', read: 'read' };
   var STATUS_LABEL = { new: 'Unread', read: 'Read' };
+  var FILTER_OPTIONS = [
+    { value: '', label: 'All' },
+    { value: 'new', label: 'Unread' },
+    { value: 'read', label: 'Read' }
+  ];
+
+  function filterLabel(value) {
+    var match = FILTER_OPTIONS.filter(function (opt) {
+      return opt.value === value;
+    })[0];
+    return match ? match.label : 'All';
+  }
+
+  // Closes the status-filter dropdown if it's open. Reads live off CONTAINER
+  // (module-level, always the current tab render) rather than a captured
+  // node — see the module-level click/keydown listeners below, which are
+  // registered once at script load and must keep working across every
+  // renderShell() rebuild.
+  function closeFilterMenu(focusToggle) {
+    if (!CONTAINER) return;
+    var wrap = CONTAINER.querySelector('.admin-msgfilter');
+    if (!wrap || !wrap.classList.contains('admin-dropdown--open')) return;
+    wrap.classList.remove('admin-dropdown--open');
+    var toggle = wrap.querySelector('.admin-dropdown__toggle');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', 'false');
+      if (focusToggle) toggle.focus();
+    }
+  }
+
+  // Registered once (not per renderShell) — renderShell() reruns on every
+  // tab re-entry with a fresh CONTAINER, so listeners bound inside it would
+  // pile up across re-entries. These check CONTAINER live instead of
+  // capturing a node, so they keep working after any number of rebuilds.
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.admin-msgfilter')) closeFilterMenu(false);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeFilterMenu(true);
+  });
 
   function fmtDate(iso) {
     if (!iso) return '—';
@@ -186,8 +226,8 @@
     // Undo showListLoading()'s disable — a fresh fetch has landed, the filter
     // is interactive again. The pager below gets fresh (enabled-by-default)
     // buttons rebuilt from scratch, so it needs no equivalent reset here.
-    var filterEl = CONTAINER.querySelector('.admin-msgfilter');
-    if (filterEl) filterEl.disabled = false;
+    var filterToggleEl = CONTAINER.querySelector('.admin-msgfilter .admin-dropdown__toggle');
+    if (filterToggleEl) filterToggleEl.disabled = false;
     dom.clear(list);
     var q = ((searchInput && searchInput.value) || '').trim().toLowerCase();
     var shown = MESSAGES.filter(function (m) {
@@ -264,7 +304,7 @@
     return dom.svg(
       'svg',
       {
-        class: 'admin-msgfilter__caret',
+        class: 'admin-dropdown__caret',
         'aria-hidden': 'true',
         focusable: 'false',
         viewBox: '0 0 24 24'
@@ -310,20 +350,94 @@
       renderList();
     });
 
-    var filter = h(
-      'select',
-      { class: 'admin-input admin-msgfilter', 'aria-label': 'Filter by status' },
-      [
-        h('option', { value: '' }, 'All'),
-        h('option', { value: 'new' }, 'Unread'),
-        h('option', { value: 'read' }, 'Read')
-      ]
+    var filterToggle = h(
+      'button',
+      {
+        type: 'button',
+        class: 'admin-dropdown__toggle',
+        'aria-haspopup': 'listbox',
+        'aria-expanded': 'false'
+      },
+      [h('span', { class: 'admin-msgfilter__label' }, filterLabel(STATUS_FILTER)), caretIcon()]
     );
-    filter.value = STATUS_FILTER;
-    filter.addEventListener('change', function () {
-      STATUS_FILTER = filter.value;
-      PAGE = 0;
-      loadMessages();
+    var filterLabelEl = filterToggle.querySelector('.admin-msgfilter__label');
+
+    var filterItems = FILTER_OPTIONS.map(function (opt) {
+      var item = h(
+        'button',
+        {
+          type: 'button',
+          class: 'admin-dropdown__item',
+          role: 'option',
+          'aria-selected': opt.value === STATUS_FILTER ? 'true' : 'false'
+        },
+        opt.label
+      );
+      item.addEventListener('click', function () {
+        closeFilterMenu(true);
+        if (STATUS_FILTER === opt.value) return;
+        STATUS_FILTER = opt.value;
+        PAGE = 0;
+        filterLabelEl.textContent = opt.label;
+        filterItems.forEach(function (other) {
+          other.setAttribute('aria-selected', other === item ? 'true' : 'false');
+        });
+        loadMessages();
+      });
+      return item;
+    });
+    filterItems.forEach(function (item, idx) {
+      item.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          (filterItems[idx + 1] || filterItems[0]).focus();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          (filterItems[idx - 1] || filterItems[filterItems.length - 1]).focus();
+        }
+      });
+    });
+
+    var filterMenu = h(
+      'div',
+      { class: 'admin-dropdown__menu', role: 'listbox', 'aria-label': 'Filter by status' },
+      filterItems
+    );
+
+    var filterWrap = h('div', { class: 'admin-msgfilter admin-dropdown' }, [
+      filterToggle,
+      filterMenu
+    ]);
+    function openFilterMenu() {
+      filterWrap.classList.add('admin-dropdown--open');
+      filterToggle.setAttribute('aria-expanded', 'true');
+      var current = filterMenu.querySelector('[aria-selected="true"]') || filterItems[0];
+      if (current) current.focus();
+    }
+    filterToggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = !filterWrap.classList.contains('admin-dropdown--open');
+      // Only one dropdown exists on this tab today, but closing any other
+      // open one first keeps this consistent with the site nav's closeAll()
+      // behavior if a second admin dropdown ever lands next to it.
+      closeFilterMenu(false);
+      if (open) openFilterMenu();
+    });
+    // ArrowDown/Up while the closed toggle has focus opens straight to the
+    // first/last option — the native <select> this replaced supported the
+    // same shortcut, so keyboard users lose nothing by the switch.
+    filterToggle.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        openFilterMenu();
+      }
+    });
+    // A native <select>'s open list captures Tab itself; this hand-built menu
+    // doesn't, so without an explicit close-on-blur, tabbing out of it (as
+    // opposed to clicking away or hitting Escape) would leave it visually
+    // open while focus has already moved elsewhere on the page.
+    filterWrap.addEventListener('focusout', function (e) {
+      if (!filterWrap.contains(e.relatedTarget)) closeFilterMenu(false);
     });
 
     var counts = h('div', { class: 'admin-msgcounts' });
@@ -331,7 +445,7 @@
     CONTAINER.appendChild(
       h('div', { class: 'admin-toolbar' }, [
         search,
-        h('div', { class: 'admin-msgfilter-wrap' }, [filter, caretIcon()]),
+        filterWrap,
         h('span', { class: 'admin-msgcount admin-muted' }, ''),
         counts
       ])
@@ -354,8 +468,9 @@
       dom.clear(list);
       list.appendChild(h('li', { class: 'admin-loading' }, 'Loading…'));
     }
-    var filterEl = CONTAINER.querySelector('.admin-msgfilter');
-    if (filterEl) filterEl.disabled = true;
+    closeFilterMenu(false);
+    var filterToggleEl = CONTAINER.querySelector('.admin-msgfilter .admin-dropdown__toggle');
+    if (filterToggleEl) filterToggleEl.disabled = true;
     var pagerHost = CONTAINER.querySelector('.admin-msgpager');
     if (pagerHost) {
       Array.prototype.forEach.call(pagerHost.querySelectorAll('button'), function (b) {
