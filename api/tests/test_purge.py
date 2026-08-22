@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from data.models import (
     Conversion,
+    ConversionVisitor,
     Error,
     Rating,
     Session,
@@ -43,6 +44,12 @@ async def test_purge_deletes_stale_retains_aggregates(db):
             ),
             Conversion(tool_id="jpg-to-png", date=old.date(), count=5, failures=0),
             Rating(tool_id="jpg-to-png", vote="yes", fingerprint="fp", created_at=old),
+            ConversionVisitor(
+                tool_id="jpg-to-png", date=old.date(), fingerprint="old-fp"
+            ),
+            ConversionVisitor(
+                tool_id="jpg-to-png", date=now.date(), fingerprint="new-fp"
+            ),
         ]
     )
     await db.commit()
@@ -51,6 +58,7 @@ async def test_purge_deletes_stale_retains_aggregates(db):
     assert counts["user_conversions"] == 1
     assert counts["errors"] == 1
     assert counts["sessions"] == 1
+    assert counts["conversion_visitors"] == 1
 
     # stale gone, fresh kept
     async def n(model, **w):
@@ -66,6 +74,8 @@ async def test_purge_deletes_stale_retains_aggregates(db):
     # anonymous aggregates + ratings retained
     assert (await db.execute(select(func.count(Conversion.tool_id)))).scalar_one() == 1
     assert (await db.execute(select(func.count(Rating.id)))).scalar_one() == 1
+    cv = (await db.execute(select(ConversionVisitor.fingerprint))).scalars().all()
+    assert set(cv) == {"new-fp"}
 
 
 async def test_canary_flags_a_purge_that_stopped_running(db):

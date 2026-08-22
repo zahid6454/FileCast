@@ -11,14 +11,17 @@ shared by the rate limiter (``middleware.py``) and ``fingerprint.py``:
 - Otherwise fall back to ``request.client.host`` (the real peer). Locally, with
   no proxies configured, this is just the loopback address.
 
-**PHASE 7 SECURITY DEPENDENCY (do not ship to prod without this):**
-``CF-Connecting-IP`` is trusted unconditionally here, which is only safe if the
-origin accepts traffic *exclusively* from Cloudflare (firewall/allowlist Cloudflare
-IP ranges, or an Authenticated Origin Pull). If the origin is directly reachable,
-an attacker can forge ``CF-Connecting-IP`` to spoof arbitrary IPs and bypass BOTH
-the rate limiter and the rating dedup. Phase 7 must either lock the origin to
-Cloudflare or gate ``CF-Connecting-IP`` on ``trusted_proxies`` like XFF. Locally
-no such header is sent, so this is inert in dev.
+**Why unconditional trust is safe in prod:** ``CF-Connecting-IP`` is only
+trustworthy if the origin accepts traffic *exclusively* from Cloudflare — and it
+does. ``docker-compose.prod.yml`` binds the API to ``127.0.0.1:8090`` (no public
+port) and the only ingress is the ``cloudflared`` tunnel sidecar (DEVELOPMENT.md
+"Production Deployment" / "Third-Party Services" — status: Live); there is no
+public inbound path to forge the header against. This is a deploy-topology
+invariant, not a code-level guarantee — if the API ever gains a public port
+(bypassing the tunnel) or moves off Cloudflare, this header stops being
+trustworthy and must be gated on ``trusted_proxies`` like XFF instead, exactly
+as ``get_client_ip`` already does for X-Forwarded-For below. Locally no such
+header is sent, so this is inert in dev.
 """
 
 from starlette.requests import HTTPConnection

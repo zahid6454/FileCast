@@ -245,7 +245,12 @@ class RatingFeedback(Base):
 
 
 class Conversion(Base):
-    """Anonymous per-tool-per-day aggregate counter. Never purged (D5)."""
+    """Anonymous per-tool-per-day aggregate counter. Never purged (D5).
+
+    ``unique_visitors`` is a distinct-fingerprint count for the same
+    ``(tool_id, date)`` — reach, not volume (one visitor running a tool 10
+    times still shows as 1). Dedup ledger is `ConversionVisitor`.
+    """
 
     __tablename__ = "conversions"
 
@@ -253,11 +258,31 @@ class Conversion(Base):
     date: Mapped[date] = mapped_column(Date, primary_key=True)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unique_visitors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     __table_args__ = (
         Index("ix_conversions_date", "date"),
         Index("ix_conversions_tool_id", "tool_id"),
     )
+
+
+class ConversionVisitor(Base):
+    """Same-day dedup ledger for `Conversion.unique_visitors` — existence-only,
+    no usage content (no format/status/timestamp beyond the day). Reuses the
+    same daily-rotated fingerprint as `Rating` (§ fingerprint.py); a row here
+    means "this fingerprint has already been counted for this tool today," not
+    a record of what that visitor did. Purged after `retention_days` (§12) —
+    the fingerprint rotates daily anyway, so nothing past that window is ever
+    useful for dedup again.
+    """
+
+    __tablename__ = "conversion_visitors"
+
+    tool_id: Mapped[str] = mapped_column(String, primary_key=True)
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String, primary_key=True)
+
+    __table_args__ = (Index("ix_conversion_visitors_date", "date"),)
 
 
 class Announcement(Base):

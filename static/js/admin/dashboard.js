@@ -31,11 +31,14 @@
     ]);
   }
 
-  function sectionCard(title, bodyNode) {
-    return h('section', { class: 'admin-card' }, [
-      h('h2', { class: 'admin-card__title' }, title),
-      bodyNode
-    ]);
+  function sectionCard(title, bodyNode, actionNode) {
+    var header = actionNode
+      ? h('div', { class: 'admin-card__head' }, [
+          h('h2', { class: 'admin-card__title' }, title),
+          actionNode
+        ])
+      : h('h2', { class: 'admin-card__title' }, title);
+    return h('section', { class: 'admin-card' }, [header, bodyNode]);
   }
 
   function placeholder(message) {
@@ -164,15 +167,27 @@
       xAt(0).toFixed(1) + ',' + baseY + ' ' + points + ' ' + xAt(n - 1).toFixed(1) + ',' + baseY;
     frame.appendChild(svg('polygon', { class: 'admin-chart__area', points: areaPoints }));
     frame.appendChild(svg('polyline', { class: 'admin-chart__line', points: points }));
-    // point dots
+    // point dots — a larger invisible hit-area circle carries the <title> (the
+    // visible 2.5px dot is too small a hover target on its own), giving a
+    // native browser tooltip with the exact date/count/failures for that day.
+    // No per-tool breakdown: this series is a same-day sum across every tool,
+    // so that's all there is to show without a different, heavier query.
     series.forEach(function (p, i) {
+      var cx = xAt(i).toFixed(1);
+      var cy = yAt(p.count).toFixed(1);
+      var label =
+        p.date +
+        ': ' +
+        p.count +
+        (p.count === 1 ? ' conversion' : ' conversions') +
+        (p.failures ? ', ' + p.failures + (p.failures === 1 ? ' failure' : ' failures') : '');
       frame.appendChild(
-        svg('circle', {
-          class: 'admin-chart__dot',
-          cx: xAt(i).toFixed(1),
-          cy: yAt(p.count).toFixed(1),
-          r: 2.5
-        })
+        svg('g', { class: 'admin-chart__point' }, [
+          svg('circle', { class: 'admin-chart__hit', cx: cx, cy: cy, r: 8 }, [
+            svg('title', {}, label)
+          ]),
+          svg('circle', { class: 'admin-chart__dot', cx: cx, cy: cy, r: 2.5 })
+        ])
       );
     });
     return frame;
@@ -187,7 +202,7 @@
       gap = 8,
       labelW = 150,
       barMax = 320,
-      W = labelW + barMax + 60;
+      W = labelW + barMax + 110;
     var H = tools.length * (rowH + gap) + gap;
     var maxCount = Math.max.apply(
       null,
@@ -227,11 +242,13 @@
           rx: 3
         })
       );
+      var valueText =
+        typeof t.visitors === 'number' ? t.count + ' (' + t.visitors + 'v)' : String(t.count);
       frame.appendChild(
         svg(
           'text',
           { class: 'admin-chart__barvalue', x: labelW + w + 6, y: y + rowH / 2 + 4 },
-          String(t.count)
+          valueText
         )
       );
     });
@@ -249,6 +266,12 @@
         String(data.total_failures),
         pct(data.total_failures, attempts) + ' of attempts',
         'error'
+      ),
+      statCard(
+        'Unique visitors',
+        String(data.total_unique_visitors),
+        'anonymous + signed-in, by day',
+        null
       ),
       statCard('Users', String(data.total_users), null, 'success'),
       statCard(
@@ -289,10 +312,14 @@
     if (!ratings || ratings.length === 0) {
       return placeholder('No ratings yet');
     }
-    // Sort by total votes desc for a stable, useful order.
-    var sorted = ratings.slice().sort(function (a, b) {
-      return b.yes + b.no - (a.yes + a.no);
-    });
+    // Sort by total votes desc for a stable, useful order; top 10 only, same
+    // cap as Top Tools — there's no dedicated ratings page to page/link into.
+    var sorted = ratings
+      .slice()
+      .sort(function (a, b) {
+        return b.yes + b.no - (a.yes + a.no);
+      })
+      .slice(0, 10);
     var table = h('table', { class: 'admin-table admin-ratings' }, [
       h('thead', h('tr', [h('th', 'Tool'), h('th', 'Helpful'), h('th', 'Not'), h('th', '')]))
     ]);
@@ -337,7 +364,7 @@
     Promise.allSettled([
       api.get('/api/v1/stats/dashboard'),
       api.get('/api/v1/stats/conversions?days=30'),
-      api.get('/api/v1/stats/errors?limit=50'),
+      api.get('/api/v1/stats/errors?limit=10'),
       api.get('/api/v1/ratings')
     ]).then(function (results) {
       // Bubble auth failures up to the global gate (R8).
@@ -393,7 +420,8 @@
       // Recent errors feed (P23 hot spot)
       if (results[2].status === 'fulfilled') {
         var errs = (results[2].value && results[2].value.errors) || [];
-        grid.appendChild(sectionCard('Recent errors', errorsWidget(errs)));
+        var viewAllErrors = h('a', { class: 'admin-card__action', href: '#errors' }, 'View all →');
+        grid.appendChild(sectionCard('Recent errors', errorsWidget(errs), viewAllErrors));
       } else {
         grid.appendChild(
           errorCard('Recent errors', function () {

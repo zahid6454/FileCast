@@ -1,9 +1,9 @@
 """30-day purge (D5/P4) — the management command **and** its scheduler.
 
-Deletes stale ``user_conversions`` and ``errors`` rows (retention promise D5 —
-actually DELETE, not filter-on-read) and expired ``sessions``. Anonymous
-aggregates (``conversions``), anonymous ``ratings``, ``rating_feedback``, and
-contact-page ``messages`` are retained — the last two are deliberately
+Deletes stale ``user_conversions``, ``errors``, and ``conversion_visitors`` rows
+(retention promise D5 — actually DELETE, not filter-on-read) and expired
+``sessions``. Anonymous aggregates (``conversions``), anonymous ``ratings``,
+``rating_feedback``, and contact-page ``messages`` are retained — the last two are deliberately
 excluded: they're actionable feedback/support requests, not diagnostic noise,
 and purging them could discard something nobody has read yet. Idempotent.
 
@@ -39,7 +39,7 @@ from sqlalchemy import delete, func, select
 
 from data.config import settings
 from data.db import sync_session
-from data.models import Error, Session, UserConversion
+from data.models import ConversionVisitor, Error, Session, UserConversion
 
 # One day. The retention window is 30 days, so the exact hour is irrelevant —
 # what matters is that it runs unattended, often enough that the oldest row
@@ -79,6 +79,12 @@ def purge_expired() -> dict[str, int]:
         ).rowcount
         counts["sessions"] = db.execute(
             delete(Session).where(Session.expires_at < now)
+        ).rowcount
+        # The fingerprint rotates daily, so a dedup row is useless for its
+        # purpose past the day it was written — retention_days is just the
+        # existing daily cadence, not a meaningful window for this table.
+        counts["conversion_visitors"] = db.execute(
+            delete(ConversionVisitor).where(ConversionVisitor.date < cutoff.date())
         ).rowcount
     return counts
 

@@ -76,6 +76,44 @@ async def test_aggregate_increments_on_conflict(client, db):
     assert row.count == 3 and row.failures == 1
 
 
+async def test_unique_visitors_dedups_same_fingerprint_counts_distinct_ones(client, db):
+    # Same (fingerprint, tool, day) three times → reach stays 1, volume climbs.
+    for _ in range(3):
+        await client.post(
+            "/api/v1/conversions",
+            json=_payload(),
+            headers={"CF-Connecting-IP": "1.1.1.1"},
+        )
+    # A different client IP the same day → a second distinct visitor.
+    await client.post(
+        "/api/v1/conversions", json=_payload(), headers={"CF-Connecting-IP": "2.2.2.2"}
+    )
+    row = (
+        await db.execute(select(Conversion).where(Conversion.tool_id == "jpg-to-png"))
+    ).scalar_one()
+    assert row.count == 4
+    assert row.unique_visitors == 2
+
+
+async def test_visitor_dedup_failure_never_fails_counter(client, db, monkeypatch):
+    # unique_visitors is a best-effort metric, not the trust counter (D3): a
+    # dedup-ledger failure must roll back only itself, same as a history-insert
+    # failure, not poison the shared transaction and lose count/failures too.
+    from data.routers import conversions as conv
+
+    def _boom(*a, **kw):
+        raise RuntimeError("dedup boom")
+
+    monkeypatch.setattr(conv, "compute_fingerprint", _boom)
+    r = await client.post("/api/v1/conversions", json=_payload())
+    assert r.status_code == 200
+    row = (
+        await db.execute(select(Conversion).where(Conversion.tool_id == "jpg-to-png"))
+    ).scalar_one()
+    assert row.count == 1  # counter survived
+    assert row.unique_visitors == 0  # dedup rolled back, not counted
+
+
 async def test_history_failure_never_fails_counter(admin_client, db):
     # duration_ms overflows int4 → the history insert fails; the SAVEPOINT must
     # roll back only the history row, the counter must still commit (D3/P5).
