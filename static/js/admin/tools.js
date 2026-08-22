@@ -484,8 +484,8 @@
       handle,
       h('span', { class: 'admin-tool__moves' }, [up, down]),
       nameBtn,
-      buildSlotpicker(tool),
       h('span', { class: 'admin-tool__spacer' }),
+      buildSlotpicker(tool),
       toggle
     ]);
 
