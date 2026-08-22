@@ -2612,6 +2612,16 @@ img { max-width: 100%; display: block; }
 .badge--cloud { background: var(--color-primary-subtle); color: var(--color-primary); border-color: var(--color-primary); }
 .badge__icon { width: 12px; height: 12px; }
 
+/* Every other `.card` is an `<a>` with a real destination (tool cards,
+   the "Built With" credits) — `.card`'s pointer cursor and hover lift/shadow
+   are correct affordance there. about.html's "How It Works" pair are plain
+   `<div>`s explaining the Local/Cloud badges, not links, so without this
+   modifier they look clickable and do nothing on click. Placed after
+   `.card`/`.card:hover` (line ~609) to win on source order at equal
+   specificity. */
+.card--static { cursor: default; }
+.card--static:hover { transform: none; box-shadow: var(--shadow-md); }
+
 /* --- Why FileCast dark band --- */
 /* --- "Why sign in?" band (light, sits above the dark Why-FileCast band) --- */
 /* Hidden pre-paint for signed-in visitors: theme-init.js stamps data-auth in

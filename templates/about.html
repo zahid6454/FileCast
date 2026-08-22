@@ -25,7 +25,17 @@
   <div class="privacy-section">
     <h2>What this is</h2>
     <p>
-      This service converts files between formats &mdash; images, PDFs, documents, and data files. It's free to use, with no paywalls and no usage limits. Sign-up is optional &mdash; every tool works without an account.
+      This service converts files between formats &mdash; images, PDFs, documents, and developer data. It's free to use, with no paywalls and no usage limits. Sign-up is optional &mdash; every tool works without an account.
+    </p>
+    <p>
+      {# Computed from nav_categories (build.py's env.globals) rather than
+         hardcoded, so this sentence can't drift the way site-config.yaml's
+         meta description and README.md did after the Build Action Plan
+         tripled the tool count without anyone updating the prose that cited
+         the old one. #}
+      {% set total_tools = nav_categories.values() | map(attribute='tools') | map('length') | sum %}
+      There are {{ total_tools }} tools in total, spread across {{ nav_categories|length }} categories:
+      {%- for cat in nav_categories.values() %} <a href="/{{ cat.slug }}/">{{ cat.name }}</a> ({{ cat.tools|length }}){% if not loop.last %},{% endif %}{% endfor %}.
     </p>
     <p>
       Most conversion tools online either charge money, require an account, or quietly upload your files to a server. This service was built as an alternative: a tool that does what it says, respects your files, and doesn't ask for anything in return.
@@ -38,13 +48,13 @@
   </section>
 
   <div class="card-grid card-grid--lg u-mb-8">
-    <div class="card card--lg">
+    <div class="card card--lg card--static">
       <div>{{ processing_pill({'type': 'client-side'}) }}</div>
       <div class="card__desc u-mt-3">
         Most tools carry the <strong>Local</strong> badge &mdash; they run entirely in your browser. Your file never leaves your device; it's converted on your own computer, not on a server. These tools work offline once the page has loaded.
       </div>
     </div>
-    <div class="card card--lg">
+    <div class="card card--lg card--static">
       <div>{{ processing_pill({'type': 'server-side'}) }}</div>
       <div class="card__desc u-mt-3">
         A few conversions &mdash; like Word to PDF &mdash; need software that can't run in a browser. These carry the <strong>Cloud</strong> badge. Your file is sent over an encrypted connection, converted, and sent back. The file is deleted from the server immediately. Nothing is stored, logged, or retained.
@@ -112,6 +122,30 @@
     <a class="card card--lg" href="https://github.com/Donaldcwl/browser-image-compression" target="_blank" rel="noopener">
       <strong>browser-image-compression</strong>
       <div class="card__desc">Client-side image compression</div>
+    </a>
+    <a class="card card--lg" href="https://github.com/photopea/UTIF.js" target="_blank" rel="noopener">
+      <strong>UTIF.js</strong>
+      <div class="card__desc">TIFF decoding for browser-based conversion</div>
+    </a>
+    <a class="card card--lg" href="https://github.com/jamsinclair/jSquash" target="_blank" rel="noopener">
+      <strong>jSquash</strong>
+      <div class="card__desc">AVIF encoding and decoding via WebAssembly, in your browser</div>
+    </a>
+    <a class="card card--lg" href="https://github.com/dothinking/pdf2docx" target="_blank" rel="noopener">
+      <strong>pdf2docx</strong>
+      <div class="card__desc">PDF-to-Word conversion, on the server</div>
+    </a>
+    <a class="card card--lg" href="https://pymupdf.readthedocs.io/" target="_blank" rel="noopener">
+      <strong>PyMuPDF &amp; python-pptx</strong>
+      <div class="card__desc">PDF-to-PowerPoint conversion, on the server</div>
+    </a>
+    <a class="card card--lg" href="https://openpyxl.readthedocs.io/" target="_blank" rel="noopener">
+      <strong>pdfplumber &amp; openpyxl</strong>
+      <div class="card__desc">PDF-to-Excel conversion, on the server</div>
+    </a>
+    <a class="card card--lg" href="https://opencv.org/" target="_blank" rel="noopener">
+      <strong>OpenCV</strong>
+      <div class="card__desc">PNG-to-SVG vector tracing, on the server</div>
     </a>
   </div>
 

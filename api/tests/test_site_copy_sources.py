@@ -8,16 +8,17 @@ look, the DB silently won, and nothing warned about it.
 
 Each data migration that has ever corrected one of these fields
 (``0004_honest_site_description``, ``0007_seo_homepage_title``,
-``0008_seo_homepage_description``) carries its own copy of the replacement
-string so it can guard on the exact prior value. That gives us *three* copies
-of the same sentence (YAML, migration, and whatever is in the DB) per edit.
-These tests pin the two that live in the repo together — specifically, that
-the CURRENT YAML value matches the NEWEST migration to touch that field — so a
-future edit to one without the other is a test failure rather than a silent
-divergence that only shows up in production meta tags. Older, superseded
-migrations (0004's description fix) keep their own self-contained tests below,
-pinned to their own historical constants — those never change regardless of
-what ships later.
+``0008_seo_homepage_description``, ``0010_seo_tool_count_refresh``) carries
+its own copy of the replacement string so it can guard on the exact prior
+value. That gives us *three* copies of the same sentence (YAML, migration,
+and whatever is in the DB) per edit. These tests pin the two that live in the
+repo together — specifically, that the CURRENT YAML value matches the NEWEST
+migration to touch that field — so a future edit to one without the other is
+a test failure rather than a silent divergence that only shows up in
+production meta tags. Older, superseded migrations (0004's description fix,
+and now 0008's, superseded by 0010's tool-count refresh) keep their own
+self-contained tests below, pinned to their own historical constants — those
+never change regardless of what ships later.
 
 Deliberately no DB access — this is a source-consistency check, and it should
 fail fast in CI without a Postgres round trip.
@@ -35,8 +36,11 @@ SITE_CONFIG = ROOT / "site-config.yaml"
 VERSIONS = ROOT / "api" / "migrations" / "versions"
 MIGRATION = VERSIONS / "0004_honest_site_description.py"  # historical, description
 MIGRATION_TAGLINE = VERSIONS / "0007_seo_homepage_title.py"  # current, tagline
-MIGRATION_DESCRIPTION = (
+MIGRATION_DESCRIPTION_0008 = (
     VERSIONS / "0008_seo_homepage_description.py"
+)  # historical, description (superseded by 0010's tool-count refresh)
+MIGRATION_DESCRIPTION = (
+    VERSIONS / "0010_seo_tool_count_refresh.py"
 )  # current, description
 
 # Claims that are false for the six ``type: server-side`` tools *unless* the
@@ -134,8 +138,23 @@ def test_migration_0007_guard_value_is_not_the_new_value():
 
 
 def test_migration_0008_guard_value_is_not_the_new_value():
+    m = _load_migration(MIGRATION_DESCRIPTION_0008)
+    assert m.OLD_DESCRIPTION != m.NEW_DESCRIPTION
+
+
+def test_migration_0010_guard_value_is_not_the_new_value():
     m = _load_migration(MIGRATION_DESCRIPTION)
     assert m.OLD_DESCRIPTION != m.NEW_DESCRIPTION
+
+
+def test_migration_0010_chains_from_0008s_output():
+    """0010's guard must match what 0008 actually wrote, or the ``WHERE``
+    clause silently no-ops on every environment that ran 0008 (i.e. all of
+    them) — the same failure mode 0004->0008 already guards against via the
+    site-config match above."""
+    old = _load_migration(MIGRATION_DESCRIPTION_0008)
+    new = _load_migration(MIGRATION_DESCRIPTION)
+    assert new.OLD_DESCRIPTION == old.NEW_DESCRIPTION
 
 
 def test_replacement_fits_the_api_length_cap(site_config):
@@ -152,7 +171,7 @@ def test_replacement_fits_the_api_length_cap(site_config):
     assert len(tagline_migration.NEW_TAGLINE) <= TAGLINE_MAX
     assert len(tagline_migration.OLD_TAGLINE) <= TAGLINE_MAX
 
-    for path in (MIGRATION, MIGRATION_DESCRIPTION):
+    for path in (MIGRATION, MIGRATION_DESCRIPTION_0008, MIGRATION_DESCRIPTION):
         m = _load_migration(path)
         assert len(m.NEW_DESCRIPTION) <= DESCRIPTION_MAX
         assert len(m.OLD_DESCRIPTION) <= DESCRIPTION_MAX

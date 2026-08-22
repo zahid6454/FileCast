@@ -1090,8 +1090,9 @@ def write_tool_data(tools: list[dict]):
 # portable as every other build step (works identically on the ubuntu-latest
 # CI runner in deploy.yml and on a contributor's machine, unlike relying on a
 # system font that may or may not be installed there). Benchmarked at ~26ms
-# per image for the full set (34 tools + 3 categories + home + one shared
-# default = 39 renders, ~1s total) — not worth caching further.
+# per image; one render per tool + per category + home + one shared default —
+# well under a couple of seconds total even at the current tool count — not
+# worth caching further.
 #
 # One image per tool/category id, one for the homepage, and ONE shared
 # ``default.png`` for every other page (privacy, terms, about, contact, 404,
