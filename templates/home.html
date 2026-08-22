@@ -247,11 +247,11 @@
   <section class="section" id="{{ cat_data.slug }}">
     <h2 class="section__title">{% set words = cat_data.name.split() %}<span class="text-brand-blue">{{ words[0] }}</span> <span class="text-brand-green">{{ words[1:] | join(' ') }}</span></h2>
     <div class="section__divider"></div>
-    {# Show the first four tools of the category in the admin-controlled order
-       (build.py has already applied the global sort_order; disabled tools are
-       dropped upstream). The admin panel's "Shown on the homepage" divider
-       mirrors this exact rule, so reordering there moves tools here (R14). #}
-    {% set homepage_tools = cat_data.tools[:4] %}
+    {# Up to 4 admin-featured tools per category (build.py's attach_homepage_tools,
+       keyed on the DB `featured_slot`, independent of the dropdown's sort_order).
+       `remaining` still counts against the FULL category so the "View all" tile
+       reports the true hidden total, not just what didn't get a homepage slot. #}
+    {% set homepage_tools = cat_data.homepage_tools %}
     {% set remaining = cat_data.tools|length - homepage_tools|length %}
     <div class="card-grid{% if remaining > 0 %} card-grid--has-more{% endif %}">
       {% for tool in homepage_tools %}

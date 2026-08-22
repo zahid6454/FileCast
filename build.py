@@ -209,8 +209,8 @@ def load_site_config() -> dict:
 def fetch_tool_overrides() -> dict:
     """Read the admin tool-state overlay from Postgres via the Phase 1 sync engine.
 
-    Returns ``{tool_id: {enabled, display_name, sort_order, maintenance_message,
-    custom_max_file_size}}``, or ``{}`` on ANY failure (shared package not
+    Returns ``{tool_id: {enabled, display_name, sort_order, featured_slot,
+    maintenance_message, custom_max_file_size}}``, or ``{}`` on ANY failure (shared package not
     importable, ``DATABASE_URL`` unset/unreachable, DB down, empty table) so the
     build degrades to pure-YAML output. A tool absent from the result keeps its
     YAML defaults (ledger P10) — the build never fails closed on DB state.
@@ -235,6 +235,7 @@ def fetch_tool_overrides() -> dict:
                     "enabled": t.enabled,
                     "display_name": t.display_name,
                     "sort_order": t.sort_order,
+                    "featured_slot": t.featured_slot,
                     "maintenance_message": t.maintenance_message,
                     "custom_max_file_size": t.custom_max_file_size,
                 }
@@ -260,6 +261,9 @@ def apply_tool_overrides(tools: list[dict], overrides: dict) -> list[dict]:
       recomputes ``tool["max_file_size_bytes"]`` (the bytes value is what the
       client enforces via ``TOOL_CONFIG``; a stale one would be a silent bug — R3).
     - ``sort_order`` (not None) → ``tool["sort_order"]``.
+    - ``featured_slot`` (not None) → ``tool["featured_slot"]`` (homepage curation,
+      independent of ``sort_order`` — consumed by ``build()``'s post-grouping
+      pass, not this function's caller directly).
     - ``maintenance_message`` (non-empty) → ``tool["maintenance_message"]``.
     - A tool **absent** from ``overrides`` is left exactly as YAML produced it (P10).
 
@@ -293,6 +297,9 @@ def apply_tool_overrides(tools: list[dict], overrides: dict) -> list[dict]:
         sort_order = ov.get("sort_order")
         if sort_order is not None:
             tool["sort_order"] = sort_order
+        featured_slot = ov.get("featured_slot")
+        if featured_slot is not None:
+            tool["featured_slot"] = featured_slot
         maintenance = ov.get("maintenance_message")
         if maintenance:
             tool["maintenance_message"] = maintenance
@@ -573,6 +580,45 @@ def group_tools_by_category(tools: list[dict], categories: list[dict]) -> dict:
         if cat_tools:
             by_cat[cat["id"]] = {**cat, "tools": cat_tools}
     return by_cat
+
+
+def attach_homepage_tools(categories_with_tools: dict) -> None:
+    """Mutate each category dict in place, adding ``homepage_tools`` — the
+    admin-curated ``featured_slot`` subset (≤4, slot-ordered) home.html renders.
+
+    Kept separate from ``cat_data['tools']`` (which stays ``sort_order``-ordered
+    and full-length) because the homepage's "View all (N more)" tile needs the
+    TRUE category total, not the featured count — swapping in a homepage-only
+    grouped structure here would silently break that count.
+
+    A category with NOTHING slotted (the no-DB path, a fresh install before
+    0011's backfill runs, or every slotted tool has since been disabled) falls
+    back to today's positional ``tools[:4]`` instead of rendering an empty
+    grid — P10: a DB-down build must look identical to a working one, not
+    broken. This is an all-or-nothing per-CATEGORY fallback, not a per-tool
+    one: the moment an admin assigns even a single slot in a category, this
+    stops applying to it and what renders is exactly what was assigned, full
+    stop — that's the "manual control" the redesign was for.
+
+    Defensive against two tools sharing a slot (hand-edited DB, a category
+    reassigned mid-migration): sorts by ``(featured_slot, sort_order)`` and
+    keeps the first tool per slot value rather than rendering a 5th card or
+    crashing (P10 posture, matching this file's other overlay-consumers).
+    """
+    for cat_data in categories_with_tools.values():
+        slotted = [t for t in cat_data["tools"] if t.get("featured_slot") is not None]
+        if not slotted:
+            cat_data["homepage_tools"] = cat_data["tools"][:4]
+            continue
+        slotted.sort(key=lambda t: (t["featured_slot"], t["sort_order"]))
+        homepage_tools = []
+        seen_slots = set()
+        for t in slotted:
+            if t["featured_slot"] in seen_slots:
+                continue
+            seen_slots.add(t["featured_slot"])
+            homepage_tools.append(t)
+        cat_data["homepage_tools"] = homepage_tools[:4]
 
 
 # ---------------------------------------------------------------------------
@@ -2451,6 +2497,7 @@ def build():
     print("[4/11] Grouping tools by category")
     categories = site_config.get("categories", [])
     categories_with_tools = group_tools_by_category(tools, categories)
+    attach_homepage_tools(categories_with_tools)
     active_cats = list(categories_with_tools.keys())
     print(f"       Active categories: {active_cats if active_cats else '(none yet)'}")
 

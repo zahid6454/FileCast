@@ -5,6 +5,12 @@
 (including disabled ones) without reading YAML (C1). ``PUT /tools/reorder``
 assigns ``sort_order = array index`` over the full global ordering (C2), so it is
 declared **before** ``PUT /tools/{id}`` to avoid the path param shadowing it.
+
+``featured_slot`` (homepage curation, admin-panel redesign) is edited through
+the same ``PUT /tools/{id}`` as any other overlay field, but carries two
+invariants ``update_tool()`` enforces server-side rather than trusting the
+client's optimistic UI: a slot has exactly one owner per category (assigning
+it steals it from whoever held it), and a disabled tool can never hold one.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,6 +31,7 @@ class ToolUpdate(BaseModel):
     display_name: str | None = None
     maintenance_message: str | None = None
     custom_max_file_size: str | None = None
+    featured_slot: int | None = None
 
 
 class ReorderBody(BaseModel):
@@ -73,6 +80,36 @@ async def update_tool(
     fields = body.model_dump(exclude_unset=True)
     for key, value in fields.items():
         setattr(tool, key, value)
+
+    # A disabled tool can never hold a homepage seat, regardless of what else
+    # this same patch also tried to set.
+    if fields.get("enabled") is False:
+        tool.featured_slot = None
+
+    # A slot has exactly one owner per category — claiming it steals it from
+    # whoever held it, enforced here (not just the admin UI) so two admins
+    # editing at once, or a dropped response, can't leave two tools claiming
+    # the same seat. `.scalars().all()` (not `.scalar_one_or_none()`): if the
+    # invariant were ever already violated (hand-edited DB, a future bug) this
+    # self-heals by clearing every other holder instead of 500ing on
+    # MultipleResultsFound over what should be a routine edit.
+    if tool.featured_slot is not None and "featured_slot" in fields:
+        holders = (
+            (
+                await db.execute(
+                    select(Tool).where(
+                        Tool.category == tool.category,
+                        Tool.featured_slot == tool.featured_slot,
+                        Tool.id != tool.id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for holder in holders:
+            holder.featured_slot = None
+
     await db.commit()
     await db.refresh(tool)
     return {"tool": tool_dict(tool)}

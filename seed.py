@@ -10,7 +10,12 @@ Upsert policy (§11): refresh the seed-managed columns
 ``sort_order``/``enabled``/``category``/``name``/``input_format``/
 ``output_format``/``updated_at`` from YAML on every run, but never touch the
 admin-owned overlay columns ``display_name``/``maintenance_message``/
-``custom_max_file_size``.
+``custom_max_file_size``/``featured_slot`` (homepage curation) — except that a
+tool reclassified into a different category has its ``featured_slot`` cleared,
+since the old value could collide with whoever holds that slot in the new
+category. A category with no existing rows gets its featured slots
+auto-backfilled on insert (admin-panel redesign notes); an existing category is
+never touched.
 
 ``--only-new`` never touches an existing row's ``sort_order`` (that's the
 admin's manually-curated ordering) and appends newly-discovered tools after
@@ -133,19 +138,38 @@ def seed_tools(only_new: bool) -> None:
         next_new_sort_order = (
             max((t.sort_order for t in existing.values()), default=0) + 1
         )
+        # A category this run has never seen before gets its homepage slots
+        # auto-backfilled (1-4, in walk order, enabled tools only) the same way
+        # 0011_tool_featured_slot backfilled every category that existed at
+        # migration time — otherwise a brand-new category would be silently
+        # invisible on the homepage until an admin remembers to assign slots by
+        # hand. Scoped to categories with ZERO existing rows so this can never
+        # touch a tool an admin has already placed in an existing category.
+        existing_categories = {t.category for t in existing.values() if t.category}
+        next_featured_slot: dict[str, int] = {}
+
         for index, data in enumerate(ordered, start=1):
             tid = data["id"]
             row = existing.get(tid)
+            category = data.get("category")
             if row is None:
+                is_enabled = bool(data.get("enabled", True))
+                featured_slot = None
+                if is_enabled and category and category not in existing_categories:
+                    slot = next_featured_slot.get(category, 1)
+                    if slot <= 4:
+                        featured_slot = slot
+                    next_featured_slot[category] = slot + 1
                 db.add(
                     Tool(
                         id=tid,
-                        enabled=bool(data.get("enabled", True)),
+                        enabled=is_enabled,
                         sort_order=next_new_sort_order if only_new else index,
-                        category=data.get("category"),
+                        category=category,
                         name=data.get("name"),
                         input_format=data.get("input_format"),
                         output_format=data.get("output_format"),
+                        featured_slot=featured_slot,
                         updated_at=now,
                     )
                 )
@@ -156,9 +180,15 @@ def seed_tools(only_new: bool) -> None:
                 skipped += 1
             else:
                 # Refresh seed-managed columns; leave admin overlay untouched.
+                if row.category != category:
+                    # A reclassified tool can't keep a homepage seat that may
+                    # now collide with whatever already holds that slot in its
+                    # new category — clear it rather than lean on build.py's
+                    # dedup guard to paper over the collision.
+                    row.featured_slot = None
                 row.enabled = bool(data.get("enabled", True))
                 row.sort_order = index
-                row.category = data.get("category")
+                row.category = category
                 row.name = data.get("name")
                 row.input_format = data.get("input_format")
                 row.output_format = data.get("output_format")

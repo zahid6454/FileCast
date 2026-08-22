@@ -1,4 +1,5 @@
-// Tools tab (#tools) — Phase 4 §8.2.
+// Tools tab (#tools) — Phase 4 §8.2, homepage/dropdown decoupling (admin-panel
+// redesign notes).
 //
 // Groups the boot catalog by category (incl. disabled tools — C1), toggles
 // enable/disable, reorders via native HTML5 drag-and-drop AND keyboard
@@ -6,6 +7,13 @@
 // Reorder is category-constrained but always sends the FULL global order in ONE
 // PUT /tools/reorder (C2/R6). Every mutation is optimistic and reverts on a
 // failed write (R17); each success → save toast + deploy flow (§7).
+//
+// One list, three independent controls, deliberately NOT three separate lists:
+// drag/keyboard order still sets sort_order (dropdown top-10 + category page,
+// unchanged); the toggle is the one enable/disable control there is; the
+// 1-4 slot picker sets featured_slot (homepage curation, independent of
+// position). A slot has one owner per category — clicking one optimistically
+// steals it from whoever held it, same as update_tool() enforces server-side.
 (function () {
   'use strict';
   var ADMIN = (window.ADMIN = window.ADMIN || {});
@@ -142,24 +150,25 @@
     return tool.display_name || tool.name || tool.id;
   }
 
-  var HOMEPAGE_CAP = 4; // tools shown per category on the homepage (home.html)
+  var DROPDOWN_CAP = 10; // tools shown per category in the nav dropdown (base.html)
+  var SLOT_COUNT = 4; // homepage seats per category (home.html)
 
   function isEnabled(row) {
     var sw = row.querySelector('.admin-switch');
     return !!sw && sw.getAttribute('aria-checked') === 'true';
   }
 
-  // Place the "Shown on the homepage" divider from the CURRENT DOM order, so it
+  // Place the "Shown in dropdown" divider from the CURRENT DOM order, so it
   // stays correct live after every reorder/toggle (not just at load). Mirrors
-  // home.html exactly: the first HOMEPAGE_CAP ENABLED tools of a category, in
-  // sort_order, land on the homepage; the divider sits right after the last of
+  // base.html exactly: the first DROPDOWN_CAP ENABLED tools of a category, in
+  // sort_order, reach the nav menu; the divider sits right after the last of
   // them. Disabled tools keep their slot but don't count toward the cap, so one
-  // between homepage tools stays above the line while trailing ones fall below.
-  function refreshDivider(section) {
+  // between dropdown tools stays above the line while trailing ones fall below.
+  function refreshDropdownDivider(section) {
     var rows = Array.prototype.slice.call(section.querySelectorAll('.admin-tool'));
     var seen = 0;
     var cutoff = 0; // number of rows that sit above the divider
-    for (var i = 0; i < rows.length && seen < HOMEPAGE_CAP; i++) {
+    for (var i = 0; i < rows.length && seen < DROPDOWN_CAP; i++) {
       if (isEnabled(rows[i])) {
         seen++;
         cutoff = i + 1;
@@ -170,13 +179,147 @@
     // Only draw it when a tool actually sits below the line.
     if (cutoff > 0 && cutoff < rows.length) {
       var anchor = rows[cutoff - 1];
-      anchor.parentNode.insertBefore(homepageDivider(), anchor.nextSibling);
+      anchor.parentNode.insertBefore(dropdownDivider(), anchor.nextSibling);
     }
   }
 
-  function homepageDivider() {
+  function dropdownDivider() {
     return h('li', { class: 'admin-tool-divider', 'aria-hidden': 'true' }, [
-      h('span', { class: 'admin-tool-divider__label' }, 'Shown on the homepage ↑')
+      h('span', { class: 'admin-tool-divider__label' }, 'Shown in dropdown ↑')
+    ]);
+  }
+
+  // --- homepage slot picker + preview (featured_slot) ----------------------
+
+  function renderSlotpickerButtons(picker) {
+    dom.clear(picker);
+    var active = picker.dataset.slot;
+    for (var i = 1; i <= SLOT_COUNT; i++) {
+      var isActive = String(i) === active;
+      picker.appendChild(
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'admin-slotpicker__btn' + (isActive ? ' is-active' : ''),
+            'aria-pressed': isActive ? 'true' : 'false',
+            'aria-label': 'Homepage slot ' + i,
+            dataset: { value: String(i) }
+          },
+          String(i)
+        )
+      );
+    }
+  }
+
+  function buildSlotpicker(tool) {
+    var picker = h('span', {
+      class: 'admin-slotpicker',
+      dataset: { slot: tool.featured_slot ? String(tool.featured_slot) : '' }
+    });
+    renderSlotpickerButtons(picker);
+    picker.addEventListener('click', function (e) {
+      var btn = e.target.closest('.admin-slotpicker__btn');
+      if (btn) onSlotClick(tool, picker, btn.dataset.value);
+    });
+    return picker;
+  }
+
+  // A slot has exactly one owner per category. Assigning it optimistically
+  // clears whoever else in this list currently shows it active — one PUT
+  // request (for the tool gaining the slot) is enough; update_tool() applies
+  // the same steal rule server-side, so the previous holder's row is already
+  // correct without a second request. Clicking an already-active slot clears it.
+  function onSlotClick(tool, picker, value) {
+    var list = picker.closest('.admin-toollist');
+    var current = picker.dataset.slot;
+    var next = current === value ? '' : value;
+
+    var stolenFrom = null;
+    if (next) {
+      Array.prototype.forEach.call(list.querySelectorAll('.admin-slotpicker'), function (p) {
+        if (p !== picker && p.dataset.slot === next) stolenFrom = p;
+      });
+    }
+    var prevValue = current;
+    var stolenPrevValue = stolenFrom ? stolenFrom.dataset.slot : '';
+
+    picker.dataset.slot = next;
+    renderSlotpickerButtons(picker);
+    if (stolenFrom) {
+      stolenFrom.dataset.slot = '';
+      renderSlotpickerButtons(stolenFrom);
+    }
+    refreshPreview(list);
+
+    api
+      .put('/api/v1/tools/' + encodeURIComponent(tool.id), {
+        featured_slot: next ? parseInt(next, 10) : null
+      })
+      .then(function () {
+        tool.featured_slot = next ? parseInt(next, 10) : null;
+        if (ADMIN.catalog) ADMIN.catalog.patch(tool.id, { featured_slot: tool.featured_slot });
+        if (stolenFrom) {
+          var stolenId = stolenFrom.closest('.admin-tool').dataset.toolId;
+          if (ADMIN.catalog) ADMIN.catalog.patch(stolenId, { featured_slot: null });
+        }
+        ADMIN.notifySaved();
+      })
+      .catch(function (err) {
+        if (err && err.isAuthError) return ADMIN.onAuthError(err);
+        picker.dataset.slot = prevValue;
+        renderSlotpickerButtons(picker);
+        if (stolenFrom) {
+          stolenFrom.dataset.slot = stolenPrevValue;
+          renderSlotpickerButtons(stolenFrom);
+        }
+        refreshPreview(list);
+        ADMIN.toast('Could not update — reverted', 'error');
+      });
+  }
+
+  // Read-only "Homepage shows" strip, recomputed from the CURRENT DOM order —
+  // same live-recompute approach as refreshDropdownDivider, so it never drifts
+  // from what the slot pickers actually show.
+  function refreshPreview(list) {
+    var section = list.closest('.admin-toolgroup');
+    var chipsEl = section && section.querySelector('.admin-homepage-preview__chips');
+    if (!chipsEl) return;
+    var picks = [];
+    Array.prototype.forEach.call(list.querySelectorAll('.admin-tool'), function (row) {
+      var picker = row.querySelector('.admin-slotpicker');
+      var slot = picker && picker.dataset.slot;
+      if (slot) picks.push({ slot: parseInt(slot, 10), id: row.dataset.toolId });
+    });
+    picks.sort(function (a, b) {
+      return a.slot - b.slot;
+    });
+    dom.clear(chipsEl);
+    if (picks.length === 0) {
+      chipsEl.appendChild(
+        h('span', { class: 'admin-homepage-preview__empty' }, 'No tools featured yet')
+      );
+      return;
+    }
+    picks.forEach(function (p) {
+      var name = ADMIN.catalog ? ADMIN.catalog.label(p.id) : p.id;
+      chipsEl.appendChild(
+        h('span', { class: 'admin-homepage-preview__chip' }, [
+          h(
+            'span',
+            { class: 'admin-homepage-preview__chip-num', 'aria-hidden': 'true' },
+            String(p.slot)
+          ),
+          name
+        ])
+      );
+    });
+  }
+
+  function buildHomepagePreview() {
+    return h('div', { class: 'admin-homepage-preview' }, [
+      h('span', { class: 'admin-homepage-preview__label' }, 'Homepage shows'),
+      h('span', { class: 'admin-homepage-preview__chips' })
     ]);
   }
 
@@ -212,9 +355,13 @@
       h('strong', 'Toggle'),
       ' shows or hides a tool across the whole site. ',
       h('strong', 'Drag ≡ or use ▲ ▼'),
-      ' to set the order within a category. Tools above the ',
-      h('strong', '“Shown on the homepage”'),
-      ' line appear on the homepage (up to four per category); the rest live on the category page. Disabled tools keep their slot. Changes save immediately — click ',
+      ' to set its order in the dropdown menu and category page — tools above the ',
+      h('strong', '“Shown in dropdown”'),
+      ' line reach the menu (up to ten per category); the rest still live on the category page. ',
+      h('strong', 'Click a number (1–4)'),
+      ' to feature a tool on the homepage in that seat, independent of its position above — ',
+      h('strong', '“Homepage shows”'),
+      ' lists the current picks. Disabling a tool clears its homepage seat too. Changes save immediately — click ',
       h('strong', 'Publish'),
       ' in the banner above to make them live.'
     ]);
@@ -262,7 +409,7 @@
 
   function buildRow(tool) {
     var row = h('li', {
-      class: 'admin-tool',
+      class: 'admin-tool' + (tool.enabled ? '' : ' admin-tool--disabled'),
       draggable: 'true',
       dataset: { toolId: tool.id, category: tool.category || 'other' }
     });
@@ -337,6 +484,7 @@
       handle,
       h('span', { class: 'admin-tool__moves' }, [up, down]),
       nameBtn,
+      buildSlotpicker(tool),
       h('span', { class: 'admin-tool__spacer' }),
       toggle
     ]);
@@ -365,7 +513,7 @@
       section.insertBefore(sibling, row);
     }
     refreshMoveButtons(section);
-    refreshDivider(section);
+    refreshDropdownDivider(section);
     // Keep focus on the row we just moved. The button we pressed may now be
     // disabled (row landed at a category boundary) — a disabled button can't
     // hold focus and it would fall to <body>, so fall back to the opposite,
@@ -430,7 +578,7 @@
       section.insertBefore(dragEl, after ? row.nextElementSibling : row);
       clearDropTargets();
       refreshMoveButtons(section);
-      refreshDivider(section);
+      refreshDropdownDivider(section);
       persistOrder();
     });
   }
@@ -450,16 +598,33 @@
 
   function toggleTool(tool, toggle, nameBtn) {
     var next = toggle.getAttribute('aria-checked') !== 'true';
+    var row = toggle.closest('.admin-tool');
     var section = toggle.closest('.admin-toollist');
+    var picker = row && row.querySelector('.admin-slotpicker');
+    var prevSlot = picker ? picker.dataset.slot : '';
     // optimistic
     toggle.setAttribute('aria-checked', next ? 'true' : 'false');
     setDisabledBadge(nameBtn, !next);
-    if (section) refreshDivider(section); // membership changed → move the line
+    if (row) row.classList.toggle('admin-tool--disabled', !next);
+    // Disabling clears the homepage slot too — a disabled tool can't hold a
+    // seat (update_tool() enforces this server-side regardless of what we do
+    // here). Re-enabling does NOT restore it; the admin re-picks a seat.
+    if (!next && picker && picker.dataset.slot) {
+      picker.dataset.slot = '';
+      renderSlotpickerButtons(picker);
+    }
+    if (section) {
+      refreshDropdownDivider(section); // membership changed → move the line
+      refreshPreview(section);
+    }
     api
       .put('/api/v1/tools/' + encodeURIComponent(tool.id), { enabled: next })
       .then(function (res) {
         tool.enabled = next;
-        if (ADMIN.catalog) ADMIN.catalog.patch(tool.id, { enabled: next });
+        if (!next) tool.featured_slot = null;
+        if (ADMIN.catalog) {
+          ADMIN.catalog.patch(tool.id, { enabled: next, featured_slot: tool.featured_slot });
+        }
         ADMIN.notifySaved();
       })
       .catch(function (err) {
@@ -467,7 +632,15 @@
         // revert
         toggle.setAttribute('aria-checked', next ? 'false' : 'true');
         setDisabledBadge(nameBtn, next);
-        if (section) refreshDivider(section);
+        if (row) row.classList.toggle('admin-tool--disabled', next);
+        if (!next && picker && prevSlot) {
+          picker.dataset.slot = prevSlot;
+          renderSlotpickerButtons(picker);
+        }
+        if (section) {
+          refreshDropdownDivider(section);
+          refreshPreview(section);
+        }
         ADMIN.toast('Could not update — reverted', 'error');
       });
   }
@@ -676,11 +849,13 @@
           wrap.appendChild(
             h('section', { class: 'admin-toolgroup' }, [
               h('h2', { class: 'admin-toolgroup__title' }, catTitle(cat)),
+              buildHomepagePreview(),
               list
             ])
           );
           refreshMoveButtons(list);
-          refreshDivider(list); // draw the homepage line from the rendered order
+          refreshDropdownDivider(list); // draw the dropdown-cutoff line from the rendered order
+          refreshPreview(list); // populate "Homepage shows" from the rendered slots
         });
         container.appendChild(wrap);
       })

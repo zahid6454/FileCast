@@ -39,6 +39,7 @@ def tool_dict(tool: Tool) -> dict:
         "enabled": tool.enabled,
         "display_name": tool.display_name,
         "sort_order": tool.sort_order,
+        "featured_slot": tool.featured_slot,
         "maintenance_message": tool.maintenance_message,
         "custom_max_file_size": tool.custom_max_file_size,
         "category": tool.category,

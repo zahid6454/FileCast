@@ -23,7 +23,8 @@ export function makeState(overrides = {}) {
         maintenance_message: null,
         custom_max_file_size: null,
         input_format: 'A',
-        output_format: 'B'
+        output_format: 'B',
+        featured_slot: null
       },
       {
         id: 'img-b',
@@ -35,7 +36,8 @@ export function makeState(overrides = {}) {
         maintenance_message: null,
         custom_max_file_size: null,
         input_format: 'A',
-        output_format: 'B'
+        output_format: 'B',
+        featured_slot: null
       },
       {
         id: 'img-c',
@@ -47,7 +49,8 @@ export function makeState(overrides = {}) {
         maintenance_message: null,
         custom_max_file_size: null,
         input_format: 'A',
-        output_format: 'B'
+        output_format: 'B',
+        featured_slot: null
       },
       {
         id: 'doc-a',
@@ -59,7 +62,8 @@ export function makeState(overrides = {}) {
         maintenance_message: null,
         custom_max_file_size: null,
         input_format: 'A',
-        output_format: 'B'
+        output_format: 'B',
+        featured_slot: null
       },
       {
         id: 'doc-b',
@@ -71,7 +75,8 @@ export function makeState(overrides = {}) {
         maintenance_message: null,
         custom_max_file_size: null,
         input_format: 'A',
-        output_format: 'B'
+        output_format: 'B',
+        featured_slot: null
       }
     ],
     announcements: overrides.announcements || [],
@@ -255,7 +260,19 @@ export async function installApi(page, state) {
     if (toolMatch && method === 'PUT') {
       const t = state.tools.find((x) => x.id === toolMatch[1]);
       if (!t) return json({ detail: 'Tool not found' }, 404);
-      Object.assign(t, body());
+      const fields = body();
+      Object.assign(t, fields);
+      // Mirrors update_tool()'s two server-side invariants (not just the admin
+      // UI's optimistic behavior) so tests exercise the real contract:
+      if (fields.enabled === false) {
+        t.featured_slot = null; // a disabled tool can never hold a homepage seat
+      }
+      if (t.featured_slot != null && 'featured_slot' in fields) {
+        const holder = state.tools.find(
+          (x) => x.id !== t.id && x.category === t.category && x.featured_slot === t.featured_slot
+        );
+        if (holder) holder.featured_slot = null; // a slot has one owner per category
+      }
       return json({ tool: t });
     }
 
