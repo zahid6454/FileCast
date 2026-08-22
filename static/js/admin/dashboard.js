@@ -118,7 +118,7 @@
           'No data yet'
         )
       );
-      return frame;
+      return h('div', { class: 'admin-chart-wrap' }, [frame]);
     }
 
     var n = series.length;
@@ -167,11 +167,28 @@
       xAt(0).toFixed(1) + ',' + baseY + ' ' + points + ' ' + xAt(n - 1).toFixed(1) + ',' + baseY;
     frame.appendChild(svg('polygon', { class: 'admin-chart__area', points: areaPoints }));
     frame.appendChild(svg('polyline', { class: 'admin-chart__line', points: points }));
-    // point dots — a larger invisible hit-area circle carries the <title> (the
-    // visible 2.5px dot is too small a hover target on its own), giving a
-    // native browser tooltip with the exact date/count/failures for that day.
+    // point dots — a larger invisible hit-area circle carries the hover/focus
+    // target (the visible 2.5px dot is too small on its own). A JS-driven
+    // tooltip div (below) shows the exact date/count/failures for that day —
+    // an SVG <title> was tried first but its native browser tooltip has a
+    // multi-second hover delay that reads as "nothing happens" (reported).
     // No per-tool breakdown: this series is a same-day sum across every tool,
     // so that's all there is to show without a different, heavier query.
+    var wrap = h('div', { class: 'admin-chart-wrap' });
+    var tip = h('div', { class: 'admin-chart__tooltip', role: 'status' });
+
+    function showTip(clientX, clientY, label) {
+      dom.clear(tip);
+      tip.appendChild(document.createTextNode(label));
+      var rect = wrap.getBoundingClientRect();
+      tip.style.left = clientX - rect.left + 'px';
+      tip.style.top = clientY - rect.top + 'px';
+      tip.classList.add('is-visible');
+    }
+    function hideTip() {
+      tip.classList.remove('is-visible');
+    }
+
     series.forEach(function (p, i) {
       var cx = xAt(i).toFixed(1);
       var cy = yAt(p.count).toFixed(1);
@@ -181,16 +198,37 @@
         p.count +
         (p.count === 1 ? ' conversion' : ' conversions') +
         (p.failures ? ', ' + p.failures + (p.failures === 1 ? ' failure' : ' failures') : '');
+      var hit = svg('circle', {
+        class: 'admin-chart__hit',
+        cx: cx,
+        cy: cy,
+        r: 10,
+        tabindex: 0,
+        role: 'img',
+        'aria-label': label
+      });
+      hit.addEventListener('pointerenter', function (e) {
+        showTip(e.clientX, e.clientY, label);
+      });
+      hit.addEventListener('pointermove', function (e) {
+        showTip(e.clientX, e.clientY, label);
+      });
+      hit.addEventListener('pointerleave', hideTip);
+      hit.addEventListener('focus', function () {
+        var r = hit.getBoundingClientRect();
+        showTip(r.left + r.width / 2, r.top, label);
+      });
+      hit.addEventListener('blur', hideTip);
       frame.appendChild(
         svg('g', { class: 'admin-chart__point' }, [
-          svg('circle', { class: 'admin-chart__hit', cx: cx, cy: cy, r: 8 }, [
-            svg('title', {}, label)
-          ]),
-          svg('circle', { class: 'admin-chart__dot', cx: cx, cy: cy, r: 2.5 })
+          hit,
+          svg('circle', { class: 'admin-chart__dot', cx: cx, cy: cy, r: 3.15 })
         ])
       );
     });
-    return frame;
+    wrap.appendChild(frame);
+    wrap.appendChild(tip);
+    return wrap;
   }
 
   // Top-tools horizontal bar chart. `tools` = [{tool_id,count}].
@@ -271,7 +309,7 @@
         'Unique visitors',
         String(data.total_unique_visitors),
         'anonymous + signed-in, by day',
-        null
+        'info'
       ),
       statCard('Users', String(data.total_users), null, 'success'),
       statCard(
@@ -420,7 +458,10 @@
       // Recent errors feed (P23 hot spot)
       if (results[2].status === 'fulfilled') {
         var errs = (results[2].value && results[2].value.errors) || [];
-        var viewAllErrors = h('a', { class: 'admin-card__action', href: '#errors' }, 'View all →');
+        var viewAllErrors =
+          errs.length > 0
+            ? h('a', { class: 'admin-card__action', href: '#errors' }, 'View all →')
+            : null;
         grid.appendChild(sectionCard('Recent errors', errorsWidget(errs), viewAllErrors));
       } else {
         grid.appendChild(

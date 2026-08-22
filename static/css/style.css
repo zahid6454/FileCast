@@ -49,6 +49,11 @@
   --color-warning: #F59E0B;
   --color-warning-light: #FEF3C7;
 
+  /* Info (lavender) — no inherent success/warning/error meaning, e.g. the
+     admin dashboard's "Unique visitors" stat card. */
+  --color-info: #8B5CF6;
+  --color-info-light: #EDE9FE;
+
   /* Account page stat/empty-state icon badges (fav/conv/upload/member).
      Light-mode values here; the dark blocks below redefine both fg and bg
      brighter/more saturated — a flat light-mode hex reads muddy against a
@@ -252,6 +257,9 @@
     --color-warning: #FBBF24;
     --color-warning-light: #451A03;
 
+    --color-info: #A78BFA;
+    --color-info-light: #2E1065;
+
     --color-text: #F4F4F5;
     --color-heading: #F4F4F5;
     --color-text-secondary: #D4D4D8;
@@ -337,6 +345,9 @@
 
   --color-warning: #FBBF24;
   --color-warning-light: #451A03;
+
+  --color-info: #A78BFA;
+  --color-info-light: #2E1065;
 
   --color-text: #F4F4F5;
   --color-heading: #F4F4F5;
