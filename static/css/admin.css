@@ -454,6 +454,24 @@
   margin: 0 0 var(--space-4);
   color: var(--color-text);
 }
+.admin-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.admin-card__head .admin-card__title {
+  margin: 0 0 var(--space-4);
+}
+.admin-card__action {
+  font-size: var(--text-sm);
+  color: var(--color-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.admin-card__action:hover {
+  text-decoration: underline;
+}
 .admin-loading {
   padding: var(--space-8);
   text-align: center;
@@ -593,6 +611,10 @@
 }
 .admin-chart__dot {
   fill: var(--color-primary);
+}
+.admin-chart__hit {
+  fill: transparent;
+  pointer-events: all;
 }
 .admin-chart__tick,
 .admin-chart__barlabel,
