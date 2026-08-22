@@ -88,14 +88,14 @@ code ships, what watches it, what it's connected to — looks like this:
 | Cloudflare DNS + Registrar |  | Gotenberg + Ghostscript    |  | workflows)                 |
 +----------------------------+  +----------------------------+  +----------------------------+
 
-+----------------------------+  +----------------------------+  +----------------------------+
-| Analytics & SEO            |  | Monitoring                 |  | Other                      |
-| ---------------            |  | ----------                 |  | -----                      |
-| Google Analytics 4         |  | UptimeRobot                |  | Buy Me a Coffee            |
-| Google Search Console      |  | Sentry (frontend +         |  | (donations)                |
-| AdSense (built, not        |  | backend)                   |  |                            |
-| enabled)                   |  |                            |  |                            |
-+----------------------------+  +----------------------------+  +----------------------------+
++----------------------------+  +----------------------------+
+| Analytics & SEO            |  | Monitoring                 |
+| ---------------            |  | ----------                 |
+| Google Analytics 4         |  | UptimeRobot                |
+| Google Search Console      |  | Sentry (frontend +         |
+| AdSense (built, not        |  | backend)                   |
+| enabled)                   |  |                            |
++----------------------------+  +----------------------------+
 ```
 
 Full detail on every piece — deploy triggers, monitoring cadence, what's live vs.

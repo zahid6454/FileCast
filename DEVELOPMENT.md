@@ -415,7 +415,6 @@ Known integrations and current status:
 | Sentry | Error tracking (frontend + backend) | Live, separate projects for each |
 | UptimeRobot | Uptime monitoring | Live |
 | Google OAuth | Sign-in | Live, `openid email profile` scopes only (no Google verification review required) |
-| Buy Me a Coffee | Donation link | Live (outbound link only, footer) |
 | Email delivery | — | **None** — no email-sending service anywhere in the stack; this is why auth is Google-only (an email/password flow was built and then reverted specifically because there was nothing to send verification/reset emails with) |
 | CAPTCHA | Bot mitigation | **None** — deliberately deferred until abuse is actually observed |
 
