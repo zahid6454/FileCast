@@ -5,11 +5,13 @@ site:
   # SEO Phase 1 (O2 report §4.4/§13 #6): describes the product (what/how many/
   # free) instead of only the privacy model, while keeping the P15 "most tools"
   # qualifier (ledger §9) — still false to claim ALL processing is in-browser
-  # given the 6 server-side tools. NOTE: since Phase 7 this field is also
+  # given the 10 server-side tools. NOTE: since Phase 7 this field is also
   # stored in site_settings (id=1) and the DB overlay WINS at build time, so
   # editing this line alone is a no-op on any environment that has a settings
-  # row. Migration 0008 corrects the row.
-  description: "Convert documents, images, and data files for free — 34 tools, no sign-up, no limits. Most conversions happen in your browser. PDF, DOCX, PNG, JPG, CSV, JSON, and more."
+  # row. Migration 0010 corrects the row (0008's "34 tools" count went stale
+  # once the Build Action Plan tripled the catalogue; 0010 is now the current
+  # migration for this field, same pattern 0008 followed from 0004).
+  description: "Convert documents, images, and data files for free — 99 tools, no sign-up, no limits. Most conversions happen in your browser. PDF, DOCX, PNG, JPG, CSV, JSON, and more."
 
 adsense:
   enabled: false

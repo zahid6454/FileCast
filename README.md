@@ -4,9 +4,10 @@ FileCast (`filecast.org`) is a privacy-first, free file conversion platform buil
 a simple promise: **"Your Files Stay Yours."**
 
 Unlike traditional file converters that upload every file to a remote server, FileCast
-runs **65 of its 71 tools** entirely inside the browser (files never leave the device)
-and reserves a small, ephemeral FastAPI backend for the **6 tools** that genuinely
-need server-side engines (LibreOffice, Chromium, Ghostscript). It also has accounts
+runs **89 of its 99 tools** entirely inside the browser (files never leave the device)
+and reserves a small, ephemeral FastAPI backend for the **10 tools** that genuinely
+need server-side engines (LibreOffice, Chromium, Ghostscript, or a Python library with
+no browser equivalent). It also has accounts
 (Google sign-in), per-tool ratings, an admin panel, and a 30-day data-retention policy
 with a GDPR self-export/self-delete flow.
 
@@ -34,8 +35,9 @@ For local setup, VS Code configuration, CI/CD, and production operations, see
 
 - **Zero-Barrier Use:** Free to use, no signup required, no paywalls.
 - **Privacy-First Design:** Conversions run client-side wherever technically possible;
-  the six that can't (Office/HTML→PDF, PDF→DOCX, PDF compression) still hold nothing —
-  files are converted in memory and discarded, never written to disk or a database.
+  the ten that can't (Office/HTML/EPUB→PDF, PDF→DOCX/PPTX/XLSX, PDF compression,
+  PNG→SVG) still hold nothing — files are converted in memory and discarded, never
+  written to disk or a database.
 - **Minimal Cost Structure:** Runs on free-tier infrastructure end to end (Cloudflare
   Pages, Oracle Cloud Always Free, Neon free tier, UptimeRobot free, Sentry free/trial).
 - **No Framework Bloat:** Hand-crafted Python, Jinja2, vanilla CSS, and vanilla
@@ -53,10 +55,10 @@ For local setup, VS Code configuration, CI/CD, and production operations, see
         v
     +-----------------------------+
     | Cloudflare Pages (Static)   |  filecast.org
-    | dist/ - 71 tool pages, etc. |
+    | dist/ - 99 tool pages, etc. |
     +-----------------------------+
                   |
-                  |  HTTPS - only for the 6 server-side tools + auth/ratings/admin calls
+                  |  HTTPS - only for the 10 server-side tools + auth/ratings/admin calls
                   v
     +-----------------------------+
     | Cloudflare Tunnel           |  api.filecast.org
@@ -110,8 +112,8 @@ A FastAPI backend wraps Gotenberg (LibreOffice + Chromium headless) and Ghostscr
 for the handful of conversions a browser genuinely can't do. It also owns everything
 that needs a database: accounts, sessions, ratings, announcements, admin actions, and
 the retention/purge job. Files are received over HTTPS, converted in memory, streamed
-back, and never persisted. If the API is down, the 65 client-side tools keep working —
-only the 6 server-side tools and account features degrade.
+back, and never persisted. If the API is down, the 89 client-side tools keep working —
+only the 10 server-side tools and account features degrade.
 
 See [DEVELOPMENT.md § Production Architecture](DEVELOPMENT.md#production-architecture)
 for the full infrastructure diagram (Cloudflare, Oracle VM, Neon, deploy paths).
@@ -120,16 +122,16 @@ for the full infrastructure diagram (Cloudflare, Oracle VM, Neon, deploy paths).
 
 ## The Conversion Tools Suite
 
-**71 tools** across 3 categories — **65 run entirely in the browser**, **6 run on the
+**99 tools** across 3 categories — **89 run entirely in the browser**, **10 run on the
 backend**.
 
 | Category | Tools | Client-side | Server-side |
 |---|---|---|---|
 | Developer Tools | 35 | 35 | 0 |
-| Document Conversion | 22 | 16 | 6 |
-| Image Conversion | 14 | 14 | 0 |
+| Document Conversion | 32 | 23 | 9 |
+| Image Conversion | 32 | 31 | 1 |
 
-### Document Conversion (22 tools)
+### Document Conversion (32 tools)
 
 | Tool | Execution | Engine | Max size |
 |---|---|---|---|
@@ -137,7 +139,10 @@ backend**.
 | XLSX → PDF | Server | Gotenberg / LibreOffice | 25MB |
 | PPTX → PDF | Server | Gotenberg / LibreOffice | 25MB |
 | HTML → PDF | Server | Gotenberg / Chromium | 25MB |
+| EPUB → PDF | Server | Custom EPUB flattener → Gotenberg / Chromium | 25MB |
 | PDF → DOCX | Server | `pdf2docx` | 25MB |
+| PDF → PPTX | Server | PyMuPDF + `python-pptx` | 25MB |
+| PDF → XLSX | Server | `pdfplumber` + `openpyxl` | 25MB |
 | PDF Compressor | Server | Ghostscript | 25MB |
 | PDF Merge | Client | pdf-lib (Web Worker) | 50MB |
 | PDF Split | Client | pdf-lib | 50MB |
@@ -154,12 +159,24 @@ backend**.
 | PDF → PDF/A | Client | pdf-lib | 50MB |
 | PDF → JPG | Client | pdf.js / Canvas | 50MB |
 | PDF → PNG | Client | pdf.js / Canvas | 50MB |
+| PDF → HTML | Client | pdf.js | 50MB |
+| PDF → Text | Client | pdf.js | 50MB |
 | Image → PDF | Client | pdf-lib | 20MB |
+| JPG → PDF | Client | pdf-lib | 20MB |
+| PNG → PDF | Client | pdf-lib | 20MB |
+| TXT → PDF | Client | pdf-lib | 5MB |
+| Markdown → PDF | Client | pdf-lib | 5MB |
+| Markdown → DOCX | Client | Custom DOCX/OOXML writer | 5MB |
 
-### Image Conversion (14 tools — all client-side, 20MB limit, 10MB for bulk)
+### Image Conversion (32 tools — 31 client-side, 1 server-side)
 
-HEIC→JPG, PNG→JPG, JPG→PNG, WebP→JPG, WebP→PNG, JPG→WebP, PNG→WebP, SVG→PNG,
-BMP→JPG, GIF→JPG, TIFF→JPG, Image Compressor, Image Resizer, Bulk Image Compressor.
+31 client-side, mostly a 20MB limit (10MB for Bulk Image Compressor, Image to Base64,
+and SVG Optimizer): AVIF↔JPG/PNG/WebP, HEIC→JPG/PNG/WebP, BMP→JPG, GIF→JPG/PNG,
+ICO→PNG, PNG↔ICO/JPG/WebP, JPG↔PNG/WebP, WebP→JPG/PNG, SVG→JPG/PNG, SVG Optimizer,
+TIFF→JPG/PNG, Image Compressor, Image Cropper, Image Resizer, Image Rotate/Flip,
+Image EXIF/Metadata Remover, Image to Base64, Bulk Image Compressor.
+
+1 server-side: **PNG → SVG** (vectorize), via OpenCV, 10MB.
 
 ### Developer Tools (35 tools — all client-side, 5MB limit)
 
@@ -214,7 +231,7 @@ FileCast has a real backend behind the "convert files" surface:
 
 ### Client-Side Tools
 1. **Zero Data Upload:** Files are processed with browser-resident WebAssembly or
-   JavaScript. No file payload is ever sent over the network for these 65 tools.
+   JavaScript. No file payload is ever sent over the network for these 89 tools.
 2. **Memory Isolation:** Files live only in the active tab's RAM; download Blob URLs
    are explicitly revoked after use. Several PDF tools run inside a dedicated Web
    Worker to keep the main thread responsive on large files.
@@ -232,7 +249,7 @@ FileCast has a real backend behind the "convert files" surface:
    capabilities, tmpfs scratch space, and a memory cap.
 3. **No Storage:** Uploaded files are read into a capped in-memory buffer, converted,
    streamed back to the client, and discarded — nothing is written to disk or a DB.
-4. **Rate Limiting:** Per-IP, per-endpoint limits (e.g. 20/hour on the six conversion
+4. **Rate Limiting:** Per-IP, per-endpoint limits (e.g. 20/hour on the ten conversion
    endpoints, tighter still on auth endpoints) return `429` on abuse.
 5. **No Public Ingress:** The API server has no public inbound port at all — it's
    reached exclusively through a Cloudflare Tunnel, which is also what makes it safe
@@ -248,9 +265,9 @@ FileCast has a real backend behind the "convert files" surface:
 FileCast/
 ├── api/                    FastAPI backend — see DEVELOPMENT.md for the full layout
 │   ├── main.py             App entrypoint, middleware stack, router registration
-│   ├── converter.py        The 6 server-side conversion endpoints
+│   ├── converter.py        The 10 server-side conversion endpoints
 │   ├── data/
-│   │   ├── models.py       13 SQLAlchemy models (users, sessions, tools, ratings, ...)
+│   │   ├── models.py       14 SQLAlchemy models (users, sessions, tools, ratings, ...)
 │   │   ├── security.py     Sessions, cookies, Google OAuth, admin bootstrap
 │   │   ├── tasks.py        Retention purge job + canary check
 │   │   └── routers/        auth, tools, admin_deploy, staff, site_settings, ...
@@ -266,13 +283,13 @@ FileCast/
 │   ├── css/style.css       Core design system stylesheet
 │   ├── js/
 │   │   ├── shared*.js      Uploader, search, batch/multi-file coordination
-│   │   ├── server-upload.js  API bridge for the 6 server-side tools
+│   │   ├── server-upload.js  API bridge for the 10 server-side tools
 │   │   ├── admin/           Admin panel SPA modules (dashboard, tools, users, ...)
 │   │   └── converters/      One JS module per client-side tool
 │   └── lib/                 Self-hosted third-party JS libraries + SRI
 ├── templates/               Jinja2 templates (base, home, tool, tool-text, admin, ...)
 ├── test/                    Vitest unit specs
-├── tools/                   One YAML per tool — the catalogue source of truth (71 files)
+├── tools/                   One YAML per tool — the catalogue source of truth (99 files)
 ├── build.py                 Site generator, SRI builder, headers/redirects generator
 ├── seed.py                  Seeds tools/*.yaml into the tools table
 ├── site-config.yaml         Global config (base URL, categories, integration defaults)

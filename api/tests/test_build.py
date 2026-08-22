@@ -1863,7 +1863,7 @@ def test_homepage_meta_description_describes_the_product(built):
     home = (built / "index.html").read_text(encoding="utf-8")
     assert (
         'name="description" content="Convert documents, images, and data '
-        "files for free — 34 tools, no sign-up, no limits." in home
+        "files for free — 99 tools, no sign-up, no limits." in home
     )
     # og:description inherits the same copy (home.html doesn't override the
     # block), so social shares match the SERP snippet.
@@ -1963,7 +1963,7 @@ def test_og_images_written_for_every_page_kind(built):
     for cat_id in ("document-conversion", "image-conversion", "developer-tools"):
         assert f"{cat_id}.png" in files, cat_id
 
-    # No stray/orphaned images beyond what's expected: 34 tools + 3 categories
+    # No stray/orphaned images beyond what's expected: one per tool + 3 categories
     # + home + default.
     assert len(files) == len(tool_data) + 3 + 2
 
