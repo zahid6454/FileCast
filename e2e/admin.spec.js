@@ -141,7 +141,7 @@ test.describe('dashboard', () => {
     await page.goto('/admin/#dashboard');
 
     await expect(page.locator('.admin-stat').first()).toBeVisible();
-    await expect(page.locator('.admin-stat')).toHaveCount(4);
+    await expect(page.locator('.admin-stat')).toHaveCount(5);
     // Inline SVG charts, no library.
     await expect(page.locator('svg.admin-chart').first()).toBeVisible();
     // Ratings summary populated.
@@ -666,6 +666,7 @@ test('fresh/empty DB renders placeholders with no throw (§8.5)', async ({ page 
       total_users: 2,
       total_ratings: 0,
       yes_ratings: 0,
+      total_unique_visitors: 0,
       top_tools: []
     },
     series: [],
@@ -676,7 +677,7 @@ test('fresh/empty DB renders placeholders with no throw (§8.5)', async ({ page 
   await installApi(page, state);
 
   await page.goto('/admin/#dashboard');
-  await expect(page.locator('.admin-stat')).toHaveCount(4); // zeros, not blank
+  await expect(page.locator('.admin-stat')).toHaveCount(5); // zeros, not blank
   await expect(page.getByText('No data yet').first()).toBeVisible(); // chart placeholders
   await expect(page.getByText('No ratings yet')).toBeVisible();
   await expect(page.getByText('No errors')).toBeVisible();

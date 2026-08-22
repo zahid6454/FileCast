@@ -109,9 +109,10 @@ export function makeState(overrides = {}) {
       total_users: 2,
       total_ratings: 5,
       yes_ratings: 4,
+      total_unique_visitors: 55,
       top_tools: [
-        { tool_id: 'img-a', count: 80 },
-        { tool_id: 'doc-a', count: 40 }
+        { tool_id: 'img-a', count: 80, visitors: 35 },
+        { tool_id: 'doc-a', count: 40, visitors: 20 }
       ]
     },
     series: overrides.series || [
