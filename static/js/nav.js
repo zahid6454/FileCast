@@ -153,8 +153,19 @@
       }
     }
 
+    var heroSearchTimer = null;
+    function trackHeroSearchDebounced(query, resultCount) {
+      clearTimeout(heroSearchTimer);
+      heroSearchTimer = setTimeout(function () {
+        if (window.FC && typeof window.FC.trackEvent === 'function') {
+          window.FC.trackEvent('search_used', { search_query: query, result_count: resultCount });
+        }
+      }, 500);
+    }
+
     function render(query) {
       matches = filter(query);
+      trackHeroSearchDebounced(query, matches.length);
       if (!matches.length) {
         close();
         return;

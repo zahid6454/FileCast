@@ -719,8 +719,6 @@
         return;
       }
 
-      trackSearchDebounced(query);
-
       var matchCount = 0;
       cards.forEach(function (card) {
         var name = card.getAttribute('data-name') || '';
@@ -730,15 +728,17 @@
       });
 
       if (noResults) noResults.classList.toggle('hidden', matchCount > 0);
+
+      trackSearchDebounced(query, matchCount);
     });
   }
 
   // Debounced search tracking (fire after 500ms of no typing)
   var searchTimer = null;
-  function trackSearchDebounced(query) {
+  function trackSearchDebounced(query, resultCount) {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(function () {
-      trackEvent('search_used', { search_query: query });
+      trackEvent('search_used', { search_query: query, result_count: resultCount });
     }, 500);
   }
 
