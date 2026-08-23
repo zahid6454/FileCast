@@ -2590,9 +2590,20 @@ img { max-width: 100%; display: block; }
   width: 16px;
   height: 16px;
   color: var(--color-primary);
+  /* "View All" has no descenders, so the icon's flex-centered box (based on
+     the full line-height box) sits ~1px above the text's visual ink center.
+     Nudge it down to match. */
+  transform: translateY(1px);
   transition: transform var(--transition-fast);
 }
-.card--ghost:hover .card--ghost__arrow { transform: translateX(3px); }
+/* Mirrors .card--ghost__arrow's width so "View All" sits between two equal
+   gaps — otherwise the trailing icon (with no counterpart on the left) pulls
+   the centered flex box rightward and the text itself reads off-center. */
+.card--ghost__spacer {
+  width: 16px;
+  flex-shrink: 0;
+}
+.card--ghost:hover .card--ghost__arrow { transform: translateY(1px) translateX(3px); }
 
 /* --- Enhanced tool card inner structure (own classes; base .card stays
        content-agnostic so plain related-tools cards don't break, R12) --- */
