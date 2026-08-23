@@ -192,4 +192,116 @@ describe('admin/tools.js — slide-out edit', () => {
     expect(puts).toHaveLength(0);
     expect(dom.window.document.querySelector('.admin-slideout')).toBeNull();
   });
+
+  it('pre-fills the box with the live YAML name (not blank) when no override is set', async () => {
+    const dom = load(defaultRoutes);
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.tools.render(c);
+    await flush();
+
+    c.querySelector('.admin-tool__name').click();
+    const nameInput = dom.window.document.getElementById('so-name');
+    // TOOLS[0] has no display_name at all — the box must show tool.name,
+    // not the blank that display_name alone would give.
+    expect(nameInput.value).toBe('JPG to PNG');
+  });
+
+  it('sends display_name: null (not "") when the box is cleared back to the live name', async () => {
+    const withOverride = [
+      {
+        id: 'jpg-to-png',
+        name: 'JPG to PNG',
+        display_name: 'Custom Name',
+        category: 'image-conversion',
+        enabled: true
+      }
+    ];
+    const puts = [];
+    const dom = load((url, opts) => {
+      if (opts && opts.method === 'PUT' && url.includes('/tools/jpg-to-png')) {
+        puts.push(JSON.parse(opts.body));
+        return makeResponse(200, { tool: withOverride[0] });
+      }
+      if (url.includes('/api/v1/tools')) return makeResponse(200, { tools: withOverride });
+      return makeResponse(404, {});
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.tools.render(c);
+    await flush();
+
+    c.querySelector('.admin-tool__name').click();
+    const nameInput = dom.window.document.getElementById('so-name');
+    expect(nameInput.value).toBe('Custom Name'); // override wins over the YAML name
+    nameInput.value = '';
+    nameInput.dispatchEvent(new dom.window.Event('input'));
+
+    const saveBtn = Array.from(
+      dom.window.document.querySelectorAll('.admin-slideout__foot button')
+    )[0];
+    saveBtn.click();
+    await flush();
+
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toEqual({ display_name: null });
+  });
+});
+
+describe('admin/tools.js — slide-out usage stats', () => {
+  function withStats(ratings, conversions) {
+    return function (url) {
+      if (url.includes('/api/v1/stats/tools')) return makeResponse(200, conversions);
+      if (url.includes('/api/v1/ratings')) return makeResponse(200, ratings);
+      return defaultRoutes(url);
+    };
+  }
+
+  it('fetches ratings/conversions once per tab visit and shows the opened tool’s numbers', async () => {
+    const calls = [];
+    const dom = load((url, opts) => {
+      calls.push(url);
+      return withStats(
+        [{ tool_id: 'jpg-to-png', yes: 3, no: 1 }],
+        [{ tool_id: 'jpg-to-png', count: 120, failures: 2, unique_visitors: 50 }]
+      )(url, opts);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.tools.render(c);
+    await flush();
+
+    c.querySelector('.admin-tool__name').click();
+    await flush();
+
+    const meta = dom.window.document.querySelectorAll('.admin-slideout__meta');
+    expect(meta[0].textContent).toBe('75% helpful (4 votes) · 120 conversions all-time');
+
+    // One bulk call each, not one per row/panel-open.
+    expect(calls.filter((u) => u.includes('/api/v1/ratings')).length).toBe(1);
+    expect(calls.filter((u) => u.includes('/api/v1/stats/tools')).length).toBe(1);
+  });
+
+  it('shows "no data yet" (not blank/undefined) for a tool with zero rows in either aggregate', async () => {
+    const dom = load(withStats([], []));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.tools.render(c);
+    await flush();
+
+    c.querySelector('.admin-tool__name').click();
+    await flush();
+
+    const meta = dom.window.document.querySelectorAll('.admin-slideout__meta');
+    expect(meta[0].textContent).toBe('No ratings yet · No conversions yet');
+  });
+
+  it('bubbles a 401 from the stats fetch to the global sign-in gate instead of swallowing it', async () => {
+    const dom = load((url) => {
+      if (url.includes('/api/v1/ratings')) return makeResponse(401, {});
+      if (url.includes('/api/v1/stats/tools')) return makeResponse(200, []);
+      return defaultRoutes(url);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.tools.render(c);
+    await flush();
+
+    expect(dom.window.ADMIN.onAuthError).toHaveBeenCalled();
+  });
 });
