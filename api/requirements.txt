@@ -5,7 +5,7 @@ cryptography==50.0.0
 httpx==0.27.0
 python-multipart==0.0.32
 pdf2docx==0.5.13
-pdfplumber==0.11.4
+pdfplumber==0.11.10
 openpyxl==3.1.5
 # Bumped alongside pdf2docx above — 0.5.13 raised its own floor to
 # PyMuPDF>=1.26.7, so the two must move together or pip's resolver rejects
