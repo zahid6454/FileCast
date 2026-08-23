@@ -2770,12 +2770,20 @@ img { max-width: 100%; display: block; }
     transition: transform var(--transition-base), visibility var(--transition-base);
   }
   .header__nav--open { transform: translateX(0); visibility: visible; }
-  .nav-dropdown__toggle { width: 100%; justify-content: space-between; }
+  .nav-dropdown__toggle { width: 100%; justify-content: space-between; padding: var(--space-2); font-weight: var(--weight-semibold); color: var(--color-text); }
   .nav-dropdown__menu { position: static; box-shadow: none; padding-left: var(--space-3); }
   /* The drawer now follows the page theme like everything else, so the
      desktop color/hover/border rules above (all theme-aware tokens) already
      work here unmodified — this block used to re-pin every color to a fixed
      light-on-dark scheme; that's gone. */
+
+  /* Grouped-card boundary: stacked with gap:0 above, an open category's item
+     list otherwise runs straight into the next category's header with no
+     visual break (reported bug). Tinting the open category as its own
+     rounded card gives the boundary a shape instead of relying on a hairline. */
+  .nav-dropdown { border-radius: var(--radius-lg); }
+  .nav-dropdown + .nav-dropdown { margin-top: var(--space-2); }
+  .nav-dropdown--open { background: var(--color-bg-sunken); padding: var(--space-1) var(--space-2); }
 }
 @media (min-width: 768px) {
   .hamburger { display: none; }

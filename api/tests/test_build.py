@@ -916,6 +916,78 @@ def test_full_category_list_untouched_by_homepage_slots():
 
 
 # --------------------------------------------------------------------------- #
+# attach_nav_dropdown_tools — nav dropdown's converter/utility split, decoupled
+# from sort_order (fix: a top-10-by-rank that's all one subcategory used to
+# silently drop the other subcategory, and the seam, from the dropdown)
+# --------------------------------------------------------------------------- #
+
+
+def _nav_grouped(tools: list[dict]) -> dict:
+    grouped = _grouped(tools)
+    build.attach_nav_dropdown_tools(grouped)
+    return grouped
+
+
+def test_nav_dropdown_reserves_utility_when_top_ranked_are_all_converters():
+    # Regression for the reported bug: 10 converters outrank the category's
+    # only utility tool, so a naive tools[:10]-then-split leaves nav_sub_tools
+    # empty even though the category clearly has a utility tool.
+    tools = [_tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(10)]
+    tools.append(_tool(id="only-utility", sort_order=99, subcategory="utility"))
+    grouped = _nav_grouped(tools)
+    cat = grouped["image-conversion"]
+    assert [t["id"] for t in cat["nav_sub_tools"]] == ["only-utility"]
+    assert len(cat["nav_main_tools"]) + len(cat["nav_sub_tools"]) <= 10
+
+
+def test_nav_dropdown_single_subcategory_is_unaffected():
+    # A category with only one subcategory (no utility tools at all) has
+    # nothing to reserve or interleave — top 10 of what exists, as before.
+    tools = [_tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(12)]
+    grouped = _nav_grouped(tools)
+    cat = grouped["image-conversion"]
+    assert len(cat["nav_main_tools"]) == 10
+    assert cat["nav_sub_tools"] == []
+
+
+def test_nav_dropdown_reserved_tools_keep_their_own_subcategory_rank():
+    # Reserving a minimum per subcategory must still respect sort_order
+    # within that subcategory, not just grab whatever's first in the list.
+    tools = [
+        _tool(id="u-low", sort_order=1, subcategory="utility"),
+        _tool(id="u-high", sort_order=2, subcategory="utility"),
+        _tool(id="c-low", sort_order=3, subcategory="converter"),
+        _tool(id="c-high", sort_order=4, subcategory="converter"),
+    ]
+    grouped = _nav_grouped(tools)
+    cat = grouped["image-conversion"]
+    assert [t["id"] for t in cat["nav_sub_tools"]] == ["u-low", "u-high"]
+    assert [t["id"] for t in cat["nav_main_tools"]] == ["c-low", "c-high"]
+
+
+def test_nav_dropdown_fills_remaining_slots_by_overall_rank():
+    # Beyond the reserved minimum, remaining slots (up to 10 total) fill by
+    # the category's overall sort_order, same behavior as the old top-10 cut.
+    tools = [_tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(8)]
+    tools += [_tool(id=f"u{i}", sort_order=100 + i, subcategory="utility") for i in range(8)]
+    grouped = _nav_grouped(tools)
+    cat = grouped["image-conversion"]
+    assert len(cat["nav_main_tools"]) + len(cat["nav_sub_tools"]) == 10
+    # All 8 converters outrank every utility, so they fill every non-reserved
+    # slot; only the 2 reserved utility slots make it in.
+    assert len(cat["nav_main_tools"]) == 8
+    assert len(cat["nav_sub_tools"]) == 2
+
+
+def test_nav_dropdown_view_all_count_unaffected():
+    # cat_data['tools'] (what "View All N Tools" counts) must stay untouched —
+    # only the dropdown's own nav_main_tools/nav_sub_tools are capped.
+    tools = [_tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(15)]
+    grouped = _nav_grouped(tools)
+    assert len(grouped["image-conversion"]["tools"]) == 15
+
+
+# --------------------------------------------------------------------------- #
 # write_tool_data — dist/tool-data.json (P8)
 # --------------------------------------------------------------------------- #
 

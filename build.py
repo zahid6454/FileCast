@@ -621,6 +621,53 @@ def attach_homepage_tools(categories_with_tools: dict) -> None:
         cat_data["homepage_tools"] = homepage_tools[:4]
 
 
+NAV_DROPDOWN_MAX = 10
+NAV_DROPDOWN_MIN_PER_SUBCATEGORY = 2
+
+
+def attach_nav_dropdown_tools(categories_with_tools: dict) -> None:
+    """Mutate each category dict in place, adding ``nav_main_tools`` /
+    ``nav_sub_tools`` — the up-to-10 converter/utility tools base.html's nav
+    dropdown renders, already split by ``subcategory`` so the template just
+    loops over two lists instead of computing the split itself.
+
+    base.html used to slice ``tools[:10]`` (sort_order order) FIRST and
+    split by ``subcategory`` SECOND. Whenever the top 10 admin-ranked tools
+    for a category happened to land in a single subcategory — e.g. Developer
+    Tools under the no-DB/alphabetical fallback order, where the first 10
+    filenames are all converters — the other subcategory, and the hairline
+    seam between them, silently vanished from the dropdown with no error.
+    The "View All" page wasn't sliced and looked fine, which is what made it
+    easy to miss: same category, two different tool counts depending on
+    which sort_order happened to be live.
+
+    Splitting first and reserving a minimum per subcategory here means both
+    are represented in the dropdown whenever both exist in the category, for
+    any sort_order — the reserved tools still follow admin rank within their
+    own subcategory, and the remaining slots (up to 10 total) fill by
+    overall rank same as before.
+    """
+    for cat_data in categories_with_tools.values():
+        converters = [t for t in cat_data["tools"] if t.get("subcategory") == "converter"]
+        utilities = [t for t in cat_data["tools"] if t.get("subcategory") == "utility"]
+
+        if not converters or not utilities:
+            # Only one subcategory present — nothing to reserve or interleave.
+            cat_data["nav_main_tools"] = converters[:NAV_DROPDOWN_MAX]
+            cat_data["nav_sub_tools"] = utilities[:NAV_DROPDOWN_MAX]
+            continue
+
+        reserved_main = converters[:NAV_DROPDOWN_MIN_PER_SUBCATEGORY]
+        reserved_sub = utilities[:NAV_DROPDOWN_MIN_PER_SUBCATEGORY]
+        reserved_ids = {t["id"] for t in reserved_main + reserved_sub}
+
+        remaining = NAV_DROPDOWN_MAX - len(reserved_main) - len(reserved_sub)
+        fill = [t for t in cat_data["tools"] if t["id"] not in reserved_ids][:remaining]
+
+        cat_data["nav_main_tools"] = reserved_main + [t for t in fill if t.get("subcategory") == "converter"]
+        cat_data["nav_sub_tools"] = reserved_sub + [t for t in fill if t.get("subcategory") == "utility"]
+
+
 # ---------------------------------------------------------------------------
 # Step 6: Load content markdown for each tool
 # ---------------------------------------------------------------------------
@@ -2505,6 +2552,7 @@ def build():
     categories = site_config.get("categories", [])
     categories_with_tools = group_tools_by_category(tools, categories)
     attach_homepage_tools(categories_with_tools)
+    attach_nav_dropdown_tools(categories_with_tools)
     active_cats = list(categories_with_tools.keys())
     print(f"       Active categories: {active_cats if active_cats else '(none yet)'}")
 
