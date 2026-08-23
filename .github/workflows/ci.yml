@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "20"
+          node-version: "24"
       - run: npm ci
       # Biome version is pinned in package.json; `biome ci` checks format + lint.
       - run: npx biome ci .
@@ -59,7 +59,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "20"
+          # jsdom 30 (via undici) requires Node ^22.22.2 || ^24.15.0 || >=26 —
+          # on Node 20 it throws `webidl.util.markAsUncloneable is not a
+          # function` at import time before a single spec runs. 24 matches
+          # the LTS this repo's own dev machines already run.
+          node-version: "24"
           cache: npm
       - run: npm ci
       # jsdom only, no build needed — runs first so a unit failure reports fast.
