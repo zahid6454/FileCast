@@ -335,7 +335,13 @@ def _flatten_epub_to_html_sync(content: bytes) -> bytes:
             def _inline_img(m, chapter_dir=chapter_dir):
                 img_path = _epub_resolve(chapter_dir, m.group(3))
                 data_uri = _epub_data_uri(zf, names, img_path)
-                return f"{m.group(1)}{m.group(2)}{data_uri or m.group(3)}{m.group(2)}"
+                # Never fall back to the original src: an image absent from the
+                # EPUB's own zip means m.group(3) is an external reference (a
+                # URL), and passing it through would have Gotenberg's Chromium
+                # engine fetch it server-side when this HTML is rendered — a
+                # blind SSRF vector (e.g. an internal host or metadata address).
+                # Drop the reference instead of resolving it.
+                return f"{m.group(1)}{m.group(2)}{data_uri or ''}{m.group(2)}"
 
             text = _EPUB_IMG_SRC_RE.sub(_inline_img, text)
 

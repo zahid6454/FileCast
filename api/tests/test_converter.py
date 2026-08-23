@@ -594,6 +594,40 @@ def test_flatten_epub_to_html_inlines_images_as_data_uris():
     assert "images/cover.png" not in html  # rewritten, not left as a dead relative link
 
 
+def test_flatten_epub_to_html_drops_external_image_src():
+    # OWASP A10 — an <img src> that isn't inside the EPUB's own zip must never
+    # survive into the HTML handed to Gotenberg's Chromium engine: Chromium
+    # will fetch it server-side, which is a blind SSRF vector (an internal
+    # host or a cloud metadata address) if the reference is left unresolved.
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("mimetype", "application/epub+zip", zipfile.ZIP_STORED)
+        z.writestr(
+            "META-INF/container.xml",
+            '<?xml version="1.0"?>'
+            '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+            '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+            'media-type="application/oebps-package+xml"/></rootfiles></container>',
+        )
+        z.writestr(
+            "OEBPS/content.opf",
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0">'
+            '<manifest><item id="c1" href="chap1.xhtml" media-type="application/xhtml+xml"/></manifest>'
+            '<spine><itemref idref="c1"/></spine></package>',
+        )
+        z.writestr(
+            "OEBPS/chap1.xhtml",
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+            '<img src="http://169.254.169.254/latest/meta-data/"/></body></html>',
+        )
+
+    html = converter._flatten_epub_to_html_sync(buf.getvalue()).decode("utf-8")
+    assert "169.254.169.254" not in html
+    assert 'src=""' in html
+
+
 def test_flatten_epub_to_html_rejects_doctype_in_control_files():
     # Guards the only server-side arbitrary-XML parsing in this codebase
     # against entity-expansion ("billion laughs") DoS — a real EPUB

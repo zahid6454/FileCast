@@ -101,6 +101,17 @@ services:
 
   gotenberg:
     image: gotenberg/gotenberg:8
+    # SSRF hardening (OWASP A10): html-to-pdf and epub-to-pdf feed user-uploaded
+    # content straight into Chromium, which will fetch any <img>/<link>/CSS
+    # url() reference it finds in that HTML — including internal hostnames or a
+    # cloud metadata address — unless told not to. Deny-list, not allow-list, so
+    # legitimate external images in a real HTML upload still resolve; only
+    # loopback/RFC1918/link-local targets are blocked. Every other flag keeps
+    # its module default — Gotenberg (Cobra/pflag) only overrides flags that
+    # are actually passed.
+    command:
+      - "gotenberg"
+      - "--chromium-deny-list=.*(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|::1|10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.|169\\.254\\.).*"
     ports:
       - "3000:3000"
     security_opt:
