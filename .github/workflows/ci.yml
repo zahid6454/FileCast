@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [master]
+  workflow_dispatch:
 
 # Least-privilege default (O4 audit item #16): every job here only reads the
 # checked-out repo (lint/test), never pushes, comments, or calls the GitHub
