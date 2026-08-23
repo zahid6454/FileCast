@@ -99,6 +99,17 @@ async def test_google_callback_rejects_bad_state(client, monkeypatch):
     assert r.status_code == 400
 
 
+async def test_google_callback_state_mismatch_logs_a_warning(
+    client, monkeypatch, caplog
+):
+    # OWASP A09 — auth failures must leave an audit trail.
+    _configure_google(monkeypatch)
+    with caplog.at_level("WARNING", logger="filecast.auth"):
+        await client.get("/api/v1/auth/google/callback?code=x&state=mismatch")
+    events = [r.data["event"] for r in caplog.records if getattr(r, "data", None)]
+    assert "auth_oauth_state_mismatch" in events
+
+
 # --- Google callback happy path + email_verified guard (mocked OAuth client) ---
 
 
@@ -191,6 +202,20 @@ async def test_google_callback_rejects_unverified_email(client, monkeypatch, db)
         await db.execute(select(User).where(User.email == "spoof@example.com"))
     ).scalar_one_or_none()
     assert row is None
+
+
+async def test_google_callback_unverified_email_logs_a_warning(
+    client, monkeypatch, db, caplog
+):
+    # OWASP A09 — auth failures must leave an audit trail.
+    with caplog.at_level("WARNING", logger="filecast.auth"):
+        await _callback_with(
+            client,
+            monkeypatch,
+            {"email": "spoof@example.com", "email_verified": False, "name": "Spoof"},
+        )
+    events = [r.data["event"] for r in caplog.records if getattr(r, "data", None)]
+    assert "auth_oauth_unverified_email" in events
 
 
 async def test_upsert_google_user_creates_then_refreshes_without_touching_role(db):

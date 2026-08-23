@@ -112,6 +112,21 @@ async def test_grant_promotes_existing_user(admin_client, user_client):
     assert (await user_client.get("/api/v1/users")).status_code == 200
 
 
+async def test_grant_logs_actor_and_target(admin_client, user_client, caplog):
+    # OWASP A09 — privilege changes must leave an audit trail.
+    with caplog.at_level("INFO", logger="filecast.staff"):
+        await admin_client.post("/api/v1/admin/staff", json={"email": "user@dev.local"})
+    events = [r.data["event"] for r in caplog.records if hasattr(r, "data")]
+    assert "admin_staff_grant" in events
+    grant_record = next(
+        r
+        for r in caplog.records
+        if getattr(r, "data", {}).get("event") == "admin_staff_grant"
+    )
+    assert grant_record.data["actor"] == "admin@dev.local"
+    assert grant_record.data["target"] == "user@dev.local"
+
+
 async def test_grant_new_email_is_pending_and_idempotent(admin_client):
     for _ in range(2):
         r = await admin_client.post(
@@ -182,6 +197,20 @@ async def test_revoke_demotes_existing_admin(admin_client, user_client, db):
     assert r.status_code == 200 and r.json()["status"] == "revoked"
     # D6: next request loses admin.
     assert (await user_client.get("/api/v1/users")).status_code == 403
+
+
+async def test_revoke_logs_actor_and_target(admin_client, user_client, caplog):
+    # OWASP A09 — privilege changes must leave an audit trail.
+    await admin_client.post("/api/v1/admin/staff", json={"email": "user@dev.local"})
+    with caplog.at_level("INFO", logger="filecast.staff"):
+        await admin_client.delete("/api/v1/admin/staff/user@dev.local")
+    revoke_record = next(
+        r
+        for r in caplog.records
+        if getattr(r, "data", {}).get("event") == "admin_staff_revoke"
+    )
+    assert revoke_record.data["actor"] == "admin@dev.local"
+    assert revoke_record.data["target"] == "user@dev.local"
 
 
 async def test_revoke_self_409(admin_client):

@@ -14,6 +14,7 @@ it steals it from whoever held it), and a disabled tool can never hold one.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from log import get_logger
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,8 @@ from data.db import get_session
 from data.models import Tool
 from data.routers._serialize import tool_dict
 from data.security import require_admin
+
+logger = get_logger("tools")
 
 router = APIRouter(prefix="/api/v1/tools", tags=["tools"])
 
@@ -53,7 +56,7 @@ async def list_tools(
 @router.put("/reorder")
 async def reorder_tools(
     body: ReorderBody,
-    _admin=Depends(require_admin),
+    admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
     # One transaction; sort_order = index in the submitted global ordering.
@@ -63,6 +66,17 @@ async def reorder_tools(
         if tool is not None:
             tool.sort_order = index
     await db.commit()
+    logger.info(
+        "Tools reordered by %s",
+        admin.email,
+        extra={
+            "data": {
+                "event": "admin_tools_reorder",
+                "actor": admin.email,
+                "count": len(body.order),
+            }
+        },
+    )
     return {"ok": True, "count": len(body.order)}
 
 
@@ -70,7 +84,7 @@ async def reorder_tools(
 async def update_tool(
     tool_id: str,
     body: ToolUpdate,
-    _admin=Depends(require_admin),
+    admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
     tool = (
@@ -119,4 +133,17 @@ async def update_tool(
 
     await db.commit()
     await db.refresh(tool)
+    logger.info(
+        "Tool %s updated by %s",
+        tool_id,
+        admin.email,
+        extra={
+            "data": {
+                "event": "admin_tool_update",
+                "actor": admin.email,
+                "tool_id": tool_id,
+                "fields": sorted(fields.keys()),
+            }
+        },
+    )
     return {"tool": tool_dict(tool)}

@@ -11,6 +11,7 @@ import secrets
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
+from log import get_logger
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from data.config import settings
 from data.db import get_session
 from data.models import UserFavorite, UserPreference
+from data.netutil import get_client_ip
 from data.routers._serialize import user_dict
 from data.security import (
     apply_staff_role,
@@ -27,6 +29,8 @@ from data.security import (
     require_user,
     upsert_google_user,
 )
+
+logger = get_logger("auth")
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -215,9 +219,28 @@ async def google_callback(
 
     # CSRF guard: the ?state must equal our httpOnly cookie. Absent/mismatch → 400.
     if not state or not cookie_state or not secrets.compare_digest(state, cookie_state):
+        logger.warning(
+            "OAuth state mismatch",
+            extra={
+                "data": {
+                    "event": "auth_oauth_state_mismatch",
+                    "ip": get_client_ip(request),
+                }
+            },
+        )
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
     if error or not code:
+        logger.warning(
+            "OAuth consent denied or missing code",
+            extra={
+                "data": {
+                    "event": "auth_oauth_denied",
+                    "ip": get_client_ip(request),
+                    "error": error or "missing_code",
+                }
+            },
+        )
         failed = RedirectResponse(
             settings.site_origin + "/?signin=failed", status_code=302
         )
@@ -234,6 +257,16 @@ async def google_callback(
             userinfo = (await client.get(GOOGLE_USERINFO_ENDPOINT)).json()
     except Exception:
         # Any token/userinfo failure degrades to a benign failed-signin redirect.
+        logger.warning(
+            "OAuth token/userinfo exchange failed",
+            exc_info=True,
+            extra={
+                "data": {
+                    "event": "auth_oauth_exchange_failed",
+                    "ip": get_client_ip(request),
+                }
+            },
+        )
         failed = RedirectResponse(
             settings.site_origin + "/?signin=failed", status_code=302
         )
@@ -244,6 +277,15 @@ async def google_callback(
     # Require a verified email (Google best practice): an unverified address could
     # be one the signer doesn't actually control → account takeover / squatting.
     if not email or not _email_verified(userinfo):
+        logger.warning(
+            "OAuth sign-in rejected: unverified or missing email",
+            extra={
+                "data": {
+                    "event": "auth_oauth_unverified_email",
+                    "ip": get_client_ip(request),
+                }
+            },
+        )
         failed = RedirectResponse(
             settings.site_origin + "/?signin=failed", status_code=302
         )

@@ -13,6 +13,7 @@ import re
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends
+from log import get_logger
 from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -21,6 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from data.db import get_session
 from data.models import SiteSetting
 from data.security import require_admin
+
+logger = get_logger("site-settings")
 
 router = APIRouter(prefix="/api/v1/admin/site-settings", tags=["site-settings"])
 
@@ -175,7 +178,7 @@ async def get_site_settings(
 @router.put("")
 async def update_site_settings(
     body: SiteSettingsBody,
-    _admin=Depends(require_admin),
+    admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
     values = body.model_dump()
@@ -196,4 +199,9 @@ async def update_site_settings(
     await db.execute(stmt)
     await db.commit()
     row = await _get_singleton(db)
+    logger.info(
+        "Site settings updated by %s",
+        admin.email,
+        extra={"data": {"event": "admin_site_settings_update", "actor": admin.email}},
+    )
     return {"site_settings": _dict(row)}

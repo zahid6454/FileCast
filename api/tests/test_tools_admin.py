@@ -49,6 +49,19 @@ async def test_reorder_assigns_index(admin_client, seeded_tools, db):
     assert rows["docx-to-pdf"] == 1 and rows["jpg-to-png"] == 2
 
 
+async def test_update_tool_logs_actor(admin_client, seeded_tools, caplog):
+    # OWASP A09 — tool overlay edits must leave an audit trail.
+    with caplog.at_level("INFO", logger="filecast.tools"):
+        await admin_client.put("/api/v1/tools/jpg-to-png", json={"enabled": False})
+    record = next(
+        r
+        for r in caplog.records
+        if getattr(r, "data", {}).get("event") == "admin_tool_update"
+    )
+    assert record.data["actor"] == "admin@dev.local"
+    assert record.data["tool_id"] == "jpg-to-png"
+
+
 async def test_featured_slot_steals_from_same_category_holder(
     admin_client, seeded_tools, db
 ):
