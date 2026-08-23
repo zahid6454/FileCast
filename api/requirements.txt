@@ -13,7 +13,7 @@ openpyxl==3.1.5
 # install` fail with a hard conflict, not a warning).
 PyMuPDF==1.28.2
 python-pptx==1.0.2
-opencv-python-headless==4.10.0.84
+opencv-python-headless==5.0.0.93
 numpy==2.5.2
 # Pinned to match the root requirements.txt's Pillow==12.* (build.py's OG-image
 # dependency) — CI installs both files in one pip command, so a different pin
