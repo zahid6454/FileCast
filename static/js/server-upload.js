@@ -7,7 +7,11 @@
   // Normalize once (strip any trailing slash) so `apiBase + '/api/…'` never
   // produces a double slash if the configured base_url ever gains one.
   var apiBase = (config.api_base_url || 'https://api.filecast.org').replace(/\/$/, '');
-  var endpoint = config.api_endpoint || '/api/v1/convert/' + config.id;
+  // endpoint is always absolute (either the fully-qualified URL the template
+  // renders, or built from apiBase here) — a bare relative path in
+  // TOOL_CONFIG's JSON got mistaken by Googlebot for a same-origin link and
+  // crawled as https://www.filecast.org/api/v1/convert/... (404 noise in GSC).
+  var endpoint = config.api_endpoint || apiBase + '/api/v1/convert/' + config.id;
 
   // Check API health before enabling uploads
   var zone = document.getElementById('upload-zone');
@@ -106,7 +110,7 @@
 
       var xhr = new XMLHttpRequest();
       activeXhr = xhr;
-      xhr.open('POST', apiBase + endpoint, true);
+      xhr.open('POST', endpoint, true);
       // Send the session cookie so the server can grant a signed-in user the
       // doubled size limit (§6.3). FormData keeps this a "simple" CORS request,
       // so credentials add no preflight; anonymous users just send no cookie.
