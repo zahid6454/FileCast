@@ -1,0 +1,34 @@
+version: 2
+updates:
+  # Backend — api/requirements.txt (the file actually installed into the
+  # Docker image; the repo-root requirements.txt is build.py's OG-image tooling
+  # only, no runtime security surface, and isn't tracked separately here).
+  - package-ecosystem: "pip"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  # Frontend tooling (vitest/playwright/biome) — devDependencies only, no
+  # runtime package ships to the static site.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  # CI workflows — every action below is already SHA-pinned (OWASP A08); this
+  # is what keeps those pins current instead of freezing them permanently.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  # api/Dockerfile's base image, also digest-pinned (OWASP A08) for the same
+  # reason.
+  - package-ecosystem: "docker"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
