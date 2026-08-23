@@ -1086,6 +1086,10 @@ img { max-width: 100%; display: block; }
    by every other card on the site) rather than the plain section h2's
    default --color-text, which reads too heavy against a boxed surface. */
 .about-credit .privacy-section h2 { color: var(--color-heading); }
+/* The card's own padding already provides the bottom gap — without this,
+   .privacy-section's sitewide margin-bottom (--space-8) stacks on top of it,
+   doubling the whitespace under the LinkedIn pill vs. above the heading. */
+.about-credit .privacy-section { margin-bottom: 0; }
 .about-credit__byline { font-size: var(--text-base); margin-bottom: var(--space-3); }
 .about-credit__byline strong { font-weight: var(--weight-semibold); color: var(--color-heading); }
 .about-credit__byline .sep { color: var(--color-text-light); margin: 0 var(--space-2); }
