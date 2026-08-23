@@ -1,3 +1,21 @@
+# PR #98 review, blocker 1: the Gotenberg --chromium-deny-list is text-based
+# (matches URL literals, not resolved IPs) and the reviewer demonstrated it
+# doesn't stop Chromium from reaching internal Docker services BY NAME
+# (http://api:8090/..., http://postgres:5432/) — a bypass no regex can fully
+# close on its own. Splitting into two networks closes the `postgres` vector
+# structurally instead: gotenberg is never attached to `db`, so Docker's
+# per-network bridge isolation means it has no route to postgres at all,
+# regardless of hostname, DNS rebinding, or IP literal. `api` still shares
+# `convert` with gotenberg (required — api is the one calling gotenberg's
+# HTTP API), so gotenberg CAN still reach `api` at the network layer; that
+# residual is real but bounded — everything gotenberg could reach there is
+# require_admin/require_user-gated, and Chromium's fetch carries no FileCast
+# session cookie, so it cannot authenticate as anything. The deny-list stays
+# as one more layer and now also matches these service names literally.
+networks:
+  convert:
+  db:
+
 services:
   api:
     # An EXPLICIT shared tag, not compose's default per-service `<project>-<service>`
@@ -26,6 +44,10 @@ services:
       postgres:
         condition: service_healthy
         required: false
+    # Needs both: `convert` to reach gotenberg's HTTP API, `db` to reach
+    # postgres (dev) / relay to Neon (prod, via the same DATABASE_URL env
+    # var — network membership here doesn't affect an external host).
+    networks: [convert, db]
     restart: unless-stopped
     # No apt package added for this — python:3.12-slim already has Python, and
     # a 200-range response IS the check (mirrors gotenberg's `curl -sf`
@@ -75,6 +97,7 @@ services:
       postgres:
         condition: service_healthy
         required: false
+    networks: [db]
     restart: unless-stopped
     # This loop has no server to poll (it wakes once a day — see data/tasks.py)
     # and a dead process already shows as "Exited" without a HEALTHCHECK, so
@@ -110,8 +133,17 @@ services:
     # its module default — Gotenberg (Cobra/pflag) only overrides flags that
     # are actually passed.
     command:
+      # Adds the actual internal Docker service names this stack uses
+      # (api/gotenberg/postgres/purge — the exact bypass demonstrated in the
+      # PR #98 review, "http://api:8090/..." and "http://postgres:5432/")
+      # alongside the IP-literal patterns. `db`-network isolation (see the
+      # top-level `networks:` comment) is what actually closes the postgres
+      # case structurally; this is defense-in-depth on top of that, not a
+      # substitute for it — text matching alone can never fully close this
+      # class of bypass (DNS rebinding to a literal IP address is still
+      # unaddressed by either layer).
       - "gotenberg"
-      - "--chromium-deny-list=.*(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|::1|10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.|169\\.254\\.).*"
+      - "--chromium-deny-list=.*(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|::1|10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.|169\\.254\\.|\\bapi\\b|\\bpostgres\\b|\\bpurge\\b|\\bgotenberg\\b).*"
     ports:
       - "3000:3000"
     security_opt:
@@ -122,6 +154,10 @@ services:
       - /tmp
       - /home/gotenberg/.cache
     mem_limit: 1g
+    # NOT `db` — see the top-level `networks:` comment. This is the
+    # structural half of the SSRF fix: gotenberg has no route to postgres
+    # at all, regardless of what hostname/IP a malicious upload references.
+    networks: [convert]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/health"]
@@ -145,6 +181,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks: [db]
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U filecast"]

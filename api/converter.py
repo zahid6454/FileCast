@@ -241,7 +241,20 @@ _EPUB_BODY_RE = re.compile(r"<body[^>]*>(.*)</body>", re.IGNORECASE | re.DOTALL)
 _EPUB_CSS_LINK_RE = re.compile(
     r'<link[^>]+rel=["\']stylesheet["\'][^>]*href=["\']([^"\']+)["\']', re.IGNORECASE
 )
-_EPUB_IMG_SRC_RE = re.compile(r'(<img[^>]+src=)(["\'])([^"\']+)\2', re.IGNORECASE)
+# PR #98 review finding: the previous version only matched a QUOTED src=
+# (["']...["']), so a valid, unquoted HTML5 attribute
+# (`<img src=http://169.254.169.254/...>`) skipped this regex entirely and
+# _inline_img never ran — the raw external src passed straight through into
+# the HTML fed to Gotenberg (a blind SSRF bypass, verified against the exact
+# repro in the review). This alternation covers all three legal forms
+# (double-quoted / single-quoted / unquoted) so every case reaches
+# _inline_img's resolve-or-drop logic. `\s` (not `[^>]`) immediately before
+# `src` also fixes a pre-existing false-positive on `data-src=`-style
+# attributes, which the old `[^>]+src=` could backtrack into.
+_EPUB_IMG_SRC_RE = re.compile(
+    r"""(<img[^>]*?\ssrc=)(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))""",
+    re.IGNORECASE,
+)
 
 
 def _epub_read_text(zf, path: str) -> str:
@@ -333,15 +346,26 @@ def _flatten_epub_to_html_sync(content: bytes) -> bytes:
                     style_blocks.append(_epub_read_text(zf, css_path))
 
             def _inline_img(m, chapter_dir=chapter_dir):
-                img_path = _epub_resolve(chapter_dir, m.group(3))
+                # Exactly one of the three quoting-style groups matched
+                # (double-quoted / single-quoted / unquoted) — see
+                # _EPUB_IMG_SRC_RE's comment.
+                raw_src = m.group(2)
+                if raw_src is None:
+                    raw_src = m.group(3)
+                if raw_src is None:
+                    raw_src = m.group(4)
+                img_path = _epub_resolve(chapter_dir, raw_src)
                 data_uri = _epub_data_uri(zf, names, img_path)
                 # Never fall back to the original src: an image absent from the
-                # EPUB's own zip means m.group(3) is an external reference (a
+                # EPUB's own zip means raw_src is an external reference (a
                 # URL), and passing it through would have Gotenberg's Chromium
                 # engine fetch it server-side when this HTML is rendered — a
                 # blind SSRF vector (e.g. an internal host or metadata address).
-                # Drop the reference instead of resolving it.
-                return f"{m.group(1)}{m.group(2)}{data_uri or ''}{m.group(2)}"
+                # Drop the reference instead of resolving it. Always re-emit as
+                # double-quoted, regardless of the source's original quoting
+                # style — only the matched span (through the src value) is
+                # replaced, so the rest of the tag is untouched.
+                return f'{m.group(1)}"{data_uri or ""}"'
 
             text = _EPUB_IMG_SRC_RE.sub(_inline_img, text)
 

@@ -57,4 +57,14 @@ services:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - api
+    # The base file's `networks:` split (PR #98 review — gotenberg no longer
+    # shares a network with postgres) replaced the implicit single default
+    # network every service used to join automatically. cloudflared reaches
+    # `api` by service name (see the comment above `api.ports` in the base
+    # file), so it needs an explicit membership in whichever network `api`
+    # is on now — `convert` is the one api shares with something other than
+    # itself, so it's the natural choice; cloudflared has no reason to talk
+    # to gotenberg and doesn't, this is just network membership, not a route
+    # cloudflared actually uses.
+    networks: [convert]
     restart: unless-stopped
