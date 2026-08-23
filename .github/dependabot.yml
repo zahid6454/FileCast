@@ -6,29 +6,29 @@ updates:
   - package-ecosystem: "pip"
     directory: "/api"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 5
 
   # Frontend tooling (vitest/playwright/biome) — devDependencies only, no
   # runtime package ships to the static site.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 5
 
   # CI workflows — every action below is already SHA-pinned (OWASP A08); this
   # is what keeps those pins current instead of freezing them permanently.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 5
 
   # api/Dockerfile's base image, also digest-pinned (OWASP A08) for the same
   # reason.
   - package-ecosystem: "docker"
     directory: "/api"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    open-pull-requests-limit: 3
