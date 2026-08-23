@@ -304,7 +304,7 @@
   "avif_enc_lib_src": {{ ("/" + avif_enc_lib_asset.path)|tojson }},
   "avif_enc_wasm_src": {{ ("/" + avif_enc_wasm_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.type == 'server-side' %},
   "api_base_url": {{ api.base_url|tojson }},
-  "api_endpoint": {{ tool.api_endpoint|default('/api/v1/convert/' + tool.id)|tojson }}{% endif %}
+  "api_endpoint": {{ (api.base_url + tool.api_endpoint|default('/api/v1/convert/' + tool.id))|tojson }}{% endif %}
 }
 </script>
 
