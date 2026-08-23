@@ -1056,6 +1056,85 @@ img { max-width: 100%; display: block; }
 .privacy-section a { color: var(--color-text-secondary); text-decoration: underline; text-underline-offset: 2px; }
 .privacy-section a:hover { color: var(--color-primary); }
 
+/* --- About Page: "Who's behind this" credit ---
+   The left edge carries the brand gradient (the same blue-to-green pairing as
+   .section__divider and .btn--primary) via a pseudo-element rather than
+   border-left, since a plain border can't take a gradient without fighting
+   border-radius on the other three sides. overflow:hidden clips it to the
+   card's own corner so it reads as one continuous edge. */
+.about-credit {
+  position: relative;
+  overflow: hidden;
+  margin-top: var(--space-8);
+  padding: var(--space-8) var(--space-6) var(--space-8) var(--space-8);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.about-credit::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--brand-blue), var(--brand-green));
+}
+/* This is the one bordered/shadowed card among the About page's plain
+   sections, so its title takes the card-title color (--color-heading, used
+   by every other card on the site) rather than the plain section h2's
+   default --color-text, which reads too heavy against a boxed surface. */
+.about-credit .privacy-section h2 { color: var(--color-heading); }
+/* The card's own padding already provides the bottom gap — without this,
+   .privacy-section's sitewide margin-bottom (--space-8) stacks on top of it,
+   doubling the whitespace under the LinkedIn pill vs. above the heading. */
+.about-credit .privacy-section { margin-bottom: 0; }
+.about-credit__byline { font-size: var(--text-base); margin-bottom: var(--space-3); }
+.about-credit__byline strong { font-weight: var(--weight-semibold); color: var(--color-heading); }
+.about-credit__byline .sep { color: var(--color-text-light); margin: 0 var(--space-2); }
+.about-credit__byline .role { font-size: var(--text-sm); font-weight: var(--weight-normal); color: var(--color-text-muted); }
+/* A ghost-chip pill, like .tool-badge__note, rather than a bare underlined
+   URL — no underline, an outlined pill instead. Qualified with .about-credit
+   so this beats `.privacy-section a` (class+element = higher specificity
+   than a bare class) instead of losing the underline to it. Hover reuses
+   .tool-badge__note's own affordance (brand-glow shadow + nudging arrow)
+   rather than inventing a second hover language on the same page. */
+.about-credit .about-credit__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+.about-credit .about-credit__link:hover {
+  box-shadow: var(--shadow-brand-hover);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+.about-credit .about-credit__link:active { transform: translateY(0) scale(0.98); }
+.about-credit .about-credit__link-arrow { display: inline-block; transition: transform var(--transition-fast); }
+.about-credit .about-credit__link:hover .about-credit__link-arrow { transform: translate(2px, -2px); }
+@media (prefers-reduced-motion: reduce) {
+  .about-credit .about-credit__link { transition: none; }
+  .about-credit .about-credit__link:hover { transform: none; }
+  .about-credit .about-credit__link-arrow { transition: none; }
+}
+/* Narrow enough that "name · role" wraps mid-phrase (e.g. "Creator &
+   maintainer" stranded from "of FileCast" on its own line) — drop the
+   separator and give the role its own line under the name instead. */
+@media (max-width: 480px) {
+  .about-credit__byline .sep { display: none; }
+  .about-credit__byline .role { display: block; margin-top: var(--space-1); }
+}
+
 /* --- Contact Page --- */
 .contact-form { display: flex; flex-direction: column; gap: var(--space-5); margin-bottom: var(--space-8); }
 .contact-form__field { display: flex; flex-direction: column; gap: var(--space-2); }
