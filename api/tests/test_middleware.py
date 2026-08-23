@@ -112,11 +112,30 @@ async def test_rate_limit_headers_on_429(client):
 
 
 async def test_no_rate_limit_headers_on_an_unmatched_path(client):
-    # /api/v1/tools carries no PATH_LIMITS entry — nothing to report.
-    r = await client.get("/api/v1/tools")
+    # /api/v1/favorites carries no PATH_LIMITS entry — nothing to report.
+    # (/api/v1/tools moved into PATH_LIMITS — see the admin-budget tests below.)
+    r = await client.get("/api/v1/favorites")
     assert "x-ratelimit-limit" not in r.headers
     assert "x-ratelimit-remaining" not in r.headers
     assert "x-ratelimit-reset" not in r.headers
+
+
+# --------------------------------------------------------------------------- #
+# Admin-surface rate limits (OWASP A05) — /admin, /tools, /stats are fully
+# require_admin-gated but previously carried no budget of their own.
+# --------------------------------------------------------------------------- #
+
+
+async def test_admin_surfaces_have_rate_limit_headers(admin_client):
+    r = await admin_client.get("/api/v1/tools")
+    assert r.status_code == 200
+    assert r.headers["x-ratelimit-limit"] == "200"
+
+    r = await admin_client.get("/api/v1/stats/dashboard")
+    assert r.headers["x-ratelimit-limit"] == "200"
+
+    r = await admin_client.get("/api/v1/admin/staff")
+    assert r.headers["x-ratelimit-limit"] == "300"
 
 
 async def test_rate_limit_remaining_is_race_free_under_concurrency(client):
@@ -201,6 +220,32 @@ async def test_noindex_header_on_429(client):
     last = codes_and_headers[-1]
     assert last.status_code == 429
     assert last.headers["x-robots-tag"] == "noindex, nofollow"
+
+
+# --------------------------------------------------------------------------- #
+# SecurityHeadersMiddleware (OWASP A05) — nosniff always, HSTS production-only
+# --------------------------------------------------------------------------- #
+
+
+async def test_nosniff_header_always_present(client):
+    r = await client.get("/")
+    assert r.headers["x-content-type-options"] == "nosniff"
+
+
+async def test_hsts_absent_outside_production(client):
+    r = await client.get("/")
+    assert "strict-transport-security" not in r.headers
+
+
+async def test_hsts_present_in_production(client, monkeypatch):
+    from data import config
+
+    monkeypatch.setattr(config.settings, "environment", "production")
+    r = await client.get("/")
+    assert (
+        r.headers["strict-transport-security"]
+        == "max-age=31536000; includeSubDomains; preload"
+    )
 
 
 # --------------------------------------------------------------------------- #

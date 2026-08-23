@@ -67,6 +67,16 @@ PATH_LIMITS: list[tuple[str, int]] = [
     # Authenticated write; also size/key-guarded in the router.
     ("/api/v1/preferences", 60),
     ("/api/v1/convert", 20),
+    # Admin-only surfaces (staff.py, site_settings.py, admin_deploy.py all live
+    # under /admin; tools.py and stats.py are admin-gated on every route). Every
+    # route here already requires require_admin (A01), but a leaked/stolen
+    # admin session previously had no throttle of its own — unbounded staff
+    # churn or repeated deploy dispatches (OWASP A05). Generous enough for
+    # normal panel use (dashboard loads + a handful of edits per session), not
+    # for scripted abuse.
+    ("/api/v1/admin", 300),
+    ("/api/v1/tools", 200),
+    ("/api/v1/stats", 200),
 ]
 
 
@@ -80,6 +90,26 @@ def add_cors(app):
         allow_headers=["Content-Type"],
         max_age=3600,
     )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Baseline security headers on every API response (OWASP A05).
+
+    The static frontend gets a full header set via dist/_headers (Cloudflare
+    Pages); this process — serving /convert's binary downloads and every JSON
+    response — set none of its own before this. X-Content-Type-Options is
+    unconditional; HSTS is production-only so local HTTP dev isn't forced onto
+    HTTPS (same env gate ``cookie_secure``/dev-login use).
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        if settings.environment == "production":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains; preload"
+            )
+        return response
 
 
 class NoIndexMiddleware(BaseHTTPMiddleware):
