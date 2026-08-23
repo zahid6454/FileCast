@@ -1103,10 +1103,9 @@ img { max-width: 100%; display: block; }
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   text-decoration: none;
-  transition: background var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 .about-credit .about-credit__link:hover {
-  background: var(--color-primary-subtle);
   box-shadow: var(--shadow-brand-hover);
   transform: translateY(-1px);
   text-decoration: none;
