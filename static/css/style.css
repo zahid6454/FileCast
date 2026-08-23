@@ -1118,6 +1118,13 @@ img { max-width: 100%; display: block; }
   .about-credit .about-credit__link:hover { transform: none; }
   .about-credit .about-credit__link-arrow { transition: none; }
 }
+/* Narrow enough that "name · role" wraps mid-phrase (e.g. "Creator &
+   maintainer" stranded from "of FileCast" on its own line) — drop the
+   separator and give the role its own line under the name instead. */
+@media (max-width: 480px) {
+  .about-credit__byline .sep { display: none; }
+  .about-credit__byline .role { display: block; margin-top: var(--space-1); }
+}
 
 /* --- Contact Page --- */
 .contact-form { display: flex; flex-direction: column; gap: var(--space-5); margin-bottom: var(--space-8); }
