@@ -174,18 +174,22 @@
         }
       }
       // null (not {}) marks "this call failed" so statsText can say so,
-      // distinct from a call that succeeded and simply found no rows.
+      // distinct from a call that succeeded and simply found no rows. Guard
+      // with Array.isArray, not just truthiness — a 2xx response whose body
+      // isn't the expected array (bad server response, stale cached bundle
+      // against a changed contract) must degrade to "unavailable" instead of
+      // throwing out of a .then with nothing left to catch it.
       var ratingsByTool = null;
-      if (results[0].status === 'fulfilled') {
+      if (results[0].status === 'fulfilled' && Array.isArray(results[0].value)) {
         ratingsByTool = {};
-        (results[0].value || []).forEach(function (r) {
+        results[0].value.forEach(function (r) {
           ratingsByTool[r.tool_id] = r;
         });
       }
       var conversionsByTool = null;
-      if (results[1].status === 'fulfilled') {
+      if (results[1].status === 'fulfilled' && Array.isArray(results[1].value)) {
         conversionsByTool = {};
-        (results[1].value || []).forEach(function (c) {
+        results[1].value.forEach(function (c) {
           conversionsByTool[c.tool_id] = c;
         });
       }
