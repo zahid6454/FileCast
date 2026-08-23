@@ -7,7 +7,7 @@ python-multipart==0.0.32
 pdf2docx==0.5.8
 pdfplumber==0.11.4
 openpyxl==3.1.5
-PyMuPDF==1.24.11
+PyMuPDF==1.28.2
 python-pptx==1.0.2
 opencv-python-headless==4.10.0.84
 numpy==2.1.3
