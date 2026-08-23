@@ -2592,6 +2592,13 @@ img { max-width: 100%; display: block; }
   color: var(--color-primary);
   transition: transform var(--transition-fast);
 }
+/* Mirrors .card--ghost__arrow's width so "View All" sits between two equal
+   gaps — otherwise the trailing icon (with no counterpart on the left) pulls
+   the centered flex box rightward and the text itself reads off-center. */
+.card--ghost__spacer {
+  width: 16px;
+  flex-shrink: 0;
+}
 .card--ghost:hover .card--ghost__arrow { transform: translateX(3px); }
 
 /* --- Enhanced tool card inner structure (own classes; base .card stays
