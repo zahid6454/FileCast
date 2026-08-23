@@ -648,7 +648,9 @@ def attach_nav_dropdown_tools(categories_with_tools: dict) -> None:
     overall rank same as before.
     """
     for cat_data in categories_with_tools.values():
-        converters = [t for t in cat_data["tools"] if t.get("subcategory") == "converter"]
+        converters = [
+            t for t in cat_data["tools"] if t.get("subcategory") == "converter"
+        ]
         utilities = [t for t in cat_data["tools"] if t.get("subcategory") == "utility"]
 
         if not converters or not utilities:
@@ -664,8 +666,12 @@ def attach_nav_dropdown_tools(categories_with_tools: dict) -> None:
         remaining = NAV_DROPDOWN_MAX - len(reserved_main) - len(reserved_sub)
         fill = [t for t in cat_data["tools"] if t["id"] not in reserved_ids][:remaining]
 
-        cat_data["nav_main_tools"] = reserved_main + [t for t in fill if t.get("subcategory") == "converter"]
-        cat_data["nav_sub_tools"] = reserved_sub + [t for t in fill if t.get("subcategory") == "utility"]
+        cat_data["nav_main_tools"] = reserved_main + [
+            t for t in fill if t.get("subcategory") == "converter"
+        ]
+        cat_data["nav_sub_tools"] = reserved_sub + [
+            t for t in fill if t.get("subcategory") == "utility"
+        ]
 
 
 # ---------------------------------------------------------------------------

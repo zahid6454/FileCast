@@ -932,7 +932,9 @@ def test_nav_dropdown_reserves_utility_when_top_ranked_are_all_converters():
     # Regression for the reported bug: 10 converters outrank the category's
     # only utility tool, so a naive tools[:10]-then-split leaves nav_sub_tools
     # empty even though the category clearly has a utility tool.
-    tools = [_tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(10)]
+    tools = [
+        _tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(10)
+    ]
     tools.append(_tool(id="only-utility", sort_order=99, subcategory="utility"))
     grouped = _nav_grouped(tools)
     cat = grouped["image-conversion"]
@@ -943,7 +945,9 @@ def test_nav_dropdown_reserves_utility_when_top_ranked_are_all_converters():
 def test_nav_dropdown_single_subcategory_is_unaffected():
     # A category with only one subcategory (no utility tools at all) has
     # nothing to reserve or interleave — top 10 of what exists, as before.
-    tools = [_tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(12)]
+    tools = [
+        _tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(12)
+    ]
     grouped = _nav_grouped(tools)
     cat = grouped["image-conversion"]
     assert len(cat["nav_main_tools"]) == 10
@@ -969,7 +973,9 @@ def test_nav_dropdown_fills_remaining_slots_by_overall_rank():
     # Beyond the reserved minimum, remaining slots (up to 10 total) fill by
     # the category's overall sort_order, same behavior as the old top-10 cut.
     tools = [_tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(8)]
-    tools += [_tool(id=f"u{i}", sort_order=100 + i, subcategory="utility") for i in range(8)]
+    tools += [
+        _tool(id=f"u{i}", sort_order=100 + i, subcategory="utility") for i in range(8)
+    ]
     grouped = _nav_grouped(tools)
     cat = grouped["image-conversion"]
     assert len(cat["nav_main_tools"]) + len(cat["nav_sub_tools"]) == 10
@@ -982,7 +988,9 @@ def test_nav_dropdown_fills_remaining_slots_by_overall_rank():
 def test_nav_dropdown_view_all_count_unaffected():
     # cat_data['tools'] (what "View All N Tools" counts) must stay untouched —
     # only the dropdown's own nav_main_tools/nav_sub_tools are capped.
-    tools = [_tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(15)]
+    tools = [
+        _tool(id=f"c{i}", sort_order=i, subcategory="converter") for i in range(15)
+    ]
     grouped = _nav_grouped(tools)
     assert len(grouped["image-conversion"]["tools"]) == 15
 
@@ -1307,6 +1315,57 @@ def test_full_build_404_links_all_categories(tmp_path, monkeypatch):
     assert 'href="/image-conversion/"' in not_found
     assert 'href="/developer-tools/"' in not_found
     assert 'id="hero-search"' in not_found  # search stays alongside the links
+
+
+def test_full_build_nav_dropdown_shows_seam_and_both_subcategories(
+    tmp_path, monkeypatch
+):
+    # Integration check for the attach_nav_dropdown_tools fix: the unit tests
+    # above exercise the Python split in isolation, but base.html still has to
+    # actually consume nav_main_tools/nav_sub_tools correctly (right attribute
+    # names, right loop) for the fix to matter. Developer Tools is the real
+    # category that triggered the bug report — under the no-DB fallback order
+    # (alphabetical by filename) its top 10 by sort_order are all converters,
+    # which used to make the seam and every utility tool vanish from just
+    # this dropdown while "View All" looked fine.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+
+    # Scope to the drawer itself — "Developer" and "nav-dropdown__menu" both
+    # recur later on the page (the homepage section heading, other
+    # categories), and Developer Tools is config-ordered last among the
+    # three categories, so everything from its toggle to </nav> is just its
+    # own block (config order asserted by other tests, e.g. the "View All
+    # categories" one at the top of this file).
+    nav_start = home.index('id="nav-drawer"')
+    nav_end = home.index("</nav>", nav_start)
+    nav_html = home[nav_start:nav_end]
+    developer_menu = nav_html[nav_html.index("Developer") :]
+
+    assert "nav-dropdown__seam" in developer_menu
+    assert 'href="/convert/csv-to-json/"' in developer_menu  # a converter
+    # Any real Developer Tools utility-subcategory tool proves the other
+    # group survived the split, without pinning to whichever two happen to
+    # rank highest alphabetically today.
+    utility_slugs = [
+        "barcode-generator",
+        "css-js-minifier",
+        "json-validator",
+        "yaml-validator",
+        "xml-validator",
+        "json-minifier",
+        "json-formatter",
+        "xml-formatter",
+        "qr-code-generator",
+        "hash-generator",
+        "html-minifier",
+        "jwt-decoder",
+        "json-diff",
+        "uuid-generator",
+        "html-formatter",
+    ]
+    assert any(f'href="/convert/{slug}/"' in developer_menu for slug in utility_slugs)
 
 
 def test_full_build_renders_offline_page_and_sw(tmp_path, monkeypatch):
