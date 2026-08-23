@@ -17,6 +17,6 @@
     "@biomejs/biome": "2.5.9",
     "@playwright/test": "^1.48.0",
     "jsdom": "^30.0.1",
-    "vitest": "^2.1.4"
+    "vitest": "^4.1.11"
   }
 }
