@@ -224,7 +224,7 @@ async def _resolve_run_id(
 
 
 @router.post("/deploy")
-async def trigger_deploy(_admin=Depends(require_admin)):
+async def trigger_deploy(admin=Depends(require_admin)):
     _require_configured()
     deploy_id = secrets.token_hex(8)
     dispatch_url = (
@@ -249,6 +249,18 @@ async def trigger_deploy(_admin=Depends(require_admin)):
         raise HTTPException(
             status_code=502, detail="Could not reach GitHub to start the deploy."
         ) from exc
+    logger.info(
+        "Deploy triggered by %s",
+        admin.email,
+        extra={
+            "data": {
+                "event": "admin_deploy_trigger",
+                "actor": admin.email,
+                "deploy_id": deploy_id,
+                "run_id": run_id,
+            }
+        },
+    )
     # run_id may be str|int|None depending on GitHub; app.js only needs it present
     # and truthy to poll. Return it as-is.
     return {"deploy_id": deploy_id, "run_id": run_id, "status": "queued"}
@@ -332,7 +344,7 @@ async def deploy_status(run_id: str, _admin=Depends(require_admin)):
 
 
 @router.post("/seed-tools")
-async def trigger_seed(_admin=Depends(require_admin)):
+async def trigger_seed(admin=Depends(require_admin)):
     _require_configured()
     seed_id = secrets.token_hex(8)
     dispatch_url = (
@@ -359,6 +371,18 @@ async def trigger_seed(_admin=Depends(require_admin)):
         raise HTTPException(
             status_code=502, detail="Could not reach GitHub to start the sync."
         ) from exc
+    logger.info(
+        "Tool sync triggered by %s",
+        admin.email,
+        extra={
+            "data": {
+                "event": "admin_seed_trigger",
+                "actor": admin.email,
+                "seed_id": seed_id,
+                "run_id": run_id,
+            }
+        },
+    )
     return {"seed_id": seed_id, "run_id": run_id, "status": "queued"}
 
 

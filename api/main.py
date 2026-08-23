@@ -20,6 +20,7 @@ from middleware import (
     NoIndexMiddleware,
     RateLimitMiddleware,
     RequestLoggingMiddleware,
+    SecurityHeadersMiddleware,
     SelectiveGZipMiddleware,
     add_cors,
 )
@@ -141,15 +142,15 @@ app = FastAPI(
 # rate-limiter 429 (or any early response) would skip CORS and a browser
 # couldn't read it on a credentialed request, and preflight OPTIONS would be
 # rate-limited instead of answered. RateLimit stays inner of RequestLogging
-# (unchanged relative order, so /convert behaves as before). NoIndex is added
-# last (outermost) so the header lands on literally every response this app
-# returns, including CORS preflights and 429s. GZip is added first (innermost)
-# so it compresses the actual response body right as it leaves the route,
-# before any other middleware touches it — every JSON response shipped
-# uncompressed until now. /convert output is already a compressed binary
-# format (PDF/DOCX/XLSX/PPTX) — excluded so it isn't gzipped a second time for
-# no size benefit at real CPU cost on the app's largest, most latency-sensitive
-# responses.
+# (unchanged relative order, so /convert behaves as before). NoIndex and
+# SecurityHeaders are added last (outermost) so their headers land on
+# literally every response this app returns, including CORS preflights and
+# 429s. GZip is added first (innermost) so it compresses the actual response
+# body right as it leaves the route, before any other middleware touches it —
+# every JSON response shipped uncompressed until now. /convert output is
+# already a compressed binary format (PDF/DOCX/XLSX/PPTX) — excluded so it
+# isn't gzipped a second time for no size benefit at real CPU cost on the
+# app's largest, most latency-sensitive responses.
 app.add_middleware(
     SelectiveGZipMiddleware, exclude_prefixes=("/api/v1/convert",), minimum_size=500
 )
@@ -157,6 +158,7 @@ app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 add_cors(app)
 app.add_middleware(NoIndexMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(converter_router)
 for data_router in all_routers:

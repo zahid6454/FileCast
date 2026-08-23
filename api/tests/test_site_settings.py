@@ -48,6 +48,18 @@ async def test_put_upserts_same_row(admin_client, db):
     assert rows[0].site_name == "Renamed"
 
 
+async def test_put_logs_actor(admin_client, caplog):
+    # OWASP A09 — config changes must leave an audit trail.
+    with caplog.at_level("INFO", logger="filecast.site-settings"):
+        await admin_client.put("/api/v1/admin/site-settings", json=VALID)
+    record = next(
+        r
+        for r in caplog.records
+        if getattr(r, "data", {}).get("event") == "admin_site_settings_update"
+    )
+    assert record.data["actor"] == "admin@dev.local"
+
+
 async def test_get_after_put_returns_saved_values(admin_client):
     body = {**VALID, "site_tagline": "Persisted Tagline"}
     await admin_client.put("/api/v1/admin/site-settings", json=body)

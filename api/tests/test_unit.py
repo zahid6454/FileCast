@@ -293,7 +293,12 @@ def test_rate_limit_path_matching():
     assert match("/api/v1/announcements/active")[0] == "/api/v1/announcements"
     assert match("/api/v1/preferences")[0] == "/api/v1/preferences"
     assert match("/api/v1/convert/docx-to-pdf")[0] == "/api/v1/convert"
-    assert match("/api/v1/tools") is None  # not rate limited
+    # Admin surfaces (OWASP A05) — /admin, /tools, /stats are all fully
+    # require_admin-gated but previously carried no rate-limit budget.
+    assert match("/api/v1/tools")[0] == "/api/v1/tools"
+    assert match("/api/v1/stats/dashboard")[0] == "/api/v1/stats"
+    assert match("/api/v1/admin/staff")[0] == "/api/v1/admin"
+    assert match("/api/v1/favorites") is None  # genuinely not rate limited
     # OAuth: start + callback share one budgeted bucket; dev-login stays separate.
     assert match("/api/v1/auth/google")[0] == "/api/v1/auth/google"
     assert match("/api/v1/auth/google/callback")[0] == "/api/v1/auth/google"

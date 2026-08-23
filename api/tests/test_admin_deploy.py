@@ -110,6 +110,20 @@ async def test_dispatch_resolves_and_returns_run_id(admin_client, monkeypatch):
     assert client.post_headers.get("Authorization") == f"Bearer {PAT}"
 
 
+async def test_trigger_deploy_logs_actor(admin_client, monkeypatch, caplog):
+    # OWASP A09 — a successful deploy dispatch must leave an audit trail.
+    _use(monkeypatch, ResolvingClient(run_id=4242))
+    with caplog.at_level("INFO", logger="filecast.admin-deploy"):
+        await admin_client.post("/api/v1/admin/deploy")
+    record = next(
+        r
+        for r in caplog.records
+        if getattr(r, "data", {}).get("event") == "admin_deploy_trigger"
+    )
+    assert record.data["actor"] == "admin@dev.local"
+    assert record.data["run_id"] == 4242
+
+
 def _iso(offset_seconds: float) -> str:
     """GitHub-shaped ``created_at``, offset from now."""
     return (

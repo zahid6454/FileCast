@@ -2219,6 +2219,13 @@ def generate_headers(site_config: dict):
         "  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
         # A file converter has no reason to touch any of these browser APIs.
         "  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+        # OWASP A05 hardening. Sign-in is a full-page redirect (auth.py), never a
+        # popup, so COOP doesn't touch it. CORP:same-origin is safe because
+        # nothing outside filecast.org legitimately embeds these assets —
+        # img-src's external hosts (Google avatars) are things THIS site loads,
+        # unrelated to what CORP governs (what other origins may load FROM it).
+        "  Cross-Origin-Opener-Policy: same-origin",
+        "  Cross-Origin-Resource-Policy: same-origin",
         # Cloudflare Pages adds `Access-Control-Allow-Origin: *` to every response
         # by default (undocumented in most places, confirmed on the Pages
         # community forum) — nothing in this codebase ever set it. `!` is Pages'

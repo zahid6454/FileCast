@@ -1026,6 +1026,14 @@ def test_generate_headers_permissions_policy_and_cors(tmp_path, monkeypatch):
     assert re.search(r"^  Access-Control-Allow-Origin:", text, re.MULTILINE) is None
 
 
+def test_generate_headers_includes_coop_and_corp(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
+    text = (tmp_path / "_headers").read_text(encoding="utf-8")
+    assert "Cross-Origin-Opener-Policy: same-origin" in text
+    assert "Cross-Origin-Resource-Policy: same-origin" in text
+
+
 def test_generate_headers_fonts_cache_rule(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})

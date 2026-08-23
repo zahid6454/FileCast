@@ -9,6 +9,7 @@ lookups are case-insensitive so a mixed-case stored row is never missed.
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
+from log import get_logger
 from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -19,6 +20,8 @@ from data.db import get_session
 from data.models import StaffGrant, User
 from data.routers._serialize import user_dict
 from data.security import require_admin
+
+logger = get_logger("staff")
 
 router = APIRouter(prefix="/api/v1/admin", tags=["staff"])
 
@@ -123,6 +126,19 @@ async def grant_staff(
     if user is not None:
         user.role = "admin"
         await db.commit()
+        logger.info(
+            "Admin granted to %s by %s",
+            email,
+            admin.email,
+            extra={
+                "data": {
+                    "event": "admin_staff_grant",
+                    "actor": admin.email,
+                    "target": email,
+                    "status": "promoted",
+                }
+            },
+        )
         return {"status": "promoted", "email": email}
 
     # Upsert a pending grant (idempotent on the unique email). Refresh the granter
@@ -137,6 +153,19 @@ async def grant_staff(
         )
     )
     await db.commit()
+    logger.info(
+        "Admin invite pending for %s by %s",
+        email,
+        admin.email,
+        extra={
+            "data": {
+                "event": "admin_staff_grant",
+                "actor": admin.email,
+                "target": email,
+                "status": "pending",
+            }
+        },
+    )
     return {"status": "pending", "email": email}
 
 
@@ -174,4 +203,16 @@ async def revoke_staff(
     # row can't confuse a later re-invite (§2).
     await db.execute(delete(StaffGrant).where(StaffGrant.email == email))
     await db.commit()
+    logger.info(
+        "Admin revoked from %s by %s",
+        email,
+        admin.email,
+        extra={
+            "data": {
+                "event": "admin_staff_revoke",
+                "actor": admin.email,
+                "target": email,
+            }
+        },
+    )
     return {"status": "revoked", "email": email}
