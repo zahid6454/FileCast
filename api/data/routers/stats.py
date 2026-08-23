@@ -62,6 +62,30 @@ async def dashboard(
     }
 
 
+@router.get("/tools")
+async def all_tool_conversions(
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """All-time per-tool conversion aggregate, every tool (not just top 10) —
+    lets the tools-tab slide-out show a single tool's usage without a
+    per-tool call (mirrors ratings.py's bulk `GET /ratings`)."""
+    rows = (
+        await db.execute(
+            select(
+                Conversion.tool_id,
+                func.sum(Conversion.count).label("count"),
+                func.sum(Conversion.failures).label("failures"),
+                func.sum(Conversion.unique_visitors).label("visitors"),
+            ).group_by(Conversion.tool_id)
+        )
+    ).all()
+    return [
+        {"tool_id": t, "count": int(c), "failures": int(f), "unique_visitors": int(v)}
+        for t, c, f, v in rows
+    ]
+
+
 @router.get("/conversions")
 async def conversions_series(
     days: int = 30,

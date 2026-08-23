@@ -150,6 +150,76 @@
     return tool.display_name || tool.name || tool.id;
   }
 
+  // --- usage stats (rating + conversions) ----------------------------------
+  //
+  // Fetched once per Tools-tab visit (kicked off from render(), alongside the
+  // catalog fetch, never per slide-out open) — same "bulk call, not N-per-row"
+  // rule the dashboard's ratings summary follows (Phase 4 §8.2). The slide-out
+  // just reads from this cache; if it opens before the fetch resolves, its
+  // stats block shows a loading state and fills in once the promise settles.
+  var statsPromise = null;
+
+  function loadStats() {
+    // allSettled + bubble-auth-errors, same as dashboard.js's ratings/stats
+    // fetch (R8) — a plain per-call .catch(() => null) would silently eat a
+    // 401/403 instead of dropping the admin back to the sign-in gate.
+    statsPromise = Promise.allSettled([
+      api.get('/api/v1/ratings'),
+      api.get('/api/v1/stats/tools')
+    ]).then(function (results) {
+      for (var i = 0; i < results.length; i++) {
+        if (results[i].reason && results[i].reason.isAuthError) {
+          ADMIN.onAuthError(results[i].reason);
+          break;
+        }
+      }
+      // null (not {}) marks "this call failed" so statsText can say so,
+      // distinct from a call that succeeded and simply found no rows.
+      var ratingsByTool = null;
+      if (results[0].status === 'fulfilled') {
+        ratingsByTool = {};
+        (results[0].value || []).forEach(function (r) {
+          ratingsByTool[r.tool_id] = r;
+        });
+      }
+      var conversionsByTool = null;
+      if (results[1].status === 'fulfilled') {
+        conversionsByTool = {};
+        (results[1].value || []).forEach(function (c) {
+          conversionsByTool[c.tool_id] = c;
+        });
+      }
+      return { ratings: ratingsByTool, conversions: conversionsByTool };
+    });
+    return statsPromise;
+  }
+
+  function statsText(toolId, stats) {
+    var parts = [];
+    if (stats.ratings) {
+      var r = stats.ratings[toolId];
+      if (r && r.yes + r.no > 0) {
+        var total = r.yes + r.no;
+        parts.push(Math.round((r.yes / total) * 100) + '% helpful (' + total + ' votes)');
+      } else {
+        parts.push('No ratings yet');
+      }
+    } else {
+      parts.push('Rating unavailable');
+    }
+    if (stats.conversions) {
+      var c = stats.conversions[toolId];
+      if (c && c.count > 0) {
+        parts.push(c.count.toLocaleString() + ' conversions all-time');
+      } else {
+        parts.push('No conversions yet');
+      }
+    } else {
+      parts.push('Conversions unavailable');
+    }
+    return parts.join(' · ');
+  }
+
   var DROPDOWN_CAP = 10; // tools shown per category in the nav dropdown (base.html)
   var SLOT_COUNT = 4; // homepage seats per category (home.html)
 
@@ -669,7 +739,11 @@
       type: 'text',
       id: 'so-name',
       class: 'admin-input',
-      value: tool.display_name || ''
+      // Pre-filled with the EFFECTIVE name (override, else the live YAML
+      // name) — not display_name alone, which is usually null and made this
+      // box look blank even for a tool with a perfectly good name on the
+      // site. saveSlideout() diffs against this same effective value.
+      value: tool.display_name || tool.name || ''
     });
     var enabledInput = h('input', { type: 'checkbox', id: 'so-enabled' });
     if (tool.enabled) enabledInput.checked = true;
@@ -681,6 +755,14 @@
       class: 'admin-input',
       value: tool.custom_max_file_size || '',
       placeholder: 'e.g. 50MB'
+    });
+
+    // loadStats()'s promise never rejects (each call's own failure/auth
+    // handling happens inside it) — one handler, no unreachable .catch.
+    var statsBlock = h('p', { class: 'admin-slideout__meta' }, 'Loading usage stats…');
+    (statsPromise || loadStats()).then(function (stats) {
+      if (!document.body.contains(statsBlock)) return; // panel closed already
+      statsBlock.textContent = statsText(tool.id, stats);
     });
 
     var closeBtn = h(
@@ -722,6 +804,7 @@
           h('label', { class: 'admin-check' }, [enabledInput, h('span', 'Enabled')]),
           field('Maintenance message', maintInput),
           field('Override max file size', sizeInput),
+          statsBlock,
           h(
             'p',
             { class: 'admin-slideout__meta' },
@@ -781,9 +864,18 @@
   }
 
   function saveSlideout(tool, values) {
-    // Only send changed fields.
+    // Only send changed fields. display_name is diffed against the EFFECTIVE
+    // name (override, else the live YAML name) that the input was pre-filled
+    // with — not the raw (usually null) override — so opening a panel and
+    // saving untouched is a true no-op instead of writing a pointless
+    // override that just repeats the tool's existing name. A deliberate
+    // clear (blank box, name previously non-empty) sends null, not "" —
+    // "" would persist as a real (empty) override in the DB and make this
+    // exact panel look blank again next time, undoing the fix.
     var patch = {};
-    if (values.display_name !== (tool.display_name || '')) patch.display_name = values.display_name;
+    var newName = (values.display_name || '').trim();
+    var effectiveName = (tool.display_name || tool.name || '').trim();
+    if (newName !== effectiveName) patch.display_name = newName === '' ? null : newName;
     if (values.enabled !== tool.enabled) patch.enabled = values.enabled;
     if (values.maintenance_message !== (tool.maintenance_message || ''))
       patch.maintenance_message = values.maintenance_message;
@@ -815,6 +907,14 @@
     CONTAINER = container;
     dom.clear(container);
     container.appendChild(h('div', { class: 'admin-loading' }, 'Loading tools…'));
+
+    // Fetch once for the tab's lifetime, not on every render() — render() also
+    // re-runs after each save/reorder/sync (to refresh the tool list itself),
+    // and ratings/conversions don't change from those actions, so refetching
+    // them every time would just be the N-per-row problem again at a coarser
+    // grain. A full page reload (or a later manual refresh, if ever needed)
+    // is what picks up new numbers.
+    if (!statsPromise) loadStats();
 
     api
       .get('/api/v1/tools')
