@@ -1081,6 +1081,11 @@ img { max-width: 100%; display: block; }
   width: 4px;
   background: linear-gradient(180deg, var(--brand-blue), var(--brand-green));
 }
+/* This is the one bordered/shadowed card among the About page's plain
+   sections, so its title takes the card-title color (--color-heading, used
+   by every other card on the site) rather than the plain section h2's
+   default --color-text, which reads too heavy against a boxed surface. */
+.about-credit .privacy-section h2 { color: var(--color-heading); }
 .about-credit__byline { font-size: var(--text-base); margin-bottom: var(--space-3); }
 .about-credit__byline strong { font-weight: var(--weight-semibold); color: var(--color-heading); }
 .about-credit__byline .sep { color: var(--color-text-light); margin: 0 var(--space-2); }
