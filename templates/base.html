@@ -278,17 +278,20 @@
        see build.py's sort_tools()), so NO per-page JSON fetch (P21/R4). nav.js
        only toggles visibility + aria-expanded. Doubles as the mobile drawer.
 
-       Each menu shows only the top 10 tools (by admin order) instead of the
-       full category — a menu that lists every tool stops scaling once a
-       category passes ~15 entries. The seam below splits that top 10 by the
+       Each menu shows only up to 10 tools instead of the full category — a
+       menu that lists every tool stops scaling once a category passes ~15
+       entries. `nav_main_tools`/`nav_sub_tools` (build.py's
+       attach_nav_dropdown_tools()) are that top-10 pre-split by the
        `subcategory` field (same one category.html groups by): 'converter'
        vs. 'utility', with a plain hairline, no label — an editorial cue, not
-       a taxonomy lesson. "View All" carries the rest. #}
+       a taxonomy lesson. Split there rather than here so a category whose
+       top-10-by-rank happens to be one subcategory doesn't silently lose the
+       other subcategory (and the seam) from just this menu. "View All"
+       carries the rest. #}
     <nav class="header__nav" id="nav-drawer">
       {% for cat_id, cat_data in nav_categories.items() %}
-      {% set top_tools = cat_data.tools[:10] %}
-      {% set main_tools = top_tools|selectattr('subcategory', 'equalto', 'converter')|list %}
-      {% set sub_tools = top_tools|selectattr('subcategory', 'equalto', 'utility')|list %}
+      {% set main_tools = cat_data.nav_main_tools %}
+      {% set sub_tools = cat_data.nav_sub_tools %}
       <div class="nav-dropdown">
         <button class="nav-dropdown__toggle" type="button" aria-expanded="false" aria-haspopup="true">
           {{ cat_data.nav_label or cat_data.name }}
