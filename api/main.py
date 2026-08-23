@@ -51,9 +51,9 @@ GIT_SHA = os.getenv("GIT_SHA") or "unknown"
 # guarantee. Still get exception type/message/full stack trace without it.
 #
 # traces_sampler instead of a flat traces_sample_rate: Docker's healthcheck
-# (docker-compose.yml) hits GET /api/v1/health every 15s, which at 100%
-# sampling would flood the project with ~5,760 traces/day for a route with no
-# diagnostic value. Sentry's project-level "filter out health check
+# (docker-compose.yml) hits GET /api/v1/health, which at 100% sampling would
+# add noise for a route with no diagnostic value. Sentry's project-level
+# "filter out health check
 # transactions" inbound filter was relied on to hide this, but it was matching
 # broadly enough to also silently drop real traffic — nothing showed up under
 # Explore > Traces at all until that filter was disabled. Excluding the route
