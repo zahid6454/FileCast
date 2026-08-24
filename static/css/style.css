@@ -627,6 +627,16 @@ img { max-width: 100%; display: block; }
 }
 .card:hover { transform: translateY(-2px); text-decoration: none; }
 
+/* Vertically centers a card's content — for text-only cards (Related Tools)
+   where every card in a grid row is stretched to the tallest row member's
+   height. Plain `.card` packs from flex-start (top), which reads fine for a
+   single line but looks off-balance once a neighboring card's 2-line name
+   makes the row taller — the 1-line cards' text then sits noticeably above
+   center. NOT applied to `.card` generally: cards with a title+description
+   (About page's "Built With") or a bottom-pinned pill (margin-top: auto)
+   rely on top-anchored, non-centered flow. */
+.card--centered { justify-content: center; }
+
 /* --- Category Page Cards (larger) --- */
 /* --- Category Page Search --- */
 .category__search {
@@ -1384,6 +1394,27 @@ img { max-width: 100%; display: block; }
   overflow-x: auto;
 }
 
+/* --- Wrapped text editor (no gutter) ---
+   Opt in via a tool's `wrap_text: true` (see tools/*.yaml + tool-text.html).
+   For tools whose input/output is a single unstructured blob rather than
+   line-oriented content (QR/Barcode Generator, Base64 to Image) — line
+   numbers add nothing and the no-wrap+horizontal-scroll above just hides a
+   huge one-line value. The gutter element itself is omitted by the template
+   in this mode, so only the textarea needs to reflow into full-width wrap. */
+.text-editor--wrap .text-input-area,
+.text-editor--wrap .text-output-area {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+  border-radius: var(--radius-lg);
+}
+
+.text-editor__caption {
+  font-size: var(--text-xs);
+  color: var(--color-text-light);
+  margin: 0 0 var(--space-2);
+}
+
 .text-input-meta {
   display: flex;
   justify-content: space-between;
@@ -1417,10 +1448,25 @@ img { max-width: 100%; display: block; }
   outline: none;
 }
 
+/* Fixed HEIGHT regardless of the source image's intrinsic size, with width
+   left to flow from it. Deliberately not a fixed square: a QR code grows in
+   both dimensions with its content (more text -> more modules -> a bigger
+   square), so a fixed height alone renders it as a constant-size square.
+   A barcode only grows WIDER with more content — its SVG height is a
+   constant set by the encoder (see barcode-generator.js's `barHeight` +
+   `labelHeight`) — so fixing height here keeps that constant and lets width
+   scale proportionally, same as a real barcode label. Forcing a square box
+   for barcode would instead squeeze it into a shrinking horizontal sliver.
+   Base64 to Image (an arbitrary photo) also just wants its real proportions
+   preserved at a consistent height, not cropped into a square. `object-fit:
+   contain` is a defensive no-op here (width:auto already tracks the ratio)
+   but protects this if a future case ever sets both dimensions explicitly. */
 .text-image-preview {
   display: block;
+  height: 300px;
+  width: auto;
   max-width: 100%;
-  max-height: 400px;
+  object-fit: contain;
   margin: 0 auto var(--space-4);
   border: 2px solid var(--color-success);
   border-radius: var(--radius-lg);

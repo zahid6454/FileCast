@@ -10,6 +10,7 @@ output_format: Barcode
 accept_extensions: [.txt]
 output_extension: .svg
 output_is_data_url: true
+wrap_text: true
 js_module: converters/barcode-generator.js
 js_libs: []
 max_file_size: 5MB
