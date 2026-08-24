@@ -220,7 +220,7 @@
    href="{{ tool.slug }}/"
    data-name="{{ tool.name|lower }}"
    data-category="{{ cat_id }}">
-  <strong>{% if tool.input_format == tool.output_format %}{{ tool.name }}{% else %}{{ tool.input_format }} → {{ tool.output_format }}{% endif %}</strong>
+  <strong>{{ tool.name }}</strong>
   {% if tool.tagline %}
   <div class="card__desc">{{ tool.tagline }}</div>
   {% endif %}

@@ -10,6 +10,7 @@ output_format: Image
 accept_extensions: [.txt]
 output_extension: .png
 output_is_data_url: true
+wrap_text: true
 js_module: converters/base64-to-image.js
 js_libs: []
 max_file_size: 5MB

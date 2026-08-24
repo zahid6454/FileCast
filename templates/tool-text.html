@@ -101,8 +101,10 @@
      Generator's "how many?" count) start pre-filled and ready to run instead
      of forcing an empty-input error before the visitor has typed anything;
      every existing tool omits it and starts empty as before. #}
-  <div class="text-editor">
+  <div class="text-editor{% if tool.get('wrap_text') %} text-editor--wrap{% endif %}">
+    {% if not tool.get('wrap_text') %}
     <div class="text-editor__gutter" aria-hidden="true"></div>
+    {% endif %}
     <textarea class="text-input-area" id="text-input" placeholder="{{ tool.get('input_placeholder', 'Paste your ' + tool.input_format + ' here...') }}">{{- tool.get('input_default', '') -}}</textarea>
   </div>
   <div class="text-input-meta">
@@ -142,9 +144,21 @@
        data: URL, so rendering it as an <img> is far more useful than reading
        it as text. Hidden by default; every other text-input tool never sets
        output_is_data_url so this never appears for them. #}
-    <img class="text-image-preview hidden" id="text-image-preview" alt="Converted image preview">
-    <div class="text-editor">
+    <img class="text-image-preview{% if tool.get('fixed_preview_size') %} text-image-preview--fixed{% endif %} hidden" id="text-image-preview" alt="Converted image preview">
+    {% if tool.get('output_is_data_url') %}
+    <p class="text-editor__caption">Raw output below — the data URL that "Copy to Clipboard" and "Download File" use.</p>
+    {% endif %}
+    {# Output is always a single unstructured value for a data-URL result
+       (never multi-line code), so it wraps whenever output_is_data_url is
+       set — independent of wrap_text, which only covers the input side and
+       stays opt-in per tool (e.g. CSV to Excel's *input* is real multi-line
+       CSV that still benefits from the line gutter, even though its output
+       is the same single-blob shape as QR/Barcode/Base64 to Image). #}
+    {% set wrap_output = tool.get('wrap_text') or tool.get('output_is_data_url') %}
+    <div class="text-editor{% if wrap_output %} text-editor--wrap{% endif %}">
+      {% if not wrap_output %}
       <div class="text-editor__gutter" aria-hidden="true"></div>
+      {% endif %}
       <textarea class="text-output-area" id="text-output" readonly></textarea>
     </div>
     <div class="text-input-meta">
@@ -179,11 +193,11 @@
     <h2 class="related-tools__title">Related Tools</h2>
     <div class="card-grid">
       {% for related in tool.related_tools_resolved %}
-      <a class="card{% if related.type == 'server-side' %} card--server{% endif %}"
+      <a class="card card--centered{% if related.type == 'server-side' %} card--server{% endif %}"
          href="{{ related.slug }}/"
          data-source="{{ tool.id }}"
          data-target="{{ related.id }}">
-        {% if related.input_format == related.output_format %}{{ related.name }}{% else %}{{ related.input_format }} → {{ related.output_format }}{% endif %}
+        {{ related.name }}
       </a>
       {% endfor %}
     </div>
