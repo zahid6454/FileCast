@@ -468,6 +468,11 @@
 
   // Edge zones are excluded from the corner band (HANDLE_HIT_RADIUS in from
   // each end) so a point near a corner is claimed by hitCorner, not here.
+  // That exclusion also means withinX/withinY require the side to be at
+  // least 2*HANDLE_HIT_RADIUS (28px) long — below that (down to MIN_SIZE,
+  // 20px) a side has no mid-edge zone at all and only its two corners are
+  // grabbable. Acceptable: the corners still cover resizing at that size,
+  // and a selection that small is already an edge case.
   function hitEdge(pt, rect) {
     var withinX = pt.x >= rect.x + HANDLE_HIT_RADIUS && pt.x <= rect.x + rect.w - HANDLE_HIT_RADIUS;
     var withinY = pt.y >= rect.y + HANDLE_HIT_RADIUS && pt.y <= rect.y + rect.h - HANDLE_HIT_RADIUS;
@@ -605,28 +610,35 @@
     if (mode === 'resize-left' || mode === 'resize-right') {
       anchorX = mode === 'resize-left' ? start.x + start.w : start.x;
       rawW = pt.x - anchorX;
-      maxW = Math.max(MIN_SIZE, rawW >= 0 ? canvas.width - anchorX : anchorX);
+      // The true room toward the anchor's far side — can be less than
+      // MIN_SIZE when the anchor itself sits close to a canvas edge.
+      // clamp()'s own Math.max(MIN_SIZE, ...) still floors w at MIN_SIZE in
+      // that case (by design, so the box stays grabbable); the x clamp
+      // below is what keeps that oversized box from landing off-canvas.
+      maxW = rawW >= 0 ? canvas.width - anchorX : anchorX;
       w = clamp(Math.abs(rawW), MIN_SIZE, maxW);
       h = clamp(w / aspect, MIN_SIZE, canvas.height);
       w = h * aspect;
       x = rawW >= 0 ? anchorX : anchorX - w;
+      x = clamp(x, 0, Math.max(0, canvas.width - w));
       y = clamp(start.y + start.h / 2 - h / 2, 0, Math.max(0, canvas.height - h));
     } else if (mode === 'resize-top' || mode === 'resize-bottom') {
       anchorY = mode === 'resize-top' ? start.y + start.h : start.y;
       rawH = pt.y - anchorY;
-      maxH = Math.max(MIN_SIZE, rawH >= 0 ? canvas.height - anchorY : anchorY);
+      maxH = rawH >= 0 ? canvas.height - anchorY : anchorY;
       h = clamp(Math.abs(rawH), MIN_SIZE, maxH);
       w = clamp(h * aspect, MIN_SIZE, canvas.width);
       h = w / aspect;
       y = rawH >= 0 ? anchorY : anchorY - h;
+      y = clamp(y, 0, Math.max(0, canvas.height - h));
       x = clamp(start.x + start.w / 2 - w / 2, 0, Math.max(0, canvas.width - w));
     } else {
       anchorX = mode === 'resize-tl' || mode === 'resize-bl' ? start.x + start.w : start.x;
       anchorY = mode === 'resize-tl' || mode === 'resize-tr' ? start.y + start.h : start.y;
       rawW = pt.x - anchorX;
       rawH = pt.y - anchorY;
-      maxW = Math.max(MIN_SIZE, rawW >= 0 ? canvas.width - anchorX : anchorX);
-      maxH = Math.max(MIN_SIZE, rawH >= 0 ? canvas.height - anchorY : anchorY);
+      maxW = rawW >= 0 ? canvas.width - anchorX : anchorX;
+      maxH = rawH >= 0 ? canvas.height - anchorY : anchorY;
 
       if (Math.abs(rawW) / aspect >= Math.abs(rawH)) {
         w = clamp(Math.abs(rawW), MIN_SIZE, maxW);
@@ -645,6 +657,8 @@
       }
       x = rawW >= 0 ? anchorX : anchorX - w;
       y = rawH >= 0 ? anchorY : anchorY - h;
+      x = clamp(x, 0, Math.max(0, canvas.width - w));
+      y = clamp(y, 0, Math.max(0, canvas.height - h));
     }
 
     rect.x = x;
