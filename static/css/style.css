@@ -1032,11 +1032,15 @@ img { max-width: 100%; display: block; }
   margin-top: var(--space-4);
   text-align: center;
 }
-/* max-height mirrors image-cropper.js's MAX_DISPLAY_HEIGHT — the canvas
-   backing store never exceeds that at 100% zoom, so no scrollbar appears
-   until the user actually zooms in past it. inline-block (rather than the
-   default block) so the box shrink-wraps to the canvas and gets centered
-   by .image-cropper's text-align, the same way the bare canvas used to. */
+/* width + aspect-ratio are set inline by image-cropper.js's buildSession(),
+   pinned to the image's 100%-fit dimensions — the viewport keeps that same
+   footprint for the whole session so zooming grows the canvas *inside* it
+   (with scrolling) instead of resizing the viewport itself. max-width:100%
+   still shrinks the whole box proportionally on narrow (mobile) viewports,
+   same mechanism --fit uses on the canvas. max-height is a safety net —
+   MAX_DISPLAY_HEIGHT in JS already keeps the pinned height under it.
+   inline-block (rather than the default block) so the box gets centered by
+   .image-cropper's text-align, the same way the bare canvas used to. */
 .image-cropper__viewport {
   display: inline-block;
   max-width: 100%;

@@ -458,4 +458,43 @@ describe('image-cropper.js — window.convertFile', () => {
     expect(blob.type).toBe('image/jpeg');
     expect(canvasSizes[canvasSizes.length - 1]).toEqual({ width: 320, height: 240 });
   });
+
+  it('keeps the viewport pinned to its 100%-fit size across a zoom in/out cycle', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    const viewportEl = dom.window.document.querySelector('.image-cropper__viewport');
+    // 400x300 is well under the 640x480 cap, so it's the fit size as-is.
+    expect(viewportEl.style.width).toBe('400px');
+    expect(viewportEl.style.aspectRatio).toBe('400 / 300');
+
+    const zoomInBtn = dom.window.document.querySelector(
+      '.image-cropper__zoom-btn[aria-label="Zoom in"]'
+    );
+    const zoomOutBtn = dom.window.document.querySelector(
+      '.image-cropper__zoom-btn[aria-label="Zoom out"]'
+    );
+
+    zoomInBtn.click(); // 125% — the canvas backing store grows, the viewport must not
+    expect(viewportEl.style.width).toBe('400px');
+    expect(viewportEl.style.aspectRatio).toBe('400 / 300');
+
+    zoomInBtn.click(); // 150%
+    zoomInBtn.click(); // 175%
+    expect(viewportEl.style.width).toBe('400px');
+    expect(viewportEl.style.aspectRatio).toBe('400 / 300');
+
+    zoomOutBtn.click(); // back down toward 100%
+    zoomOutBtn.click();
+    zoomOutBtn.click();
+    expect(zoomOutBtn.disabled).toBe(true); // confirms we're back at the 100% floor
+    expect(viewportEl.style.width).toBe('400px');
+    expect(viewportEl.style.aspectRatio).toBe('400 / 300');
+  });
 });
