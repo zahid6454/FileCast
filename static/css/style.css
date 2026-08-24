@@ -1448,29 +1448,39 @@ img { max-width: 100%; display: block; }
   outline: none;
 }
 
-/* Fixed HEIGHT regardless of the source image's intrinsic size, with width
-   left to flow from it. Deliberately not a fixed square: a QR code grows in
-   both dimensions with its content (more text -> more modules -> a bigger
-   square), so a fixed height alone renders it as a constant-size square.
-   A barcode only grows WIDER with more content — its SVG height is a
-   constant set by the encoder (see barcode-generator.js's `barHeight` +
-   `labelHeight`) — so fixing height here keeps that constant and lets width
-   scale proportionally, same as a real barcode label. Forcing a square box
-   for barcode would instead squeeze it into a shrinking horizontal sliver.
-   Base64 to Image (an arbitrary photo) also just wants its real proportions
-   preserved at a consistent height, not cropped into a square. `object-fit:
-   contain` is a defensive no-op here (width:auto already tracks the ratio)
-   but protects this if a future case ever sets both dimensions explicitly. */
 .text-image-preview {
   display: block;
-  height: 300px;
-  width: auto;
   max-width: 100%;
-  object-fit: contain;
+  max-height: 400px;
   margin: 0 auto var(--space-4);
   border: 2px solid var(--color-success);
   border-radius: var(--radius-lg);
   background: var(--color-success-subtle);
+}
+
+/* Fixed HEIGHT regardless of the source's intrinsic size, with width left to
+   flow from it. Opt in via a tool's `fixed_preview_size: true` (QR, Barcode)
+   — NOT the base rule above, which stays natural/capped-only for Base64 to
+   Image: that tool decodes arbitrary real photos, including small icons and
+   favicons, and forcing a fixed height would upscale a e.g. 16x16 PNG into a
+   blurry 300px-tall preview instead of showing it crisply at native size.
+   For QR/Barcode a constant on-screen size regardless of content IS the
+   goal (their "native size" is an implementation artifact, not something
+   worth preserving): a QR code grows in both dimensions with its content
+   (more text -> more modules -> a bigger square), so a fixed height alone
+   renders it as a constant-size square. A barcode only grows WIDER with
+   more content — its SVG height is a constant set by the encoder (see
+   barcode-generator.js's `barHeight` + `labelHeight`) — so fixing height
+   here keeps that constant and lets width scale proportionally, same as a
+   real barcode label. Forcing a square box for barcode would instead
+   squeeze it into a shrinking horizontal sliver. `object-fit: contain` is a
+   defensive no-op here (width:auto already tracks the ratio) but protects
+   this if a future case ever sets both dimensions explicitly. */
+.text-image-preview--fixed {
+  height: 300px;
+  width: auto;
+  max-height: none;
+  object-fit: contain;
 }
 
 .text-result { margin-top: var(--space-6); }
