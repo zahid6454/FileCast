@@ -209,4 +209,253 @@ describe('image-cropper.js — window.convertFile', () => {
 
     expect(dom.window.TOOL_CONFIG.output_extension).toBe('.png');
   });
+
+  it('shows the live output resolution for the default selection', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    // Default selection on a 400x300 image is the centered 80% box: 320x240.
+    expect(dom.window.document.querySelector('.image-cropper__dims').textContent).toBe(
+      '320 × 240 px'
+    );
+  });
+
+  it('resizes only the dragged side when dragging an edge, not a corner', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    // Default selection x=40,y=30,w=320,h=240 -> right edge midpoint is (360, 150).
+    const canvasEl = dom.window.document.querySelector('.image-cropper__canvas');
+    firePointer(canvasEl, dom.window, 'pointerdown', 360, 150);
+    firePointer(canvasEl, dom.window, 'pointermove', 400, 150); // drag the right edge out by 40
+    firePointer(canvasEl, dom.window, 'pointerup', 400, 150);
+
+    const blob = await dom.window.convertFile(file);
+
+    expect(blob.type).toBe('image/jpeg');
+    // Width grows to 360 (40..400); height is untouched at 240.
+    expect(canvasSizes[canvasSizes.length - 1]).toEqual({ width: 360, height: 240 });
+    const lastDraw = ctx.drawImage.mock.calls[ctx.drawImage.mock.calls.length - 1];
+    expect(lastDraw.slice(1)).toEqual([40, 30, 360, 240, 0, 0, 360, 240]);
+  });
+
+  it('reflects each zone under the pointer in the canvas cursor, without dragging', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    // Default selection: tl(40,30) tr(360,30) bl(40,270) br(360,270).
+    const canvasEl = dom.window.document.querySelector('.image-cropper__canvas');
+    const cursorAt = (x, y) => {
+      firePointer(canvasEl, dom.window, 'pointermove', x, y);
+      return canvasEl.style.cursor;
+    };
+
+    expect(cursorAt(360, 150)).toBe('ew-resize'); // right edge midpoint
+    expect(cursorAt(200, 30)).toBe('ns-resize'); // top edge midpoint
+    expect(cursorAt(360, 270)).toBe('nwse-resize'); // br corner
+    expect(cursorAt(40, 30)).toBe('nwse-resize'); // tl corner
+    expect(cursorAt(200, 150)).toBe('move'); // inside
+    expect(cursorAt(5, 5)).toBe('default'); // outside the box entirely
+  });
+
+  it('reshapes the selection to a locked ratio and keeps it locked through a corner drag', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    const ratioBtn = Array.from(
+      dom.window.document.querySelectorAll('.image-cropper__ratio-btn')
+    ).find((b) => b.textContent === '1:1');
+    ratioBtn.click();
+
+    expect(ratioBtn.className).toContain('is-active');
+    // 80% of the 400x300 canvas, square-capped by height: 240x240, centered -> x=80,y=30.
+    expect(dom.window.document.querySelector('.image-cropper__dims').textContent).toBe(
+      '240 × 240 px'
+    );
+
+    // Drag the br corner (80+240, 30+240) = (320, 270) mostly horizontally —
+    // a non-diagonal drag that would break aspect if the lock weren't applied.
+    const canvasEl = dom.window.document.querySelector('.image-cropper__canvas');
+    firePointer(canvasEl, dom.window, 'pointerdown', 320, 270);
+    firePointer(canvasEl, dom.window, 'pointermove', 400, 280);
+    firePointer(canvasEl, dom.window, 'pointerup', 400, 280);
+
+    const blob = await dom.window.convertFile(file);
+
+    expect(blob.type).toBe('image/jpeg');
+    const finalSize = canvasSizes[canvasSizes.length - 1];
+    expect(finalSize.width).toBe(finalSize.height); // still square after a non-diagonal drag
+    expect(finalSize).toEqual({ width: 270, height: 270 });
+    const lastDraw = ctx.drawImage.mock.calls[ctx.drawImage.mock.calls.length - 1];
+    expect(lastDraw.slice(1)).toEqual([80, 30, 270, 270, 0, 0, 270, 270]);
+  });
+
+  it('keeps an aspect-locked resize on-canvas when dragged past its own anchor near an edge', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    const ratioBtn = Array.from(
+      dom.window.document.querySelectorAll('.image-cropper__ratio-btn')
+    ).find((b) => b.textContent === '1:1');
+    ratioBtn.click(); // rect -> x=80,y=30,w=240,h=240
+
+    const canvasEl = dom.window.document.querySelector('.image-cropper__canvas');
+    // Move the box so its left edge sits close to the canvas edge (x=5) —
+    // drag from its center, (200,150), left by 75.
+    firePointer(canvasEl, dom.window, 'pointerdown', 200, 150);
+    firePointer(canvasEl, dom.window, 'pointermove', 125, 150);
+    firePointer(canvasEl, dom.window, 'pointerup', 125, 150);
+    // rect is now x=5,y=30,w=240,h=240 — its right edge sits at 245.
+
+    // Grab the (now-fixed) right-edge handle and overshoot the drag past
+    // the left anchor (x=5) and past the canvas's own left edge (x=0) —
+    // an easy mouse overshoot. Before the fix this pushed rect.x negative.
+    firePointer(canvasEl, dom.window, 'pointerdown', 245, 150);
+    firePointer(canvasEl, dom.window, 'pointermove', -5, 150);
+    firePointer(canvasEl, dom.window, 'pointerup', -5, 150);
+
+    const blob = await dom.window.convertFile(file);
+
+    expect(blob.type).toBe('image/jpeg');
+    const finalSize = canvasSizes[canvasSizes.length - 1];
+    expect(finalSize.width).toBe(finalSize.height); // aspect still locked
+    expect(finalSize).toEqual({ width: 20, height: 20 });
+    const lastDraw = ctx.drawImage.mock.calls[ctx.drawImage.mock.calls.length - 1];
+    const [sx, sy, sw, sh] = lastDraw.slice(1);
+    // The source rect stays entirely within the 400x300 canvas — the bug
+    // let sx go negative here (an off-canvas source region silently
+    // rendering blank in the exported crop).
+    expect(sx).toBeGreaterThanOrEqual(0);
+    expect(sy).toBeGreaterThanOrEqual(0);
+    expect(sx + sw).toBeLessThanOrEqual(400);
+    expect(sy + sh).toBeLessThanOrEqual(300);
+  });
+
+  it('keeps an aspect-locked corner drag at least MIN_SIZE near a canvas corner', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    const ratioBtn = Array.from(
+      dom.window.document.querySelectorAll('.image-cropper__ratio-btn')
+    ).find((b) => b.textContent === '1:1');
+    ratioBtn.click(); // rect -> x=80,y=30,w=240,h=240
+
+    const canvasEl = dom.window.document.querySelector('.image-cropper__canvas');
+    // Move the box so its left edge sits close to the canvas edge (x=5),
+    // same setup as the edge-drag regression above.
+    firePointer(canvasEl, dom.window, 'pointerdown', 200, 150);
+    firePointer(canvasEl, dom.window, 'pointermove', 125, 150);
+    firePointer(canvasEl, dom.window, 'pointerup', 125, 150);
+    // rect is now x=5,y=30,w=240,h=240 -> tr handle sits at (245, 30).
+
+    // Grab the top-right CORNER handle and drag it down-and-left, mostly
+    // vertically, overshooting past its own anchor (the bl corner, at
+    // x=5) and the canvas's left edge. The corner branch picks the
+    // height-driven case here, caps w against the tiny room left of the
+    // anchor, then re-derives h from that capped w — before the fix,
+    // that final cap wasn't floored at MIN_SIZE and collapsed the box to
+    // 5x5 instead of the required minimum 20x20.
+    firePointer(canvasEl, dom.window, 'pointerdown', 245, 30);
+    firePointer(canvasEl, dom.window, 'pointermove', 0, 150);
+    firePointer(canvasEl, dom.window, 'pointerup', 0, 150);
+
+    const blob = await dom.window.convertFile(file);
+
+    expect(blob.type).toBe('image/jpeg');
+    const finalSize = canvasSizes[canvasSizes.length - 1];
+    expect(finalSize.width).toBe(finalSize.height); // aspect still locked
+    expect(finalSize).toEqual({ width: 20, height: 20 }); // floored at MIN_SIZE, not collapsed
+    const lastDraw = ctx.drawImage.mock.calls[ctx.drawImage.mock.calls.length - 1];
+    const [sx, sy, sw, sh] = lastDraw.slice(1);
+    expect(sx).toBeGreaterThanOrEqual(0);
+    expect(sy).toBeGreaterThanOrEqual(0);
+    expect(sx + sw).toBeLessThanOrEqual(400);
+    expect(sy + sh).toBeLessThanOrEqual(300);
+  });
+
+  it('zooming in and back out does not change the selected output region', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    const { canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    const zoomInBtn = dom.window.document.querySelector(
+      '.image-cropper__zoom-btn[aria-label="Zoom in"]'
+    );
+    const zoomOutBtn = dom.window.document.querySelector(
+      '.image-cropper__zoom-btn[aria-label="Zoom out"]'
+    );
+    const zoomLabel = dom.window.document.querySelector('.image-cropper__zoom-label');
+
+    expect(zoomOutBtn.disabled).toBe(true); // already at the 100% floor
+    expect(zoomLabel.textContent).toBe('100%');
+
+    zoomInBtn.click();
+
+    expect(zoomLabel.textContent).toBe('125%');
+    expect(zoomOutBtn.disabled).toBe(false);
+    // The zoomed display canvas grows (400x300 * 1.25 = 500x375)...
+    const canvasEl = dom.window.document.querySelector('.image-cropper__canvas');
+    expect(canvasEl.width).toBe(500);
+    expect(canvasEl.height).toBe(375);
+    // ...but the selected region is the same image content, so the cropped
+    // output is unchanged: still 320x240, the default 80% selection.
+    expect(dom.window.document.querySelector('.image-cropper__dims').textContent).toBe(
+      '320 × 240 px'
+    );
+
+    zoomOutBtn.click(); // back to 100%
+
+    expect(zoomLabel.textContent).toBe('100%');
+    expect(zoomOutBtn.disabled).toBe(true);
+    expect(canvasEl.width).toBe(400);
+    expect(canvasEl.height).toBe(300);
+    expect(dom.window.document.querySelector('.image-cropper__dims').textContent).toBe(
+      '320 × 240 px'
+    );
+
+    const blob = await dom.window.convertFile(file);
+    expect(blob.type).toBe('image/jpeg');
+    expect(canvasSizes[canvasSizes.length - 1]).toEqual({ width: 320, height: 240 });
+  });
 });
