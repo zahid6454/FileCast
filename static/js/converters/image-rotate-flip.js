@@ -4,12 +4,13 @@
   // Interactive UI note: shared.js (loaded before this file) never exposes a
   // "file was just selected" hook to converters — it only calls
   // window.convertFile(file) once, at Convert-button click. So this file
-  // wires its own 'change' listener directly on #file-input (present in the
-  // server-rendered page before this deferred script runs) to build a live
-  // preview the moment a file is picked, entirely independent of shared.js's
-  // own state machine. window.convertFile still returns a Promise<Blob>, the
-  // same contract every other converter uses. Same pattern as
-  // converters/image-cropper.js.
+  // wires its own listeners, mirroring the three ways shared.js's own
+  // initUploadZone()/initClipboardPaste() accept a file — #file-input
+  // 'change', 'drop' on #upload-zone, and a document-level 'paste' — to
+  // build a live preview the moment a file is picked, entirely independent
+  // of shared.js's own state machine. window.convertFile still returns a
+  // Promise<Blob>, the same contract every other converter uses. Same
+  // pattern as converters/image-cropper.js (file-input only, today).
 
   var MAX_DISPLAY_WIDTH = 640;
   var MAX_DISPLAY_HEIGHT = 480;
@@ -35,6 +36,7 @@
 
     canvasEl = document.createElement('canvas');
     canvasEl.className = 'image-rotate-flip__canvas';
+    canvasEl.setAttribute('aria-label', 'Live preview of the rotated/flipped image');
 
     dimsEl = document.createElement('div');
     dimsEl.className = 'image-rotate-flip__dims';
@@ -138,6 +140,33 @@
       loadImageForPreview(file);
     });
   }
+
+  var uploadZoneEl = document.getElementById('upload-zone');
+  if (uploadZoneEl) {
+    uploadZoneEl.addEventListener('drop', function (e) {
+      var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) loadImageForPreview(file);
+    });
+  }
+
+  // Mirrors shared.js's initClipboardPaste() editable-target guard so a
+  // normal text paste into a real input (the feedback textarea, a tool
+  // option field) isn't hijacked into building an image preview.
+  document.addEventListener('paste', function (e) {
+    var active = document.activeElement;
+    var isEditable =
+      active &&
+      (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+    if (isEditable) return;
+
+    var items = (e.clipboardData && e.clipboardData.items) || [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file' && items[i].type && items[i].type.indexOf('image/') === 0) {
+        loadImageForPreview(items[i].getAsFile());
+        return;
+      }
+    }
+  });
 
   var resetBtnEl = document.getElementById('reset-btn');
   if (resetBtnEl) {
