@@ -655,6 +655,16 @@
           h = w / aspect;
         }
       }
+      // maxW/maxH can be below MIN_SIZE near a canvas corner (no room left
+      // in one axis), so the cap above can undercut it on either side —
+      // scale both dimensions back up together, preserving the locked
+      // aspect ratio, so the box stays grabbable; the x/y clamp below
+      // re-anchors whatever that lands outside of.
+      if (w < MIN_SIZE || h < MIN_SIZE) {
+        var growBy = Math.max(MIN_SIZE / w, MIN_SIZE / h);
+        w *= growBy;
+        h *= growBy;
+      }
       x = rawW >= 0 ? anchorX : anchorX - w;
       y = rawH >= 0 ? anchorY : anchorY - h;
       x = clamp(x, 0, Math.max(0, canvas.width - w));

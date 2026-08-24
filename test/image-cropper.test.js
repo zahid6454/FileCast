@@ -361,6 +361,54 @@ describe('image-cropper.js — window.convertFile', () => {
     expect(sy + sh).toBeLessThanOrEqual(300);
   });
 
+  it('keeps an aspect-locked corner drag at least MIN_SIZE near a canvas corner', async () => {
+    const dom = toolPage();
+    mockImageLoad(dom.window, { width: 400, height: 300 });
+    const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-cropper.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(dom, file);
+    await flush();
+
+    const ratioBtn = Array.from(
+      dom.window.document.querySelectorAll('.image-cropper__ratio-btn')
+    ).find((b) => b.textContent === '1:1');
+    ratioBtn.click(); // rect -> x=80,y=30,w=240,h=240
+
+    const canvasEl = dom.window.document.querySelector('.image-cropper__canvas');
+    // Move the box so its left edge sits close to the canvas edge (x=5),
+    // same setup as the edge-drag regression above.
+    firePointer(canvasEl, dom.window, 'pointerdown', 200, 150);
+    firePointer(canvasEl, dom.window, 'pointermove', 125, 150);
+    firePointer(canvasEl, dom.window, 'pointerup', 125, 150);
+    // rect is now x=5,y=30,w=240,h=240 -> tr handle sits at (245, 30).
+
+    // Grab the top-right CORNER handle and drag it down-and-left, mostly
+    // vertically, overshooting past its own anchor (the bl corner, at
+    // x=5) and the canvas's left edge. The corner branch picks the
+    // height-driven case here, caps w against the tiny room left of the
+    // anchor, then re-derives h from that capped w — before the fix,
+    // that final cap wasn't floored at MIN_SIZE and collapsed the box to
+    // 5x5 instead of the required minimum 20x20.
+    firePointer(canvasEl, dom.window, 'pointerdown', 245, 30);
+    firePointer(canvasEl, dom.window, 'pointermove', 0, 150);
+    firePointer(canvasEl, dom.window, 'pointerup', 0, 150);
+
+    const blob = await dom.window.convertFile(file);
+
+    expect(blob.type).toBe('image/jpeg');
+    const finalSize = canvasSizes[canvasSizes.length - 1];
+    expect(finalSize.width).toBe(finalSize.height); // aspect still locked
+    expect(finalSize).toEqual({ width: 20, height: 20 }); // floored at MIN_SIZE, not collapsed
+    const lastDraw = ctx.drawImage.mock.calls[ctx.drawImage.mock.calls.length - 1];
+    const [sx, sy, sw, sh] = lastDraw.slice(1);
+    expect(sx).toBeGreaterThanOrEqual(0);
+    expect(sy).toBeGreaterThanOrEqual(0);
+    expect(sx + sw).toBeLessThanOrEqual(400);
+    expect(sy + sh).toBeLessThanOrEqual(300);
+  });
+
   it('zooming in and back out does not change the selected output region', async () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
