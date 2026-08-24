@@ -1173,6 +1173,28 @@ img { max-width: 100%; display: block; }
   color: var(--color-text-muted);
 }
 
+/* --- Image Rotate/Flip (live preview canvas, built by
+   converters/image-rotate-flip.js) --- */
+.image-rotate-flip {
+  margin-top: var(--space-4);
+  text-align: center;
+}
+.image-rotate-flip__canvas {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 480px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+.image-rotate-flip__dims {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Privacy Page --- */
 .privacy-section { margin-bottom: var(--space-8); }
 .privacy-section h2 { font-size: var(--text-xl); font-weight: var(--weight-bold); margin-bottom: var(--space-3); }
