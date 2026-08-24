@@ -232,7 +232,17 @@
     canvasEl.classList.add('image-cropper__canvas--fit');
     canvasEl.style.width = '';
     canvasEl.style.height = '';
-    if (viewportEl) viewportEl.scrollLeft = viewportEl.scrollTop = 0;
+    if (viewportEl) {
+      // Pin the viewport to its 100%-fit footprint so it stays this size for
+      // the rest of the session — zooming grows the canvas inside it (with
+      // scrolling), not the viewport itself. width + aspect-ratio (rather
+      // than a fixed height) keeps it shrinking proportionally on narrow
+      // viewports via the existing max-width:100% rule, same as --fit does
+      // for the canvas.
+      viewportEl.style.width = displayW + 'px';
+      viewportEl.style.aspectRatio = displayW + ' / ' + displayH;
+      viewportEl.scrollLeft = viewportEl.scrollTop = 0;
+    }
 
     var rect = defaultRect(displayW, displayH);
     if (selectedAspect) rect = centeredRectForAspect(selectedAspect, canvasEl, MIN_ZOOM);
