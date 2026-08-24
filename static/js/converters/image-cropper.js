@@ -106,6 +106,7 @@
       btn.type = 'button';
       btn.className = 'image-cropper__ratio-btn';
       btn.textContent = preset.label;
+      btn.setAttribute('aria-pressed', 'false');
       btn.addEventListener('click', function () {
         selectRatio(preset.value);
       });
@@ -379,7 +380,9 @@
 
   function syncRatioButtons() {
     ratioButtons.forEach(function (b) {
-      b.el.classList.toggle('is-active', b.value === selectedAspect);
+      var active = b.value === selectedAspect;
+      b.el.classList.toggle('is-active', active);
+      b.el.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
   }
 
