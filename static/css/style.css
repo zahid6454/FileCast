@@ -1404,6 +1404,8 @@ img { max-width: 100%; display: block; }
   white-space: pre;
   user-select: none;
 }
+.text-editor:has(.text-input-area) .text-editor__gutter { max-height: 500px; }
+.text-editor:has(.text-output-area) .text-editor__gutter { max-height: 400px; }
 .text-editor__gutter-inner { will-change: transform; }
 .text-editor .text-input-area,
 .text-editor .text-output-area {
