@@ -84,16 +84,17 @@
   function addFiles(fileList) {
     var config = window.TOOL_CONFIG;
     var maxFiles = config.max_files || 10;
+    var errorMessage = null; // last error wins, same as today — just don't lose it
 
     for (var i = 0; i < fileList.length; i++) {
       if (selectedFiles.length >= maxFiles) {
-        showError('Maximum ' + maxFiles + ' files allowed.');
+        errorMessage = 'Maximum ' + maxFiles + ' files allowed.';
         break;
       }
       var file = fileList[i];
       var result = validateFile(file);
       if (!result.valid) {
-        showError(result.error);
+        errorMessage = result.error;
         trackEvent('conversion_failed', { tool_id: config.id, error_type: result.error_type });
         continue;
       }
@@ -104,6 +105,7 @@
     if (selectedFiles.length > 0) {
       setState('selected');
     }
+    if (errorMessage) showError(errorMessage); // AFTER setState, so it isn't wiped by it
   }
 
   function removeFile(index) {
@@ -248,8 +250,8 @@
         .catch(function (err) {
           if (cancelledThisRun) return;
           var msg = err.message || 'Processing failed. One or more files may be corrupted.';
-          showError(msg);
           setState('selected');
+          showError(msg);
           trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
           postConversion(
             {
