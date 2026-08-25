@@ -21,7 +21,14 @@
       var sha256Hex = bufferToHex(digest);
       return {
         text: 'MD5:     ' + md5Hex + '\nSHA-256: ' + sha256Hex + '\n',
-        filename: 'hashes.txt'
+        filename: 'hashes.txt',
+        // Structured extra for shared-text.js's renderOutputTable() — see
+        // tool-text.html/shared-text.js. `text` above stays the source of
+        // truth for Copy/Download; this only changes how it's displayed.
+        table: [
+          { label: 'MD5', value: md5Hex },
+          { label: 'SHA-256', value: sha256Hex }
+        ]
       };
     });
   };

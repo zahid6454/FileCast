@@ -177,6 +177,7 @@
     els.outputArea.value = outputText;
     refreshLineNumbers(els.outputArea);
     els.textResult.classList.remove('hidden');
+    renderOutputTable(output);
 
     if (els.imagePreview) {
       // output_is_data_url also covers non-image binary output (CSV to
@@ -219,6 +220,96 @@
       },
       true
     );
+  }
+
+  // Converters may return a structured `table` alongside the plain `text`
+  // (currently hash-generator.js, number-base-converter.js) — same
+  // optional-extra-field contract shared-diff.js's renderDiffReport() uses
+  // for json-diff.js's `diffs`: an extra field rides the worker's
+  // postMessage structured-clone for free, so this only fires when a
+  // converter opts in. Two shapes share the field: a flat array of
+  // {label, value} (Hash Generator's fixed MD5/SHA-256 rows) or a grouped
+  // array of {input, fields: [{label, value}, ...]} (Number Base
+  // Converter's one row-group per input number) — distinguished by whether
+  // the first entry carries `fields`.
+  function renderOutputTable(output) {
+    var hasTable = Array.isArray(output.table) && output.table.length > 0;
+    if (!els.outputTable || !els.outputEditor) return;
+
+    els.outputTable.classList.toggle('hidden', !hasTable);
+    els.outputEditor.classList.toggle('hidden', hasTable);
+    els.outputTable.innerHTML = '';
+    if (!hasTable) return;
+
+    var isGrouped = Array.isArray(output.table[0].fields);
+    els.outputTable.appendChild(
+      isGrouped ? buildGroupedOutputTable(output.table) : buildFlatOutputTable(output.table)
+    );
+  }
+
+  function buildFlatOutputTable(rows) {
+    var table = document.createElement('table');
+    table.className = 'out-table';
+    table.innerHTML =
+      '<colgroup><col style="width:22%"><col style="width:68%"><col style="width:10%"></colgroup>' +
+      '<thead><tr><th>Algorithm</th><th>Hash</th><th></th></tr></thead>';
+
+    var tbody = document.createElement('tbody');
+    rows.forEach(function (row) {
+      var tr = document.createElement('tr');
+      var tdLabel = document.createElement('td');
+      tdLabel.textContent = row.label;
+      var tdValue = document.createElement('td');
+      tdValue.textContent = row.value;
+      var tdCopy = document.createElement('td');
+      tdCopy.className = 'copy';
+      tdCopy.textContent = '⧉';
+      tr.appendChild(tdLabel);
+      tr.appendChild(tdValue);
+      tr.appendChild(tdCopy);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    return table;
+  }
+
+  function buildGroupedOutputTable(groups) {
+    var table = document.createElement('table');
+    table.className = 'kv-table';
+    table.innerHTML = '<colgroup><col style="width:92px"><col></colgroup>';
+
+    groups.forEach(function (group) {
+      var tbody = document.createElement('tbody');
+      tbody.className = 'group';
+
+      var titleRow = document.createElement('tr');
+      titleRow.className = 'group-title';
+      var th = document.createElement('th');
+      th.colSpan = 2;
+      var eyebrow = document.createElement('span');
+      eyebrow.className = 'eyebrow';
+      eyebrow.textContent = 'Input';
+      th.appendChild(eyebrow);
+      th.appendChild(document.createTextNode(group.input));
+      titleRow.appendChild(th);
+      tbody.appendChild(titleRow);
+
+      group.fields.forEach(function (field) {
+        var tr = document.createElement('tr');
+        var tdLabel = document.createElement('td');
+        tdLabel.className = 'label';
+        tdLabel.textContent = field.label;
+        var tdValue = document.createElement('td');
+        tdValue.className = 'value';
+        tdValue.textContent = field.value;
+        tr.appendChild(tdLabel);
+        tr.appendChild(tdValue);
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+    });
+    return table;
   }
 
   function copyOutput() {
@@ -334,6 +425,8 @@
     els.progressFill = document.getElementById('progress-fill');
     els.textResult = document.getElementById('text-result');
     els.outputArea = document.getElementById('text-output');
+    els.outputEditor = document.getElementById('text-output-editor');
+    els.outputTable = document.getElementById('text-output-table');
     els.imagePreview = document.getElementById('text-image-preview');
     els.resultInfo = document.getElementById('result-info');
     els.copyBtn = document.getElementById('copy-btn');

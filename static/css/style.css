@@ -1528,6 +1528,66 @@ img { max-width: 100%; display: block; }
   object-fit: contain;
 }
 
+/* Structured table output (shared-text.js's renderOutputTable()) — a
+   scannable alternative to the plain-text output textarea, for converters
+   that opt in with a `table` result field (hash-generator.js,
+   number-base-converter.js). Mirrors the diff report's structured-view
+   pattern below: falls back to the textarea (unhidden by shared-text.js)
+   for any text tool whose converter doesn't return `table`. */
+table.out-table {
+  width: 100%; table-layout: fixed; border-collapse: collapse;
+  border: 2px solid var(--color-success); border-radius: var(--radius-lg);
+  overflow: hidden; background: var(--color-bg);
+}
+table.out-table th {
+  background: var(--color-success-subtle); color: var(--color-badge-local);
+  text-align: left; font-weight: 600; padding: 8px 12px;
+  border-bottom: 1px solid var(--color-success-light);
+  font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  overflow-wrap: anywhere; word-break: break-all;
+}
+table.out-table td {
+  padding: 8px 12px; border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere; word-break: break-all; vertical-align: top;
+}
+table.out-table tr:last-child td { border-bottom: none; }
+table.out-table td.copy { text-align: right; word-break: normal; color: var(--color-text-light); font-family: var(--font-sans); font-size: 11px; }
+
+/* Grouped label/value table — each converted number is its own row-group
+   (tbody), a fixed-width label column and a value column that absorbs 100%
+   of the remaining width. A field never shares a row with another field, so
+   the widest one (Binary, ~3.3x Decimal's digit count) always gets the
+   table's full width rather than a starved fixed slice of it. */
+table.kv-table {
+  width: 100%; table-layout: fixed; border-collapse: collapse;
+  border: 2px solid var(--color-success); border-radius: var(--radius-lg);
+  overflow: hidden; background: var(--color-bg);
+}
+table.kv-table td {
+  padding: 7px 12px; border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere; word-break: break-all; vertical-align: top;
+}
+table.kv-table td.label {
+  font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  font-weight: 600; color: var(--color-badge-local); background: var(--color-success-subtle);
+  white-space: nowrap;
+}
+table.kv-table tr:last-child td { border-bottom: none; }
+/* The input isn't a fifth field alongside Binary/Decimal/Hex/Octal — it's
+   what was typed, everything below it is what got computed FROM it. A
+   spanning title bar per group keeps that structurally distinct rather
+   than styling it as one more row that happens to say "Input". */
+table.kv-table tr.group-title th {
+  text-align: left; padding: 10px 12px; background: var(--color-bg-sunken);
+  border-bottom: 2px solid var(--color-success-light);
+  font-family: var(--font-mono); font-weight: 700; font-size: 13.5px; color: var(--color-heading);
+  overflow-wrap: anywhere; word-break: break-all;
+}
+table.kv-table tr.group-title th .eyebrow {
+  display: block; font-family: var(--font-sans); font-weight: 600; font-size: 10px;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-light); margin-bottom: 3px;
+}
+
 .text-result { margin-top: var(--space-6); }
 .text-result__title { font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--color-success); margin-bottom: var(--space-3); }
 .text-result__actions { margin-top: var(--space-4); display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }

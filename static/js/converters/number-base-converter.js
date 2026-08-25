@@ -7,18 +7,28 @@
   window.convertText = function (text) {
     var lines = text.split('\n');
     var blocks = [];
+    var table = [];
 
     for (var i = 0; i < lines.length; i++) {
       var raw = lines[i].trim();
       if (!raw) continue;
-      blocks.push(formatLine(raw, i + 1));
+      var group = formatLine(raw, i + 1);
+      blocks.push(formatBlockText(group));
+      table.push(group);
     }
 
     if (blocks.length === 0) {
       throw new Error('Enter at least one number to convert.');
     }
 
-    return { text: blocks.join('\n\n'), filename: 'number-bases.txt' };
+    return {
+      text: blocks.join('\n\n'),
+      filename: 'number-bases.txt',
+      // Structured extra for shared-text.js's renderOutputTable() — see
+      // tool-text.html/shared-text.js. `text` above stays the source of
+      // truth for Copy/Download; this only changes how it's displayed.
+      table: table
+    };
   };
 
   function formatLine(raw, lineNumber) {
@@ -27,25 +37,27 @@
     var abs = negative ? -value : value;
     var sign = negative ? '-' : '';
 
+    return {
+      input: raw,
+      fields: [
+        { label: 'Binary', value: sign + abs.toString(2) },
+        { label: 'Decimal', value: sign + abs.toString(10) },
+        { label: 'Hex', value: sign + abs.toString(16).toUpperCase() },
+        { label: 'Octal', value: sign + abs.toString(8) }
+      ]
+    };
+  }
+
+  function formatBlockText(group) {
     return (
       'Input: ' +
-      raw +
+      group.input +
       '\n' +
-      '  Binary:  ' +
-      sign +
-      abs.toString(2) +
-      '\n' +
-      '  Decimal: ' +
-      sign +
-      abs.toString(10) +
-      '\n' +
-      '  Hex:     ' +
-      sign +
-      abs.toString(16).toUpperCase() +
-      '\n' +
-      '  Octal:   ' +
-      sign +
-      abs.toString(8)
+      group.fields
+        .map(function (f) {
+          return '  ' + (f.label + ':').padEnd(9) + f.value;
+        })
+        .join('\n')
     );
   }
 

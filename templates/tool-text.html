@@ -178,7 +178,14 @@
        CSV that still benefits from the line gutter, even though its output
        is the same single-blob shape as QR/Barcode/Base64 to Image). #}
     {% set wrap_output = tool.get('wrap_output', tool.get('wrap_text', false)) or tool.get('output_is_data_url') %}
-    <div class="text-editor{% if wrap_output %} text-editor--wrap{% endif %}">
+    {# Structured table output (shared-text.js's renderOutputTable()) — same
+       optional-extra-field contract shared-diff.js's renderDiffReport() uses
+       for json-diff.js's `diffs`: a converter (currently hash-generator.js,
+       number-base-converter.js) may return a `table` field alongside `text`;
+       when present this replaces the textarea below, which stays in the DOM
+       either way as what Copy/Download actually read from. #}
+    <div class="hidden" id="text-output-table"></div>
+    <div class="text-editor{% if wrap_output %} text-editor--wrap{% endif %}" id="text-output-editor">
       {% if not wrap_output %}
       <div class="text-editor__gutter" aria-hidden="true"></div>
       {% endif %}
