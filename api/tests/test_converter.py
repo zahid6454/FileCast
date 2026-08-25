@@ -233,6 +233,37 @@ async def test_png_to_svg_rejects_oversized_file(client):
     assert r.json()["error_type"] == "too_large"
 
 
+async def test_png_to_svg_rejects_decompression_bomb_with_accurate_message(
+    client, monkeypatch
+):
+    # STRESS_TEST_REPORT.md Finding 7: a genuine, non-malicious but very
+    # large image (e.g. 20000x20000) trips Pillow's own DecompressionBombError
+    # safety check. Before this fix, that fell into the generic `except
+    # Exception` handler and came back as "may be corrupted or
+    # password-protected" — false, since the file is completely valid. Must
+    # come back as an honest, specific message instead. Shrinks
+    # PIL.Image.MAX_IMAGE_PIXELS rather than actually building a 20000x20000
+    # PNG, so the test stays fast — the code path exercised (Image.open
+    # raising DecompressionBombError) is identical either way.
+    from PIL import Image as PILImage
+
+    monkeypatch.setattr(PILImage, "MAX_IMAGE_PIXELS", 1000)
+
+    img = PILImage.new("RGB", (200, 200), (10, 20, 30))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    r = await client.post(
+        "/api/v1/convert/png-to-svg",
+        files={"file": ("huge.png", buf.getvalue(), "image/png")},
+    )
+    assert r.status_code == 400
+    body = r.json()
+    assert body["error_type"] == "too_large_dimensions"
+    assert "corrupted" not in body["error"].lower()
+    assert "password" not in body["error"].lower()
+
+
 async def test_png_to_svg_success_with_mocked_conversion(client, monkeypatch):
     async def fake_trace(content, filename):
         return b"<svg>fake</svg>"
@@ -247,6 +278,79 @@ async def test_png_to_svg_success_with_mocked_conversion(client, monkeypatch):
     assert r.headers["content-type"] == "image/svg+xml"
     assert r.headers["content-disposition"] == 'attachment; filename="logo.svg"'
     assert r.content == b"<svg>fake</svg>"
+
+
+# --------------------------------------------------------------------------- #
+# pdf-compress route — no prior test hit this endpoint at all (unlike every
+# other convert route above, which all have wrong-extension/empty-file/
+# mocked-success coverage). Adding the same baseline pattern here since this
+# PR changes _compress_ghostscript's concurrency behavior.
+# --------------------------------------------------------------------------- #
+
+
+async def test_pdf_compress_rejects_wrong_extension(client):
+    r = await client.post(
+        "/api/v1/convert/pdf-compress",
+        files={"file": ("notes.txt", b"hello world", "text/plain")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "wrong_format"
+
+
+async def test_pdf_compress_rejects_empty_file(client):
+    r = await client.post(
+        "/api/v1/convert/pdf-compress",
+        files={"file": ("empty.pdf", b"", "application/pdf")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "empty_file"
+
+
+async def test_pdf_compress_success_with_mocked_ghostscript(client, monkeypatch):
+    async def fake_compress(content, quality):
+        assert quality == "screen"
+        return b"%PDF-1.4 compressed"
+
+    monkeypatch.setattr(converter, "_compress_ghostscript", fake_compress)
+    valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
+    r = await client.post(
+        "/api/v1/convert/pdf-compress",
+        files={"file": ("report.pdf", valid_pdf, "application/pdf")},
+        data={"quality": "screen"},
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.headers["content-disposition"] == 'attachment; filename="report.pdf"'
+    assert r.content == b"%PDF-1.4 compressed"
+
+
+async def test_pdf_compress_defaults_to_ebook_quality(client, monkeypatch):
+    async def fake_compress(content, quality):
+        assert quality == "ebook"
+        return b"%PDF-1.4 compressed"
+
+    monkeypatch.setattr(converter, "_compress_ghostscript", fake_compress)
+    valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
+    r = await client.post(
+        "/api/v1/convert/pdf-compress",
+        files={"file": ("report.pdf", valid_pdf, "application/pdf")},
+    )
+    assert r.status_code == 200
+
+
+async def test_pdf_compress_invalid_quality_falls_back_to_ebook(client, monkeypatch):
+    async def fake_compress(content, quality):
+        assert quality == "ebook"
+        return b"%PDF-1.4 compressed"
+
+    monkeypatch.setattr(converter, "_compress_ghostscript", fake_compress)
+    valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
+    r = await client.post(
+        "/api/v1/convert/pdf-compress",
+        files={"file": ("report.pdf", valid_pdf, "application/pdf")},
+        data={"quality": "not-a-real-quality"},
+    )
+    assert r.status_code == 200
 
 
 # --------------------------------------------------------------------------- #
@@ -537,6 +641,20 @@ def test_trace_png_to_svg_downscales_oversized_images():
     svg_bytes = converter._trace_png_to_svg_sync(buf.getvalue())
     svg_text = svg_bytes.decode("utf-8")
     assert 'width="1500" height="500"' in svg_text
+
+
+def test_trace_png_to_svg_raises_validation_error_on_decompression_bomb(monkeypatch):
+    from PIL import Image
+
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1000)
+
+    img = Image.new("RGB", (200, 200), (10, 20, 30))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    with pytest.raises(converter.ValidationError) as exc_info:
+        converter._trace_png_to_svg_sync(buf.getvalue())
+    assert exc_info.value.error_type == "too_large_dimensions"
 
 
 def test_flatten_epub_to_html_orders_chapters_and_inserts_page_breaks():
@@ -989,3 +1107,150 @@ async def test_gotenberg_own_busy_response_maps_to_503_not_generic_500(
         assert all(r.levelname == "WARNING" for r in gotenberg_records), [
             (r.levelname, r.getMessage()) for r in gotenberg_records
         ]
+
+
+async def test_gotenberg_non_busy_rejection_maps_to_400_conversion_error(
+    client, monkeypatch
+):
+    # STRESS_TEST_REPORT.md Finding 4: a file with a valid extension/magic
+    # bytes but broken internals (e.g. a docx whose XML is garbage past the
+    # ZIP header) makes Gotenberg itself reject the request with a genuine,
+    # non-busy error status. Before this fix, that fell into the generic
+    # `except Exception` handler and came back as a misleading 500 "may be
+    # corrupted or password-protected". It must instead come back as an
+    # honest 400 the same way validate_upload's own too_large/empty_file/
+    # invalid_file cases already do — same ValidationError class, just
+    # raised later, from _gotenberg_request instead of validate_upload.
+    async def post_impl():
+        return _FakeResponse(
+            status_code=400,
+            content=b"Internal LibreOffice stack trace: /root/.config/libreoffice blew up",
+        )
+
+    monkeypatch.setattr(converter.httpx, "AsyncClient", _fake_async_client(post_impl))
+
+    r = await client.post(
+        "/api/v1/convert/docx-to-pdf",
+        files={
+            "file": (
+                "report.docx",
+                b"PK\x03\x04" + b"\x00" * 200,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert r.status_code == 400
+    body = r.json()
+    assert body["error_type"] == "conversion_error"
+    assert "corrupted or password-protected" not in body["error"]
+    assert "/root/.config" not in r.text
+    assert "LibreOffice" not in r.text
+
+
+async def test_gotenberg_connection_failure_still_returns_generic_500(
+    client, monkeypatch
+):
+    # Boundary check for the Finding 4 fix above: only an actual HTTP-level
+    # rejection from a *running* Gotenberg (the `resp.status_code != 200`
+    # branch inside _gotenberg_request) should map to the honest 400
+    # conversion_error. A genuine connectivity failure (Gotenberg's
+    # container down/unreachable) never reaches that branch at all — the
+    # exception happens at `await client.post(...)` itself, before there's
+    # any `resp` to check the status of — so it must still fall through to
+    # `_handle_conversion`'s generic `except Exception` handler and come
+    # back as a 500: that really is a server-side problem, not a bad file.
+    async def post_impl():
+        raise converter.httpx.ConnectError("Connection refused")
+
+    monkeypatch.setattr(converter.httpx, "AsyncClient", _fake_async_client(post_impl))
+
+    r = await client.post(
+        "/api/v1/convert/docx-to-pdf",
+        files={
+            "file": (
+                "report.docx",
+                b"PK\x03\x04" + b"\x00" * 200,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert r.status_code == 500
+    assert r.json()["error_type"] == "conversion_error"
+
+
+# --------------------------------------------------------------------------- #
+# Ghostscript concurrency cap (STRESS_TEST_REPORT.md Finding 3) — caps
+# concurrent `gs` subprocesses, and bounds how long a request queues for a
+# free slot, with the same in-process asyncio.Semaphore + queue-timeout
+# pattern _gotenberg_semaphore/GOTENBERG_QUEUE_TIMEOUT_SECONDS already use
+# above. `_compress_ghostscript_sync` is faked rather than run for real: it
+# shells out to the `gs` binary, which isn't installed in this test
+# environment (only inside the api/gotenberg Docker images) — same reason
+# the Gotenberg tests above fake httpx instead of hitting a real Gotenberg.
+# --------------------------------------------------------------------------- #
+
+
+async def test_ghostscript_semaphore_caps_concurrency(monkeypatch):
+    import threading
+    import time as time_module
+
+    monkeypatch.setattr(converter, "_ghostscript_semaphore", asyncio.Semaphore(1))
+
+    in_flight = 0
+    max_in_flight = 0
+    lock = threading.Lock()
+
+    def fake_compress_sync(content, quality):
+        nonlocal in_flight, max_in_flight
+        with lock:
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+        time_module.sleep(0.05)
+        with lock:
+            in_flight -= 1
+        return b"%PDF-1.4 compressed"
+
+    monkeypatch.setattr(converter, "_compress_ghostscript_sync", fake_compress_sync)
+
+    # Three "compressions" sharing a single-slot semaphore must never
+    # overlap, even though they're all launched at once — mirrors
+    # test_gotenberg_semaphore_caps_concurrency above.
+    await asyncio.gather(
+        *(converter._compress_ghostscript(b"content", "ebook") for _ in range(3))
+    )
+    assert max_in_flight == 1
+
+
+async def test_ghostscript_queue_timeout_returns_503_with_retry_after(
+    client, monkeypatch
+):
+    # Mirrors test_gotenberg_queue_timeout_returns_503_with_retry_after: a
+    # bare semaphore with no bound on the wait would let a pile-up of
+    # pdf-compress requests queue indefinitely instead of failing fast.
+    import time as time_module
+
+    monkeypatch.setattr(converter, "_ghostscript_semaphore", asyncio.Semaphore(1))
+    monkeypatch.setattr(converter, "GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS", 0.05)
+
+    def slow_compress_sync(content, quality):
+        # Holds the one slot well past the queue timeout so the second
+        # request below is forced to wait and expire.
+        time_module.sleep(1.0)
+        return b"%PDF-1.4 compressed"
+
+    monkeypatch.setattr(converter, "_compress_ghostscript_sync", slow_compress_sync)
+
+    valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
+
+    async def _compress_request():
+        return await client.post(
+            "/api/v1/convert/pdf-compress",
+            files={"file": ("report.pdf", valid_pdf, "application/pdf")},
+        )
+
+    first, second = await asyncio.gather(_compress_request(), _compress_request())
+    timed_out = [r for r in (first, second) if r.status_code == 503]
+    assert timed_out, (first.status_code, second.status_code)
+    body = timed_out[0].json()
+    assert body["error_type"] == "queue_timeout"
+    assert timed_out[0].headers["retry-after"] == "10"

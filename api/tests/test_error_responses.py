@@ -133,11 +133,15 @@ async def test_wrong_field_types_returns_structured_422(client):
 
 async def test_gotenberg_non_200_does_not_leak_upstream_body(client, monkeypatch):
     """Gotenberg's raw error body is logged server-side (converter.py) but must
-    never reach the client — the client only ever sees the fixed generic
-    message from `_handle_conversion`'s broad except-clause.
+    never reach the client — the client only ever sees the fixed, honest
+    message `_handle_conversion`'s ValidationError branch returns.
 
-    Raises the exact RuntimeError shape `_gotenberg_request` itself raises on
-    a non-200 response (`Gotenberg {endpoint} returned {status}: {body}`) from
+    STRESS_TEST_REPORT.md Finding 4: a non-2xx, non-busy Gotenberg response
+    (`_gotenberg_request`'s own non-busy branch) now raises ValidationError,
+    not a bare RuntimeError — see
+    test_gotenberg_non_busy_rejection_maps_to_400_conversion_error in
+    test_converter.py for the direct, unmocked-httpx version of this same
+    path. This test instead raises that exact ValidationError shape from
     `_convert_libreoffice` directly, rather than mocking `httpx.AsyncClient`
     globally — a class-level httpx mock would also hijack the test `client`
     fixture's own request to the app (same class, same patched method),
@@ -146,9 +150,10 @@ async def test_gotenberg_non_200_does_not_leak_upstream_body(client, monkeypatch
     """
 
     async def boom(content, filename, extra_form=None):
-        raise RuntimeError(
-            "Gotenberg /forms/libreoffice/convert returned 500: "
-            "LibreOffice crashed: /root/.config/libreoffice corrupted profile at /tmp/xyz123"
+        raise converter.ValidationError(
+            "This file could not be converted. It may be damaged or "
+            "contain content the conversion engine doesn't support.",
+            "conversion_error",
         )
 
     monkeypatch.setattr(converter, "_convert_libreoffice", boom)
@@ -163,7 +168,9 @@ async def test_gotenberg_non_200_does_not_leak_upstream_body(client, monkeypatch
             )
         },
     )
-    assert r.status_code == 500
+    assert r.status_code == 400
+    body = r.json()
+    assert body["error_type"] == "conversion_error"
     assert "/root/.config" not in r.text
     assert "/tmp/xyz123" not in r.text
     assert "LibreOffice crashed" not in r.text

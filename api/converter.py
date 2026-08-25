@@ -198,8 +198,20 @@ async def _gotenberg_request(endpoint: str, files: dict, tool_id: str) -> bytes:
             raise ConversionQueueTimeout(
                 "The conversion service is busy right now. Please try again in a moment."
             ) from None
-        raise RuntimeError(
-            f"Gotenberg {endpoint} returned {resp.status_code}: {error_body}"
+        # A genuine, already-identified rejection (not busy) — Gotenberg
+        # looked at the file's actual content and refused it (e.g. a docx
+        # with a valid header but corrupted internals, STRESS_TEST_REPORT.md
+        # Finding 4). That's the visitor's file, not a server failure, so
+        # this raises ValidationError (same class/pattern as
+        # too_large/empty_file/invalid_file in validation.py) instead of a
+        # bare RuntimeError, which _handle_conversion's generic `except
+        # Exception` would otherwise report as a misleading 500. The raw
+        # Gotenberg status/body is logged above only — never handed to the
+        # client.
+        raise ValidationError(
+            "This file could not be converted. It may be damaged or "
+            "contain content the conversion engine doesn't support.",
+            "conversion_error",
         )
 
     logger.info(
@@ -413,6 +425,42 @@ async def _convert_epub_to_pdf(content: bytes, filename: str) -> bytes:
     return await _convert_chromium_html(html_bytes, "index.html")
 
 
+# PDF-compress runs Ghostscript directly inside the api container itself
+# (unlike the Gotenberg-backed tools above, which hand off to Gotenberg's own
+# separate, already-bounded container) — STRESS_TEST_REPORT.md Finding 3.
+# Confirmed empirically (scripts/stress_test.py-style concurrent pdf-compress
+# bursts against the local stack, realistic ~14MB image-heavy PDFs, watching
+# `docker stats`) that this container's 2GB/1.5-cpu budget (docker-compose.yml)
+# has enough headroom that concurrent Ghostscript processes don't come close
+# to OOMing it — even 24 at once peaked under 1GB. The actual problem is CPU
+# contention: those gs processes compete with every other request this same
+# process serves (DB queries, other conversions' shared executor threads) for
+# the container's fixed 1.5 CPUs, which is what the report measured as
+# pdf-compress "slowing down everything else" under load — confirmed here
+# too: with 16 concurrent compress requests running uncapped, /health's
+# round-trip rose from ~65ms idle to 170-266ms, and the burst itself took
+# 15.3s wall time. Tried both 2 and 4 as the cap: 4 was worse on both counts
+# (health up to 676ms, burst 18.2s — more processes thrashing for the same
+# 1.5 cores, not more real throughput) while 2 (same value as
+# GOTENBERG_MAX_CONCURRENT above) brought /health back down to a steady
+# 56-82ms *and* finished the same burst faster, in 10.8s. Same "acceptable
+# per-worker, not cross-worker" caveat as _gotenberg_semaphore above (uvicorn
+# runs 4 worker processes, confirmed locally — each gets its own semaphore
+# instance, so the real ceiling is up to ~4x this per container instance):
+# fine here for the same reason, this is defense against any one worker's
+# own burst monopolizing the shared CPU budget, not a hard global cap.
+GHOSTSCRIPT_MAX_CONCURRENT = int(os.getenv("GHOSTSCRIPT_MAX_CONCURRENT", "2"))
+# Same rationale as GOTENBERG_QUEUE_TIMEOUT_SECONDS above: a bare semaphore
+# with no bound on the wait means a burst of pdf-compress requests beyond
+# GHOSTSCRIPT_MAX_CONCURRENT would each queue indefinitely for a slot,
+# holding their already-buffered upload bytes and connection open the whole
+# time — the exact "queuing request holding its connection open
+# indefinitely" failure mode that constant exists to avoid for Gotenberg.
+# Same value, for the same reason: fail fast with a retryable error instead.
+GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS = 30.0
+_ghostscript_semaphore = asyncio.Semaphore(GHOSTSCRIPT_MAX_CONCURRENT)
+
+
 def _compress_ghostscript_sync(content: bytes, quality: str) -> bytes:
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_in:
         tmp_in.write(content)
@@ -482,10 +530,27 @@ def _compress_ghostscript_sync(content: bytes, quality: str) -> bytes:
 
 
 async def _compress_ghostscript(content: bytes, quality: str) -> bytes:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(
-        None, _compress_ghostscript_sync, content, quality
-    )
+    try:
+        await asyncio.wait_for(
+            _ghostscript_semaphore.acquire(), timeout=GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        logger.warning(
+            "Ghostscript queue timeout: waited %ss for a free slot",
+            GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS,
+            extra={"data": {"event": "ghostscript_queue_timeout"}},
+        )
+        raise ConversionQueueTimeout(
+            "The conversion service is busy right now. Please try again in a moment."
+        ) from None
+
+    try:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None, _compress_ghostscript_sync, content, quality
+        )
+    finally:
+        _ghostscript_semaphore.release()
 
 
 def _convert_pdf2docx_sync(content: bytes) -> bytes:
@@ -933,6 +998,26 @@ def _trace_png_to_svg_sync(content: bytes) -> bytes:
             },
         )
         return output
+    except Image.DecompressionBombError:
+        # Pillow's own safety check (separate from PNG_TO_SVG_MAX_DIMENSION
+        # above, which only applies after a successful decode) refusing to
+        # decode an unusually large image — a real, valid file, not a
+        # corrupted one (STRESS_TEST_REPORT.md Finding 7). The generic
+        # `except Exception` below would otherwise report this as
+        # "corrupted or password-protected", which is simply false here.
+        logger.warning(
+            "png-to-svg rejected: image exceeds Pillow's decompression-bomb guard",
+            extra={
+                "data": {
+                    "event": "png_to_svg_decompression_bomb",
+                    "trace_input_bytes": len(content),
+                }
+            },
+        )
+        raise ValidationError(
+            "Image dimensions too large to process.",
+            "too_large_dimensions",
+        ) from None
     except Exception:
         logger.error(
             "png-to-svg failed",
