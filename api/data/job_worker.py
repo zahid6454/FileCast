@@ -54,6 +54,7 @@ from converter import (
     JOB_RESULTS_DIR,
     JOB_WAKE_QUEUE_KEY,
     TOOL_REGISTRY,
+    WORKER_HEARTBEAT_KEY,
     _classify_conversion_error,
     _safe_filename,
 )
@@ -93,6 +94,17 @@ GC_SWEEP_INTERVAL_SECONDS = 3 * 60
 # "alive and cycling" apart from "process up but the event loop is wedged".
 HEARTBEAT_PATH = Path(tempfile.gettempdir()) / "worker-heartbeat"
 
+# Same per-iteration touch as HEARTBEAT_PATH above, but into Redis (shared
+# with `api`) rather than a local file, so converter.py's /health route can
+# actually see it — HEARTBEAT_PATH lives in this container's own /tmp, never
+# mounted into `api`. A TTL'd SET rather than a timestamp value: the key's
+# mere existence *is* the freshness check on the reading side, no clock-skew
+# or parsing concerns. Set a little above the healthcheck's own 120s
+# staleness threshold (docker-compose.yml) so a slow-but-still-cycling loop
+# iteration doesn't flap /health before the container healthcheck itself
+# would consider the worker unhealthy.
+WORKER_HEARTBEAT_TTL_SECONDS = 150
+
 
 async def _claim_one(db, job_id: str) -> bool:
     result = await db.execute(
@@ -114,17 +126,15 @@ async def _execute_job(job_id: str) -> None:
     caller — either ``run_job`` below or the discovery loop's bulk claim.
 
     Deliberately does NOT hold one DB session open for the whole call.
-    ``spec.convert`` can wait behind the Gotenberg/Ghostscript semaphore for
-    up to their own queue-timeout bound, or run unboundedly for the tools
-    with no internal timeout at all (pdf2docx, pdf-to-xlsx, pdf-to-pptx,
-    png-to-svg) — holding a session, and the pool connection it checks out,
-    across that whole span would let any backlog bigger than the pool's own
-    size (``data/db.py`` sets no explicit ``pool_size`` — SQLAlchemy
-    defaults to 5 + 10 overflow = 15 connections) wedge this worker's own
-    ability to claim further work or run its GC sweep, exactly the
-    "Postgres touched per-job, not held open" shape the plan calls for.
-    Two short-lived sessions instead: one to read the job's inputs, one to
-    write its terminal state.
+    ``spec.convert`` can wait behind the Gotenberg/Ghostscript/CPU-bound
+    semaphore for up to that tool's own queue-timeout bound — holding a
+    session, and the pool connection it checks out, across that whole span
+    would let any backlog bigger than the pool's own size (``data/db.py``
+    sets no explicit ``pool_size`` — SQLAlchemy defaults to 5 + 10 overflow
+    = 15 connections) wedge this worker's own ability to claim further work
+    or run its GC sweep, exactly the "Postgres touched per-job, not held
+    open" shape the plan calls for. Two short-lived sessions instead: one to
+    read the job's inputs, one to write its terminal state.
     """
     async with async_session_factory() as db:
         job = await db.get(ConversionJob, job_id)
@@ -433,6 +443,16 @@ async def _loop() -> None:
             last_gc = now
 
         HEARTBEAT_PATH.write_text(datetime.now(UTC).isoformat())
+        try:
+            await redis_client.set(
+                WORKER_HEARTBEAT_KEY, "1", ex=WORKER_HEARTBEAT_TTL_SECONDS
+            )
+        except Exception:  # noqa: BLE001 — a Redis blip must not stop the loop
+            logger.warning(
+                "Worker heartbeat write to Redis failed — /health may report "
+                "the worker as down until this succeeds again",
+                extra={"data": {"event": "worker_heartbeat_write_failed"}},
+            )
 
 
 def main(argv: list[str]) -> int:

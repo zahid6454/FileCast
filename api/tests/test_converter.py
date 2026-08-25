@@ -1357,3 +1357,149 @@ async def test_ghostscript_queue_timeout_marks_job_failed(client, monkeypatch):
     failed = [s for s in statuses if s["status"] == "failed"]
     assert failed, statuses
     assert failed[0]["error_type"] == "queue_timeout"
+
+
+# --------------------------------------------------------------------------- #
+# CPU-bound tool concurrency cap (pr-review follow-up on Phase 3): pdf2docx,
+# pdf-to-xlsx, pdf-to-pptx, and png-to-svg have no Gotenberg/Ghostscript
+# backing of their own — before this, they ran via loop.run_in_executor with
+# no cap at all. data/job_worker.py's discovery loop claims and spawns a
+# task for every currently-queued row on each wake with no cap of its own,
+# relying entirely on each tool's own semaphore to bound real concurrency —
+# these four tools never had one, unlike Gotenberg/Ghostscript above.
+# --------------------------------------------------------------------------- #
+
+
+async def test_cpu_bound_semaphore_caps_concurrency(monkeypatch):
+    import threading
+    import time as time_module
+
+    monkeypatch.setattr(converter, "_cpu_bound_semaphore", asyncio.Semaphore(1))
+
+    in_flight = 0
+    max_in_flight = 0
+    lock = threading.Lock()
+
+    def fake_sync(content):
+        nonlocal in_flight, max_in_flight
+        with lock:
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+        time_module.sleep(0.05)
+        with lock:
+            in_flight -= 1
+        return b"fake output"
+
+    # Three "conversions" sharing a single-slot semaphore must never
+    # overlap, even though they're all launched at once — mirrors
+    # test_ghostscript_semaphore_caps_concurrency above.
+    await asyncio.gather(
+        *(converter._run_cpu_bound(fake_sync, b"content") for _ in range(3))
+    )
+    assert max_in_flight == 1
+
+
+async def test_cpu_bound_queue_timeout_raises_conversion_queue_timeout(monkeypatch):
+    import time as time_module
+
+    monkeypatch.setattr(converter, "_cpu_bound_semaphore", asyncio.Semaphore(1))
+    monkeypatch.setattr(converter, "CPU_BOUND_QUEUE_TIMEOUT_SECONDS", 0.05)
+
+    def slow_sync(content):
+        # Holds the one slot well past the queue timeout so the second call
+        # below is forced to wait and expire.
+        time_module.sleep(1.0)
+        return b"fake output"
+
+    async def first_call():
+        await converter._run_cpu_bound(slow_sync, b"content")
+
+    async def second_call():
+        with pytest.raises(converter.ConversionQueueTimeout):
+            await converter._run_cpu_bound(slow_sync, b"content")
+
+    await asyncio.gather(first_call(), second_call())
+
+
+# --------------------------------------------------------------------------- #
+# Enqueue-time orphan file cleanup (pr-review follow-up on Phase 3): a
+# job_results/{id}.input file written before the row-creating db.commit()
+# must not survive a commit that then fails — nothing else ever sweeps a
+# file with no matching row (data/job_worker.py's GC sweep only inspects
+# ConversionJob rows, never lists the directory).
+# --------------------------------------------------------------------------- #
+
+
+class _FakeUploadFile:
+    """Minimal async-read stand-in — mirrors test_validation.py's
+    _FakeUploadFile. Single read returns the whole (small) payload, second
+    read signals EOF, matching _read_capped's chunked-read loop."""
+
+    def __init__(self, content: bytes, filename: str):
+        self.filename = filename
+        self._content = content
+        self._served = False
+
+    async def read(self, size: int) -> bytes:
+        if self._served:
+            return b""
+        self._served = True
+        return self._content
+
+
+async def test_enqueue_conversion_cleans_up_input_file_when_commit_fails(
+    db, monkeypatch
+):
+    async def boom_commit():
+        raise RuntimeError("connection lost")
+
+    monkeypatch.setattr(db, "commit", boom_commit)
+
+    valid_docx = b"PK\x03\x04" + b"\x00" * 200
+    upload = _FakeUploadFile(valid_docx, "report.docx")
+
+    before = set(converter.JOB_RESULTS_DIR.glob("*.input"))
+    with pytest.raises(RuntimeError):
+        await converter._enqueue_conversion(
+            upload, "docx-to-pdf", converter.MAX_FILE_SIZE, db
+        )
+    after = set(converter.JOB_RESULTS_DIR.glob("*.input"))
+
+    assert after == before  # no new orphaned .input file left behind
+
+
+# --------------------------------------------------------------------------- #
+# Worker liveness in /health (pr-review follow-up on Phase 3): every
+# server-side tool now depends on data/job_worker.py, but /health previously
+# only checked Gotenberg and Postgres — a dead worker was invisible to both
+# uptime monitors and server-upload.js's checkHealth() upload gate.
+# --------------------------------------------------------------------------- #
+
+
+async def test_health_endpoint_reports_worker_down_with_no_heartbeat(client):
+    # No heartbeat key set in the isolated test Redis DB — matches this test
+    # environment, where no worker process ever runs against it.
+    r = await client.get("/api/v1/health")
+    body = r.json()
+    assert body["worker"] == "down"
+    assert body["status"] == "degraded"
+
+
+async def test_health_endpoint_reports_worker_up_with_fresh_heartbeat(client):
+    from data.redis_client import redis_client
+
+    await redis_client.set(converter.WORKER_HEARTBEAT_KEY, "1", ex=60)
+    try:
+        r = await client.get("/api/v1/health")
+        assert r.json()["worker"] == "up"
+    finally:
+        await redis_client.delete(converter.WORKER_HEARTBEAT_KEY)
+
+
+async def test_check_worker_fails_closed_when_redis_unreachable(monkeypatch):
+    class _BoomRedis:
+        async def exists(self, *a, **kw):
+            raise ConnectionError("redis down")
+
+    monkeypatch.setattr(converter, "redis_client", _BoomRedis())
+    assert await converter._check_worker() is False

@@ -555,6 +555,52 @@ async def _compress_ghostscript(content: bytes, quality: str) -> bytes:
         _ghostscript_semaphore.release()
 
 
+# pdf2docx / pdf-to-xlsx / pdf-to-pptx / png-to-svg (below) have no Gotenberg
+# or Ghostscript backing of their own — before Phase 3, their concurrency was
+# implicitly bounded by however many HTTP connections were open at once (each
+# request occupied one connection for the duration of its
+# loop.run_in_executor call). Phase 3's worker discovery loop claims and
+# spawns a task for every currently-queued row on each wake with no cap of
+# its own (data/job_worker.py's _discovery_wake), relying on each tool's own
+# semaphore to bound real concurrency — exactly like
+# _gotenberg_semaphore/_ghostscript_semaphore above, these four tools just
+# never got one. Without it, a burst landing in one discovery wake would run
+# fully unbounded on the shared default ThreadPoolExecutor (sized off host
+# CPU count, not the `worker` container's own cgroup CPU quota in
+# docker-compose.yml), the same class of CPU-contention problem
+# GOTENBERG_MAX_CONCURRENT/GHOSTSCRIPT_MAX_CONCURRENT already exist to
+# prevent — and here it competes with the worker's own event loop (heartbeat,
+# discovery, GC sweep), not just other conversions.
+CPU_BOUND_MAX_CONCURRENT = int(os.getenv("CPU_BOUND_MAX_CONCURRENT", "2"))
+# Same backpressure-bound rationale/value as GOTENBERG_QUEUE_TIMEOUT_SECONDS/
+# GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS above: data/job_worker.py is the only
+# caller, so this bounds a genuine backlog, not a live HTTP connection.
+CPU_BOUND_QUEUE_TIMEOUT_SECONDS = 600.0
+_cpu_bound_semaphore = asyncio.Semaphore(CPU_BOUND_MAX_CONCURRENT)
+
+
+async def _run_cpu_bound(fn: Callable[[bytes], bytes], content: bytes) -> bytes:
+    try:
+        await asyncio.wait_for(
+            _cpu_bound_semaphore.acquire(), timeout=CPU_BOUND_QUEUE_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        logger.warning(
+            "CPU-bound conversion queue timeout: waited %ss for a free slot",
+            CPU_BOUND_QUEUE_TIMEOUT_SECONDS,
+            extra={"data": {"event": "cpu_bound_queue_timeout"}},
+        )
+        raise ConversionQueueTimeout(
+            "The conversion service is busy right now. Please try again in a moment."
+        ) from None
+
+    try:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, fn, content)
+    finally:
+        _cpu_bound_semaphore.release()
+
+
 def _convert_pdf2docx_sync(content: bytes) -> bytes:
     from pdf2docx import Converter
 
@@ -607,8 +653,7 @@ def _convert_pdf2docx_sync(content: bytes) -> bytes:
 
 
 async def _convert_pdf2docx(content: bytes, filename: str) -> bytes:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _convert_pdf2docx_sync, content)
+    return await _run_cpu_bound(_convert_pdf2docx_sync, content)
 
 
 # pdfplumber's default table-detection ("lines" strategy) only finds tables
@@ -763,8 +808,7 @@ def _convert_pdf_to_xlsx_sync(content: bytes) -> bytes:
 
 
 async def _convert_pdf_to_xlsx(content: bytes, filename: str) -> bytes:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _convert_pdf_to_xlsx_sync, content)
+    return await _run_cpu_bound(_convert_pdf_to_xlsx_sync, content)
 
 
 # PDF's MediaBox is spec-legal up to 14,400x14,400pt (200x200in), and a
@@ -877,8 +921,7 @@ def _convert_pdf_to_pptx_sync(content: bytes) -> bytes:
 
 
 async def _convert_pdf_to_pptx(content: bytes, filename: str) -> bytes:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _convert_pdf_to_pptx_sync, content)
+    return await _run_cpu_bound(_convert_pdf_to_pptx_sync, content)
 
 
 # PNG to SVG (Vectorize) — a genuinely new server-side capability, not a
@@ -1032,8 +1075,7 @@ def _trace_png_to_svg_sync(content: bytes) -> bytes:
 
 
 async def _trace_png_to_svg(content: bytes, filename: str) -> bytes:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _trace_png_to_svg_sync, content)
+    return await _run_cpu_bound(_trace_png_to_svg_sync, content)
 
 
 def _safe_filename(filename: str, ext: str = ".pdf") -> str:
@@ -1106,6 +1148,17 @@ JOB_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 # UPDATE, so there's no bookkeeping to keep in sync between what this list
 # says arrived and what's actually queued in Postgres.
 JOB_WAKE_QUEUE_KEY = "conversion_jobs:wake"
+
+# data/job_worker.py's own container healthcheck (docker-compose.yml) reads a
+# heartbeat FILE, but that file lives in the worker container's own /tmp,
+# never shared with `api` (the only shared volume is job_results) — so
+# before this, a dead/stuck worker was invisible to /health and to every
+# visitor's checkHealth() gate (server-upload.js), even though every
+# server-side tool now depends on it. The worker SETs this key with a TTL on
+# every loop iteration (job_worker.py's WORKER_HEARTBEAT_TTL_SECONDS); its
+# mere existence in Redis is the freshness check — no timestamp parsing or
+# clock-skew concerns, since Redis's own expiry does that work.
+WORKER_HEARTBEAT_KEY = "worker:heartbeat"
 
 
 @dataclass
@@ -1268,8 +1321,19 @@ async def _enqueue_conversion(
     db.add(job)
     await db.flush()
     job_id = job.id
-    (JOB_RESULTS_DIR / f"{job_id}.input").write_bytes(content)
-    await db.commit()
+    input_path = JOB_RESULTS_DIR / f"{job_id}.input"
+    try:
+        input_path.write_bytes(content)
+        await db.commit()
+    except Exception:
+        # A write that fails partway (disk full) or a commit that fails
+        # after a successful write (e.g. a dropped Neon connection) would
+        # otherwise leave this file orphaned forever — the row itself rolls
+        # back automatically (get_session's context manager closes the
+        # session without committing), but nothing ever sweeps a file with
+        # no matching row; data/job_worker.py's GC sweep only inspects rows.
+        input_path.unlink(missing_ok=True)
+        raise
 
     # Redis push failure is non-fatal (Part B's own fail-open posture): the
     # Postgres row already exists regardless, and data/job_worker.py's
@@ -1507,6 +1571,18 @@ async def _check_gotenberg() -> bool:
         return False
 
 
+async def _check_worker() -> bool:
+    # Every server-side tool now depends on data/job_worker.py — a dead
+    # worker means every enqueued job sits `queued` forever with nothing to
+    # notice (the periodic GC sweep that would otherwise force-fail a stuck
+    # job IS the worker's own loop). WORKER_HEARTBEAT_KEY's TTL is what makes
+    # this a freshness check, not just an existence check.
+    try:
+        return bool(await redis_client.exists(WORKER_HEARTBEAT_KEY))
+    except Exception:
+        return False
+
+
 async def _check_db() -> bool:
     # P2 §20 — an uptime monitor hitting /health should see the DB as part of
     # "is the API actually usable", not just the Gotenberg dependency:
@@ -1534,14 +1610,18 @@ async def _check_db() -> bool:
 
 @router.api_route("/health", methods=["GET", "HEAD"])
 async def health():
-    # Run concurrently, not sequentially — both checks are independently
-    # bounded at 5s, but running them one after another let a partial outage
-    # (both dependencies slow-but-not-instantly-refused) push total latency to
-    # ~10s, right when a monitor most needs a fast "degraded" signal instead
-    # of a bare timeout. gather() bounds total latency at max(5s, 5s).
-    gotenberg_ok, db_ok = await asyncio.gather(_check_gotenberg(), _check_db())
+    # Run concurrently, not sequentially — all three checks are independently
+    # bounded (5s for Gotenberg/DB, Redis's own short client timeout for the
+    # worker heartbeat), but running them one after another let a partial
+    # outage (multiple dependencies slow-but-not-instantly-refused) push
+    # total latency to their sum, right when a monitor most needs a fast
+    # "degraded" signal instead of a bare timeout. gather() bounds total
+    # latency at the slowest single check instead.
+    gotenberg_ok, db_ok, worker_ok = await asyncio.gather(
+        _check_gotenberg(), _check_db(), _check_worker()
+    )
 
-    status = "healthy" if (gotenberg_ok and db_ok) else "degraded"
+    status = "healthy" if (gotenberg_ok and db_ok and worker_ok) else "degraded"
     if not gotenberg_ok:
         logger.warning(
             "Health check: Gotenberg unreachable",
@@ -1562,10 +1642,21 @@ async def health():
                 }
             },
         )
+    if not worker_ok:
+        logger.warning(
+            "Health check: conversion worker heartbeat stale or missing",
+            extra={
+                "data": {
+                    "event": "health_degraded",
+                    "worker": "down",
+                }
+            },
+        )
     return {
         "status": status,
         "gotenberg": "up" if gotenberg_ok else "down",
         "database": "up" if db_ok else "down",
+        "worker": "up" if worker_ok else "down",
     }
 
 
