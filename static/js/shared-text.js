@@ -265,6 +265,11 @@
     );
   }
 
+  // "Algorithm"/"Hash" are hardcoded, not derived from `rows` — fine while
+  // Hash Generator is the only flat-table producer, but a second converter
+  // reusing this {label, value} shape would silently get the wrong headers.
+  // Not worth a `headers` field for one consumer; revisit if a second one
+  // shows up.
   function buildFlatOutputTable(rows) {
     var table = document.createElement('table');
     table.className = 'out-table';
