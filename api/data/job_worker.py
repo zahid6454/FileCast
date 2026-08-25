@@ -111,63 +111,109 @@ async def _claim_one(db, job_id: str) -> bool:
 async def _execute_job(job_id: str) -> None:
     """Run one already-``converting`` job to a terminal state. Assumes the
     row was already claimed (status flipped to ``converting``) by the
-    caller — either ``run_job`` below or the discovery loop's bulk claim."""
+    caller — either ``run_job`` below or the discovery loop's bulk claim.
+
+    Deliberately does NOT hold one DB session open for the whole call.
+    ``spec.convert`` can wait behind the Gotenberg/Ghostscript semaphore for
+    up to their own queue-timeout bound, or run unboundedly for the tools
+    with no internal timeout at all (pdf2docx, pdf-to-xlsx, pdf-to-pptx,
+    png-to-svg) — holding a session, and the pool connection it checks out,
+    across that whole span would let any backlog bigger than the pool's own
+    size (``data/db.py`` sets no explicit ``pool_size`` — SQLAlchemy
+    defaults to 5 + 10 overflow = 15 connections) wedge this worker's own
+    ability to claim further work or run its GC sweep, exactly the
+    "Postgres touched per-job, not held open" shape the plan calls for.
+    Two short-lived sessions instead: one to read the job's inputs, one to
+    write its terminal state.
+    """
     async with async_session_factory() as db:
         job = await db.get(ConversionJob, job_id)
         if job is None:
             return
+        tool_id = job.tool_id
+        original_filename = job.original_filename
+        options = job.options
 
-        spec = TOOL_REGISTRY.get(job.tool_id)
-        input_path = JOB_RESULTS_DIR / f"{job_id}.input"
-        try:
-            if spec is None:
-                raise RuntimeError(f"Unknown tool_id: {job.tool_id}")
-            content = input_path.read_bytes()
-            result = await spec.convert(content, job.original_filename, job.options)
-            output_path = JOB_RESULTS_DIR / f"{job_id}.output"
-            # Truncate-mode write (the default for write_bytes), not
-            # exclusive-create: a retried job (startup orphan recovery) may
-            # leave a partial file from a prior crashed attempt — overwriting
-            # it is harmless, since the download route gates on the DB row's
-            # status, never on file existence alone.
-            output_path.write_bytes(result)
-            job.status = "done"
-            job.finished_at = datetime.now(UTC)
-            job.output_filename = _safe_filename(job.original_filename, spec.output_ext)
-            logger.info(
-                "Conversion job done: %s",
-                job.tool_id,
-                extra={
-                    "data": {
-                        "event": "job_done",
-                        "tool_id": job.tool_id,
-                        "job_id": job_id,
-                        "output_bytes": len(result),
-                    }
-                },
-            )
-        except Exception as exc:
-            message, error_type = _classify_conversion_error(exc)
-            job.status = "failed"
-            job.finished_at = datetime.now(UTC)
-            job.error_message = message
-            job.error_type = error_type
-            log_fn = logger.warning if error_type == "queue_timeout" else logger.error
-            log_fn(
-                "Conversion job failed: %s — %s",
-                job.tool_id,
-                error_type,
-                exc_info=error_type not in ("queue_timeout", "validation_error"),
-                extra={
-                    "data": {
-                        "event": "job_failed",
-                        "tool_id": job.tool_id,
-                        "job_id": job_id,
-                        "error_type": error_type,
-                    }
-                },
-            )
+    spec = TOOL_REGISTRY.get(tool_id)
+    input_path = JOB_RESULTS_DIR / f"{job_id}.input"
+    try:
+        if spec is None:
+            raise RuntimeError(f"Unknown tool_id: {tool_id}")
+        content = input_path.read_bytes()
+        result = await spec.convert(content, original_filename, options)
+        output_path = JOB_RESULTS_DIR / f"{job_id}.output"
+        # Truncate-mode write (the default for write_bytes), not
+        # exclusive-create: a retried job (startup orphan recovery) may
+        # leave a partial file from a prior crashed attempt — overwriting
+        # it is harmless, since the download route gates on the DB row's
+        # status, never on file existence alone.
+        output_path.write_bytes(result)
+        values = {
+            "status": "done",
+            "finished_at": datetime.now(UTC),
+            "output_filename": _safe_filename(original_filename, spec.output_ext),
+        }
+        logger.info(
+            "Conversion job done: %s",
+            tool_id,
+            extra={
+                "data": {
+                    "event": "job_done",
+                    "tool_id": tool_id,
+                    "job_id": job_id,
+                    "output_bytes": len(result),
+                }
+            },
+        )
+    except Exception as exc:
+        message, error_type = _classify_conversion_error(exc)
+        values = {
+            "status": "failed",
+            "finished_at": datetime.now(UTC),
+            "error_message": message,
+            "error_type": error_type,
+        }
+        log_fn = logger.warning if error_type == "queue_timeout" else logger.error
+        log_fn(
+            "Conversion job failed: %s — %s",
+            tool_id,
+            error_type,
+            exc_info=error_type not in ("queue_timeout", "validation_error"),
+            extra={
+                "data": {
+                    "event": "job_failed",
+                    "tool_id": tool_id,
+                    "job_id": job_id,
+                    "error_type": error_type,
+                }
+            },
+        )
+
+    async with async_session_factory() as db:
+        # Guard on status='converting': the periodic GC sweep may have
+        # already force-failed this row (STUCK_JOB_MAX_AGE_SECONDS) while
+        # this conversion was still running unbounded in the background —
+        # an unconditional write here would silently clobber that
+        # resolution with a stale result arriving after the fact.
+        outcome = await db.execute(
+            update(ConversionJob)
+            .where(ConversionJob.id == job_id, ConversionJob.status == "converting")
+            .values(**values)
+        )
         await db.commit()
+        if outcome.rowcount == 0:
+            logger.warning(
+                "Conversion job resolved after its row left 'converting' "
+                "(likely GC-swept as stuck) — discarding late result: %s",
+                tool_id,
+                extra={
+                    "data": {
+                        "event": "job_late_result_discarded",
+                        "tool_id": tool_id,
+                        "job_id": job_id,
+                    }
+                },
+            )
 
 
 async def run_job(job_id: str) -> None:

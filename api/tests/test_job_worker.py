@@ -68,6 +68,45 @@ async def test_run_job_marks_failed_on_conversion_exception(db, monkeypatch):
     (converter.JOB_RESULTS_DIR / f"{job_id}.input").unlink()
 
 
+async def test_execute_job_does_not_clobber_a_row_gc_swept_out_from_under_it(
+    db, monkeypatch
+):
+    # _execute_job reads its job's inputs in one short session, runs the
+    # conversion with no session held, then writes the terminal state in a
+    # second session — guarded on the row still being 'converting'. If the
+    # periodic GC sweep already force-failed this row as stuck (because the
+    # conversion ran long), a late-arriving success must not silently
+    # overwrite that resolution.
+    async def fake_libreoffice(content, filename, extra_form=None):
+        return b"%PDF-1.4 ok"
+
+    monkeypatch.setattr(converter, "_convert_libreoffice", fake_libreoffice)
+
+    job = _make_job(status="converting", started_at=datetime.now(UTC))
+    db.add(job)
+    await db.flush()
+    job_id = job.id
+    await db.commit()
+    (converter.JOB_RESULTS_DIR / f"{job_id}.input").write_bytes(b"PK\x03\x04fake docx")
+
+    # Simulate gc_sweep resolving this row as stuck while the (mocked, but
+    # otherwise unbounded) conversion is still "running".
+    job.status = "failed"
+    job.error_type = "queue_timeout"
+    job.error_message = (
+        "The conversion service is busy right now. Please try again in a moment."
+    )
+    await db.commit()
+
+    await job_worker._execute_job(job_id)
+
+    await db.refresh(job)
+    assert job.status == "failed"
+    assert job.error_type == "queue_timeout"
+    assert job.output_filename is None
+    (converter.JOB_RESULTS_DIR / f"{job_id}.input").unlink()
+
+
 async def test_run_job_is_a_noop_for_an_already_claimed_job(db):
     # A job already `converting` (claimed by a prior/concurrent call) must
     # not be re-run — the atomic claim UPDATE's WHERE status='queued' guards
