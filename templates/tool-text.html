@@ -101,13 +101,29 @@
      Generator's "how many?" count) start pre-filled and ready to run instead
      of forcing an empty-input error before the visitor has typed anything;
      every existing tool omits it and starts empty as before. #}
+  {% if tool.get('input_kind') == 'number' %}
+  {# A single short value (e.g. UUID Generator's 1-100 count) doesn't need a
+     multi-line textarea + line-number gutter — a real number input gets a
+     numeric keypad on mobile and native spinner arrows on desktop for free.
+     shared-text.js never needs to change: every els.inputArea access it makes
+     (.value/.trim()/'input' listener) works identically on <input>. #}
+  <input type="number" inputmode="numeric" class="text-input-number" id="text-input"
+    min="{{ tool.get('input_min', '') }}" max="{{ tool.get('input_max', '') }}"
+    value="{{ tool.get('input_default', '') }}"
+    placeholder="{{ tool.get('input_placeholder', '') }}">
+  {% else %}
   <div class="text-editor{% if tool.get('wrap_text') %} text-editor--wrap{% endif %}">
     {% if not tool.get('wrap_text') %}
     <div class="text-editor__gutter" aria-hidden="true"></div>
     {% endif %}
     <textarea class="text-input-area" id="text-input" placeholder="{{ tool.get('input_placeholder', 'Paste your ' + tool.input_format + ' here...') }}">{{- tool.get('input_default', '') -}}</textarea>
   </div>
-  <div class="text-input-meta">
+  {% endif %}
+  {# char/byte count is meaningless next to a number spinner (input_kind:
+     number) — kept in the DOM either way since shared-text.js's updateMeta()
+     unconditionally writes to #char-count/#byte-count on every input/init,
+     just hidden so nothing renders. #}
+  <div class="text-input-meta{% if tool.get('input_kind') == 'number' %} hidden{% endif %}">
     <span id="char-count">0 chars</span>
     <span>
       <button class="card text-input-format-btn hidden" id="format-btn">Prettier</button>
