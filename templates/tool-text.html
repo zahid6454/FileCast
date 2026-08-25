@@ -101,6 +101,13 @@
      Generator's "how many?" count) start pre-filled and ready to run instead
      of forcing an empty-input error before the visitor has typed anything;
      every existing tool omits it and starts empty as before. #}
+  {# wrap_input/wrap_output let a tool wrap one side without the other (e.g.
+     JWT Decoder: a single-token input that should wrap, but structured
+     header/payload JSON output that should keep its line-number gutter).
+     wrap_text remains a shorthand fallback that sets both, unchanged for the
+     existing tools (Base64 to Image, QR/Barcode Generator) that only need
+     one flag for a single-blob input AND output. #}
+  {% set wrap_input = tool.get('wrap_input', tool.get('wrap_text', false)) %}
   {% if tool.get('input_kind') == 'number' %}
   {# A single short value (e.g. UUID Generator's 1-100 count) doesn't need a
      multi-line textarea + line-number gutter — a real number input gets a
@@ -112,8 +119,8 @@
     value="{{ tool.get('input_default', '') }}"
     placeholder="{{ tool.get('input_placeholder', '') }}">
   {% else %}
-  <div class="text-editor{% if tool.get('wrap_text') %} text-editor--wrap{% endif %}">
-    {% if not tool.get('wrap_text') %}
+  <div class="text-editor{% if wrap_input %} text-editor--wrap{% endif %}">
+    {% if not wrap_input %}
     <div class="text-editor__gutter" aria-hidden="true"></div>
     {% endif %}
     <textarea class="text-input-area" id="text-input" placeholder="{{ tool.get('input_placeholder', 'Paste your ' + tool.input_format + ' here...') }}">{{- tool.get('input_default', '') -}}</textarea>
@@ -170,7 +177,7 @@
        stays opt-in per tool (e.g. CSV to Excel's *input* is real multi-line
        CSV that still benefits from the line gutter, even though its output
        is the same single-blob shape as QR/Barcode/Base64 to Image). #}
-    {% set wrap_output = tool.get('wrap_text') or tool.get('output_is_data_url') %}
+    {% set wrap_output = tool.get('wrap_output', tool.get('wrap_text', false)) or tool.get('output_is_data_url') %}
     <div class="text-editor{% if wrap_output %} text-editor--wrap{% endif %}">
       {% if not wrap_output %}
       <div class="text-editor__gutter" aria-hidden="true"></div>

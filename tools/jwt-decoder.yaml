@@ -15,6 +15,7 @@ max_file_size: 5MB
 bulk_support: false
 ui_type: text-input
 action_label: "Decode JWT"
+wrap_input: true
 input_placeholder: "Paste a JWT here...\n\nExample:\neyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
 tagline: "Decode a JWT's header and payload — no signature verification"
 tagline_long: "Decode a JSON Web Token's header and payload instantly in your browser and see the claims inside. This only decodes — it does not verify the signature, so never trust an unverified token's contents for authorization."
