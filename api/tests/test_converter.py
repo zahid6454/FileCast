@@ -233,6 +233,37 @@ async def test_png_to_svg_rejects_oversized_file(client):
     assert r.json()["error_type"] == "too_large"
 
 
+async def test_png_to_svg_rejects_decompression_bomb_with_accurate_message(
+    client, monkeypatch
+):
+    # STRESS_TEST_REPORT.md Finding 7: a genuine, non-malicious but very
+    # large image (e.g. 20000x20000) trips Pillow's own DecompressionBombError
+    # safety check. Before this fix, that fell into the generic `except
+    # Exception` handler and came back as "may be corrupted or
+    # password-protected" — false, since the file is completely valid. Must
+    # come back as an honest, specific message instead. Shrinks
+    # PIL.Image.MAX_IMAGE_PIXELS rather than actually building a 20000x20000
+    # PNG, so the test stays fast — the code path exercised (Image.open
+    # raising DecompressionBombError) is identical either way.
+    from PIL import Image as PILImage
+
+    monkeypatch.setattr(PILImage, "MAX_IMAGE_PIXELS", 1000)
+
+    img = PILImage.new("RGB", (200, 200), (10, 20, 30))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    r = await client.post(
+        "/api/v1/convert/png-to-svg",
+        files={"file": ("huge.png", buf.getvalue(), "image/png")},
+    )
+    assert r.status_code == 400
+    body = r.json()
+    assert body["error_type"] == "too_large_dimensions"
+    assert "corrupted" not in body["error"].lower()
+    assert "password" not in body["error"].lower()
+
+
 async def test_png_to_svg_success_with_mocked_conversion(client, monkeypatch):
     async def fake_trace(content, filename):
         return b"<svg>fake</svg>"
@@ -537,6 +568,20 @@ def test_trace_png_to_svg_downscales_oversized_images():
     svg_bytes = converter._trace_png_to_svg_sync(buf.getvalue())
     svg_text = svg_bytes.decode("utf-8")
     assert 'width="1500" height="500"' in svg_text
+
+
+def test_trace_png_to_svg_raises_validation_error_on_decompression_bomb(monkeypatch):
+    from PIL import Image
+
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1000)
+
+    img = Image.new("RGB", (200, 200), (10, 20, 30))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    with pytest.raises(converter.ValidationError) as exc_info:
+        converter._trace_png_to_svg_sync(buf.getvalue())
+    assert exc_info.value.error_type == "too_large_dimensions"
 
 
 def test_flatten_epub_to_html_orders_chapters_and_inserts_page_breaks():
@@ -989,3 +1034,83 @@ async def test_gotenberg_own_busy_response_maps_to_503_not_generic_500(
         assert all(r.levelname == "WARNING" for r in gotenberg_records), [
             (r.levelname, r.getMessage()) for r in gotenberg_records
         ]
+
+
+async def test_gotenberg_non_busy_rejection_maps_to_400_conversion_error(
+    client, monkeypatch
+):
+    # STRESS_TEST_REPORT.md Finding 4: a file with a valid extension/magic
+    # bytes but broken internals (e.g. a docx whose XML is garbage past the
+    # ZIP header) makes Gotenberg itself reject the request with a genuine,
+    # non-busy error status. Before this fix, that fell into the generic
+    # `except Exception` handler and came back as a misleading 500 "may be
+    # corrupted or password-protected". It must instead come back as an
+    # honest 400 the same way validate_upload's own too_large/empty_file/
+    # invalid_file cases already do — same ValidationError class, just
+    # raised later, from _gotenberg_request instead of validate_upload.
+    async def post_impl():
+        return _FakeResponse(
+            status_code=400,
+            content=b"Internal LibreOffice stack trace: /root/.config/libreoffice blew up",
+        )
+
+    monkeypatch.setattr(converter.httpx, "AsyncClient", _fake_async_client(post_impl))
+
+    r = await client.post(
+        "/api/v1/convert/docx-to-pdf",
+        files={
+            "file": (
+                "report.docx",
+                b"PK\x03\x04" + b"\x00" * 200,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert r.status_code == 400
+    body = r.json()
+    assert body["error_type"] == "conversion_error"
+    assert "corrupted or password-protected" not in body["error"]
+    assert "/root/.config" not in r.text
+    assert "LibreOffice" not in r.text
+
+
+# --------------------------------------------------------------------------- #
+# Ghostscript concurrency cap (STRESS_TEST_REPORT.md Finding 3) — caps
+# concurrent `gs` subprocesses with the same in-process asyncio.Semaphore
+# pattern _gotenberg_semaphore already uses above. `_compress_ghostscript_sync`
+# is faked rather than run for real: it shells out to the `gs` binary, which
+# isn't installed in this test environment (only inside the api/gotenberg
+# Docker images) — same reason the Gotenberg tests above fake httpx instead
+# of hitting a real Gotenberg.
+# --------------------------------------------------------------------------- #
+
+
+async def test_ghostscript_semaphore_caps_concurrency(monkeypatch):
+    import threading
+    import time as time_module
+
+    monkeypatch.setattr(converter, "_ghostscript_semaphore", asyncio.Semaphore(1))
+
+    in_flight = 0
+    max_in_flight = 0
+    lock = threading.Lock()
+
+    def fake_compress_sync(content, quality):
+        nonlocal in_flight, max_in_flight
+        with lock:
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+        time_module.sleep(0.05)
+        with lock:
+            in_flight -= 1
+        return b"%PDF-1.4 compressed"
+
+    monkeypatch.setattr(converter, "_compress_ghostscript_sync", fake_compress_sync)
+
+    # Three "compressions" sharing a single-slot semaphore must never
+    # overlap, even though they're all launched at once — mirrors
+    # test_gotenberg_semaphore_caps_concurrency above.
+    await asyncio.gather(
+        *(converter._compress_ghostscript(b"content", "ebook") for _ in range(3))
+    )
+    assert max_in_flight == 1
