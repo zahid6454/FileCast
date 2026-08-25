@@ -281,6 +281,79 @@ async def test_png_to_svg_success_with_mocked_conversion(client, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
+# pdf-compress route — no prior test hit this endpoint at all (unlike every
+# other convert route above, which all have wrong-extension/empty-file/
+# mocked-success coverage). Adding the same baseline pattern here since this
+# PR changes _compress_ghostscript's concurrency behavior.
+# --------------------------------------------------------------------------- #
+
+
+async def test_pdf_compress_rejects_wrong_extension(client):
+    r = await client.post(
+        "/api/v1/convert/pdf-compress",
+        files={"file": ("notes.txt", b"hello world", "text/plain")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "wrong_format"
+
+
+async def test_pdf_compress_rejects_empty_file(client):
+    r = await client.post(
+        "/api/v1/convert/pdf-compress",
+        files={"file": ("empty.pdf", b"", "application/pdf")},
+    )
+    assert r.status_code == 400
+    assert r.json()["error_type"] == "empty_file"
+
+
+async def test_pdf_compress_success_with_mocked_ghostscript(client, monkeypatch):
+    async def fake_compress(content, quality):
+        assert quality == "screen"
+        return b"%PDF-1.4 compressed"
+
+    monkeypatch.setattr(converter, "_compress_ghostscript", fake_compress)
+    valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
+    r = await client.post(
+        "/api/v1/convert/pdf-compress",
+        files={"file": ("report.pdf", valid_pdf, "application/pdf")},
+        data={"quality": "screen"},
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.headers["content-disposition"] == 'attachment; filename="report.pdf"'
+    assert r.content == b"%PDF-1.4 compressed"
+
+
+async def test_pdf_compress_defaults_to_ebook_quality(client, monkeypatch):
+    async def fake_compress(content, quality):
+        assert quality == "ebook"
+        return b"%PDF-1.4 compressed"
+
+    monkeypatch.setattr(converter, "_compress_ghostscript", fake_compress)
+    valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
+    r = await client.post(
+        "/api/v1/convert/pdf-compress",
+        files={"file": ("report.pdf", valid_pdf, "application/pdf")},
+    )
+    assert r.status_code == 200
+
+
+async def test_pdf_compress_invalid_quality_falls_back_to_ebook(client, monkeypatch):
+    async def fake_compress(content, quality):
+        assert quality == "ebook"
+        return b"%PDF-1.4 compressed"
+
+    monkeypatch.setattr(converter, "_compress_ghostscript", fake_compress)
+    valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
+    r = await client.post(
+        "/api/v1/convert/pdf-compress",
+        files={"file": ("report.pdf", valid_pdf, "application/pdf")},
+        data={"quality": "not-a-real-quality"},
+    )
+    assert r.status_code == 200
+
+
+# --------------------------------------------------------------------------- #
 # Direct, unmocked tests of the 3 new conversion functions' actual logic.
 #
 # The route-level tests above all monkeypatch the conversion function itself,
@@ -1074,14 +1147,46 @@ async def test_gotenberg_non_busy_rejection_maps_to_400_conversion_error(
     assert "LibreOffice" not in r.text
 
 
+async def test_gotenberg_connection_failure_still_returns_generic_500(
+    client, monkeypatch
+):
+    # Boundary check for the Finding 4 fix above: only an actual HTTP-level
+    # rejection from a *running* Gotenberg (the `resp.status_code != 200`
+    # branch inside _gotenberg_request) should map to the honest 400
+    # conversion_error. A genuine connectivity failure (Gotenberg's
+    # container down/unreachable) never reaches that branch at all — the
+    # exception happens at `await client.post(...)` itself, before there's
+    # any `resp` to check the status of — so it must still fall through to
+    # `_handle_conversion`'s generic `except Exception` handler and come
+    # back as a 500: that really is a server-side problem, not a bad file.
+    async def post_impl():
+        raise converter.httpx.ConnectError("Connection refused")
+
+    monkeypatch.setattr(converter.httpx, "AsyncClient", _fake_async_client(post_impl))
+
+    r = await client.post(
+        "/api/v1/convert/docx-to-pdf",
+        files={
+            "file": (
+                "report.docx",
+                b"PK\x03\x04" + b"\x00" * 200,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert r.status_code == 500
+    assert r.json()["error_type"] == "conversion_error"
+
+
 # --------------------------------------------------------------------------- #
 # Ghostscript concurrency cap (STRESS_TEST_REPORT.md Finding 3) — caps
-# concurrent `gs` subprocesses with the same in-process asyncio.Semaphore
-# pattern _gotenberg_semaphore already uses above. `_compress_ghostscript_sync`
-# is faked rather than run for real: it shells out to the `gs` binary, which
-# isn't installed in this test environment (only inside the api/gotenberg
-# Docker images) — same reason the Gotenberg tests above fake httpx instead
-# of hitting a real Gotenberg.
+# concurrent `gs` subprocesses, and bounds how long a request queues for a
+# free slot, with the same in-process asyncio.Semaphore + queue-timeout
+# pattern _gotenberg_semaphore/GOTENBERG_QUEUE_TIMEOUT_SECONDS already use
+# above. `_compress_ghostscript_sync` is faked rather than run for real: it
+# shells out to the `gs` binary, which isn't installed in this test
+# environment (only inside the api/gotenberg Docker images) — same reason
+# the Gotenberg tests above fake httpx instead of hitting a real Gotenberg.
 # --------------------------------------------------------------------------- #
 
 
@@ -1114,3 +1219,38 @@ async def test_ghostscript_semaphore_caps_concurrency(monkeypatch):
         *(converter._compress_ghostscript(b"content", "ebook") for _ in range(3))
     )
     assert max_in_flight == 1
+
+
+async def test_ghostscript_queue_timeout_returns_503_with_retry_after(
+    client, monkeypatch
+):
+    # Mirrors test_gotenberg_queue_timeout_returns_503_with_retry_after: a
+    # bare semaphore with no bound on the wait would let a pile-up of
+    # pdf-compress requests queue indefinitely instead of failing fast.
+    import time as time_module
+
+    monkeypatch.setattr(converter, "_ghostscript_semaphore", asyncio.Semaphore(1))
+    monkeypatch.setattr(converter, "GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS", 0.05)
+
+    def slow_compress_sync(content, quality):
+        # Holds the one slot well past the queue timeout so the second
+        # request below is forced to wait and expire.
+        time_module.sleep(1.0)
+        return b"%PDF-1.4 compressed"
+
+    monkeypatch.setattr(converter, "_compress_ghostscript_sync", slow_compress_sync)
+
+    valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
+
+    async def _compress_request():
+        return await client.post(
+            "/api/v1/convert/pdf-compress",
+            files={"file": ("report.pdf", valid_pdf, "application/pdf")},
+        )
+
+    first, second = await asyncio.gather(_compress_request(), _compress_request())
+    timed_out = [r for r in (first, second) if r.status_code == 503]
+    assert timed_out, (first.status_code, second.status_code)
+    body = timed_out[0].json()
+    assert body["error_type"] == "queue_timeout"
+    assert timed_out[0].headers["retry-after"] == "10"

@@ -118,9 +118,25 @@ async def _one_convert(
         )
 
 
-async def run_convert(base_url: str, tool: str, concurrency: int, total: int) -> None:
+async def run_convert(
+    base_url: str,
+    tool: str,
+    concurrency: int,
+    total: int,
+    file_override: str | None = None,
+) -> None:
     filename, mime = CONVERT_TOOLS[tool]
-    content = (TEST_FILES_DIR / filename).read_bytes()
+    if file_override:
+        # The bundled fixtures are deliberately tiny (test.pdf is 541 bytes)
+        # so the default run stays fast — too small to put real load on
+        # Ghostscript/LibreOffice/Chromium. Point at a bigger, realistic file
+        # (e.g. a multi-MB image-heavy PDF) to actually stress pdf-compress;
+        # STRESS_TEST_REPORT.md Finding 3's concurrency-cap numbers were
+        # measured this way, not against the bundled test.pdf.
+        content = Path(file_override).read_bytes()
+        filename = Path(file_override).name
+    else:
+        content = (TEST_FILES_DIR / filename).read_bytes()
     report = Report()
     sem = asyncio.Semaphore(concurrency)
 
@@ -261,6 +277,20 @@ def main() -> None:
     p_conv.add_argument("--tool", choices=[*CONVERT_TOOLS, "all"], default="all")
     p_conv.add_argument("--concurrency", type=int, default=10)
     p_conv.add_argument("--requests", type=int, default=100)
+    p_conv.add_argument(
+        "--file",
+        default=None,
+        help=(
+            "Override the bundled fixture with a real file on disk (single "
+            "--tool only, not 'all') — needed for tools like pdf-compress "
+            "where the bundled fixture is too small to put real load on the "
+            "underlying engine. NOTE: /api/v1/convert is rate-limited to "
+            "5/hr per client IP (middleware.py PATH_LIMITS) — testing "
+            "--concurrency above that will just 429 past the 5th request "
+            "unless you restart the api container between runs to reset "
+            "the (in-memory, per-worker) counter first."
+        ),
+    )
 
     p_data = sub.add_parser(
         "data", help="Load-test data-layer endpoints (DB pool, rate limiter)."
@@ -284,11 +314,16 @@ def main() -> None:
         sys.exit(1)
 
     if args.mode == "convert":
+        if args.file and args.tool == "all":
+            print("--file requires a single --tool, not 'all'", file=sys.stderr)
+            sys.exit(1)
         if args.tool == "all":
             asyncio.run(run_convert_all(args.base_url, args.concurrency, args.requests))
         else:
             asyncio.run(
-                run_convert(args.base_url, args.tool, args.concurrency, args.requests)
+                run_convert(
+                    args.base_url, args.tool, args.concurrency, args.requests, args.file
+                )
             )
     elif args.mode == "data":
         asyncio.run(run_data(args.base_url, args.concurrency, args.requests))

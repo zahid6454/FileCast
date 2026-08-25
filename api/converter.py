@@ -443,8 +443,21 @@ async def _convert_epub_to_pdf(content: bytes, filename: str) -> bytes:
 # (health up to 676ms, burst 18.2s — more processes thrashing for the same
 # 1.5 cores, not more real throughput) while 2 (same value as
 # GOTENBERG_MAX_CONCURRENT above) brought /health back down to a steady
-# 56-82ms *and* finished the same burst faster, in 10.8s.
+# 56-82ms *and* finished the same burst faster, in 10.8s. Same "acceptable
+# per-worker, not cross-worker" caveat as _gotenberg_semaphore above (uvicorn
+# runs 4 worker processes, confirmed locally — each gets its own semaphore
+# instance, so the real ceiling is up to ~4x this per container instance):
+# fine here for the same reason, this is defense against any one worker's
+# own burst monopolizing the shared CPU budget, not a hard global cap.
 GHOSTSCRIPT_MAX_CONCURRENT = int(os.getenv("GHOSTSCRIPT_MAX_CONCURRENT", "2"))
+# Same rationale as GOTENBERG_QUEUE_TIMEOUT_SECONDS above: a bare semaphore
+# with no bound on the wait means a burst of pdf-compress requests beyond
+# GHOSTSCRIPT_MAX_CONCURRENT would each queue indefinitely for a slot,
+# holding their already-buffered upload bytes and connection open the whole
+# time — the exact "queuing request holding its connection open
+# indefinitely" failure mode that constant exists to avoid for Gotenberg.
+# Same value, for the same reason: fail fast with a retryable error instead.
+GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS = 30.0
 _ghostscript_semaphore = asyncio.Semaphore(GHOSTSCRIPT_MAX_CONCURRENT)
 
 
@@ -517,11 +530,27 @@ def _compress_ghostscript_sync(content: bytes, quality: str) -> bytes:
 
 
 async def _compress_ghostscript(content: bytes, quality: str) -> bytes:
-    async with _ghostscript_semaphore:
+    try:
+        await asyncio.wait_for(
+            _ghostscript_semaphore.acquire(), timeout=GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        logger.warning(
+            "Ghostscript queue timeout: waited %ss for a free slot",
+            GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS,
+            extra={"data": {"event": "ghostscript_queue_timeout"}},
+        )
+        raise ConversionQueueTimeout(
+            "The conversion service is busy right now. Please try again in a moment."
+        ) from None
+
+    try:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None, _compress_ghostscript_sync, content, quality
         )
+    finally:
+        _ghostscript_semaphore.release()
 
 
 def _convert_pdf2docx_sync(content: bytes) -> bytes:
