@@ -144,6 +144,27 @@ services:
       # unaddressed by either layer).
       - "gotenberg"
       - "--chromium-deny-list=.*(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|::1|10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.|169\\.254\\.|\\bapi\\b|\\bpostgres\\b|\\bpurge\\b|\\bgotenberg\\b).*"
+      # STRESS_TEST_REPORT.md Finding 1: 6 concurrent html-to-pdf jobs on a
+      # realistic ~12MB HTML upload maxed out this container's 1GB mem_limit
+      # and wedged it permanently (CPU ~20x a core, memory 98%+, still
+      # unhealthy 2+ minutes later, needed a manual restart) — the factory
+      # default of 6 lets in more simultaneous Chromium renders than fit in
+      # 1GB for realistic documents. Verified locally with scripts/stress_test.py
+      # (same repro: 6 concurrent ~12.7MB html-to-pdf requests) that 1, 2, and 3
+      # all avoid the permanent lockup — each recovers to idle memory within
+      # a few seconds instead of staying pinned. 2 is the highest of those
+      # that still leaves real headroom (1 and 3 both still touched ~100% of
+      # the 1GB limit on a single render of the heavy test file; the
+      # difference is recovery speed, not peak) while giving more real
+      # concurrency than serializing everything at 1.
+      - "--chromium-max-concurrency=2"
+      # Default is unlimited — once max-concurrency is hit, every extra
+      # request just waits in an ever-growing line (the 30s queue wait in
+      # Finding 1's log) instead of being turned away. Bounded per the
+      # report's §1b so a full queue rejects fast (429 "maximum queue size
+      # exceeded", confirmed in local testing) instead of piling up.
+      - "--chromium-max-queue-size=5"
+      - "--libreoffice-max-queue-size=5"
     ports:
       - "3000:3000"
     security_opt:
@@ -154,6 +175,15 @@ services:
       - /tmp
       - /home/gotenberg/.cache
     mem_limit: 1g
+    # Previously the only service here with no CPU limit — Finding 1 showed
+    # it can burn ~20x a core when overloaded. That alone doesn't stop a
+    # lockup, but it stops the lockup from also starving `api`/`purge` and
+    # taking the whole site down (today the API's own health check depends
+    # on gotenberg, so a gotenberg lockup reads as a full outage). Prod is a
+    # 2 OCPU box (DEVELOPMENT.md) with api already at 1.5 and purge at 0.25;
+    # 1.0 leaves gotenberg genuine room to do real rendering work without
+    # being the container that can single-handedly claim the whole box.
+    cpus: 1.0
     # NOT `db` — see the top-level `networks:` comment. This is the
     # structural half of the SSRF fix: gotenberg has no route to postgres
     # at all, regardless of what hostname/IP a malicious upload references.

@@ -36,30 +36,31 @@ async def test_cors_preflight_answered_not_rate_limited(client):
     assert "PUT" in r.headers.get("access-control-allow-methods", "")
 
 
-async def test_errors_rate_limited_at_60(client):
+async def test_errors_rate_limited_at_15(client):
     codes = []
-    for _ in range(61):
+    for _ in range(16):
         codes.append(
             (await client.post("/api/v1/errors", json={"error_type": "x"})).status_code
         )
-    assert codes.count(200) == 60
+    assert codes.count(200) == 15
     assert codes[-1] == 429
 
 
-async def test_messages_rate_limited_at_10(client):
+async def test_messages_rate_limited_at_3(client):
     codes = []
-    for _ in range(11):
+    for _ in range(4):
         codes.append(
             (
                 await client.post("/api/v1/messages", json={"title": "t", "body": "b"})
             ).status_code
         )
-    assert codes.count(200) == 10
+    assert codes.count(200) == 3
     assert codes[-1] == 429
 
 
 async def test_conversions_higher_budget_than_errors(client):
-    # 61 conversion tracking posts must NOT be rate limited (budget is 120)
+    # 16 conversion tracking posts (one more than errors' 15/hr) must NOT be
+    # rate limited (conversions' budget is 30)
     codes = [
         (
             await client.post(
@@ -72,7 +73,7 @@ async def test_conversions_higher_budget_than_errors(client):
                 },
             )
         ).status_code
-        for _ in range(61)
+        for _ in range(16)
     ]
     assert all(c == 200 for c in codes)
 
@@ -85,8 +86,8 @@ async def test_conversions_higher_budget_than_errors(client):
 async def test_rate_limit_headers_on_allowed_response(client):
     r = await client.post("/api/v1/errors", json={"error_type": "x"})
     assert r.status_code == 200
-    assert r.headers["x-ratelimit-limit"] == "60"
-    assert r.headers["x-ratelimit-remaining"] == "59"  # one request just spent
+    assert r.headers["x-ratelimit-limit"] == "15"
+    assert r.headers["x-ratelimit-remaining"] == "14"  # one request just spent
     assert 0 < int(r.headers["x-ratelimit-reset"]) <= middleware.RATE_WINDOW
 
 
@@ -95,16 +96,16 @@ async def test_rate_limit_headers_count_down(client):
     for _ in range(3):
         r = await client.post("/api/v1/errors", json={"error_type": "x"})
         remaining.append(int(r.headers["x-ratelimit-remaining"]))
-    assert remaining == [59, 58, 57]
+    assert remaining == [14, 13, 12]
 
 
 async def test_rate_limit_headers_on_429(client):
     codes_and_headers = [
-        await client.post("/api/v1/errors", json={"error_type": "x"}) for _ in range(61)
+        await client.post("/api/v1/errors", json={"error_type": "x"}) for _ in range(16)
     ]
     last = codes_and_headers[-1]
     assert last.status_code == 429
-    assert last.headers["x-ratelimit-limit"] == "60"
+    assert last.headers["x-ratelimit-limit"] == "15"
     assert last.headers["x-ratelimit-remaining"] == "0"
     # Retry-After and X-RateLimit-Reset agree — both describe the same "wait
     # this long" number, not an independent hardcoded value.
@@ -129,13 +130,13 @@ async def test_no_rate_limit_headers_on_an_unmatched_path(client):
 async def test_admin_surfaces_have_rate_limit_headers(admin_client):
     r = await admin_client.get("/api/v1/tools")
     assert r.status_code == 200
-    assert r.headers["x-ratelimit-limit"] == "200"
+    assert r.headers["x-ratelimit-limit"] == "50"
 
     r = await admin_client.get("/api/v1/stats/dashboard")
-    assert r.headers["x-ratelimit-limit"] == "200"
+    assert r.headers["x-ratelimit-limit"] == "50"
 
     r = await admin_client.get("/api/v1/admin/staff")
-    assert r.headers["x-ratelimit-limit"] == "300"
+    assert r.headers["x-ratelimit-limit"] == "75"
 
 
 async def test_rate_limit_remaining_is_race_free_under_concurrency(client):
@@ -161,7 +162,7 @@ async def test_rate_limit_remaining_is_race_free_under_concurrency(client):
     assert all(r.status_code == 200 for r in responses)
     remaining = [int(r.headers["x-ratelimit-remaining"]) for r in responses]
     assert len(set(remaining)) == n, remaining  # no two requests reported the same slot
-    assert set(remaining) == set(range(60 - n, 60))  # exactly slots 50..59, no gaps
+    assert set(remaining) == set(range(15 - n, 15))  # exactly slots 5..14, no gaps
 
 
 async def test_docs_enabled_in_development():
@@ -215,7 +216,7 @@ async def test_noindex_header_on_root(client):
 
 async def test_noindex_header_on_429(client):
     codes_and_headers = [
-        await client.post("/api/v1/errors", json={"error_type": "x"}) for _ in range(61)
+        await client.post("/api/v1/errors", json={"error_type": "x"}) for _ in range(16)
     ]
     last = codes_and_headers[-1]
     assert last.status_code == 429

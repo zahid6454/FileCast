@@ -159,13 +159,29 @@ async def _gotenberg_request(endpoint: str, files: dict, tool_id: str) -> bytes:
 
     if resp.status_code != 200:
         error_body = resp.text[:500]
-        logger.error(
-            "Gotenberg error: %s returned %s",
+        # Gotenberg itself signaling "busy" — 429 is its own
+        # --chromium-max-queue-size/--libreoffice-max-queue-size rejection
+        # (STRESS_TEST_REPORT.md Finding 1's fix, docker-compose.yml), 503 is
+        # its --api-timeout expiring under load. Both are the same "try again
+        # shortly" condition GOTENBERG_QUEUE_TIMEOUT_SECONDS already handles
+        # above for OUR OWN queue (logged at warning there) — log these the
+        # same way, not at error: main.py's sentry_sdk.init() has no explicit
+        # integrations=[], so the default LoggingIntegration auto-captures
+        # every logger.error() as a Sentry event, and this queue-size bound
+        # exists specifically to make busy periods resolve in ~200ms instead
+        # of hanging — logging that as an error would flood Sentry with
+        # "working as designed" noise during exactly the traffic spikes this
+        # is meant to survive gracefully. Any other status is a genuine
+        # unexpected error and still logs at error.
+        is_busy = resp.status_code in (429, 503)
+        (logger.warning if is_busy else logger.error)(
+            "Gotenberg %s: %s returned %s",
+            "busy" if is_busy else "error",
             endpoint,
             resp.status_code,
             extra={
                 "data": {
-                    "event": "gotenberg_error",
+                    "event": "gotenberg_busy" if is_busy else "gotenberg_error",
                     "tool_id": tool_id,
                     "gotenberg_endpoint": endpoint,
                     "gotenberg_status": resp.status_code,
@@ -174,6 +190,14 @@ async def _gotenberg_request(endpoint: str, files: dict, tool_id: str) -> bytes:
                 }
             },
         )
+        if is_busy:
+            # Route through the same ConversionQueueTimeout path as the
+            # app's own queue timeout, instead of the generic handler below,
+            # which reports this as "file may be corrupted" (wrong: nothing
+            # about the file was the problem).
+            raise ConversionQueueTimeout(
+                "The conversion service is busy right now. Please try again in a moment."
+            ) from None
         raise RuntimeError(
             f"Gotenberg {endpoint} returned {resp.status_code}: {error_body}"
         )

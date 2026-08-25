@@ -49,24 +49,33 @@ ALLOWED_ORIGINS = allowed_origins(settings.environment)
 # prefix of the other and no ordering could confuse them. Longest-prefix only
 # matters if a genuinely nested pair (e.g. ``/api/v1/x`` + ``/api/v1/x/y``) is
 # ever added; this keeps that future case order-independent.
+#
+# STRESS_TEST_REPORT.md Finding 2: because these are enforced per-worker (see
+# RateLimitMiddleware's docstring below) and the API runs 4 workers, a
+# configured N/hr is really up to ~4N/hr in practice — measured at 66/100
+# getting through against an advertised 20/hr. Every value below has been
+# divided by ~4 from its original as a rough compensating patch so the
+# *effective* ceiling lands close to what's advertised, until Phase 7 makes
+# enforcement exact via a shared store (Redis). The comments above each entry
+# describe the ORIGINAL, pre-division reasoning for that budget.
 PATH_LIMITS: list[tuple[str, int]] = [
-    ("/api/v1/auth/dev-login", 20),
+    ("/api/v1/auth/dev-login", 5),
     # Google sign-in: /google (start) + /google/callback. The callback makes an
     # outbound token+userinfo exchange, so give it a budget. One prefix covers
     # both; ~15 sign-in round-trips/hr per IP.
-    ("/api/v1/auth/google", 30),
-    ("/api/v1/conversions", 120),
-    ("/api/v1/ratings", 30),
-    ("/api/v1/errors", 60),
+    ("/api/v1/auth/google", 8),
+    ("/api/v1/conversions", 30),
+    ("/api/v1/ratings", 8),
+    ("/api/v1/errors", 15),
     # Contact-page submissions — deliberately stricter than ratings/errors,
     # which fire automatically as a byproduct of normal tool use. A real
     # visitor sends at most a handful of these per hour.
-    ("/api/v1/messages", 10),
+    ("/api/v1/messages", 3),
     # Public, unauthenticated, DB-touching read (/announcements/active).
-    ("/api/v1/announcements", 120),
+    ("/api/v1/announcements", 30),
     # Authenticated write; also size/key-guarded in the router.
-    ("/api/v1/preferences", 60),
-    ("/api/v1/convert", 20),
+    ("/api/v1/preferences", 15),
+    ("/api/v1/convert", 5),
     # Admin-only surfaces (staff.py, site_settings.py, admin_deploy.py all live
     # under /admin; tools.py and stats.py are admin-gated on every route). Every
     # route here already requires require_admin (A01), but a leaked/stolen
@@ -74,9 +83,9 @@ PATH_LIMITS: list[tuple[str, int]] = [
     # churn or repeated deploy dispatches (OWASP A05). Generous enough for
     # normal panel use (dashboard loads + a handful of edits per session), not
     # for scripted abuse.
-    ("/api/v1/admin", 300),
-    ("/api/v1/tools", 200),
-    ("/api/v1/stats", 200),
+    ("/api/v1/admin", 75),
+    ("/api/v1/tools", 50),
+    ("/api/v1/stats", 50),
 ]
 
 
@@ -195,10 +204,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     KNOWN LIMITATION (per-worker): the API runs ``uvicorn --workers 4``, so each
     worker process holds its OWN ``requests`` dict and requests are load-balanced
     across workers. Limits are therefore enforced **per worker** — a configured
-    20/hr is effectively up to ~4×20/hr across the instance, and counts are not
+    N/hr is effectively up to ~4×N/hr across the instance, and counts are not
     shared. This is acceptable for Phase 1 (defense-in-depth, not a hard quota);
     Phase 7 moves enforcement to a shared store (Redis) to make limits exact and
     cross-worker.
+
+    STRESS_TEST_REPORT.md Finding 2 measured the real size of that gap (66/100
+    requests got through against an advertised 20/hr for /convert). Every
+    PATH_LIMITS value has since been divided by ~4 as a stopgap so the
+    *effective* per-instance ceiling lands close to the originally-intended
+    number — a rough compensating patch, not a fix for the underlying
+    per-worker split; Phase 7 is still what actually fixes it.
 
     Memory is bounded: buckets for IPs that go idle are evicted by a periodic
     sweep (``_sweep``) once per ``RATE_WINDOW`` — without it, distinct client IPs
