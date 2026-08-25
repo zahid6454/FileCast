@@ -61,7 +61,7 @@
     {% if category %}
     <a href="/{{ category.slug }}/">{{ category.name }}</a><span>&gt;</span>
     {% endif %}
-    {{ tool.name }}
+    <span class="breadcrumb__current">{{ tool.name }}</span>
   </nav>
 
   {# Converter panel — the whole tool area on one raised surface: title/tagline,
