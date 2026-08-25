@@ -232,8 +232,26 @@
   // array of {input, fields: [{label, value}, ...]} (Number Base
   // Converter's one row-group per input number) — distinguished by whether
   // the first entry carries `fields`.
+  //
+  // MAX_TABLE_ENTRIES guards against building the table at all for a
+  // pathological input: unlike the plain-text textarea it replaces (one
+  // cheap .value assignment regardless of size), building a DOM subtree
+  // scales with entry count and runs synchronously on the main thread in
+  // showResult() (only the conversion itself is off-thread, in the
+  // Worker). Number Base Converter's one-group-per-line output means a
+  // max-size (5MB) paste of short lines could ask for over a million
+  // groups — falling back to the textarea above this is a display choice,
+  // not a data loss: Copy/Download still read the full window._convertedText
+  // regardless of which view is showing, and a table that long stops being
+  // "scannable" (the entire reason for building one) well before it stops
+  // being buildable.
+  var MAX_TABLE_ENTRIES = 500;
+
   function renderOutputTable(output) {
-    var hasTable = Array.isArray(output.table) && output.table.length > 0;
+    var hasTable =
+      Array.isArray(output.table) &&
+      output.table.length > 0 &&
+      output.table.length <= MAX_TABLE_ENTRIES;
     if (!els.outputTable || !els.outputEditor) return;
 
     els.outputTable.classList.toggle('hidden', !hasTable);
