@@ -10,6 +10,38 @@ import zipfile
 
 import converter
 import pytest
+from data import job_worker
+
+
+async def _enqueue(client, path, files, data=None):
+    """POST to an enqueue route and return (job_id, response) — the 202 +
+    Location-header contract every /convert/* route now returns (Phase 3)."""
+    r = await client.post(path, files=files, data=data or {})
+    assert r.status_code == 202, r.text
+    body = r.json()
+    job_id = body["job_id"]
+    assert body["status"] == "queued"
+    assert r.headers["location"] == f"/api/v1/convert/jobs/{job_id}"
+    return job_id, r
+
+
+async def _run_and_finish(client, job_id):
+    """Run the job synchronously (no Redis, no loop — job_worker.run_job is
+    directly callable, per STRESS_TEST_PHASE3_PLAN.md's test-impact note)
+    and return the final GET .../jobs/{id} status body."""
+    await job_worker.run_job(job_id)
+    r = await client.get(f"/api/v1/convert/jobs/{job_id}")
+    assert r.status_code == 200
+    return r.json()
+
+
+async def _enqueue_run_and_download(client, path, files, data=None):
+    """Full happy-path cycle: enqueue -> run -> poll (done) -> download.
+    Returns the download response."""
+    job_id, _ = await _enqueue(client, path, files, data)
+    status = await _run_and_finish(client, job_id)
+    assert status["status"] == "done", status
+    return await client.get(f"/api/v1/convert/jobs/{job_id}/download")
 
 
 async def test_convert_rejects_wrong_extension(client):
@@ -36,7 +68,8 @@ async def test_convert_success_with_mocked_gotenberg(client, monkeypatch):
 
     monkeypatch.setattr(converter, "_convert_libreoffice", fake_libreoffice)
     valid_docx = b"PK\x03\x04" + b"\x00" * 200  # passes magic-byte check
-    r = await client.post(
+    r = await _enqueue_run_and_download(
+        client,
         "/api/v1/convert/docx-to-pdf",
         files={
             "file": (
@@ -50,6 +83,59 @@ async def test_convert_success_with_mocked_gotenberg(client, monkeypatch):
     assert r.headers["content-type"] == "application/pdf"
     assert r.headers["content-disposition"] == 'attachment; filename="report.pdf"'
     assert r.content == b"%PDF-1.4 fake pdf bytes"
+    assert "x-conversion-time" in r.headers
+
+
+async def test_convert_job_status_reports_queued_with_retry_after(client, monkeypatch):
+    # Never actually runs the job — proves the status route itself, while
+    # queued, carries the Retry-After header the frontend's backoff depends
+    # on (STRESS_TEST_PHASE3_PLAN.md).
+    valid_docx = b"PK\x03\x04" + b"\x00" * 200
+    job_id, _ = await _enqueue(
+        client,
+        "/api/v1/convert/docx-to-pdf",
+        files={
+            "file": (
+                "report.docx",
+                valid_docx,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    r = await client.get(f"/api/v1/convert/jobs/{job_id}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "queued"
+    assert int(r.headers["retry-after"]) >= 1
+
+
+async def test_convert_job_status_404_for_unknown_job(client):
+    r = await client.get("/api/v1/convert/jobs/does-not-exist")
+    assert r.status_code == 404
+    assert r.json()["error_type"] == "not_found"
+
+
+async def test_convert_job_download_404_for_unknown_job(client):
+    r = await client.get("/api/v1/convert/jobs/does-not-exist/download")
+    assert r.status_code == 404
+
+
+async def test_convert_job_download_rejects_not_yet_done(client):
+    valid_docx = b"PK\x03\x04" + b"\x00" * 200
+    job_id, _ = await _enqueue(
+        client,
+        "/api/v1/convert/docx-to-pdf",
+        files={
+            "file": (
+                "report.docx",
+                valid_docx,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    r = await client.get(f"/api/v1/convert/jobs/{job_id}/download")
+    assert r.status_code == 409
+    assert r.json()["error_type"] == "not_ready"
 
 
 async def test_pdf_to_xlsx_rejects_wrong_extension(client):
@@ -76,7 +162,8 @@ async def test_pdf_to_xlsx_success_with_mocked_conversion(client, monkeypatch):
 
     monkeypatch.setattr(converter, "_convert_pdf_to_xlsx", fake_convert)
     valid_pdf = b"%PDF-1.4" + b"\x00" * 200
-    r = await client.post(
+    r = await _enqueue_run_and_download(
+        client,
         "/api/v1/convert/pdf-to-xlsx",
         files={"file": ("report.pdf", valid_pdf, "application/pdf")},
     )
@@ -113,7 +200,8 @@ async def test_pdf_to_pptx_success_with_mocked_conversion(client, monkeypatch):
 
     monkeypatch.setattr(converter, "_convert_pdf_to_pptx", fake_convert)
     valid_pdf = b"%PDF-1.4" + b"\x00" * 200
-    r = await client.post(
+    r = await _enqueue_run_and_download(
+        client,
         "/api/v1/convert/pdf-to-pptx",
         files={"file": ("deck.pdf", valid_pdf, "application/pdf")},
     )
@@ -190,7 +278,8 @@ async def test_epub_to_pdf_success_with_mocked_gotenberg(client, monkeypatch):
         return b"%PDF-1.4 fake pdf bytes"
 
     monkeypatch.setattr(converter, "_convert_chromium_html", fake_chromium)
-    r = await client.post(
+    r = await _enqueue_run_and_download(
+        client,
         "/api/v1/convert/epub-to-pdf",
         files={
             "file": ("book.epub", _make_minimal_epub_bytes(), "application/epub+zip")
@@ -245,6 +334,11 @@ async def test_png_to_svg_rejects_decompression_bomb_with_accurate_message(
     # PIL.Image.MAX_IMAGE_PIXELS rather than actually building a 20000x20000
     # PNG, so the test stays fast — the code path exercised (Image.open
     # raising DecompressionBombError) is identical either way.
+    #
+    # Phase 3: this check only fires once Pillow actually decodes the image,
+    # which now happens in data/job_worker.py's execution — not synchronously
+    # on the enqueue POST (validate_upload's own checks don't decode the
+    # image at all, only magic bytes/size/extension).
     from PIL import Image as PILImage
 
     monkeypatch.setattr(PILImage, "MAX_IMAGE_PIXELS", 1000)
@@ -253,15 +347,16 @@ async def test_png_to_svg_rejects_decompression_bomb_with_accurate_message(
     buf = io.BytesIO()
     img.save(buf, format="PNG")
 
-    r = await client.post(
+    job_id, _ = await _enqueue(
+        client,
         "/api/v1/convert/png-to-svg",
         files={"file": ("huge.png", buf.getvalue(), "image/png")},
     )
-    assert r.status_code == 400
-    body = r.json()
-    assert body["error_type"] == "too_large_dimensions"
-    assert "corrupted" not in body["error"].lower()
-    assert "password" not in body["error"].lower()
+    status = await _run_and_finish(client, job_id)
+    assert status["status"] == "failed"
+    assert status["error_type"] == "too_large_dimensions"
+    assert "corrupted" not in status["error"].lower()
+    assert "password" not in status["error"].lower()
 
 
 async def test_png_to_svg_success_with_mocked_conversion(client, monkeypatch):
@@ -270,7 +365,8 @@ async def test_png_to_svg_success_with_mocked_conversion(client, monkeypatch):
 
     monkeypatch.setattr(converter, "_trace_png_to_svg", fake_trace)
     valid_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 200
-    r = await client.post(
+    r = await _enqueue_run_and_download(
+        client,
         "/api/v1/convert/png-to-svg",
         files={"file": ("logo.png", valid_png, "image/png")},
     )
@@ -313,7 +409,8 @@ async def test_pdf_compress_success_with_mocked_ghostscript(client, monkeypatch)
 
     monkeypatch.setattr(converter, "_compress_ghostscript", fake_compress)
     valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
-    r = await client.post(
+    r = await _enqueue_run_and_download(
+        client,
         "/api/v1/convert/pdf-compress",
         files={"file": ("report.pdf", valid_pdf, "application/pdf")},
         data={"quality": "screen"},
@@ -331,7 +428,8 @@ async def test_pdf_compress_defaults_to_ebook_quality(client, monkeypatch):
 
     monkeypatch.setattr(converter, "_compress_ghostscript", fake_compress)
     valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
-    r = await client.post(
+    r = await _enqueue_run_and_download(
+        client,
         "/api/v1/convert/pdf-compress",
         files={"file": ("report.pdf", valid_pdf, "application/pdf")},
     )
@@ -345,7 +443,8 @@ async def test_pdf_compress_invalid_quality_falls_back_to_ebook(client, monkeypa
 
     monkeypatch.setattr(converter, "_compress_ghostscript", fake_compress)
     valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
-    r = await client.post(
+    r = await _enqueue_run_and_download(
+        client,
         "/api/v1/convert/pdf-compress",
         files={"file": ("report.pdf", valid_pdf, "application/pdf")},
         data={"quality": "not-a-real-quality"},
@@ -1019,57 +1118,56 @@ async def test_gotenberg_semaphore_caps_concurrency(monkeypatch):
     assert max_in_flight == 1
 
 
-async def test_gotenberg_queue_timeout_returns_503_with_retry_after(
-    client, monkeypatch
-):
+async def test_gotenberg_queue_timeout_marks_job_failed(client, monkeypatch):
+    # Phase 3: this contention no longer happens on a live HTTP connection —
+    # both requests enqueue immediately (202), and the semaphore is only
+    # ever touched once data/job_worker.py actually runs the jobs.
     monkeypatch.setattr(converter, "_gotenberg_semaphore", asyncio.Semaphore(1))
     monkeypatch.setattr(converter, "GOTENBERG_QUEUE_TIMEOUT_SECONDS", 0.05)
 
     async def post_impl():
         # Holds the one slot well past the queue timeout so the second
-        # request below is forced to wait and expire.
+        # job below is forced to wait and expire.
         await asyncio.sleep(1.0)
         return _FakeResponse()
 
     monkeypatch.setattr(converter.httpx, "AsyncClient", _fake_async_client(post_impl))
 
     valid_docx = b"PK\x03\x04" + b"\x00" * 200
-
-    async def _convert_request():
-        return await client.post(
-            "/api/v1/convert/docx-to-pdf",
-            files={
-                "file": (
-                    "report.docx",
-                    valid_docx,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+    files = {
+        "file": (
+            "report.docx",
+            valid_docx,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
+    }
+    job_id_1, _ = await _enqueue(client, "/api/v1/convert/docx-to-pdf", files=files)
+    job_id_2, _ = await _enqueue(client, "/api/v1/convert/docx-to-pdf", files=files)
 
-    # Fire two conversions at once: the first occupies the only slot for 1s
-    # (well past the 0.05s queue timeout), so the second must time out
+    # Run both concurrently: the first occupies the only Gotenberg slot for
+    # 1s (well past the 0.05s queue timeout), so the second must time out
     # waiting rather than queue indefinitely.
-    first, second = await asyncio.gather(_convert_request(), _convert_request())
-    timed_out = [r for r in (first, second) if r.status_code == 503]
-    assert timed_out, (first.status_code, second.status_code)
-    body = timed_out[0].json()
-    assert body["error_type"] == "queue_timeout"
-    assert timed_out[0].headers["retry-after"] == "10"
+    await asyncio.gather(job_worker.run_job(job_id_1), job_worker.run_job(job_id_2))
+
+    statuses = {}
+    for job_id in (job_id_1, job_id_2):
+        r = await client.get(f"/api/v1/convert/jobs/{job_id}")
+        statuses[job_id] = r.json()
+
+    failed = [s for s in statuses.values() if s["status"] == "failed"]
+    assert failed, statuses
+    assert failed[0]["error_type"] == "queue_timeout"
 
 
-async def test_gotenberg_own_busy_response_maps_to_503_not_generic_500(
+async def test_gotenberg_own_busy_response_marks_job_failed_not_generic_error(
     client, monkeypatch, caplog
 ):
     # STRESS_TEST_REPORT.md Finding 1 fix: Gotenberg itself now rejects with
     # 429 once --chromium-max-queue-size/--libreoffice-max-queue-size is full,
-    # and can still 503 on its own --api-timeout. Before this test existed,
-    # both fell through to the generic `except Exception` handler and were
-    # reported to the user as "file may be corrupted or password-protected"
-    # — wrong, since nothing about the file was the problem. Both must
-    # instead route through the same honest "service busy" 503+Retry-After
-    # response ``test_gotenberg_queue_timeout_returns_503_with_retry_after``
-    # above already verifies for OUR OWN queue timeout.
+    # and can still 503 on its own --api-timeout. Both must route through the
+    # same honest "service busy" queue_timeout classification
+    # ``test_gotenberg_queue_timeout_marks_job_failed`` above already verifies
+    # for OUR OWN queue timeout — not the generic "may be corrupted" message.
     for gotenberg_status in (429, 503):
 
         async def post_impl(status=gotenberg_status):
@@ -1079,22 +1177,25 @@ async def test_gotenberg_own_busy_response_maps_to_503_not_generic_500(
             converter.httpx, "AsyncClient", _fake_async_client(post_impl)
         )
         caplog.clear()
+
+        valid_docx = b"PK\x03\x04" + b"\x00" * 200
+        job_id, _ = await _enqueue(
+            client,
+            "/api/v1/convert/docx-to-pdf",
+            files={
+                "file": (
+                    "report.docx",
+                    valid_docx,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
         with caplog.at_level("WARNING", logger="filecast.converter"):
-            r = await client.post(
-                "/api/v1/convert/docx-to-pdf",
-                files={
-                    "file": (
-                        "report.docx",
-                        b"PK\x03\x04" + b"\x00" * 200,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-                },
-            )
-        assert r.status_code == 503, gotenberg_status
-        body = r.json()
-        assert body["error_type"] == "queue_timeout"
-        assert "corrupted" not in body["error"].lower()
-        assert r.headers["retry-after"] == "10"
+            status = await _run_and_finish(client, job_id)
+
+        assert status["status"] == "failed", gotenberg_status
+        assert status["error_type"] == "queue_timeout"
+        assert "corrupted" not in (status["error"] or "").lower()
         # Sentry's default LoggingIntegration auto-captures every
         # logger.error() as an error event (main.py's sentry_sdk.init() has
         # no explicit integrations=[]) — this queue-size bound exists
@@ -1109,18 +1210,16 @@ async def test_gotenberg_own_busy_response_maps_to_503_not_generic_500(
         ]
 
 
-async def test_gotenberg_non_busy_rejection_maps_to_400_conversion_error(
+async def test_gotenberg_non_busy_rejection_marks_job_failed_with_accurate_message(
     client, monkeypatch
 ):
     # STRESS_TEST_REPORT.md Finding 4: a file with a valid extension/magic
     # bytes but broken internals (e.g. a docx whose XML is garbage past the
     # ZIP header) makes Gotenberg itself reject the request with a genuine,
-    # non-busy error status. Before this fix, that fell into the generic
-    # `except Exception` handler and came back as a misleading 500 "may be
-    # corrupted or password-protected". It must instead come back as an
-    # honest 400 the same way validate_upload's own too_large/empty_file/
-    # invalid_file cases already do — same ValidationError class, just
-    # raised later, from _gotenberg_request instead of validate_upload.
+    # non-busy error status. Must come back as the honest "conversion_error"
+    # ValidationError message _gotenberg_request raises for this case — not
+    # the generic "may be corrupted or password-protected" catch-all, and
+    # never leaking Gotenberg's raw response body.
     async def post_impl():
         return _FakeResponse(
             status_code=400,
@@ -1129,7 +1228,8 @@ async def test_gotenberg_non_busy_rejection_maps_to_400_conversion_error(
 
     monkeypatch.setattr(converter.httpx, "AsyncClient", _fake_async_client(post_impl))
 
-    r = await client.post(
+    job_id, _ = await _enqueue(
+        client,
         "/api/v1/convert/docx-to-pdf",
         files={
             "file": (
@@ -1139,32 +1239,34 @@ async def test_gotenberg_non_busy_rejection_maps_to_400_conversion_error(
             )
         },
     )
-    assert r.status_code == 400
-    body = r.json()
-    assert body["error_type"] == "conversion_error"
-    assert "corrupted or password-protected" not in body["error"]
-    assert "/root/.config" not in r.text
-    assert "LibreOffice" not in r.text
+    status = await _run_and_finish(client, job_id)
+    assert status["status"] == "failed"
+    assert status["error_type"] == "conversion_error"
+    assert "corrupted or password-protected" not in status["error"]
+    assert "/root/.config" not in status["error"]
+    assert "LibreOffice" not in status["error"]
 
 
-async def test_gotenberg_connection_failure_still_returns_generic_500(
+async def test_gotenberg_connection_failure_marks_job_failed_with_generic_error(
     client, monkeypatch
 ):
     # Boundary check for the Finding 4 fix above: only an actual HTTP-level
     # rejection from a *running* Gotenberg (the `resp.status_code != 200`
-    # branch inside _gotenberg_request) should map to the honest 400
-    # conversion_error. A genuine connectivity failure (Gotenberg's
-    # container down/unreachable) never reaches that branch at all — the
-    # exception happens at `await client.post(...)` itself, before there's
-    # any `resp` to check the status of — so it must still fall through to
-    # `_handle_conversion`'s generic `except Exception` handler and come
-    # back as a 500: that really is a server-side problem, not a bad file.
+    # branch inside _gotenberg_request) should map to the specific
+    # conversion_error ValidationError message. A genuine connectivity
+    # failure (Gotenberg's container down/unreachable) never reaches that
+    # branch at all — the exception happens at `await client.post(...)`
+    # itself, before there's any `resp` to check the status of — so it must
+    # still fall through to the generic catch-all mapping in
+    # converter._classify_conversion_error: that really is a server-side
+    # problem, not a bad file.
     async def post_impl():
         raise converter.httpx.ConnectError("Connection refused")
 
     monkeypatch.setattr(converter.httpx, "AsyncClient", _fake_async_client(post_impl))
 
-    r = await client.post(
+    job_id, _ = await _enqueue(
+        client,
         "/api/v1/convert/docx-to-pdf",
         files={
             "file": (
@@ -1174,8 +1276,9 @@ async def test_gotenberg_connection_failure_still_returns_generic_500(
             )
         },
     )
-    assert r.status_code == 500
-    assert r.json()["error_type"] == "conversion_error"
+    status = await _run_and_finish(client, job_id)
+    assert status["status"] == "failed"
+    assert status["error_type"] == "conversion_error"
 
 
 # --------------------------------------------------------------------------- #
@@ -1221,12 +1324,11 @@ async def test_ghostscript_semaphore_caps_concurrency(monkeypatch):
     assert max_in_flight == 1
 
 
-async def test_ghostscript_queue_timeout_returns_503_with_retry_after(
-    client, monkeypatch
-):
-    # Mirrors test_gotenberg_queue_timeout_returns_503_with_retry_after: a
-    # bare semaphore with no bound on the wait would let a pile-up of
-    # pdf-compress requests queue indefinitely instead of failing fast.
+async def test_ghostscript_queue_timeout_marks_job_failed(client, monkeypatch):
+    # Mirrors test_gotenberg_queue_timeout_marks_job_failed: a bare semaphore
+    # with no bound on the wait would let a pile-up of pdf-compress jobs
+    # queue indefinitely instead of failing fast, once the worker actually
+    # runs them (Phase 3 — this no longer happens on a live connection).
     import time as time_module
 
     monkeypatch.setattr(converter, "_ghostscript_semaphore", asyncio.Semaphore(1))
@@ -1234,23 +1336,24 @@ async def test_ghostscript_queue_timeout_returns_503_with_retry_after(
 
     def slow_compress_sync(content, quality):
         # Holds the one slot well past the queue timeout so the second
-        # request below is forced to wait and expire.
+        # job below is forced to wait and expire.
         time_module.sleep(1.0)
         return b"%PDF-1.4 compressed"
 
     monkeypatch.setattr(converter, "_compress_ghostscript_sync", slow_compress_sync)
 
     valid_pdf = b"%PDF-1.4\n" + b"\x00" * 200
+    files = {"file": ("report.pdf", valid_pdf, "application/pdf")}
+    job_id_1, _ = await _enqueue(client, "/api/v1/convert/pdf-compress", files=files)
+    job_id_2, _ = await _enqueue(client, "/api/v1/convert/pdf-compress", files=files)
 
-    async def _compress_request():
-        return await client.post(
-            "/api/v1/convert/pdf-compress",
-            files={"file": ("report.pdf", valid_pdf, "application/pdf")},
-        )
+    await asyncio.gather(job_worker.run_job(job_id_1), job_worker.run_job(job_id_2))
 
-    first, second = await asyncio.gather(_compress_request(), _compress_request())
-    timed_out = [r for r in (first, second) if r.status_code == 503]
-    assert timed_out, (first.status_code, second.status_code)
-    body = timed_out[0].json()
-    assert body["error_type"] == "queue_timeout"
-    assert timed_out[0].headers["retry-after"] == "10"
+    statuses = []
+    for job_id in (job_id_1, job_id_2):
+        r = await client.get(f"/api/v1/convert/jobs/{job_id}")
+        statuses.append(r.json())
+
+    failed = [s for s in statuses if s["status"] == "failed"]
+    assert failed, statuses
+    assert failed[0]["error_type"] == "queue_timeout"

@@ -27,3 +27,6 @@ alembic==1.*
 pydantic-settings==2.*
 authlib==1.7.*
 sentry-sdk[fastapi]==2.*
+# Phase 3: shared rate-limit store + conversion job worker wake-up signal
+# (data/redis_client.py). redis.asyncio only — no persistence configured.
+redis==5.*

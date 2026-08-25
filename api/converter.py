@@ -13,16 +13,22 @@ import tempfile
 import time
 import zipfile
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import httpx
-from data.db import async_engine
-from data.models import User
+from data.db import async_engine, get_session
+from data.models import ConversionJob, User
+from data.redis_client import redis_client
 from data.security import current_user_for_convert, require_admin
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
 from log import get_logger, request_id_var
-from sqlalchemy import text
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 from validation import (
     MAX_FILE_SIZE,
     ValidationError,
@@ -57,11 +63,24 @@ HEALTH_DB_TIMEOUT_SECONDS = 5.0
 # same reason: this is defense against a single worker's own burst, not a
 # hard global cap.
 GOTENBERG_MAX_CONCURRENT = int(os.getenv("GOTENBERG_MAX_CONCURRENT", "2"))
-# How long a request waits in queue for a free slot before giving up. Bounded
-# so a pile-up of requests behind two slow conversions fails fast with a
-# retryable error instead of each queuing request holding its connection open
-# indefinitely (and, upstream, holding open the client's XHR).
-GOTENBERG_QUEUE_TIMEOUT_SECONDS = 30.0
+# How long a request waits in queue for a free slot before giving up.
+#
+# Phase 3 (STRESS_TEST_PHASE3_PLAN.md): this changed MEANING, not just value,
+# once conversions moved off the request/response cycle. The 30s figure
+# (Phase 1/2) existed to fail fast so a *live HTTP connection* wasn't held
+# open indefinitely waiting for a free semaphore slot. `data/job_worker.py`
+# is now the only caller of `_gotenberg_request` — that connection no longer
+# exists, so 30s would just mean a real backlog (more than ~2 jobs deep,
+# given GOTENBERG_MAX_CONCURRENT=2) starts failing jobs with "busy, try
+# again" sooner than under Phase 1/2 — backwards from the goal. This is now a
+# deliberate **backpressure bound**: past this point the queue is treated as
+# pathologically overloaded rather than "give it more time," and the job
+# sheds with the honest busy message instead of accepting unbounded queue
+# growth forever. (A count-based admission control — reject new uploads
+# outright once N jobs are already queued — would be a more principled
+# version of this; time-based is the right amount of engineering for a
+# single-box side project.)
+GOTENBERG_QUEUE_TIMEOUT_SECONDS = 600.0
 
 _gotenberg_semaphore = asyncio.Semaphore(GOTENBERG_MAX_CONCURRENT)
 
@@ -69,13 +88,6 @@ _gotenberg_semaphore = asyncio.Semaphore(GOTENBERG_MAX_CONCURRENT)
 class ConversionQueueTimeout(Exception):
     """Raised when a request waited GOTENBERG_QUEUE_TIMEOUT_SECONDS for a free
     Gotenberg slot and none opened up."""
-
-
-metrics = {
-    "conversions": defaultdict(int),
-    "failures": defaultdict(int),
-    "total_duration_ms": defaultdict(float),
-}
 
 
 def _error_response(
@@ -87,14 +99,6 @@ def _error_response(
         media_type="application/json",
         headers=headers,
     )
-
-
-def _record_metric(tool_id: str, success: bool, duration_ms: float):
-    if success:
-        metrics["conversions"][tool_id] += 1
-    else:
-        metrics["failures"][tool_id] += 1
-    metrics["total_duration_ms"][tool_id] += duration_ms
 
 
 async def _gotenberg_request(endpoint: str, files: dict, tool_id: str) -> bytes:
@@ -412,7 +416,7 @@ def _flatten_epub_to_html_sync(content: bytes) -> bytes:
             body_parts.append(f"<section {page_break}>{inner}</section>")
 
         html = (
-            "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+            '<!DOCTYPE html><html><head><meta charset="utf-8">'
             f"<style>{''.join(style_blocks)}</style></head><body>"
             f"{''.join(body_parts)}</body></html>"
         )
@@ -450,14 +454,12 @@ async def _convert_epub_to_pdf(content: bytes, filename: str) -> bytes:
 # fine here for the same reason, this is defense against any one worker's
 # own burst monopolizing the shared CPU budget, not a hard global cap.
 GHOSTSCRIPT_MAX_CONCURRENT = int(os.getenv("GHOSTSCRIPT_MAX_CONCURRENT", "2"))
-# Same rationale as GOTENBERG_QUEUE_TIMEOUT_SECONDS above: a bare semaphore
-# with no bound on the wait means a burst of pdf-compress requests beyond
-# GHOSTSCRIPT_MAX_CONCURRENT would each queue indefinitely for a slot,
-# holding their already-buffered upload bytes and connection open the whole
-# time — the exact "queuing request holding its connection open
-# indefinitely" failure mode that constant exists to avoid for Gotenberg.
-# Same value, for the same reason: fail fast with a retryable error instead.
-GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS = 30.0
+# Same rationale as GOTENBERG_QUEUE_TIMEOUT_SECONDS above, including the
+# Phase 3 meaning change: `data/job_worker.py` is now the only caller of
+# `_compress_ghostscript`, so this is a backpressure bound on a real backlog,
+# not a live-connection-latency bound anymore. Same value, for the same
+# reason.
+GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS = 600.0
 _ghostscript_semaphore = asyncio.Semaphore(GHOSTSCRIPT_MAX_CONCURRENT)
 
 
@@ -1077,52 +1079,171 @@ async def _read_capped(file: UploadFile, max_size: int) -> bytes:
     return b"".join(chunks)
 
 
-async def _handle_conversion(
+# --------------------------------------------------------------------------- #
+# Async conversion job queue (STRESS_TEST_PHASE3_PLAN.md Part A).
+#
+# Each POST /convert/{tool} route below still runs _read_capped + validate_upload
+# SYNCHRONOUSLY, unchanged (already fast — bad-file rejection stays <0.2s, and
+# every existing validation-failure test is untouched). On success it no
+# longer calls the tool's convert function inline: it writes the validated
+# bytes to job_results/{job_id}.input, INSERTs a `queued` ConversionJob row,
+# pushes a wake signal to Redis for data/job_worker.py to pick up, and returns
+# 202 with a Location header pointing at the job's status resource (RFC 7231's
+# own stated shape for a 202). GET .../jobs/{id} and .../jobs/{id}/download
+# below are the two follow-up routes a client polls.
+# --------------------------------------------------------------------------- #
+
+# Job bytes live in a shared Docker volume (job_results), never in Postgres —
+# only metadata rows there (ConversionJob). Relative path resolves to
+# /app/job_results in the container (Dockerfile WORKDIR /app), or a local
+# dir next to wherever the process/tests run from on the host.
+JOB_RESULTS_DIR = Path(os.getenv("JOB_RESULTS_DIR", "job_results"))
+JOB_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Redis list data/job_worker.py BRPOPs — a pure wake-up trigger, not "the one
+# job to process": on any wake (a real push, or its own BRPOP timeout simply
+# elapsing) the worker claims *every* currently-queued row in one atomic
+# UPDATE, so there's no bookkeeping to keep in sync between what this list
+# says arrived and what's actually queued in Postgres.
+JOB_WAKE_QUEUE_KEY = "conversion_jobs:wake"
+
+
+@dataclass
+class ToolSpec:
+    """One entry in TOOL_REGISTRY — the single source of truth for a
+    convert tool's behavior, used by both the enqueue routes below and
+    data/job_worker.py (which imports TOOL_REGISTRY directly)."""
+
+    convert: Callable[[bytes, str, dict], Awaitable[bytes]]
+    output_ext: str = ".pdf"
+    output_mime: str = "application/pdf"
+    max_size_for: Callable[[User | None], int] = _max_size_for
+
+
+async def _run_libreoffice(content: bytes, filename: str, options: dict) -> bytes:
+    return await _convert_libreoffice(content, filename)
+
+
+async def _run_xlsx_libreoffice(content: bytes, filename: str, options: dict) -> bytes:
+    return await _convert_libreoffice(
+        content, filename, extra_form={"landscape": "true", "singlePageSheets": "true"}
+    )
+
+
+async def _run_chromium_html(content: bytes, filename: str, options: dict) -> bytes:
+    return await _convert_chromium_html(content, filename)
+
+
+async def _run_epub_to_pdf(content: bytes, filename: str, options: dict) -> bytes:
+    return await _convert_epub_to_pdf(content, filename)
+
+
+async def _run_pdf_compress(content: bytes, filename: str, options: dict) -> bytes:
+    quality = validate_compress_quality(options.get("quality", "ebook"))
+    return await _compress_ghostscript(content, quality)
+
+
+async def _run_pdf_to_docx(content: bytes, filename: str, options: dict) -> bytes:
+    return await _convert_pdf2docx(content, filename)
+
+
+async def _run_pdf_to_xlsx(content: bytes, filename: str, options: dict) -> bytes:
+    return await _convert_pdf_to_xlsx(content, filename)
+
+
+async def _run_pdf_to_pptx(content: bytes, filename: str, options: dict) -> bytes:
+    return await _convert_pdf_to_pptx(content, filename)
+
+
+async def _run_png_to_svg(content: bytes, filename: str, options: dict) -> bytes:
+    return await _trace_png_to_svg(content, filename)
+
+
+# Smaller than the 25MB every other Cloud tool allows — tracing is more
+# CPU-intensive than a document conversion, and PNG_TO_SVG_MAX_DIMENSION
+# already bounds per-request cost independent of this cap (see the tracer
+# above); this just keeps very large uploads from queuing up in the first
+# place. Matches the tool's own YAML max_file_size (client-side check).
+#
+# Deliberately flat for every user tier, unlike every other Cloud route:
+# _png_to_svg_max_size below means a signed-in user's usual ×2 allowance
+# (_max_size_for) is capped right back down to this constant. That's
+# intentional, not an accidental side effect of min() — the cap here is
+# driven by tracing's CPU/memory cost per byte, which doesn't get cheaper
+# because the uploader has an account, unlike the other Cloud tools' cap
+# (mostly abuse/queue-fairness, where trusting a signed-in user with more
+# headroom makes sense).
+PNG_TO_SVG_MAX_UPLOAD = 10 * 1024 * 1024
+
+
+def _png_to_svg_max_size(user: User | None) -> int:
+    return min(_max_size_for(user), PNG_TO_SVG_MAX_UPLOAD)
+
+
+TOOL_REGISTRY: dict[str, ToolSpec] = {
+    "docx-to-pdf": ToolSpec(_run_libreoffice),
+    "xlsx-to-pdf": ToolSpec(_run_xlsx_libreoffice),
+    "pptx-to-pdf": ToolSpec(_run_libreoffice),
+    "html-to-pdf": ToolSpec(_run_chromium_html),
+    "pdf-compress": ToolSpec(_run_pdf_compress),
+    "pdf-to-docx": ToolSpec(
+        _run_pdf_to_docx,
+        output_ext=".docx",
+        output_mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ),
+    "pdf-to-xlsx": ToolSpec(
+        _run_pdf_to_xlsx,
+        output_ext=".xlsx",
+        output_mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ),
+    "pdf-to-pptx": ToolSpec(
+        _run_pdf_to_pptx,
+        output_ext=".pptx",
+        output_mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ),
+    "epub-to-pdf": ToolSpec(_run_epub_to_pdf),
+    "png-to-svg": ToolSpec(
+        _run_png_to_svg,
+        output_ext=".svg",
+        output_mime="image/svg+xml",
+        max_size_for=_png_to_svg_max_size,
+    ),
+}
+
+
+def _classify_conversion_error(exc: Exception) -> tuple[str, str]:
+    """Map a conversion-time exception to (message, error_type) — the exact
+    mapping ``_handle_conversion`` used before the async job queue existed,
+    now shared between data/job_worker.py's post-claim exception handling
+    and (for ValidationError raised during the synchronous pre-enqueue
+    validate_upload step) the routes below."""
+    if isinstance(exc, ValidationError):
+        return exc.message, exc.error_type
+    if isinstance(exc, ConversionQueueTimeout):
+        return str(exc), "queue_timeout"
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return "Conversion timed out. Try a simpler or smaller file.", "timeout"
+    return (
+        "Conversion failed. The file may be corrupted or password-protected.",
+        "conversion_error",
+    )
+
+
+async def _enqueue_conversion(
     file: UploadFile,
     tool_id: str,
-    convert_fn,
-    output_ext: str = ".pdf",
-    output_mime: str = "application/pdf",
-    max_size: int = MAX_FILE_SIZE,
+    max_size: int,
+    db: AsyncSession,
+    options: dict | None = None,
 ) -> Response:
-    start = time.time()
     input_size = 0
     try:
         content = await _read_capped(file, max_size)
         input_size = len(content)
         validate_upload(content, file.filename or "unknown", tool_id, max_size)
-        result = await convert_fn(content, file.filename or "file")
-        duration_ms = round((time.time() - start) * 1000, 1)
-        _record_metric(tool_id, True, duration_ms)
-
-        logger.info(
-            "Conversion OK: %s",
-            tool_id,
-            extra={
-                "data": {
-                    "event": "conversion_success",
-                    "tool_id": tool_id,
-                    "input_bytes": input_size,
-                    "output_bytes": len(result),
-                    "duration_ms": duration_ms,
-                }
-            },
-        )
-
-        output_filename = _safe_filename(file.filename or "file", output_ext)
-        return Response(
-            content=result,
-            media_type=output_mime,
-            headers={
-                "Content-Disposition": f'attachment; filename="{output_filename}"',
-                "X-Conversion-Time": f"{duration_ms}ms",
-            },
-        )
     except ValidationError as e:
         if e.bytes_read is not None:
             input_size = e.bytes_read
-        duration_ms = round((time.time() - start) * 1000, 1)
-        _record_metric(tool_id, False, duration_ms)
         logger.warning(
             "Validation failed: %s — %s",
             tool_id,
@@ -1133,222 +1254,248 @@ async def _handle_conversion(
                     "tool_id": tool_id,
                     "error_type": e.error_type,
                     "input_bytes": input_size,
-                    "duration_ms": duration_ms,
                 }
             },
         )
         return _error_response(e.message, e.error_type, 400)
-    except ConversionQueueTimeout as e:
-        duration_ms = round((time.time() - start) * 1000, 1)
-        _record_metric(tool_id, False, duration_ms)
-        logger.warning(
-            "Conversion queue timeout: %s",
-            tool_id,
-            extra={
-                "data": {
-                    "event": "queue_timeout",
-                    "tool_id": tool_id,
-                    "input_bytes": input_size,
-                    "duration_ms": duration_ms,
-                }
-            },
-        )
-        # Retryable, so callers get a Retry-After the same way the rate
-        # limiter's 429 does (middleware.py) rather than a bare 503.
-        return _error_response(
-            str(e), "queue_timeout", 503, headers={"Retry-After": "10"}
-        )
-    except subprocess.TimeoutExpired:
-        duration_ms = round((time.time() - start) * 1000, 1)
-        _record_metric(tool_id, False, duration_ms)
-        logger.error(
-            "Conversion timeout: %s",
-            tool_id,
-            extra={
-                "data": {
-                    "event": "conversion_timeout",
-                    "tool_id": tool_id,
-                    "input_bytes": input_size,
-                    "duration_ms": duration_ms,
-                }
-            },
-        )
-        return _error_response(
-            "Conversion timed out. Try a simpler or smaller file.",
-            "timeout",
-            504,
-        )
+
+    job = ConversionJob(
+        tool_id=tool_id,
+        status="queued",
+        original_filename=file.filename or "file",
+        options=options or {},
+    )
+    db.add(job)
+    await db.flush()
+    job_id = job.id
+    (JOB_RESULTS_DIR / f"{job_id}.input").write_bytes(content)
+    await db.commit()
+
+    # Redis push failure is non-fatal (Part B's own fail-open posture): the
+    # Postgres row already exists regardless, and data/job_worker.py's
+    # periodic GC-sweep loop is the eventual-consistency fallback pickup.
+    try:
+        await redis_client.lpush(JOB_WAKE_QUEUE_KEY, job_id)
     except Exception:
-        duration_ms = round((time.time() - start) * 1000, 1)
-        _record_metric(tool_id, False, duration_ms)
-        logger.error(
-            "Conversion failed: %s",
-            tool_id,
-            exc_info=True,
+        logger.warning(
+            "Redis push failed for job wake-up — worker will still pick this "
+            "up on its next periodic sweep",
             extra={
                 "data": {
-                    "event": "conversion_error",
+                    "event": "job_wake_push_failed",
                     "tool_id": tool_id,
-                    "input_bytes": input_size,
-                    "duration_ms": duration_ms,
+                    "job_id": job_id,
                 }
             },
         )
-        return _error_response(
-            "Conversion failed. The file may be corrupted or password-protected.",
-            "conversion_error",
-            500,
-        )
+
+    logger.info(
+        "Conversion job queued: %s",
+        tool_id,
+        extra={
+            "data": {
+                "event": "job_queued",
+                "tool_id": tool_id,
+                "job_id": job_id,
+                "input_bytes": input_size,
+            }
+        },
+    )
+    return Response(
+        content=json.dumps({"job_id": job_id, "status": "queued"}),
+        status_code=202,
+        media_type="application/json",
+        headers={"Location": f"/api/v1/convert/jobs/{job_id}"},
+    )
 
 
-@router.post("/convert/docx-to-pdf")
+@router.post("/convert/docx-to-pdf", status_code=202)
 async def docx_to_pdf(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
+    db: AsyncSession = Depends(get_session),
 ):
-    return await _handle_conversion(
-        file, "docx-to-pdf", _convert_libreoffice, max_size=_max_size_for(user)
-    )
+    spec = TOOL_REGISTRY["docx-to-pdf"]
+    return await _enqueue_conversion(file, "docx-to-pdf", spec.max_size_for(user), db)
 
 
-@router.post("/convert/xlsx-to-pdf")
+@router.post("/convert/xlsx-to-pdf", status_code=202)
 async def xlsx_to_pdf(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
+    db: AsyncSession = Depends(get_session),
 ):
-    async def _convert(content: bytes, filename: str) -> bytes:
-        return await _convert_libreoffice(
-            content,
-            filename,
-            extra_form={"landscape": "true", "singlePageSheets": "true"},
-        )
-
-    return await _handle_conversion(
-        file, "xlsx-to-pdf", _convert, max_size=_max_size_for(user)
-    )
+    spec = TOOL_REGISTRY["xlsx-to-pdf"]
+    return await _enqueue_conversion(file, "xlsx-to-pdf", spec.max_size_for(user), db)
 
 
-@router.post("/convert/pptx-to-pdf")
+@router.post("/convert/pptx-to-pdf", status_code=202)
 async def pptx_to_pdf(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
+    db: AsyncSession = Depends(get_session),
 ):
-    return await _handle_conversion(
-        file, "pptx-to-pdf", _convert_libreoffice, max_size=_max_size_for(user)
-    )
+    spec = TOOL_REGISTRY["pptx-to-pdf"]
+    return await _enqueue_conversion(file, "pptx-to-pdf", spec.max_size_for(user), db)
 
 
-@router.post("/convert/html-to-pdf")
+@router.post("/convert/html-to-pdf", status_code=202)
 async def html_to_pdf(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
+    db: AsyncSession = Depends(get_session),
 ):
-    return await _handle_conversion(
-        file, "html-to-pdf", _convert_chromium_html, max_size=_max_size_for(user)
-    )
+    spec = TOOL_REGISTRY["html-to-pdf"]
+    return await _enqueue_conversion(file, "html-to-pdf", spec.max_size_for(user), db)
 
 
-@router.post("/convert/pdf-compress")
+@router.post("/convert/pdf-compress", status_code=202)
 async def pdf_compress(
     file: UploadFile = File(...),
     quality: str = Form("ebook"),
     user: User | None = Depends(current_user_for_convert),
+    db: AsyncSession = Depends(get_session),
 ):
     quality = validate_compress_quality(quality)
-
-    async def _compress(content: bytes, filename: str) -> bytes:
-        return await _compress_ghostscript(content, quality)
-
-    return await _handle_conversion(
-        file, "pdf-compress", _compress, max_size=_max_size_for(user)
+    spec = TOOL_REGISTRY["pdf-compress"]
+    return await _enqueue_conversion(
+        file, "pdf-compress", spec.max_size_for(user), db, options={"quality": quality}
     )
 
 
-@router.post("/convert/pdf-to-docx")
+@router.post("/convert/pdf-to-docx", status_code=202)
 async def pdf_to_docx(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
+    db: AsyncSession = Depends(get_session),
 ):
-    return await _handle_conversion(
-        file,
-        "pdf-to-docx",
-        _convert_pdf2docx,
-        output_ext=".docx",
-        output_mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        max_size=_max_size_for(user),
-    )
+    spec = TOOL_REGISTRY["pdf-to-docx"]
+    return await _enqueue_conversion(file, "pdf-to-docx", spec.max_size_for(user), db)
 
 
-@router.post("/convert/pdf-to-xlsx")
+@router.post("/convert/pdf-to-xlsx", status_code=202)
 async def pdf_to_xlsx(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
+    db: AsyncSession = Depends(get_session),
 ):
-    return await _handle_conversion(
-        file,
-        "pdf-to-xlsx",
-        _convert_pdf_to_xlsx,
-        output_ext=".xlsx",
-        output_mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        max_size=_max_size_for(user),
-    )
+    spec = TOOL_REGISTRY["pdf-to-xlsx"]
+    return await _enqueue_conversion(file, "pdf-to-xlsx", spec.max_size_for(user), db)
 
 
-@router.post("/convert/pdf-to-pptx")
+@router.post("/convert/pdf-to-pptx", status_code=202)
 async def pdf_to_pptx(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
+    db: AsyncSession = Depends(get_session),
 ):
-    return await _handle_conversion(
-        file,
-        "pdf-to-pptx",
-        _convert_pdf_to_pptx,
-        output_ext=".pptx",
-        output_mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        max_size=_max_size_for(user),
-    )
+    spec = TOOL_REGISTRY["pdf-to-pptx"]
+    return await _enqueue_conversion(file, "pdf-to-pptx", spec.max_size_for(user), db)
 
 
-@router.post("/convert/epub-to-pdf")
+@router.post("/convert/epub-to-pdf", status_code=202)
 async def epub_to_pdf(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
+    db: AsyncSession = Depends(get_session),
 ):
-    return await _handle_conversion(
-        file, "epub-to-pdf", _convert_epub_to_pdf, max_size=_max_size_for(user)
-    )
+    spec = TOOL_REGISTRY["epub-to-pdf"]
+    return await _enqueue_conversion(file, "epub-to-pdf", spec.max_size_for(user), db)
 
 
-# Smaller than the 25MB every other Cloud tool allows — tracing is more
-# CPU-intensive than a document conversion, and PNG_TO_SVG_MAX_DIMENSION
-# already bounds per-request cost independent of this cap (see the tracer
-# above); this just keeps very large uploads from queuing up in the first
-# place. Matches the tool's own YAML max_file_size (client-side check).
-#
-# Deliberately flat for every user tier, unlike every other Cloud route:
-# min(_max_size_for(user), PNG_TO_SVG_MAX_UPLOAD) below means a signed-in
-# user's usual ×2 allowance (_max_size_for) is capped right back down to
-# this constant. That's intentional, not an accidental side effect of
-# min() — the cap here is driven by tracing's CPU/memory cost per byte,
-# which doesn't get cheaper because the uploader has an account, unlike the
-# other Cloud tools' cap (mostly abuse/queue-fairness, where trusting a
-# signed-in user with more headroom makes sense).
-PNG_TO_SVG_MAX_UPLOAD = 10 * 1024 * 1024
-
-
-@router.post("/convert/png-to-svg")
+@router.post("/convert/png-to-svg", status_code=202)
 async def png_to_svg(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
+    db: AsyncSession = Depends(get_session),
 ):
-    return await _handle_conversion(
-        file,
-        "png-to-svg",
-        _trace_png_to_svg,
-        output_ext=".svg",
-        output_mime="image/svg+xml",
-        max_size=min(_max_size_for(user), PNG_TO_SVG_MAX_UPLOAD),
+    spec = TOOL_REGISTRY["png-to-svg"]
+    return await _enqueue_conversion(file, "png-to-svg", spec.max_size_for(user), db)
+
+
+# Staged approximation of the frontend's own exponential-backoff shape
+# (server-upload.js: ~1s -> x1.5, capped ~5s for the first ~2 minutes, then a
+# steady ~15-20s tail) rather than computing the curve precisely — the
+# frontend honors whatever Retry-After says, so this is what actually sets
+# the pace; a few coarse stages are simpler to reason about (and test) than
+# reproducing an exponential formula server-side for the same result.
+_POLL_RETRY_AFTER_STAGES = [(10, 1), (120, 5)]
+_POLL_RETRY_AFTER_TAIL = 18
+
+
+def _job_retry_after_seconds(job: ConversionJob) -> int:
+    elapsed = (datetime.now(UTC) - job.created_at).total_seconds()
+    for age_threshold, retry_after in _POLL_RETRY_AFTER_STAGES:
+        if elapsed < age_threshold:
+            return retry_after
+    return _POLL_RETRY_AFTER_TAIL
+
+
+@router.get("/convert/jobs/{job_id}")
+async def get_job_status(job_id: str, db: AsyncSession = Depends(get_session)):
+    job = await db.get(ConversionJob, job_id)
+    if job is None:
+        return _error_response("Job not found.", "not_found", 404)
+
+    headers = {}
+    if job.status in ("queued", "converting"):
+        headers["Retry-After"] = str(_job_retry_after_seconds(job))
+
+    return Response(
+        content=json.dumps(
+            {
+                "status": job.status,
+                "error": job.error_message,
+                "error_type": job.error_type,
+            }
+        ),
+        media_type="application/json",
+        headers=headers,
     )
+
+
+@router.get("/convert/jobs/{job_id}/download")
+async def download_job(job_id: str, db: AsyncSession = Depends(get_session)):
+    job = await db.get(ConversionJob, job_id)
+    if job is None:
+        return _error_response("Job not found.", "not_found", 404)
+    if job.status != "done":
+        return _error_response(
+            "This job is not ready for download yet.", "not_ready", 409
+        )
+
+    output_path = JOB_RESULTS_DIR / f"{job_id}.output"
+    try:
+        content = output_path.read_bytes()
+    except OSError:
+        # The periodic GC sweep (data/job_worker.py) reaps done/failed job
+        # files after a short grace period — a download attempted after that
+        # window (or a redundant retry past the grace window) finds nothing.
+        return _error_response(
+            "This job's result is no longer available.", "expired", 410
+        )
+
+    duration_ms = None
+    if job.started_at is not None and job.finished_at is not None:
+        duration_ms = round(
+            (job.finished_at - job.started_at).total_seconds() * 1000, 1
+        )
+
+    # Not deleted here — kept a short grace period (data/job_worker.py's GC
+    # sweep) so one dropped download connection can retry once. This just
+    # stamps when the first successful download happened.
+    job.downloaded_at = datetime.now(UTC)
+    await db.commit()
+
+    spec = TOOL_REGISTRY.get(job.tool_id)
+    output_mime = spec.output_mime if spec else "application/octet-stream"
+    output_filename = job.output_filename or _safe_filename(
+        job.original_filename, spec.output_ext if spec else ""
+    )
+    headers = {"Content-Disposition": f'attachment; filename="{output_filename}"'}
+    if duration_ms is not None:
+        headers["X-Conversion-Time"] = f"{duration_ms}ms"
+    return Response(content=content, media_type=output_mime, headers=headers)
 
 
 async def _check_gotenberg() -> bool:
@@ -1423,12 +1570,51 @@ async def health():
 
 
 @router.get("/metrics")
-async def get_metrics(_admin=Depends(require_admin)):
+async def get_metrics(
+    _admin=Depends(require_admin), db: AsyncSession = Depends(get_session)
+):
+    # Phase 3: conversions now execute in the separate `worker` process, not
+    # inline in one of the 4 `api` workers — an in-memory dict here would
+    # report zero conversions, forever (a much more visible regression than
+    # the pre-existing per-worker skew this replaces). Querying ConversionJob
+    # rows instead is also cross-process-consistent, incidentally fixing that
+    # older skew too.
+    rows = (
+        await db.execute(
+            select(
+                ConversionJob.tool_id,
+                ConversionJob.status,
+                func.count().label("n"),
+                func.avg(
+                    func.extract(
+                        "epoch", ConversionJob.finished_at - ConversionJob.started_at
+                    )
+                ).label("avg_seconds"),
+            )
+            .where(ConversionJob.status.in_(("done", "failed")))
+            .group_by(ConversionJob.tool_id, ConversionJob.status)
+        )
+    ).all()
+
+    conversions: dict[str, int] = defaultdict(int)
+    failures: dict[str, int] = defaultdict(int)
+    weighted_ms: dict[str, float] = defaultdict(float)
+    counted: dict[str, int] = defaultdict(int)
+
+    for tool_id, status, n, avg_seconds in rows:
+        if status == "done":
+            conversions[tool_id] += n
+        else:
+            failures[tool_id] += n
+        if avg_seconds is not None:
+            weighted_ms[tool_id] += avg_seconds * 1000 * n
+            counted[tool_id] += n
+
     return {
-        "conversions": dict(metrics["conversions"]),
-        "failures": dict(metrics["failures"]),
+        "conversions": dict(conversions),
+        "failures": dict(failures),
         "avg_duration_ms": {
-            k: round(v / max(metrics["conversions"][k] + metrics["failures"][k], 1), 1)
-            for k, v in metrics["total_duration_ms"].items()
+            tool_id: round(weighted_ms[tool_id] / counted[tool_id], 1)
+            for tool_id in counted
         },
     }

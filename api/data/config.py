@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     # Retention
     retention_days: int = 30
 
+    # Phase 3: shared Redis — cross-process rate limiting (middleware.py) and
+    # the conversion job worker's wake-up signal (data/job_worker.py). No
+    # persistence needed (both uses are inherently ephemeral); tests point
+    # this at a dedicated logical DB index (TEST_REDIS_URL, conftest.py) so
+    # they never collide with a dev instance's real counters.
+    redis_url: str = "redis://localhost:6379/0"
+
     # Google OAuth (Phase 5) — optional. Unset client id/secret ⇒ the Google
     # auth routes return 503 and dev-login still works (spec §1, D-locked).
     google_client_id: str = ""

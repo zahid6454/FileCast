@@ -39,7 +39,18 @@ from sqlalchemy import delete, func, select
 
 from data.config import settings
 from data.db import sync_session
-from data.models import ConversionVisitor, Error, Session, UserConversion
+from data.models import ConversionJob, ConversionVisitor, Error, Session, UserConversion
+
+# Phase 3 (STRESS_TEST_PHASE3_PLAN.md): job **files** are reaped much sooner
+# by data/job_worker.py's own periodic GC sweep (a short, disk-cost-driven
+# grace period) — this is just the row/metadata cleanup, on the same daily
+# cadence as everything else this loop already purges. Independent of
+# ``retention_days``: a job row has no privacy-retention promise the way
+# UserConversion/Error do, this is purely "don't let Postgres rows
+# accumulate forever" — one day is comfortably past every one of
+# job_worker.py's own bounds (the ~10min per-attempt backpressure bound, the
+# ~30min stuck-job ceiling, the ~5min finished-file grace period).
+CONVERSION_JOB_MAX_AGE_HOURS = 24
 
 # One day. The retention window is 30 days, so the exact hour is irrelevant —
 # what matters is that it runs unattended, often enough that the oldest row
@@ -85,6 +96,10 @@ def purge_expired() -> dict[str, int]:
         # existing daily cadence, not a meaningful window for this table.
         counts["conversion_visitors"] = db.execute(
             delete(ConversionVisitor).where(ConversionVisitor.date < cutoff.date())
+        ).rowcount
+        job_cutoff = now - timedelta(hours=CONVERSION_JOB_MAX_AGE_HOURS)
+        counts["conversion_jobs"] = db.execute(
+            delete(ConversionJob).where(ConversionJob.created_at < job_cutoff)
         ).rowcount
     return counts
 

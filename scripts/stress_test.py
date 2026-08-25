@@ -101,6 +101,15 @@ class Report:
             print("5xx sample       :", server_err[0].status)
 
 
+# Phase 3 (STRESS_TEST_PHASE3_PLAN.md): /convert/{tool} now returns 202 +
+# {job_id} immediately instead of blocking on the conversion — the real
+# success/failure only shows up later, via GET .../jobs/{id}. This maps a
+# terminal `failed` job back onto a representative HTTP status so
+# Report.summarize()'s existing 2xx/429/4xx/5xx buckets still mean the same
+# thing they did under the old synchronous contract.
+_JOB_FAILURE_STATUS = {"queue_timeout": 503, "timeout": 504}
+
+
 async def _one_convert(
     client: httpx.AsyncClient, tool: str, filename: str, content: bytes, mime: str
 ) -> Result:
@@ -111,7 +120,34 @@ async def _one_convert(
             files={"file": (filename, content, mime)},
             timeout=60.0,
         )
-        return Result(status=resp.status_code, elapsed=time.monotonic() - t0)
+        if resp.status_code != 202:
+            # Synchronous rejection (validation failure, 429 rate limit, a
+            # 5xx before a job ever got created) — same meaning as the old
+            # synchronous contract.
+            return Result(status=resp.status_code, elapsed=time.monotonic() - t0)
+
+        job_id = resp.json()["job_id"]
+        status_url = f"/api/v1/convert/jobs/{job_id}"
+
+        while True:
+            poll_resp = await client.get(status_url, timeout=30.0)
+            if poll_resp.status_code != 200:
+                return Result(
+                    status=poll_resp.status_code, elapsed=time.monotonic() - t0
+                )
+            body = poll_resp.json()
+            if body["status"] == "done":
+                dl_resp = await client.get(f"{status_url}/download", timeout=60.0)
+                return Result(status=dl_resp.status_code, elapsed=time.monotonic() - t0)
+            if body["status"] == "failed":
+                error_type = body.get("error_type")
+                return Result(
+                    status=_JOB_FAILURE_STATUS.get(error_type, 500),
+                    elapsed=time.monotonic() - t0,
+                    error=f"job_failed:{error_type}",
+                )
+            retry_after = poll_resp.headers.get("Retry-After")
+            await asyncio.sleep(float(retry_after) if retry_after else 1.0)
     except Exception as e:  # noqa: BLE001 - want every exception type surfaced in the report
         return Result(
             status=None, elapsed=time.monotonic() - t0, error=f"{type(e).__name__}: {e}"
@@ -233,10 +269,17 @@ async def run_data(base_url: str, concurrency: int, total: int) -> None:
 async def run_ratelimit_probe(base_url: str, tool: str) -> None:
     """Fire 100 sequential requests at one endpoint, one fresh TCP connection
     per request (``Connection: close``), to see exactly where 429s kick in —
-    checks whether the documented per-worker gap (middleware.py: 4 workers x
-    5/hr = up to ~20/hr) is real in practice. A single kept-alive connection
-    would pin every request to one worker and hide the gap entirely, so this
-    deliberately avoids httpx's connection reuse."""
+    checks whether the shared Redis-backed limit (Phase 3) actually lands at
+    its advertised, exact value now, instead of the ~4x-inflated effective
+    ceiling the old per-worker in-memory limiter measured (Finding 2). A
+    single kept-alive connection would pin every request to one worker and
+    hide any remaining per-worker gap, so this deliberately avoids httpx's
+    connection reuse. Each non-rate-limited request runs the full
+    202 -> poll -> download cycle via ``_one_convert``, so a successful
+    request's terminal status here is a real 200 from the download step —
+    ``.count(200)`` below already means "genuinely succeeded," not just
+    "got past the enqueue step."
+    """
     filename, mime = CONVERT_TOOLS[tool]
     content = (TEST_FILES_DIR / filename).read_bytes()
     statuses: list[int] = []
@@ -252,7 +295,10 @@ async def run_ratelimit_probe(base_url: str, tool: str) -> None:
             print(f"  after {i + 1:>3} requests: 200={ok:>3} 429={limited:>3}")
     first_429 = next((i for i, s in enumerate(statuses) if s == 429), None)
     print(f"\n=== ratelimit probe /{tool} ===")
-    print("configured limit : 5/hr (single worker) — see middleware.py PATH_LIMITS")
+    print(
+        "configured limit : 20/hr, shared exactly across all 4 workers via "
+        "Redis — see middleware.py PATH_LIMITS"
+    )
     print(f"first 429 at req#: {first_429}")
     print(f"total 200s       : {statuses.count(200)}")
     print(f"total 429s       : {statuses.count(429)}")
@@ -285,10 +331,13 @@ def main() -> None:
             "--tool only, not 'all') — needed for tools like pdf-compress "
             "where the bundled fixture is too small to put real load on the "
             "underlying engine. NOTE: /api/v1/convert is rate-limited to "
-            "5/hr per client IP (middleware.py PATH_LIMITS) — testing "
-            "--concurrency above that will just 429 past the 5th request "
-            "unless you restart the api container between runs to reset "
-            "the (in-memory, per-worker) counter first."
+            "20/hr per client IP, shared exactly across all workers via "
+            "Redis (middleware.py PATH_LIMITS) — testing --concurrency "
+            "above that will just 429 past the 20th request. Restarting "
+            "the api container does NOT reset this anymore (the counter "
+            "lives in Redis, not in-process) — flush Redis "
+            "(docker compose exec redis redis-cli FLUSHDB) or wait out the "
+            "1-hour window instead."
         ),
     )
 

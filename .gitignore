@@ -164,6 +164,11 @@ venv.bak/
 # Project-specific local folders
 project-docs/
 
+# Phase 3 conversion job files (api/converter.py JOB_RESULTS_DIR) — created
+# locally when running the API/worker on the host (outside Docker, where the
+# job_results named volume normally holds these instead).
+api/job_results/
+
 # Spyder project settings
 .spyderproject
 .spyproject

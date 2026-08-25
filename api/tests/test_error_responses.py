@@ -12,6 +12,7 @@ shipping.
 """
 
 import converter
+from data import job_worker
 
 # Telltale substrings that must never appear in a response body — a real
 # leak would surface one of these regardless of which route or exception
@@ -85,11 +86,18 @@ async def test_invalid_html_content_rejected(client):
     _assert_no_leak(r.text)
 
 
-async def test_unexpected_conversion_exception_returns_generic_500(client, monkeypatch):
+async def test_unexpected_conversion_exception_stays_generic_in_job_status(
+    client, monkeypatch
+):
     """A genuinely unexpected failure inside the conversion path (not a
     ValidationError, not a Gotenberg/timeout path) — the broad `except
-    Exception` in `_handle_conversion` must still respond with the fixed
-    generic message, never the raised exception's own text."""
+    Exception` mapping in `converter._classify_conversion_error` must still
+    resolve the job to the fixed generic message, never the raised
+    exception's own text. Phase 3: this now surfaces from
+    data/job_worker.py's execution of the job, not synchronously on the
+    enqueue POST — see test_gotenberg_non_busy_rejection_marks_job_failed_
+    with_accurate_message in test_converter.py for the equivalent Gotenberg-
+    layer case."""
 
     async def boom(content, filename, extra_form=None):
         raise RuntimeError("super secret internal detail: /etc/shadow readable")
@@ -106,13 +114,18 @@ async def test_unexpected_conversion_exception_returns_generic_500(client, monke
             )
         },
     )
-    assert r.status_code == 500
-    body = r.json()
+    assert r.status_code == 202
+    job_id = r.json()["job_id"]
+    await job_worker.run_job(job_id)
+
+    status_r = await client.get(f"/api/v1/convert/jobs/{job_id}")
+    body = status_r.json()
+    assert body["status"] == "failed"
     assert body["error_type"] == "conversion_error"
     assert "secret" not in body["error"]
-    assert "/etc/shadow" not in r.text
-    assert "RuntimeError" not in r.text
-    _assert_no_leak(r.text)
+    assert "/etc/shadow" not in status_r.text
+    assert "RuntimeError" not in status_r.text
+    _assert_no_leak(status_r.text)
 
 
 async def test_malformed_json_body_returns_structured_422_not_a_trace(client):
@@ -134,13 +147,14 @@ async def test_wrong_field_types_returns_structured_422(client):
 async def test_gotenberg_non_200_does_not_leak_upstream_body(client, monkeypatch):
     """Gotenberg's raw error body is logged server-side (converter.py) but must
     never reach the client — the client only ever sees the fixed, honest
-    message `_handle_conversion`'s ValidationError branch returns.
+    message `converter._classify_conversion_error`'s ValidationError branch
+    returns, now surfaced via the job status route (Phase 3).
 
     STRESS_TEST_REPORT.md Finding 4: a non-2xx, non-busy Gotenberg response
     (`_gotenberg_request`'s own non-busy branch) now raises ValidationError,
     not a bare RuntimeError — see
-    test_gotenberg_non_busy_rejection_maps_to_400_conversion_error in
-    test_converter.py for the direct, unmocked-httpx version of this same
+    test_gotenberg_non_busy_rejection_marks_job_failed_with_accurate_message
+    in test_converter.py for the direct, unmocked-httpx version of this same
     path. This test instead raises that exact ValidationError shape from
     `_convert_libreoffice` directly, rather than mocking `httpx.AsyncClient`
     globally — a class-level httpx mock would also hijack the test `client`
@@ -168,10 +182,15 @@ async def test_gotenberg_non_200_does_not_leak_upstream_body(client, monkeypatch
             )
         },
     )
-    assert r.status_code == 400
-    body = r.json()
+    assert r.status_code == 202
+    job_id = r.json()["job_id"]
+    await job_worker.run_job(job_id)
+
+    status_r = await client.get(f"/api/v1/convert/jobs/{job_id}")
+    body = status_r.json()
+    assert body["status"] == "failed"
     assert body["error_type"] == "conversion_error"
-    assert "/root/.config" not in r.text
-    assert "/tmp/xyz123" not in r.text
-    assert "LibreOffice crashed" not in r.text
-    _assert_no_leak(r.text)
+    assert "/root/.config" not in status_r.text
+    assert "/tmp/xyz123" not in status_r.text
+    assert "LibreOffice crashed" not in status_r.text
+    _assert_no_leak(status_r.text)

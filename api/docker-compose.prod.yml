@@ -50,6 +50,21 @@ services:
       - ENVIRONMENT=production
       - RETENTION_DAYS=${RETENTION_DAYS:-30}
 
+  # Phase 3: same pattern as `purge` above — point at Neon instead of the
+  # (never-started-in-prod) local `postgres` service.
+  worker:
+    environment:
+      - GOTENBERG_URL=http://gotenberg:3000
+      - DATABASE_URL=${PROD_DATABASE_URL}
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379/0
+
+  # Tunnel-only, mirrors `api.ports` above: prod has no host-side script that
+  # needs to reach Redis — `api`/`worker` reach it by service name on the
+  # internal network — so the base file's host publish must not survive here.
+  redis:
+    ports: !override []
+
   cloudflared:
     image: cloudflare/cloudflared:2026.7.3
     command: tunnel run

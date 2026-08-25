@@ -25,6 +25,10 @@ os.environ["DATABASE_URL"] = os.getenv(
     "TEST_DATABASE_URL",
     "postgresql+psycopg://filecast:filecast_dev@localhost:5432/filecast_test",
 )
+# Isolated logical DB index — mirrors TEST_DATABASE_URL's pattern — so the
+# rate limiter / job-worker wake-up tests never collide with a dev instance's
+# real Redis counters.
+os.environ["REDIS_URL"] = os.getenv("TEST_REDIS_URL", "redis://localhost:6379/1")
 # Deterministic salt so fingerprint tests are stable.
 os.environ.setdefault("FINGERPRINT_SALT", "test-salt")
 
@@ -33,6 +37,7 @@ import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from data.db import Base, async_session_factory, sync_engine  # noqa: E402
 from data.models import Tool  # noqa: E402
+from data.redis_client import redis_client  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 
 
@@ -54,26 +59,28 @@ def _clean_tables():
         conn.exec_driver_sql(f"TRUNCATE {tables} RESTART IDENTITY CASCADE")
 
 
-@pytest.fixture(autouse=True)
-def _reset_rate_limiter():
-    """Clear the in-memory rate limiter before each test.
+@pytest_asyncio.fixture(autouse=True)
+async def _reset_rate_limiter():
+    """Flush the isolated test Redis logical DB before each test.
 
-    ``main.app`` is a single instance whose limiter state would otherwise
-    accumulate across tests — the per-test dev-login calls alone would blow the
-    20/hr dev-login budget and break fixtures. We pin the built middleware stack
-    (so the app reuses the same instance we clear) and empty the limiter.
+    The rate limiter (Redis-backed, Phase 3) and the job-worker wake-up queue
+    both live in this same logical DB — the per-test dev-login calls alone
+    would blow the 20/hr dev-login budget without this, and a stale wake-up
+    entry from a prior test could otherwise leak into another.
+
+    Teardown disconnects the pool's connections while THIS test's event loop
+    is still the running one — pytest-asyncio gives every test function its
+    own fresh loop, and redis.asyncio's pooled connections are bound to
+    whichever loop was running when they opened. Leaving them for the next
+    test to reuse fails with "Future attached to a different loop" the
+    moment that new loop tries to read from a socket opened on the old one;
+    disconnecting here (not at setup) means the pool is empty by the time
+    the next test's `flushdb()` runs, so it always opens a fresh connection
+    on ITS OWN loop instead.
     """
-    from middleware import RateLimitMiddleware
-
-    if main.app.middleware_stack is None:
-        main.app.middleware_stack = main.app.build_middleware_stack()
-    node = main.app.middleware_stack
-    while node is not None:
-        if isinstance(node, RateLimitMiddleware):
-            node.requests.clear()
-            break
-        node = getattr(node, "app", None)
+    await redis_client.flushdb()
     yield
+    await redis_client.connection_pool.disconnect()
 
 
 async def _new_client() -> AsyncClient:
