@@ -61,7 +61,7 @@
     {% if category %}
     <a href="/{{ category.slug }}/">{{ category.name }}</a><span>&gt;</span>
     {% endif %}
-    {{ tool.name }}
+    <span class="breadcrumb__current">{{ tool.name }}</span>
   </nav>
 
   {# Converter panel — the whole tool area on one raised surface: title/tagline,
@@ -101,13 +101,36 @@
      Generator's "how many?" count) start pre-filled and ready to run instead
      of forcing an empty-input error before the visitor has typed anything;
      every existing tool omits it and starts empty as before. #}
-  <div class="text-editor{% if tool.get('wrap_text') %} text-editor--wrap{% endif %}">
-    {% if not tool.get('wrap_text') %}
+  {# wrap_input/wrap_output let a tool wrap one side without the other (e.g.
+     JWT Decoder: a single-token input that should wrap, but structured
+     header/payload JSON output that should keep its line-number gutter).
+     wrap_text remains a shorthand fallback that sets both, unchanged for the
+     existing tools (Base64 to Image, QR/Barcode Generator) that only need
+     one flag for a single-blob input AND output. #}
+  {% set wrap_input = tool.get('wrap_input', tool.get('wrap_text', false)) %}
+  {% if tool.get('input_kind') == 'number' %}
+  {# A single short value (e.g. UUID Generator's 1-100 count) doesn't need a
+     multi-line textarea + line-number gutter — a real number input gets a
+     numeric keypad on mobile and native spinner arrows on desktop for free.
+     shared-text.js never needs to change: every els.inputArea access it makes
+     (.value/.trim()/'input' listener) works identically on <input>. #}
+  <input type="number" inputmode="numeric" class="text-input-number" id="text-input"
+    min="{{ tool.get('input_min', '') }}" max="{{ tool.get('input_max', '') }}"
+    value="{{ tool.get('input_default', '') }}"
+    placeholder="{{ tool.get('input_placeholder', '') }}">
+  {% else %}
+  <div class="text-editor{% if wrap_input %} text-editor--wrap{% endif %}">
+    {% if not wrap_input %}
     <div class="text-editor__gutter" aria-hidden="true"></div>
     {% endif %}
     <textarea class="text-input-area" id="text-input" placeholder="{{ tool.get('input_placeholder', 'Paste your ' + tool.input_format + ' here...') }}">{{- tool.get('input_default', '') -}}</textarea>
   </div>
-  <div class="text-input-meta">
+  {% endif %}
+  {# char/byte count is meaningless next to a number spinner (input_kind:
+     number) — kept in the DOM either way since shared-text.js's updateMeta()
+     unconditionally writes to #char-count/#byte-count on every input/init,
+     just hidden so nothing renders. #}
+  <div class="text-input-meta{% if tool.get('input_kind') == 'number' %} hidden{% endif %}">
     <span id="char-count">0 chars</span>
     <span>
       <button class="card text-input-format-btn hidden" id="format-btn">Prettier</button>
@@ -154,8 +177,15 @@
        stays opt-in per tool (e.g. CSV to Excel's *input* is real multi-line
        CSV that still benefits from the line gutter, even though its output
        is the same single-blob shape as QR/Barcode/Base64 to Image). #}
-    {% set wrap_output = tool.get('wrap_text') or tool.get('output_is_data_url') %}
-    <div class="text-editor{% if wrap_output %} text-editor--wrap{% endif %}">
+    {% set wrap_output = tool.get('wrap_output', tool.get('wrap_text', false)) or tool.get('output_is_data_url') %}
+    {# Structured table output (shared-text.js's renderOutputTable()) — same
+       optional-extra-field contract shared-diff.js's renderDiffReport() uses
+       for json-diff.js's `diffs`: a converter (currently hash-generator.js,
+       number-base-converter.js) may return a `table` field alongside `text`;
+       when present this replaces the textarea below, which stays in the DOM
+       either way as what Copy/Download actually read from. #}
+    <div class="hidden" id="text-output-table"></div>
+    <div class="text-editor{% if wrap_output %} text-editor--wrap{% endif %}" id="text-output-editor">
       {% if not wrap_output %}
       <div class="text-editor__gutter" aria-hidden="true"></div>
       {% endif %}

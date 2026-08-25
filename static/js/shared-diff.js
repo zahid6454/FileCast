@@ -302,16 +302,39 @@
     );
   }
 
+  // A bare .catch() isn't enough on its own: if navigator.clipboard doesn't
+  // exist at all (old browser, non-HTTPS context), .writeText throws a
+  // SYNCHRONOUS TypeError on property access, before any promise exists to
+  // catch. Both paths need to land the user on the same visible fallback,
+  // since a silent failure here looks identical to a silent success.
+  function showCopyFallback(message) {
+    var btn = els.copyBtn;
+    var original = btn.textContent;
+    btn.textContent = message;
+    setTimeout(function () {
+      btn.textContent = original;
+    }, 2000);
+  }
+
   function copyOutput() {
     if (!window._convertedText) return;
-    navigator.clipboard.writeText(window._convertedText).then(function () {
-      var btn = els.copyBtn;
-      var original = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(function () {
-        btn.textContent = original;
-      }, 1500);
-    });
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      showCopyFallback('Clipboard not available — select manually.');
+      return;
+    }
+    navigator.clipboard
+      .writeText(window._convertedText)
+      .then(function () {
+        var btn = els.copyBtn;
+        var original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(function () {
+          btn.textContent = original;
+        }, 1500);
+      })
+      .catch(function () {
+        showCopyFallback("Couldn't copy — select manually.");
+      });
   }
 
   function downloadOutput() {

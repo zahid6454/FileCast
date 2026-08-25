@@ -62,4 +62,21 @@ describe('hash-generator.js — window.convertText', () => {
       'SHA-256: 367e0c956d2fe75a184497fd97a7f715899cc7b96c4b6e727bc89dc5ebd62510'
     );
   });
+
+  // Tool UI audit §4: shared-text.js's renderOutputTable() renders this flat
+  // `table` field instead of the plain-text output when present.
+  it('returns a flat `table` field alongside `text`, matching the same digests', async () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/hash-generator.js');
+
+    const { table } = await dom.window.convertText('abc');
+
+    expect(table).toEqual([
+      { label: 'MD5', value: '900150983cd24fb0d6963f7d28e17f72' },
+      {
+        label: 'SHA-256',
+        value: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+      }
+    ]);
+  });
 });

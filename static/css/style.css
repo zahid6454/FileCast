@@ -1375,6 +1375,27 @@ img { max-width: 100%; display: block; }
 .text-input-area:focus { border-color: var(--color-border-focus); }
 .text-input-area::placeholder { color: var(--color-text-light); font-family: var(--font-sans); }
 
+/* A tool's primary input when it's a single short number (e.g. UUID
+   Generator's 1-100 count) rather than line-oriented text — sized/weighted
+   like .text-input-area above so it still reads as the tool's main control,
+   not reused from .tool-options__input, which is sized for a secondary
+   options row instead. */
+.text-input-number {
+  width: auto;
+  min-width: 120px;
+  max-width: 200px;
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  color: var(--color-text);
+  background: var(--color-bg);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+.text-input-number:focus { border-color: var(--color-border-focus); }
+
 /* --- Line-number gutter (text-editor-gutter.js) ---
    Textareas inside `.text-editor` get a synced-scroll number column. This
    requires disabling soft-wrap so one source line always renders as exactly
@@ -1404,6 +1425,8 @@ img { max-width: 100%; display: block; }
   white-space: pre;
   user-select: none;
 }
+.text-editor:has(.text-input-area) .text-editor__gutter { max-height: 500px; }
+.text-editor:has(.text-output-area) .text-editor__gutter { max-height: 400px; }
 .text-editor__gutter-inner { will-change: transform; }
 .text-editor .text-input-area,
 .text-editor .text-output-area {
@@ -1503,6 +1526,66 @@ img { max-width: 100%; display: block; }
   width: auto;
   max-height: none;
   object-fit: contain;
+}
+
+/* Structured table output (shared-text.js's renderOutputTable()) — a
+   scannable alternative to the plain-text output textarea, for converters
+   that opt in with a `table` result field (hash-generator.js,
+   number-base-converter.js). Mirrors the diff report's structured-view
+   pattern below: falls back to the textarea (unhidden by shared-text.js)
+   for any text tool whose converter doesn't return `table`. */
+table.out-table {
+  width: 100%; table-layout: fixed; border-collapse: collapse;
+  border: 2px solid var(--color-success); border-radius: var(--radius-lg);
+  overflow: hidden; background: var(--color-bg);
+}
+table.out-table th {
+  background: var(--color-success-subtle); color: var(--color-badge-local);
+  text-align: left; font-weight: 600; padding: 8px 12px;
+  border-bottom: 1px solid var(--color-success-light);
+  font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  overflow-wrap: anywhere; word-break: break-all;
+}
+table.out-table td {
+  padding: 8px 12px; border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere; word-break: break-all; vertical-align: top;
+}
+table.out-table tr:last-child td { border-bottom: none; }
+table.out-table td.copy { text-align: right; word-break: normal; color: var(--color-text-light); font-family: var(--font-sans); font-size: 11px; }
+
+/* Grouped label/value table — each converted number is its own row-group
+   (tbody), a fixed-width label column and a value column that absorbs 100%
+   of the remaining width. A field never shares a row with another field, so
+   the widest one (Binary, ~3.3x Decimal's digit count) always gets the
+   table's full width rather than a starved fixed slice of it. */
+table.kv-table {
+  width: 100%; table-layout: fixed; border-collapse: collapse;
+  border: 2px solid var(--color-success); border-radius: var(--radius-lg);
+  overflow: hidden; background: var(--color-bg);
+}
+table.kv-table td {
+  padding: 7px 12px; border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere; word-break: break-all; vertical-align: top;
+}
+table.kv-table td.label {
+  font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  font-weight: 600; color: var(--color-badge-local); background: var(--color-success-subtle);
+  white-space: nowrap;
+}
+table.kv-table tr:last-child td { border-bottom: none; }
+/* The input isn't a fifth field alongside Binary/Decimal/Hex/Octal — it's
+   what was typed, everything below it is what got computed FROM it. A
+   spanning title bar per group keeps that structurally distinct rather
+   than styling it as one more row that happens to say "Input". */
+table.kv-table tr.group-title th {
+  text-align: left; padding: 10px 12px; background: var(--color-bg-sunken);
+  border-bottom: 2px solid var(--color-success-light);
+  font-family: var(--font-mono); font-weight: 700; font-size: 13.5px; color: var(--color-heading);
+  overflow-wrap: anywhere; word-break: break-all;
+}
+table.kv-table tr.group-title th .eyebrow {
+  display: block; font-family: var(--font-sans); font-weight: 600; font-size: 10px;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-light); margin-bottom: 3px;
 }
 
 .text-result { margin-top: var(--space-6); }

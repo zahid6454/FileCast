@@ -15,6 +15,7 @@ max_file_size: 5MB
 bulk_support: false
 ui_type: text-input
 action_label: "Generate Hashes"
+wrap_input: true
 input_placeholder: "Type or paste the text you want to hash..."
 tagline: "Generate MD5 and SHA-256 hashes from text"
 tagline_long: "Generate MD5 and SHA-256 hash digests from any text instantly in your browser — for checksums, cache keys, and integrity checks."

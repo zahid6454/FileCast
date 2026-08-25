@@ -16,9 +16,12 @@ function toolPageHtml() {
     <div id="progress" class="hidden"><div id="progress-fill"></div></div>
     <div id="text-result" class="hidden">
       <div id="result-info"></div>
-      <textarea id="text-output"></textarea>
+      <div id="text-output-table" class="hidden"></div>
+      <div id="text-output-editor">
+        <textarea id="text-output"></textarea>
+      </div>
       <img id="text-image-preview" class="hidden" alt="Converted image preview">
-      <button id="copy-btn"></button>
+      <button id="copy-btn">Copy to Clipboard</button>
       <button id="download-btn"></button>
     </div>
     <button id="reset-btn"></button>
@@ -63,6 +66,62 @@ class FakeFailingTextWorker {
     setTimeout(function () {
       if (self.onmessage) {
         self.onmessage({ data: { ok: false, error: 'Bad input.' } });
+      }
+    }, 0);
+  }
+  terminate() {}
+}
+
+// Mirrors hash-generator.js's flat `table` shape: [{label, value}, ...].
+class FlatTableTextWorker {
+  postMessage(msg) {
+    var self = this;
+    setTimeout(function () {
+      if (self.onmessage) {
+        self.onmessage({
+          data: {
+            ok: true,
+            result: {
+              text: 'MD5:     abc\nSHA-256: def\n',
+              filename: 'hashes.txt',
+              table: [
+                { label: 'MD5', value: 'abc' },
+                { label: 'SHA-256', value: 'def' }
+              ]
+            }
+          }
+        });
+      }
+    }, 0);
+  }
+  terminate() {}
+}
+
+// Mirrors number-base-converter.js's grouped `table` shape:
+// [{input, fields: [{label, value}, ...]}, ...].
+class GroupedTableTextWorker {
+  postMessage(msg) {
+    var self = this;
+    setTimeout(function () {
+      if (self.onmessage) {
+        self.onmessage({
+          data: {
+            ok: true,
+            result: {
+              text: 'Input: 123\n  Binary:  1111011',
+              filename: 'number-bases.txt',
+              table: [
+                {
+                  input: '123',
+                  fields: [
+                    { label: 'Binary', value: '1111011' },
+                    { label: 'Decimal', value: '123' }
+                  ]
+                }
+              ]
+            }
+          }
+        });
       }
     }, 0);
   }
@@ -253,5 +312,197 @@ describe('shared-text.js — worker-based conversion', () => {
     const preview = dom.window.document.getElementById('text-image-preview');
     expect(preview.classList.contains('hidden')).toBe(false);
     expect(preview.getAttribute('src')).toBe(imageDataUrl);
+  });
+});
+
+// Tool UI audit §3/§4: a converter may return a structured `table` field
+// alongside `text` (hash-generator.js's flat rows, number-base-converter.js's
+// grouped rows) — shared-text.js's renderOutputTable() swaps the textarea
+// for a rendered <table> when present, mirroring shared-diff.js's existing
+// renderDiffReport()/`diffs` pattern.
+describe('shared-text.js — structured table output (tool UI audit §3/§4)', () => {
+  it('renders a flat table and hides the textarea editor when `table` is a flat list', async () => {
+    const dom = await setupTextToolPage(FlatTableTextWorker);
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const tableWrap = dom.window.document.getElementById('text-output-table');
+    const editor = dom.window.document.getElementById('text-output-editor');
+    expect(tableWrap.classList.contains('hidden')).toBe(false);
+    expect(editor.classList.contains('hidden')).toBe(true);
+
+    const table = tableWrap.querySelector('table.out-table');
+    expect(table).not.toBeNull();
+    const rows = table.querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('MD5');
+    expect(rows[0].textContent).toContain('abc');
+    expect(rows[1].textContent).toContain('SHA-256');
+    expect(rows[1].textContent).toContain('def');
+
+    // The textarea stays populated underneath — Copy/Download read from
+    // window._convertedText, not from whichever view is visible.
+    expect(dom.window.document.getElementById('text-output').value).toBe(
+      'MD5:     abc\nSHA-256: def\n'
+    );
+    expect(dom.window._convertedText).toBe('MD5:     abc\nSHA-256: def\n');
+  });
+
+  it('renders a grouped table with a title bar per input when `table` entries carry `fields`', async () => {
+    const dom = await setupTextToolPage(GroupedTableTextWorker);
+    const input = dom.window.document.getElementById('text-input');
+    input.value = '123';
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const tableWrap = dom.window.document.getElementById('text-output-table');
+    expect(tableWrap.classList.contains('hidden')).toBe(false);
+    expect(
+      dom.window.document.getElementById('text-output-editor').classList.contains('hidden')
+    ).toBe(true);
+
+    const table = tableWrap.querySelector('table.kv-table');
+    expect(table).not.toBeNull();
+    const group = table.querySelector('tbody.group');
+    expect(group).not.toBeNull();
+    expect(group.querySelector('.group-title th').textContent).toContain('123');
+    const valueRows = group.querySelectorAll('tr:not(.group-title)');
+    expect(valueRows).toHaveLength(2);
+    expect(valueRows[0].textContent).toContain('Binary');
+    expect(valueRows[0].textContent).toContain('1111011');
+  });
+
+  it('keeps the plain textarea visible and the table hidden when the converter returns no `table`', async () => {
+    const dom = await setupTextToolPage(FakeTextWorker);
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    expect(
+      dom.window.document.getElementById('text-output-table').classList.contains('hidden')
+    ).toBe(true);
+    expect(
+      dom.window.document.getElementById('text-output-editor').classList.contains('hidden')
+    ).toBe(false);
+    expect(dom.window.document.getElementById('text-output').value).toBe('HELLO');
+  });
+
+  it('falls back to the plain textarea instead of building an oversized table for a pathological entry count', async () => {
+    class HugeTableTextWorker {
+      postMessage() {
+        var self = this;
+        setTimeout(function () {
+          if (self.onmessage) {
+            var table = [];
+            for (var i = 0; i < 501; i++) {
+              table.push({ label: 'Row ' + i, value: String(i) });
+            }
+            self.onmessage({
+              data: { ok: true, result: { text: 'big output', filename: 'out.txt', table: table } }
+            });
+          }
+        }, 0);
+      }
+      terminate() {}
+    }
+
+    const dom = await setupTextToolPage(HugeTableTextWorker);
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    expect(
+      dom.window.document.getElementById('text-output-table').classList.contains('hidden')
+    ).toBe(true);
+    expect(
+      dom.window.document.getElementById('text-output-editor').classList.contains('hidden')
+    ).toBe(false);
+    // The full result is still there for Copy/Download either way.
+    expect(dom.window.document.getElementById('text-output').value).toBe('big output');
+  });
+
+  it('rebuilds the table from scratch on a second conversion instead of appending duplicate rows', async () => {
+    const dom = await setupTextToolPage(FlatTableTextWorker);
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const table = dom.window.document.querySelector('#text-output-table table.out-table');
+    expect(table.querySelectorAll('tbody tr')).toHaveLength(2);
+  });
+});
+
+// Tool UI audit §7: navigator.clipboard.writeText() had no .catch(), so a
+// rejected promise left the Copy button unchanged with no indication
+// anything failed. If navigator.clipboard doesn't exist at all (jsdom's
+// default — matching an old browser or a non-HTTPS context), .writeText
+// throws a SYNCHRONOUS TypeError on property access, before any promise
+// exists to catch, so a feature-detect guard has to run first.
+describe('shared-text.js — Copy to Clipboard fallback (tool UI audit §7)', () => {
+  async function convertAndGetCopyBtn(dom) {
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+    return dom.window.document.getElementById('copy-btn');
+  }
+
+  it('shows a visible fallback instead of silently doing nothing when navigator.clipboard does not exist', async () => {
+    const dom = await setupTextToolPage(IdentityTextWorker);
+    // jsdom has no Clipboard API implementation by default — this is the
+    // real-world "old browser / non-HTTPS" condition, not a manual override.
+    expect(dom.window.navigator.clipboard).toBeUndefined();
+
+    const copyBtn = await convertAndGetCopyBtn(dom);
+    const original = copyBtn.textContent;
+    copyBtn.click();
+
+    expect(copyBtn.textContent).toBe('Clipboard not available — select manually.');
+    expect(copyBtn.textContent).not.toBe(original);
+  });
+
+  it('shows "Copied!" on a successful write', async () => {
+    const dom = await setupTextToolPage(IdentityTextWorker);
+    dom.window.navigator.clipboard = { writeText: () => Promise.resolve() };
+
+    const copyBtn = await convertAndGetCopyBtn(dom);
+    copyBtn.click();
+    await flush();
+
+    expect(copyBtn.textContent).toBe('Copied!');
+  });
+
+  it('shows a visible fallback when navigator.clipboard.writeText() rejects', async () => {
+    const dom = await setupTextToolPage(IdentityTextWorker);
+    dom.window.navigator.clipboard = {
+      writeText: () => Promise.reject(new Error('permission denied'))
+    };
+
+    const copyBtn = await convertAndGetCopyBtn(dom);
+    copyBtn.click();
+    await flush();
+
+    expect(copyBtn.textContent).toBe("Couldn't copy — select manually.");
   });
 });

@@ -256,3 +256,55 @@ describe('shared-diff.js — two-input worker-based comparison', () => {
     );
   });
 });
+
+// Tool UI audit §7: same fix as shared-text.js's copyOutput() (each file
+// carries its own identical copy of the function) — a rejected
+// navigator.clipboard.writeText() left the Copy button silently unchanged,
+// and if navigator.clipboard doesn't exist at all (jsdom's default), the
+// bare call throws synchronously before any promise exists to catch.
+describe('shared-diff.js — Copy to Clipboard fallback (tool UI audit §7)', () => {
+  async function compareAndGetCopyBtn(dom) {
+    dom.window.document.getElementById('text-input-a').value = '{"a":1}';
+    dom.window.document.getElementById('text-input-a').dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('text-input-b').value = '{"a":2}';
+    dom.window.document.getElementById('text-input-b').dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+    return dom.window.document.getElementById('copy-btn');
+  }
+
+  it('shows a visible fallback instead of silently doing nothing when navigator.clipboard does not exist', async () => {
+    const dom = await setupDiffToolPage(FakeDiffWorker);
+    expect(dom.window.navigator.clipboard).toBeUndefined();
+
+    const copyBtn = await compareAndGetCopyBtn(dom);
+    copyBtn.click();
+
+    expect(copyBtn.textContent).toBe('Clipboard not available — select manually.');
+  });
+
+  it('shows "Copied!" on a successful write', async () => {
+    const dom = await setupDiffToolPage(FakeDiffWorker);
+    dom.window.navigator.clipboard = { writeText: () => Promise.resolve() };
+
+    const copyBtn = await compareAndGetCopyBtn(dom);
+    copyBtn.click();
+    await flush();
+
+    expect(copyBtn.textContent).toBe('Copied!');
+  });
+
+  it('shows a visible fallback when navigator.clipboard.writeText() rejects', async () => {
+    const dom = await setupDiffToolPage(FakeDiffWorker);
+    dom.window.navigator.clipboard = {
+      writeText: () => Promise.reject(new Error('permission denied'))
+    };
+
+    const copyBtn = await compareAndGetCopyBtn(dom);
+    copyBtn.click();
+    await flush();
+
+    expect(copyBtn.textContent).toBe("Couldn't copy — select manually.");
+  });
+});
