@@ -103,4 +103,49 @@ describe('number-base-converter.js — window.convertText', () => {
 
     expect(() => dom.window.convertText('   \n  ')).toThrow(/at least one number/);
   });
+
+  // Tool UI audit §3: shared-text.js's renderOutputTable() renders this
+  // grouped `table` field (one entry per input line) instead of the
+  // plain-text output when present.
+  it('returns a grouped `table` field, one entry per input line, matching the plain-text output', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/number-base-converter.js');
+
+    const { table } = dom.window.convertText('123\n0xFF');
+
+    expect(table).toEqual([
+      {
+        input: '123',
+        fields: [
+          { label: 'Binary', value: '1111011' },
+          { label: 'Decimal', value: '123' },
+          { label: 'Hex', value: '7B' },
+          { label: 'Octal', value: '173' }
+        ]
+      },
+      {
+        input: '0xFF',
+        fields: [
+          { label: 'Binary', value: '11111111' },
+          { label: 'Decimal', value: '255' },
+          { label: 'Hex', value: 'FF' },
+          { label: 'Octal', value: '377' }
+        ]
+      }
+    ]);
+  });
+
+  it('preserves the sign in the `table` field for a negative number', () => {
+    const dom = createDom();
+    evalScript(dom, 'converters/number-base-converter.js');
+
+    const { table } = dom.window.convertText('-42');
+
+    expect(table[0].fields).toEqual([
+      { label: 'Binary', value: '-101010' },
+      { label: 'Decimal', value: '-42' },
+      { label: 'Hex', value: '-2A' },
+      { label: 'Octal', value: '-52' }
+    ]);
+  });
 });
