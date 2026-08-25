@@ -24,13 +24,22 @@ COPY . .
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
 
-# Drop root before serving. Nothing at runtime writes under /app — the only
-# two filesystem writes anywhere in this app (converter.py's temp PDFs,
-# data/tasks.py's purge heartbeat) already go through Python's tempfile
-# module, which defaults to /tmp (world-writable, sticky bit) — so a non-root
-# user needs no chown here, only read+execute on files root already left
-# world-readable by the default umask.
+# Drop root before serving. Nothing else at runtime writes under /app — the
+# other filesystem writes in this app (converter.py's temp PDFs,
+# data/tasks.py's purge heartbeat, data/job_worker.py's own heartbeat)
+# already go through Python's tempfile module, which defaults to /tmp
+# (world-writable, sticky bit) — so a non-root user needs no chown for those,
+# only read+execute on files root already left world-readable by the default
+# umask.
+#
+# job_results IS under /app though, and it's a fresh named-volume mount
+# point (Phase 3 — STRESS_TEST_PHASE3_PLAN.md), which Docker creates
+# root-owned by default regardless of where it's mounted — /tmp's sticky-bit
+# default is what gives appuser free write access there, and job_results
+# doesn't get that for free. Explicit mkdir+chown, same non-root user, so
+# both `api` and `worker` (which mount this same volume) can read/write it.
 RUN useradd --create-home --shell /usr/sbin/nologin --uid 1000 appuser
+RUN mkdir -p /app/job_results && chown appuser:appuser /app/job_results
 USER appuser
 
 EXPOSE 8090

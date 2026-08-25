@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from data.models import (
     Conversion,
+    ConversionJob,
     ConversionVisitor,
     Error,
     Rating,
@@ -76,6 +77,42 @@ async def test_purge_deletes_stale_retains_aggregates(db):
     assert (await db.execute(select(func.count(Rating.id)))).scalar_one() == 1
     cv = (await db.execute(select(ConversionVisitor.fingerprint))).scalars().all()
     assert set(cv) == {"new-fp"}
+
+
+async def test_purge_deletes_old_conversion_job_metadata_rows(db):
+    # Phase 3 (STRESS_TEST_PHASE3_PLAN.md): job files are reaped much sooner
+    # by data/job_worker.py's own GC sweep — this is just the row/metadata
+    # cleanup, on the same daily cadence as everything else here. 25h old is
+    # comfortably past the 24h CONVERSION_JOB_MAX_AGE_HOURS cutoff.
+    from data.tasks import CONVERSION_JOB_MAX_AGE_HOURS
+
+    now = datetime.now(UTC)
+    old = now - timedelta(hours=CONVERSION_JOB_MAX_AGE_HOURS + 1)
+    db.add_all(
+        [
+            ConversionJob(
+                tool_id="docx-to-pdf",
+                status="done",
+                original_filename="old.docx",
+                created_at=old,
+            ),
+            ConversionJob(
+                tool_id="docx-to-pdf",
+                status="done",
+                original_filename="new.docx",
+                created_at=now,
+            ),
+        ]
+    )
+    await db.commit()
+
+    counts = purge_expired()
+    assert counts["conversion_jobs"] == 1
+
+    remaining = (
+        (await db.execute(select(ConversionJob.original_filename))).scalars().all()
+    )
+    assert set(remaining) == {"new.docx"}
 
 
 async def test_canary_flags_a_purge_that_stopped_running(db):

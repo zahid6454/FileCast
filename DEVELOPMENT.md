@@ -65,7 +65,7 @@ api/
 │   └── routers/            One router per admin/user-facing feature (auth, tools, admin_deploy, staff, ...)
 ├── migrations/              Alembic migrations
 ├── tests/                   pytest suite (19 files, 374 tests)
-├── docker-compose.yml       Base compose: api, purge, gotenberg, postgres (dev-only profile)
+├── docker-compose.yml       Base compose: api, worker, purge, gotenberg, redis, postgres (dev-only profile)
 ├── docker-compose.prod.yml  Prod overlay: Neon, Cloudflare Tunnel, no dev-only postgres
 └── Dockerfile
 ```
@@ -89,7 +89,8 @@ silently falls back to YAML-only, which is exactly what CI does (no DB secret th
 
 ## Local Setup — API
 
-The API, Gotenberg, and a local Postgres all run via Docker Compose:
+The API, its async conversion worker, Gotenberg, Redis, and a local Postgres all run
+via Docker Compose:
 
 ```bash
 cd api
@@ -107,7 +108,10 @@ GIT_SHA=$(git rev-parse HEAD) docker compose --profile dev-only up -d --build
 This starts:
 - **api** — FastAPI on `http://localhost:8090` (alembic migrations run automatically
   on container start, before uvicorn starts serving)
+- **worker** — the async conversion job worker (Phase 3), sharing the api image;
+  discovers `ConversionJob` rows via Redis and runs them through Gotenberg/Ghostscript
 - **gotenberg** — LibreOffice/Chromium conversion engine on `http://localhost:3000`
+- **redis** — shared rate-limit store + job-worker wake-up queue on `localhost:6379`
 - **postgres** — local dev DB on `localhost:5432` (`filecast`/`filecast_dev`)
 - **purge** — the retention-purge loop, sharing the api image
 

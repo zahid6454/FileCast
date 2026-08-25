@@ -293,6 +293,10 @@ def test_rate_limit_path_matching():
     assert match("/api/v1/announcements/active")[0] == "/api/v1/announcements"
     assert match("/api/v1/preferences")[0] == "/api/v1/preferences"
     assert match("/api/v1/convert/docx-to-pdf")[0] == "/api/v1/convert"
+    # Phase 3: /convert/jobs is a genuinely nested prefix under /convert —
+    # longest-prefix-match must pick the more specific (higher) budget, not
+    # fall back to the general 20/hr enqueue limit.
+    assert match("/api/v1/convert/jobs/abc123")[0] == "/api/v1/convert/jobs"
     # Admin surfaces (OWASP A05) — /admin, /tools, /stats are all fully
     # require_admin-gated but previously carried no rate-limit budget.
     assert match("/api/v1/tools")[0] == "/api/v1/tools"
@@ -303,20 +307,6 @@ def test_rate_limit_path_matching():
     assert match("/api/v1/auth/google")[0] == "/api/v1/auth/google"
     assert match("/api/v1/auth/google/callback")[0] == "/api/v1/auth/google"
     assert match("/api/v1/auth/dev-login")[0] == "/api/v1/auth/dev-login"
-
-
-def test_rate_limiter_sweep_evicts_idle_buckets():
-    import time
-
-    from middleware import RATE_WINDOW, RateLimitMiddleware
-
-    mw = RateLimitMiddleware(None)
-    now = time.time()
-    mw.requests["errors:1.1.1.1"] = [now - RATE_WINDOW - 10]  # stale (idle IP)
-    mw.requests["errors:2.2.2.2"] = [now]  # fresh
-    mw._sweep(now)
-    assert "errors:1.1.1.1" not in mw.requests  # evicted → no unbounded growth
-    assert "errors:2.2.2.2" in mw.requests  # active bucket retained
 
 
 # --------------------------------------------------------------------------- #

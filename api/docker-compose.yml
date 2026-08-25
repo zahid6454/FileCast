@@ -38,17 +38,26 @@ services:
       - GOTENBERG_URL=http://gotenberg:3000
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DATABASE_URL=postgresql+psycopg://filecast:${POSTGRES_PASSWORD:-filecast_dev}@postgres:5432/filecast
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       gotenberg:
         condition: service_healthy
       postgres:
         condition: service_healthy
         required: false
-    # Needs both: `convert` to reach gotenberg's HTTP API, `db` to reach
+      redis:
+        condition: service_healthy
+    # Needs all three: `convert` to reach gotenberg's HTTP API, `db` to reach
     # postgres (dev) / relay to Neon (prod, via the same DATABASE_URL env
-    # var — network membership here doesn't affect an external host).
+    # var — network membership here doesn't affect an external host) and the
+    # `redis` service alongside it.
     networks: [convert, db]
     restart: unless-stopped
+    volumes:
+      # Job-conversion bytes (Phase 3) — shared with `worker`, which is the
+      # only thing that ever writes {id}.output; this service reads it back
+      # on download and writes {id}.input on enqueue.
+      - job_results:/app/job_results
     # No apt package added for this — python:3.12-slim already has Python, and
     # a 200-range response IS the check (mirrors gotenberg's `curl -sf`
     # below); urlopen raises on anything else, which is a non-zero exit.
@@ -121,6 +130,80 @@ services:
       start_period: 30s
     mem_limit: 256m
     cpus: 0.25
+
+  # Async conversion job worker (Phase 3 — STRESS_TEST_PHASE3_PLAN.md). Own
+  # compose service, same "exactly one trigger" reasoning as `purge` above —
+  # a background task inside the 4-worker `api` app would mean 4 competing
+  # discovery loops. Reuses the api image (`build: .`) so it shares the
+  # TOOL_REGISTRY/convert code with no second thing to keep in sync.
+  worker:
+    image: filecast-api:local
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    command: ["python", "-m", "data.job_worker", "--loop"]
+    environment:
+      - GOTENBERG_URL=http://gotenberg:3000
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=postgresql+psycopg://filecast:${POSTGRES_PASSWORD:-filecast_dev}@postgres:5432/filecast
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      gotenberg:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+    # Needs all three, same as `api`: gotenberg for the actual conversion
+    # calls, postgres for the job rows, redis for its wake-up BRPOP.
+    networks: [convert, db]
+    restart: unless-stopped
+    volumes:
+      - job_results:/app/job_results
+    # Mirrors `purge`'s heartbeat-file healthcheck pattern exactly
+    # (data/tasks.py's HEARTBEAT_PATH idiom) — touched once per loop
+    # iteration so `docker stats`/monitoring can tell "alive and cycling"
+    # apart from "process up but the event loop is wedged." Threshold is
+    # much tighter than purge's 48h: this loop cycles at least every ~5s
+    # (BRPOP_TIMEOUT_SECONDS), not once a day, so 2 minutes with no update is
+    # already a strong signal something's stuck.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import pathlib,sys,tempfile,time; p=pathlib.Path(tempfile.gettempdir())/'worker-heartbeat'; sys.exit(0 if p.exists() and time.time()-p.stat().st_mtime < 120 else 1)"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    mem_limit: 512m
+    cpus: 0.5
+
+  # Local Redis sidecar (Phase 3) — backs the cross-process rate limiter
+  # (middleware.py) and the conversion worker's wake-up signal (job_worker.py
+  # BRPOPs, converter.py LPUSHes). No persistence needed (both uses are
+  # inherently ephemeral); tiny footprint. NOT gated behind `dev-only` (unlike
+  # `postgres` below) — prod needs this same cross-worker guarantee dev
+  # testing would otherwise miss, so it runs automatically there too
+  # (docker-compose.prod.yml only overrides the host port publish away).
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks: [db]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 64m
+    cpus: 0.1
 
   gotenberg:
     image: gotenberg/gotenberg:8
@@ -221,3 +304,7 @@ services:
 
 volumes:
   pgdata:
+  # Job-conversion bytes (Phase 3), shared between `api` and `worker` — a
+  # fresh named volume is root-owned by default regardless of mount path;
+  # api/Dockerfile's mkdir+chown step is what makes it writable by appuser.
+  job_results:

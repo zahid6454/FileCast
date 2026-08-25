@@ -395,3 +395,51 @@ class Message(Base):
         Index("ix_messages_created_at", "created_at"),
         Index("ix_messages_status", "status"),
     )
+
+
+class ConversionJob(Base):
+    """Async server-side conversion job (Phase 3 — STRESS_TEST_PHASE3_PLAN.md
+    Part A). Job **metadata** only — job bytes (``{id}.input``/``{id}.output``)
+    live in the shared ``job_results`` Docker volume, never in Postgres, the
+    same "small metadata row, file content elsewhere" split as
+    ``UserConversion.file_size_kb`` being an int, never file content.
+
+    ``attempts`` backs ``data/job_worker.py``'s startup orphan-recovery
+    dead-letter guard (force-fail instead of requeue past a small cap).
+    ``downloaded_at`` and the ``queued``/``converting``/``done``/``failed``
+    lifecycle are read/written by ``converter.py``'s enqueue/status/download
+    routes and by the worker; nothing else touches this table. Rows are
+    purged after ~24h by the existing daily sweep (``data/tasks.py``) — job
+    **files** are cleaned up much sooner, by the worker's own periodic GC
+    sweep (see job_worker.py), on a separate, shorter, disk-cost-driven
+    schedule.
+    """
+
+    __tablename__ = "conversion_jobs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    tool_id: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="queued")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    options: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    original_filename: Mapped[str] = mapped_column(String, nullable=False)
+    output_filename: Mapped[str | None] = mapped_column(String, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    downloaded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_conversion_jobs_status", "status"),
+        Index("ix_conversion_jobs_created_at", "created_at"),
+    )

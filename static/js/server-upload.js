@@ -86,19 +86,176 @@
     });
   }
 
-  // Active upload, so Cancel (P4 §35) has something real to abort.
-  var activeXhr = null;
+  // Conversion is now async (Phase 3 — STRESS_TEST_PHASE3_PLAN.md): the
+  // upload POST returns 202 + {job_id} the moment validation passes, and
+  // this polls GET .../jobs/{id} until the worker resolves it, then fetches
+  // the result via GET .../jobs/{id}/download. shared.js doesn't know or
+  // care — window.convertFile still returns one Promise<Blob>, so a fast
+  // conversion looks identical to the old single-XHR wait.
 
-  window.cancelConversion = function () {
-    if (activeXhr) {
-      activeXhr.abort();
-      activeXhr = null;
-    }
-  };
+  // Approximates the same backoff shape the server's own Retry-After header
+  // already encodes (converter.py's _job_retry_after_seconds) — used only
+  // when a poll response doesn't carry one (e.g. a request that errored out
+  // before reaching the status handler). ~1s to start, capped ~5s for the
+  // first ~2 minutes, then a longer ~18s tail so a worst-case job doesn't
+  // burn through its own rate-limit budget just by polling.
+  function fallbackPollDelayMs(elapsedMs) {
+    if (elapsedMs < 10000) return 1000;
+    if (elapsedMs < 120000) return 5000;
+    return 18000;
+  }
+
+  function nextPollDelayMs(retryAfterHeader, elapsedMs) {
+    var seconds = parseInt(retryAfterHeader, 10);
+    if (!isNaN(seconds) && seconds >= 0) return seconds * 1000;
+    return fallbackPollDelayMs(elapsedMs);
+  }
+
+  // Past this many ms of polling, swap the label to an honest "still
+  // working" message instead of leaving a spinner with no explanation — the
+  // report's exact wording, no queue position or upfront disclaimer.
+  var LONG_WAIT_MESSAGE_AFTER_MS = 8000;
 
   // Server upload as the conversion function
   window.convertFile = function (file) {
     return new Promise(function (resolve, reject) {
+      var activeXhr = null; // whatever request (upload/poll/download) is in flight
+      var pollTimer = null; // pending setTimeout for the next poll tick
+      var cancelled = false;
+      var pollStartTime = null;
+      var longWaitShown = false;
+
+      var progressFill = document.getElementById('progress-fill');
+      var progressEl = document.getElementById('progress');
+      var progressLabel = document.getElementById('progress-label');
+
+      // With a repeating poll loop, aborting only the *current* in-flight
+      // request isn't enough — the loop would just schedule another one.
+      // The cancelled flag is checked before every scheduled next poll, on
+      // top of aborting whatever request (upload/poll/download) is active
+      // right now.
+      window.cancelConversion = function () {
+        if (cancelled) return;
+        cancelled = true;
+        if (pollTimer) {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
+        if (activeXhr) {
+          activeXhr.abort(); // fires that xhr's onabort -> reject('Cancelled.')
+          activeXhr = null;
+        } else {
+          // Between poll ticks — nothing in flight to abort.
+          reject(new Error('Cancelled.'));
+        }
+      };
+
+      function maybeShowLongWaitMessage() {
+        if (longWaitShown || !progressLabel) return;
+        if (Date.now() - pollStartTime < LONG_WAIT_MESSAGE_AFTER_MS) return;
+        longWaitShown = true;
+        progressLabel.textContent = 'Still converting — this is taking a bit longer than usual.';
+      }
+
+      function scheduleNextPoll(jobId, retryAfterHeader) {
+        if (cancelled) return;
+        var delay = nextPollDelayMs(retryAfterHeader, Date.now() - pollStartTime);
+        pollTimer = setTimeout(function () {
+          pollTimer = null;
+          poll(jobId);
+        }, delay);
+      }
+
+      function downloadResult(jobId) {
+        if (cancelled) return;
+        var xhr = new XMLHttpRequest();
+        activeXhr = xhr;
+        xhr.open('GET', apiBase + '/api/v1/convert/jobs/' + jobId + '/download', true);
+        xhr.withCredentials = true;
+        xhr.responseType = 'blob';
+
+        xhr.onload = function () {
+          activeXhr = null;
+          if (progressFill) progressFill.style.width = '100%';
+          if (xhr.status === 200) {
+            resolve(xhr.response);
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function () {
+            try {
+              var err = JSON.parse(reader.result);
+              reject(new Error(err.error || 'Conversion failed. Please try again.'));
+            } catch (e) {
+              reject(new Error('Conversion failed. Please try again.'));
+            }
+          };
+          reader.onerror = function () {
+            reject(new Error('Conversion failed. Please try again.'));
+          };
+          reader.readAsText(xhr.response);
+        };
+        xhr.onerror = function () {
+          activeXhr = null;
+          reject(new Error('Network error. Check your connection and try again.'));
+        };
+        xhr.onabort = function () {
+          activeXhr = null;
+          reject(new Error('Cancelled.'));
+        };
+        xhr.send();
+      }
+
+      function poll(jobId) {
+        if (cancelled) return;
+        var xhr = new XMLHttpRequest();
+        activeXhr = xhr;
+        xhr.open('GET', apiBase + '/api/v1/convert/jobs/' + jobId, true);
+        xhr.withCredentials = true;
+        xhr.responseType = 'json';
+        // Bounds only THIS one request, not the overall wait — a failed
+        // poll just retries on the next tick rather than aborting the whole
+        // flow (there is no fixed client give-up on the flow as a whole;
+        // see server-upload.js's history / STRESS_TEST_PHASE3_PLAN.md for
+        // why an earlier draft's xhr.timeout-as-give-up was wrong: it would
+        // silently discard a job that's still genuinely converting).
+        xhr.timeout = 10000;
+
+        xhr.onload = function () {
+          activeXhr = null;
+          if (cancelled) return;
+          var retryAfter = xhr.getResponseHeader('Retry-After');
+          var body = xhr.response;
+          if (xhr.status !== 200 || !body) {
+            scheduleNextPoll(jobId, retryAfter);
+            return;
+          }
+          if (body.status === 'done') {
+            downloadResult(jobId);
+          } else if (body.status === 'failed') {
+            reject(new Error(body.error || 'Conversion failed. Please try again.'));
+          } else {
+            maybeShowLongWaitMessage();
+            scheduleNextPoll(jobId, retryAfter);
+          }
+        };
+        xhr.onerror = function () {
+          activeXhr = null;
+          if (cancelled) return;
+          scheduleNextPoll(jobId, null);
+        };
+        xhr.ontimeout = function () {
+          activeXhr = null;
+          if (cancelled) return;
+          scheduleNextPoll(jobId, null);
+        };
+        xhr.onabort = function () {
+          activeXhr = null;
+          reject(new Error('Cancelled.'));
+        };
+        xhr.send();
+      }
+
       var formData = new FormData();
       formData.append('file', file);
 
@@ -115,13 +272,13 @@
       // doubled size limit (§6.3). FormData keeps this a "simple" CORS request,
       // so credentials add no preflight; anonymous users just send no cookie.
       xhr.withCredentials = true;
-      xhr.responseType = 'blob';
+      xhr.responseType = 'json';
+      // Bounds the upload itself (network transfer + the server's
+      // synchronous validation, both fast) — not conversion time, which no
+      // longer happens on this connection at all.
       xhr.timeout = 120000;
 
       // Upload progress — drive the progress bar directly
-      var progressFill = document.getElementById('progress-fill');
-      var progressEl = document.getElementById('progress');
-      var progressLabel = document.getElementById('progress-label');
       if (xhr.upload && progressFill && progressEl) {
         progressEl.classList.remove('progress--indeterminate');
         if (progressLabel) progressLabel.textContent = 'Uploading…';
@@ -131,9 +288,9 @@
             progressFill.style.width = pct + '%';
           }
         });
-        // Upload finished (all bytes sent); what's pending now is Gotenberg/
-        // Ghostscript actually converting the file, not more network I/O
-        // (P3 §27 — the "Processing..." spinner state the report asked for).
+        // Upload finished (all bytes sent); what's pending now is the job
+        // being picked up and converted, not more network I/O on this
+        // connection (P3 §27 — the "Processing..." spinner state).
         xhr.upload.addEventListener('load', function () {
           progressFill.style.width = '90%';
           if (progressLabel) progressLabel.textContent = 'Processing…';
@@ -142,28 +299,27 @@
 
       xhr.onload = function () {
         activeXhr = null;
-        if (progressFill) progressFill.style.width = '100%';
+        if (cancelled) return;
 
-        if (xhr.status === 200) {
-          resolve(xhr.response);
-        } else if (xhr.status === 429) {
-          reject(new Error('Rate limit exceeded. Please wait a few minutes and try again.'));
-        } else {
-          // Try to parse error JSON from blob
-          var reader = new FileReader();
-          reader.onload = function () {
-            try {
-              var err = JSON.parse(reader.result);
-              reject(new Error(err.error || 'Conversion failed. Please try again.'));
-            } catch (e) {
-              reject(new Error('Conversion failed. Please try again.'));
-            }
-          };
-          reader.onerror = function () {
+        if (xhr.status === 202) {
+          var body = xhr.response;
+          var jobId = body && body.job_id;
+          if (!jobId) {
             reject(new Error('Conversion failed. Please try again.'));
-          };
-          reader.readAsText(xhr.response);
+            return;
+          }
+          pollStartTime = Date.now();
+          poll(jobId);
+          return;
         }
+
+        if (xhr.status === 429) {
+          reject(new Error('Rate limit exceeded. Please wait a few minutes and try again.'));
+          return;
+        }
+
+        var errBody = xhr.response;
+        reject(new Error((errBody && errBody.error) || 'Conversion failed. Please try again.'));
       };
 
       xhr.onerror = function () {
@@ -173,7 +329,7 @@
 
       xhr.ontimeout = function () {
         activeXhr = null;
-        reject(new Error('Conversion timed out. Try a simpler or smaller file.'));
+        reject(new Error('Upload timed out. Try a smaller file or check your connection.'));
       };
 
       xhr.onabort = function () {
