@@ -938,3 +938,40 @@ async def test_gotenberg_queue_timeout_returns_503_with_retry_after(
     body = timed_out[0].json()
     assert body["error_type"] == "queue_timeout"
     assert timed_out[0].headers["retry-after"] == "10"
+
+
+async def test_gotenberg_own_busy_response_maps_to_503_not_generic_500(
+    client, monkeypatch
+):
+    # STRESS_TEST_REPORT.md Finding 1 fix: Gotenberg itself now rejects with
+    # 429 once --chromium-max-queue-size/--libreoffice-max-queue-size is full,
+    # and can still 503 on its own --api-timeout. Before this test existed,
+    # both fell through to the generic `except Exception` handler and were
+    # reported to the user as "file may be corrupted or password-protected"
+    # — wrong, since nothing about the file was the problem. Both must
+    # instead route through the same honest "service busy" 503+Retry-After
+    # response ``test_gotenberg_queue_timeout_returns_503_with_retry_after``
+    # above already verifies for OUR OWN queue timeout.
+    for gotenberg_status in (429, 503):
+
+        async def post_impl(status=gotenberg_status):
+            return _FakeResponse(status_code=status, content=b"busy")
+
+        monkeypatch.setattr(
+            converter.httpx, "AsyncClient", _fake_async_client(post_impl)
+        )
+        r = await client.post(
+            "/api/v1/convert/docx-to-pdf",
+            files={
+                "file": (
+                    "report.docx",
+                    b"PK\x03\x04" + b"\x00" * 200,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
+        assert r.status_code == 503, gotenberg_status
+        body = r.json()
+        assert body["error_type"] == "queue_timeout"
+        assert "corrupted" not in body["error"].lower()
+        assert r.headers["retry-after"] == "10"

@@ -174,6 +174,20 @@ async def _gotenberg_request(endpoint: str, files: dict, tool_id: str) -> bytes:
                 }
             },
         )
+        # Gotenberg itself signaling "busy" — 429 is its own
+        # --chromium-max-queue-size/--libreoffice-max-queue-size rejection
+        # (STRESS_TEST_REPORT.md Finding 1's fix, docker-compose.yml), 503 is
+        # its --api-timeout expiring under load. Both are the same "try again
+        # shortly" condition GOTENBERG_QUEUE_TIMEOUT_SECONDS already handles
+        # above for OUR OWN queue — route them through the same
+        # ConversionQueueTimeout path instead of falling into the generic
+        # handler below, which reports them as "file may be corrupted" (wrong:
+        # nothing about the file was the problem). Any other status is a
+        # genuine unexpected error and still raises RuntimeError.
+        if resp.status_code in (429, 503):
+            raise ConversionQueueTimeout(
+                "The conversion service is busy right now. Please try again in a moment."
+            ) from None
         raise RuntimeError(
             f"Gotenberg {endpoint} returned {resp.status_code}: {error_body}"
         )
