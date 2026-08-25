@@ -54,8 +54,17 @@ async def test_honeypot_silently_drops_submission(client):
     assert rows == []
 
 
-async def test_rejects_empty_or_whitespace_only_title_or_body(client):
-    for title, body in [("", "x"), ("x", ""), ("   ", "x"), ("x", "\n\t")]:
+async def test_rejects_empty_or_whitespace_only_title(client):
+    # Split from the body-side cases below — /messages' rate limit (3/hr,
+    # STRESS_TEST_REPORT.md Finding 2's stopgap) is tighter than the 4
+    # combinations this used to check in one test.
+    for title, body in [("", "x"), ("   ", "x")]:
+        r = await client.post("/api/v1/messages", json={"title": title, "body": body})
+        assert r.status_code == 400, (title, body)
+
+
+async def test_rejects_empty_or_whitespace_only_body(client):
+    for title, body in [("x", ""), ("x", "\n\t")]:
         r = await client.post("/api/v1/messages", json={"title": title, "body": body})
         assert r.status_code == 400, (title, body)
 
