@@ -941,7 +941,7 @@ async def test_gotenberg_queue_timeout_returns_503_with_retry_after(
 
 
 async def test_gotenberg_own_busy_response_maps_to_503_not_generic_500(
-    client, monkeypatch
+    client, monkeypatch, caplog
 ):
     # STRESS_TEST_REPORT.md Finding 1 fix: Gotenberg itself now rejects with
     # 429 once --chromium-max-queue-size/--libreoffice-max-queue-size is full,
@@ -960,18 +960,32 @@ async def test_gotenberg_own_busy_response_maps_to_503_not_generic_500(
         monkeypatch.setattr(
             converter.httpx, "AsyncClient", _fake_async_client(post_impl)
         )
-        r = await client.post(
-            "/api/v1/convert/docx-to-pdf",
-            files={
-                "file": (
-                    "report.docx",
-                    b"PK\x03\x04" + b"\x00" * 200,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
-        )
+        caplog.clear()
+        with caplog.at_level("WARNING", logger="filecast.converter"):
+            r = await client.post(
+                "/api/v1/convert/docx-to-pdf",
+                files={
+                    "file": (
+                        "report.docx",
+                        b"PK\x03\x04" + b"\x00" * 200,
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    )
+                },
+            )
         assert r.status_code == 503, gotenberg_status
         body = r.json()
         assert body["error_type"] == "queue_timeout"
         assert "corrupted" not in body["error"].lower()
         assert r.headers["retry-after"] == "10"
+        # Sentry's default LoggingIntegration auto-captures every
+        # logger.error() as an error event (main.py's sentry_sdk.init() has
+        # no explicit integrations=[]) — this queue-size bound exists
+        # specifically to make busy periods resolve in ~200ms instead of
+        # hanging, so it must log at warning (like the app's own queue
+        # timeout does), not error, or every "working as designed" rejection
+        # floods Sentry during exactly the traffic spike this PR targets.
+        gotenberg_records = [r for r in caplog.records if "Gotenberg" in r.getMessage()]
+        assert gotenberg_records, gotenberg_status
+        assert all(r.levelname == "WARNING" for r in gotenberg_records), [
+            (r.levelname, r.getMessage()) for r in gotenberg_records
+        ]
