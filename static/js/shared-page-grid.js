@@ -4,9 +4,10 @@
   // Shared "page grid" component (Tool Preview/Interaction Redesign §1) — one
   // thumbnail grid, five modes: click-to-mark (Remove/Extract),
   // drag/keyboard-to-reorder (Organize), a read-only confirmation strip
-  // (Split v1's "every page" preview), and a read-only strip that also
-  // live-previews a whole-document rotation (Rotate v1, reacting to the
-  // tool's own #opt-rotation select). Each mode's converter file calls
+  // (Split's "preview" mode — "every page" v1 default, plus a v2 "at marked
+  // points" sub-mode), and a read-only strip that also live-previews a
+  // whole-document rotation (Rotate v1, reacting to the tool's own
+  // #opt-rotation select). Each mode's converter file calls
   // window.FCPageGrid.init({ mode, onChange }) at load time; this module owns
   // everything else — DOM, the render Worker, selection state.
   //
@@ -16,7 +17,9 @@
   // directly, independent of shared.js's own state machine. window.convertFile
   // is untouched by this file: each converter keeps reading the same hidden
   // #opt-pages/#opt-order text input it always has, this component just keeps
-  // that input's value in sync with the grid selection.
+  // that input's value in sync with the grid selection (visible, read-only,
+  // for Remove/Extract/Organize — Split's onChange receives groups directly
+  // instead, since it has no text input of its own).
 
   var THUMB_CSS_WIDTH = 120; // display width, in CSS px, requested from the render worker
   var MAX_DPR = 2; // cap devicePixelRatio scaling so a 3x/4x phone doesn't over-render
@@ -25,10 +28,12 @@
   var statusEl = null;
   var listEl = null;
   var loadingEl = null;
-  var optionsRowEl = null; // #tool-options — hidden while the grid is active, restored on fallback
+  var optionsRowEl = null; // #tool-options — stays visible for every mode; see setOptionsInputReadOnly
 
   var opts = null; // { mode: 'remove'|'extract'|'organize', onChange: fn(spec) }
   var session = null; // rebuilt on every file pick; null before any pick / after fallback
+  var hintEl = null;
+  var splitModeButtons = null; // { every: <button>, marked: <button> } — 'preview' mode only
 
   function q(id) {
     return document.getElementById(id);
@@ -69,17 +74,52 @@
     listEl.className = 'page-grid__list hidden';
     listEl.setAttribute('role', opts.mode === 'organize' ? 'listbox' : 'group');
 
-    var hint = document.createElement('div');
-    hint.className = 'page-grid__hint';
-    hint.textContent = hintText();
+    hintEl = document.createElement('div');
+    hintEl.className = 'page-grid__hint';
+    hintEl.textContent = hintText();
 
     container.appendChild(loadingEl);
     container.appendChild(statusEl);
     container.appendChild(listEl);
-    container.appendChild(hint);
+    if (opts.mode === 'preview') {
+      container.appendChild(buildSplitModeRow());
+    }
+    container.appendChild(hintEl);
     fileInfo.parentNode.insertBefore(container, fileInfo.nextSibling);
 
     optionsRowEl = q('tool-options');
+  }
+
+  // Split's read-only 'preview' mode has two sub-modes: "every page" (the
+  // long-standing v1 default) and "at marked points" (v2 — click between
+  // pages to mark a cut, grouped ranges become separate files). Rendered
+  // once, next to the hint text, and never rebuilt — see switchSplitSubMode().
+  function buildSplitModeRow() {
+    var row = document.createElement('div');
+    row.className = 'page-grid__split-modes';
+
+    var everyBtn = document.createElement('button');
+    everyBtn.type = 'button';
+    everyBtn.className = 'page-grid__split-mode-btn is-active';
+    everyBtn.textContent = 'Every page';
+    everyBtn.setAttribute('aria-pressed', 'true');
+    everyBtn.addEventListener('click', function () {
+      switchSplitSubMode('every');
+    });
+
+    var markedBtn = document.createElement('button');
+    markedBtn.type = 'button';
+    markedBtn.className = 'page-grid__split-mode-btn';
+    markedBtn.textContent = 'At marked points';
+    markedBtn.setAttribute('aria-pressed', 'false');
+    markedBtn.addEventListener('click', function () {
+      switchSplitSubMode('marked');
+    });
+
+    row.appendChild(everyBtn);
+    row.appendChild(markedBtn);
+    splitModeButtons = { every: everyBtn, marked: markedBtn };
+    return row;
   }
 
   function hintText() {
@@ -90,12 +130,18 @@
       return 'Click a page to select it for extraction.';
     }
     if (opts.mode === 'preview') {
-      return 'Every page becomes its own PDF.';
+      return session && session.splitSubMode === 'marked'
+        ? 'Click the marker between two pages to cut there.'
+        : 'Every page becomes its own PDF.';
     }
     if (opts.mode === 'rotate') {
       return 'Preview of how every page will look after rotating.';
     }
     return 'Click a page to mark it for removal.';
+  }
+
+  function updateHintText() {
+    if (hintEl) hintEl.textContent = hintText();
   }
 
   // ---------------------------------------------------------------------
@@ -106,7 +152,30 @@
   // — same pattern image-cropper.js uses for its own async image decode.
   var pendingFile = null;
 
+  // shared.js enables the Convert button synchronously, in its own 'change'
+  // listener on this same #file-input — a race otherwise: pdf.js parsing the
+  // newly-picked file (buildGrid(), below) is async, so without this, the
+  // grid-driven spec (Remove/Extract/Organize's mirrored input, or Split's
+  // currentGroups) would keep reflecting the PREVIOUS file until that parse
+  // finishes. A visitor who marks a selection, picks a different PDF, and
+  // clicks Convert inside that window would silently apply the old file's
+  // spec/groups to the new one. Resetting here runs in the same synchronous
+  // 'change' dispatch as shared.js's own listener, so no click can land in
+  // between — the actual grid (once it loads) overwrites this again anyway.
+  function resetGridDrivenStateForNewPick() {
+    if (opts.mode === 'preview') {
+      if (typeof opts.onChange === 'function') opts.onChange(null);
+      return;
+    }
+    if (opts.mode === 'remove' || opts.mode === 'extract' || opts.mode === 'organize') {
+      var row = q('tool-options');
+      var input = row && row.querySelector('.tool-options__input');
+      if (input) input.value = '';
+    }
+  }
+
   function onFilePicked(file) {
+    resetGridDrivenStateForNewPick();
     if (!file || getExt(file.name) !== '.pdf') {
       teardownSession();
       return;
@@ -190,6 +259,8 @@
     session.order = [];
     for (var i = 0; i < pageCount; i++) session.order.push(i);
     session.marked = new Set();
+    session.cutPoints = new Set(); // 'preview' mode, "at marked points" sub-mode only
+    session.splitSubMode = 'every';
 
     listEl.innerHTML = '';
     session.tileEls = new Array(pageCount);
@@ -205,18 +276,32 @@
     hideLoading();
     listEl.classList.remove('hidden');
     statusEl.classList.remove('hidden');
-    // Remove/Extract/Organize replace their tool's own text-input option, so
-    // that row is hidden once the grid takes over. Rotate's #opt-rotation
-    // select is NOT replaced — the live preview reacts to it, so it has to
-    // stay visible and usable. Split (preview) has no options row at all.
-    if (optionsRowEl && opts.mode !== 'rotate') optionsRowEl.classList.add('hidden');
+    // Remove/Extract/Organize mirror the grid's selection into their tool's
+    // own text-input option (see setOptionsInputReadOnly) rather than hiding
+    // that row — kept visible, read-only, so the exact spec the grid
+    // produces stays there for verification.
+    setOptionsInputReadOnly(true);
     container.classList.remove('hidden');
     var preview = q('file-preview');
     if (preview) preview.classList.add('hidden');
 
+    updateSplitModeButtons();
+    updateHintText();
     updateStatus();
     commitChange();
     announce(pageCount + ' page' + (pageCount === 1 ? '' : 's') + ' loaded.');
+  }
+
+  // Remove/Extract/Organize's #tool-options row has a single text input
+  // (#opt-pages/#opt-order) that commitChange()'s onChange callback already
+  // mirrors the grid's selection into — made read-only once the grid is
+  // driving it, so it stays visible as a live confirmation of the exact spec
+  // rather than an editable field two sources could fight over.
+  function setOptionsInputReadOnly(readOnly) {
+    if (!optionsRowEl) return;
+    if (opts.mode !== 'remove' && opts.mode !== 'extract' && opts.mode !== 'organize') return;
+    var input = optionsRowEl.querySelector('.tool-options__input');
+    if (input) input.readOnly = readOnly;
   }
 
   function buildTile(idx) {
@@ -341,6 +426,121 @@
   }
 
   // ---------------------------------------------------------------------
+  // Split — "at marked points" sub-mode. The tiles built by buildTile() for
+  // 'preview' mode are plain, non-interactive <div>s (matching "every page",
+  // the default) — switching sub-modes attaches/detaches a small corner
+  // toggle button on the *already-built* tiles rather than rebuilding the
+  // grid, so flipping back and forth never re-triggers the pdf.js render
+  // worker or loses scroll position.
+  // ---------------------------------------------------------------------
+  function switchSplitSubMode(mode) {
+    if (!session || session.splitSubMode === mode) return;
+    session.splitSubMode = mode;
+    if (mode === 'marked') {
+      // Cut points from a previous visit to this sub-mode (same file,
+      // flipped back and forth) are intentionally kept, not cleared — only
+      // a new file pick (buildGrid()) resets them. attachCutToggles() below
+      // restores each toggle's visual state from session.cutPoints as it
+      // re-creates them.
+      attachCutToggles();
+      commitSplitGroups();
+    } else {
+      detachCutToggles();
+      if (opts && typeof opts.onChange === 'function') opts.onChange(null);
+    }
+    updateSplitModeButtons();
+    updateHintText();
+    updateStatus();
+    if (statusEl) announce(statusEl.textContent);
+  }
+
+  function updateSplitModeButtons() {
+    if (!splitModeButtons || !session) return;
+    var isMarked = session.splitSubMode === 'marked';
+    splitModeButtons.every.classList.toggle('is-active', !isMarked);
+    splitModeButtons.every.setAttribute('aria-pressed', isMarked ? 'false' : 'true');
+    splitModeButtons.marked.classList.toggle('is-active', isMarked);
+    splitModeButtons.marked.setAttribute('aria-pressed', isMarked ? 'true' : 'false');
+  }
+
+  // Every tile except the last gets a toggle (cutting "after the last page"
+  // isn't a meaningful cut point).
+  function attachCutToggles() {
+    if (!session) return;
+    for (var i = 0; i < session.pageCount - 1; i++) {
+      var tile = session.tileEls[i];
+      if (!tile || tile._fcCutToggle) continue;
+      var toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'page-grid__cut-toggle';
+      toggle.setAttribute('aria-label', 'Toggle cut after page ' + (i + 1));
+      toggle.setAttribute('aria-pressed', session.cutPoints.has(i) ? 'true' : 'false');
+      toggle.classList.toggle('is-active', session.cutPoints.has(i));
+      (function (origIdx) {
+        toggle.addEventListener('click', function (e) {
+          e.stopPropagation();
+          toggleCutPoint(origIdx);
+        });
+      })(i);
+      tile.appendChild(toggle);
+      tile._fcCutToggle = toggle;
+    }
+  }
+
+  function detachCutToggles() {
+    if (!session) return;
+    session.tileEls.forEach(function (tile) {
+      if (tile && tile._fcCutToggle) {
+        tile.removeChild(tile._fcCutToggle);
+        tile._fcCutToggle = null;
+      }
+    });
+  }
+
+  function toggleCutPoint(origIdx) {
+    if (session.cutPoints.has(origIdx)) session.cutPoints.delete(origIdx);
+    else session.cutPoints.add(origIdx);
+    var toggle = session.tileEls[origIdx] && session.tileEls[origIdx]._fcCutToggle;
+    if (toggle) {
+      var active = session.cutPoints.has(origIdx);
+      toggle.classList.toggle('is-active', active);
+      toggle.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    updateStatus();
+    commitSplitGroups();
+    if (statusEl) announce(statusEl.textContent);
+  }
+
+  // Contiguous [startIdx, endIdxInclusive] pairs, 0-indexed, covering every
+  // page exactly once — the shape pdf-lib-worker.js's split() expects.
+  function computeSplitGroups() {
+    if (!session) return [];
+    var cuts = Array.from(session.cutPoints).sort(function (a, b) {
+      return a - b;
+    });
+    var groups = [];
+    var start = 0;
+    cuts.forEach(function (cut) {
+      groups.push([start, cut]);
+      start = cut + 1;
+    });
+    groups.push([start, session.pageCount - 1]);
+    return groups;
+  }
+
+  // Split's own commit path — buildSpec()/commitChange() are string-shaped
+  // (built from session.marked), not groups-array-shaped, so this doesn't
+  // reuse them. Called only from the toggle handler and the sub-mode switch;
+  // buildGrid()'s own unconditional commitChange() call is untouched and
+  // keeps no-oping for Split (onChange('') from buildSpec(), which happens
+  // to be falsy the same way null is — see pdf-split.js).
+  function commitSplitGroups() {
+    if (opts && typeof opts.onChange === 'function') {
+      opts.onChange(computeSplitGroups());
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // Remove / Extract — click to toggle
   // ---------------------------------------------------------------------
   function toggleMark(origIdx) {
@@ -373,8 +573,22 @@
       statusEl.textContent =
         marked + ' of ' + total + ' page' + (total === 1 ? '' : 's') + ' selected.';
     } else if (opts.mode === 'preview') {
-      statusEl.textContent =
-        total + ' page' + (total === 1 ? '' : 's') + ' — will split into ' + total + ' files.';
+      if (session.splitSubMode === 'marked') {
+        var cuts = session.cutPoints.size;
+        var fileCount = cuts + 1;
+        statusEl.textContent =
+          cuts +
+          ' cut' +
+          (cuts === 1 ? '' : 's') +
+          ' — will split into ' +
+          fileCount +
+          ' file' +
+          (fileCount === 1 ? '' : 's') +
+          '.';
+      } else {
+        statusEl.textContent =
+          total + ' page' + (total === 1 ? '' : 's') + ' — will split into ' + total + ' files.';
+      }
     } else {
       statusEl.textContent = total + ' page' + (total === 1 ? '' : 's') + '.';
     }
@@ -540,7 +754,9 @@
     teardownWorker();
     session = null;
     if (container) container.classList.add('hidden');
-    if (optionsRowEl) optionsRowEl.classList.remove('hidden');
+    // Falls back to the plain, editable text box — no pdf.js assets, or a
+    // non-PDF file re-picked mid-session.
+    setOptionsInputReadOnly(false);
   }
 
   // ---------------------------------------------------------------------

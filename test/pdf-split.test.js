@@ -36,8 +36,11 @@ function toolPageHtml() {
 
 // Stands in for the real Worker (not implemented in jsdom) — replies with a
 // fixed 2-page split, mirroring the payload shape pdf-lib-worker.js sends.
+// Captures the posted message (lastMessage) so a test can assert what was
+// actually sent (e.g. whether `groups` was included).
 class FakeSplitWorker {
-  postMessage() {
+  postMessage(msg) {
+    this.lastMessage = msg;
     var self = this;
     setTimeout(function () {
       if (self.onmessage) {
@@ -46,8 +49,8 @@ class FakeSplitWorker {
             ok: true,
             result: {
               parts: [
-                { bytes: new Uint8Array([1, 2, 3]), pageNum: 1 },
-                { bytes: new Uint8Array([4, 5, 6]), pageNum: 2 }
+                { bytes: new Uint8Array([1, 2, 3]), pageNum: 1, label: 'Page 1' },
+                { bytes: new Uint8Array([4, 5, 6]), pageNum: 2, label: 'Page 2' }
               ]
             }
           }
@@ -58,10 +61,20 @@ class FakeSplitWorker {
   terminate() {}
 }
 
-async function setupSplitToolPage() {
+// `withFCPageGrid` mocks window.FCPageGrid before pdf-split.js loads,
+// capturing the onChange callback it registers — the same style
+// shared-multi.test.js uses for takeover hooks — so a test can call it
+// directly to simulate the visitor toggling a cut point in the (separately
+// tested) shared-page-grid.js UI.
+async function setupSplitToolPage({ withFCPageGrid = false } = {}) {
   const dom = createDom(toolPageHtml());
   dom.window.gtag = vi.fn();
-  dom.window.Worker = FakeSplitWorker;
+  const workers = [];
+  dom.window.Worker = function () {
+    var w = new FakeSplitWorker();
+    workers.push(w);
+    return w;
+  };
   evalScript(dom, 'fc-util.js');
   dom.window.TOOL_CONFIG = {
     id: 'pdf-split',
@@ -76,8 +89,17 @@ async function setupSplitToolPage() {
     pdf_lib_src: '/static/lib/pdf-lib.min.js'
   };
   await boot(dom, 'shared.js');
+
+  var capturedOnChange = null;
+  if (withFCPageGrid) {
+    dom.window.FCPageGrid = {
+      init: function (o) {
+        capturedOnChange = o.onChange;
+      }
+    };
+  }
   evalScript(dom, 'converters/pdf-split.js');
-  return dom;
+  return { dom, workers, onChange: (groups) => capturedOnChange(groups) };
 }
 
 function selectFile(dom, file) {
@@ -88,7 +110,7 @@ function selectFile(dom, file) {
 
 describe('pdf-split.js — Convert Another button', () => {
   it('reuses the real #reset-btn instead of a location.reload() replacement', async () => {
-    const dom = await setupSplitToolPage();
+    const { dom } = await setupSplitToolPage();
     const file = new dom.window.File([new Uint8Array(1024)], 'input.pdf', {
       type: 'application/pdf'
     });
@@ -114,5 +136,77 @@ describe('pdf-split.js — Convert Another button', () => {
       false
     );
     expect(dom.window.document.getElementById('result').classList.contains('hidden')).toBe(true);
+  });
+
+  it("renders each part's label as the download button text", async () => {
+    const { dom } = await setupSplitToolPage();
+    const file = new dom.window.File([new Uint8Array(1024)], 'input.pdf', {
+      type: 'application/pdf'
+    });
+
+    selectFile(dom, file);
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const labels = Array.from(
+      dom.window.document.querySelectorAll('.result__actions .btn--success')
+    ).map((b) => b.textContent);
+    expect(labels).toEqual(['Page 1', 'Page 2']);
+  });
+});
+
+describe('pdf-split.js — "at marked points" groups', () => {
+  it('includes groups in the posted message once FCPageGrid onChange has fired', async () => {
+    const { dom, workers, onChange } = await setupSplitToolPage({ withFCPageGrid: true });
+    const file = new dom.window.File([new Uint8Array(1024)], 'input.pdf', {
+      type: 'application/pdf'
+    });
+
+    onChange([
+      [0, 1],
+      [2, 2]
+    ]);
+
+    selectFile(dom, file);
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    expect(workers[0].lastMessage.groups).toEqual([
+      [0, 1],
+      [2, 2]
+    ]);
+  });
+
+  it('posts groups: null (matching v1 "every page") when onChange never fires', async () => {
+    const { dom, workers } = await setupSplitToolPage({ withFCPageGrid: true });
+    const file = new dom.window.File([new Uint8Array(1024)], 'input.pdf', {
+      type: 'application/pdf'
+    });
+
+    selectFile(dom, file);
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    expect(workers[0].lastMessage.groups).toBeNull();
+  });
+
+  it('reverting to an empty groups array (switching back to "every page") also posts null', async () => {
+    const { dom, workers, onChange } = await setupSplitToolPage({ withFCPageGrid: true });
+    const file = new dom.window.File([new Uint8Array(1024)], 'input.pdf', {
+      type: 'application/pdf'
+    });
+
+    onChange([[0, 2]]);
+    onChange(null);
+
+    selectFile(dom, file);
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    expect(workers[0].lastMessage.groups).toBeNull();
   });
 });

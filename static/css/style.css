@@ -1433,11 +1433,66 @@ img { max-width: 100%; display: block; }
 .page-grid__tile--rotate {
   cursor: default;
   touch-action: auto;
+  /* position: relative anchors Split's "at marked points" .page-grid__cut-toggle,
+     appended/removed in place without rebuilding the tile — see
+     attachCutToggles()/detachCutToggles() in shared-page-grid.js. */
+  position: relative;
 }
 .page-grid__tile--preview:hover,
 .page-grid__tile--rotate:hover {
   border-color: var(--color-border);
   box-shadow: none;
+}
+/* Split v2 — "cut after this page" toggle, sitting on the tile's right edge
+   rather than a flex-child divider between tiles, so it stays correctly
+   placed however the grid wraps across rows. Not rendered on the last tile
+   (attachCutToggles() skips it — no cut point exists after the last page). */
+.page-grid__cut-toggle {
+  position: absolute;
+  top: 50%;
+  /* Centered on the tile's right edge (half the button's own 18px width) so
+     it sits inside the 12px flex gap (--space-3) between tiles without
+     reaching into the next tile's box. */
+  right: -9px;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-raised);
+  cursor: pointer;
+  z-index: 1;
+}
+.page-grid__cut-toggle:hover,
+.page-grid__cut-toggle:focus-visible {
+  border-color: var(--color-primary);
+  outline: none;
+}
+.page-grid__cut-toggle.is-active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+.page-grid__split-modes {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.page-grid__split-mode-btn {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-raised);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
+}
+.page-grid__split-mode-btn.is-active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-bg);
 }
 .page-grid__tile-canvas-wrap {
   position: relative;
@@ -1544,6 +1599,10 @@ img { max-width: 100%; display: block; }
   display: block;
   max-width: 100%;
   height: auto;
+  touch-action: none; /* Watermark's drag-to-position — let pointer drags move the stamp instead of scrolling the page */
+}
+.page-proof__canvas--draggable {
+  cursor: move;
 }
 .page-proof__hint {
   margin-top: var(--space-3);
@@ -2233,6 +2292,13 @@ table.kv-table tr.group-title th .eyebrow {
   max-width: fit-content;
 }
 .tool-options__input:focus { border-color: var(--color-border-focus); }
+/* Remove/Extract/Organize's page-list input, once the page grid takes over
+   (shared-page-grid.js's setOptionsInputReadOnly) — reads as non-interactive
+   at a glance, not just via cursor behavior. */
+.tool-options__input[readonly] {
+  background: var(--color-bg-sunken);
+  color: var(--color-text-muted);
+}
 /* max-width:fit-content above exists so a lone text input (e.g. Organize's
    #opt-order before the page grid takes over) doesn't stretch across an
    entire flex row — but a <select> needs room for its widest real option

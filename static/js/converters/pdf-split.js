@@ -1,15 +1,24 @@
 (function () {
   'use strict';
 
-  // Page-grid preview (Tool Preview/Interaction Redesign §7, v1 scope) —
-  // shared-page-grid.js (loaded before this file, see pdf-split.yaml's
-  // shared_js) shows a read-only thumbnail strip confirming what split()
-  // already does today (every page becomes its own PDF) — no marking, no
-  // options, so convertFile() below needs no changes at all. Absent
-  // (window.FCPageGrid undefined) in the worker-level unit tests, which eval
-  // this file alone.
+  // Page-grid preview (Tool Preview/Interaction Redesign §7, plus the v2 "at
+  // marked points" range mode) — shared-page-grid.js (loaded before this
+  // file, see pdf-split.yaml's shared_js) shows a read-only thumbnail strip
+  // with two sub-modes: "every page" (default, matches v1 — onChange never
+  // fires) and "at marked points" (onChange fires the computed groups on
+  // every cut toggle). currentGroups stays null until the visitor marks at
+  // least one cut, so an untouched load posts no groups and split() falls
+  // back to its own default (every page becomes its own file) — identical to
+  // v1 behavior. Absent (window.FCPageGrid undefined) in the worker-level
+  // unit tests, which eval this file alone.
+  var currentGroups = null;
   if (window.FCPageGrid) {
-    window.FCPageGrid.init({ mode: 'preview' });
+    window.FCPageGrid.init({
+      mode: 'preview',
+      onChange: function (groups) {
+        currentGroups = Array.isArray(groups) && groups.length ? groups : null;
+      }
+    });
   }
 
   var activeWorker = null;
@@ -48,7 +57,8 @@
           var blobs = data.result.parts.map(function (part) {
             return {
               blob: new Blob([part.bytes], { type: 'application/pdf' }),
-              pageNum: part.pageNum
+              pageNum: part.pageNum,
+              label: part.label
             };
           });
           showSplitResults(blobs, file.name);
@@ -61,7 +71,7 @@
           reject(new Error((err && err.message) || 'This PDF could not be split.'));
         };
 
-        worker.postMessage({ op: 'split', file: bytes }, [bytes]);
+        worker.postMessage({ op: 'split', file: bytes, groups: currentGroups }, [bytes]);
       });
     });
   };
@@ -89,7 +99,7 @@
     blobs.forEach(function (item) {
       var btn = document.createElement('button');
       btn.className = 'btn btn--success';
-      btn.textContent = 'Page ' + item.pageNum;
+      btn.textContent = item.label;
       btn.addEventListener('click', function () {
         var url = URL.createObjectURL(item.blob);
         var a = document.createElement('a');
@@ -109,7 +119,12 @@
 
     var infoEl = document.getElementById('result-info');
     if (infoEl) {
-      infoEl.textContent = 'Split into ' + blobs.length + ' pages. Click each button to download.';
+      infoEl.textContent =
+        'Split into ' +
+        blobs.length +
+        ' file' +
+        (blobs.length === 1 ? '' : 's') +
+        '. Click each button to download.';
     }
   }
 })();

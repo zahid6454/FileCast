@@ -1,13 +1,16 @@
 (function () {
   'use strict';
 
-  // Page-proof preview (Tool Preview/Interaction Redesign §9) —
-  // shared-page-proof.js (loaded before this file, see pdf-watermark.yaml's
-  // shared_js) renders page 1 and overlays a live watermark reacting to
-  // #opt-text/#opt-opacity/#opt-fontSize. convertFile() below is unchanged
-  // — the worker call already matches those three options 1:1. Absent
-  // (window.FCPageProof undefined) in the worker-level unit tests, which
-  // eval this file alone.
+  // Page-proof preview (Tool Preview/Interaction Redesign §9, plus
+  // drag-to-position + free-rotation) — shared-page-proof.js (loaded before
+  // this file, see pdf-watermark.yaml's shared_js) renders page 1 and
+  // overlays a live watermark reacting to #opt-text/#opt-opacity/
+  // #opt-fontSize/#opt-angle, and lets the visitor drag the stamp to
+  // reposition it. convertFile() below reads #opt-angle directly (same
+  // pattern as the other options) and FCPageProof.getWatermarkPosition() for
+  // the drag position, since there's no hidden input to mirror position into.
+  // Absent (window.FCPageProof undefined) in the worker-level unit tests,
+  // which eval this file alone.
   if (window.FCPageProof) {
     window.FCPageProof.init({ mode: 'watermark' });
   }
@@ -25,9 +28,11 @@
     var textEl = document.getElementById('opt-text');
     var opacityEl = document.getElementById('opt-opacity');
     var fontSizeEl = document.getElementById('opt-fontSize');
+    var angleEl = document.getElementById('opt-angle');
     var text = textEl && textEl.value ? textEl.value : 'CONFIDENTIAL';
     var opacityPercent = opacityEl ? parseInt(opacityEl.value, 10) : 30;
     var fontSize = fontSizeEl ? parseInt(fontSizeEl.value, 10) : 40;
+    var angle = angleEl ? parseInt(angleEl.value, 10) : 45;
     if (!text.trim()) {
       return Promise.reject(new Error('Please enter watermark text.'));
     }
@@ -38,6 +43,12 @@
         new Error('Watermark is unavailable right now. Please refresh the page.')
       );
     }
+
+    // FCPageProof is absent in the worker-level unit tests, which eval this
+    // file alone — default to page-center, matching the worker's own default.
+    var position = window.FCPageProof
+      ? window.FCPageProof.getWatermarkPosition()
+      : { xPercent: 50, yPercent: 50 };
 
     return file.arrayBuffer().then(function (bytes) {
       return new Promise(function (resolve, reject) {
@@ -69,7 +80,10 @@
             file: bytes,
             text: text,
             opacity: (isNaN(opacityPercent) ? 30 : opacityPercent) / 100,
-            fontSize: isNaN(fontSize) ? 40 : fontSize
+            fontSize: isNaN(fontSize) ? 40 : fontSize,
+            xPercent: position.xPercent,
+            yPercent: position.yPercent,
+            angle: isNaN(angle) ? 45 : angle
           },
           [bytes]
         );

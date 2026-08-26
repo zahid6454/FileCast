@@ -40,6 +40,13 @@ options:
     default: 40
     placeholder: "40"
     suffix: "pt"
+  - id: angle
+    label: "Angle"
+    type: range
+    min: 0
+    max: 359
+    default: 45
+    suffix: "°"
 tagline: "Stamp a text watermark across every page"
 tagline_long: "Add a diagonal text watermark to every page of a PDF — entirely in your browser, no upload required."
 meta:

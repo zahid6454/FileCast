@@ -14,6 +14,7 @@ function pageProofHtml(mode) {
         <input id="opt-text" value="AB" />
         <input id="opt-opacity" value="30" />
         <input id="opt-fontSize" value="40" />
+        <input id="opt-angle" value="45" />
       `
       : `
         <select id="opt-position">
@@ -132,6 +133,76 @@ describe('shared-page-proof.js — watermark overlay math', () => {
     textEl.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 
     expect(ctx.fillText).not.toHaveBeenCalled();
+  });
+
+  it('reacts live to a custom #opt-angle value', async () => {
+    const dom = createDom(pageProofHtml('watermark'));
+    const ctx = await setupProof(dom, 'watermark');
+
+    const angleEl = dom.window.document.getElementById('opt-angle');
+    angleEl.value = '90';
+    angleEl.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+    expect(ctx.rotate).toHaveBeenLastCalledWith((-90 * Math.PI) / 180);
+  });
+});
+
+describe('shared-page-proof.js — watermark drag-to-position', () => {
+  it('updates getWatermarkPosition() and redraws at the dragged coordinates on pointerdown', async () => {
+    const dom = createDom(pageProofHtml('watermark'));
+    const ctx = await setupProof(dom, 'watermark');
+
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+    // jsdom's default getBoundingClientRect() returns an all-zero rect, which
+    // would divide-by-zero the pointer-to-percent math — stub a real box.
+    // canvas.width=200 (bitmap width from mockRenderWorker) over a 100px CSS
+    // box -> scaleX=2; canvas.height=280 over a 140px CSS box -> scaleY=2.
+    canvasEl.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 140 });
+
+    const initialPos = dom.window.FCPageProof.getWatermarkPosition();
+    expect(initialPos).toEqual({ xPercent: 50, yPercent: 50 });
+
+    ctx.translate.mockClear();
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 20, clientY: 20, bubbles: true })
+    );
+
+    const draggedPos = dom.window.FCPageProof.getWatermarkPosition();
+    // Dragging toward the top-left of the canvas moves x left of center, and
+    // moves y toward the top of the page — a *higher* percent-from-bottom.
+    expect(draggedPos.xPercent).toBeLessThan(50);
+    expect(draggedPos.yPercent).toBeGreaterThan(50);
+
+    // The overlay redrew at the new (dragged) position, not the old center.
+    expect(ctx.translate).toHaveBeenCalled();
+    const [xPx] = ctx.translate.mock.calls[ctx.translate.mock.calls.length - 1];
+    expect(xPx).not.toBe(90); // 90 was the fixed page-center x from the test above
+  });
+
+  it('keeps following the pointer on pointermove, and stops on pointerup', async () => {
+    const dom = createDom(pageProofHtml('watermark'));
+    const ctx = await setupProof(dom, 'watermark');
+
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+    canvasEl.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 140 });
+
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 50, clientY: 70, bubbles: true })
+    );
+    const posAfterDown = dom.window.FCPageProof.getWatermarkPosition();
+
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 10, clientY: 10, bubbles: true })
+    );
+    const posAfterMove = dom.window.FCPageProof.getWatermarkPosition();
+    expect(posAfterMove).not.toEqual(posAfterDown);
+
+    canvasEl.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true }));
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 90, clientY: 130, bubbles: true })
+    );
+    // No pointerdown preceded this move — dragging is off, position unchanged.
+    expect(dom.window.FCPageProof.getWatermarkPosition()).toEqual(posAfterMove);
   });
 });
 

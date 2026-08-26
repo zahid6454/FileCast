@@ -21,8 +21,9 @@
   var loadingEl = null;
 
   var opts = null; // { mode: 'watermark' | 'pageNumbers' }
-  var session = null; // { file, worker, bitmap, scale, pageWidthPt, pageHeightPt, pageCount }
+  var session = null; // { file, worker, bitmap, scale, pageWidthPt, pageHeightPt, pageCount, xPercent, yPercent }
   var pendingFile = null;
+  var dragging = false;
 
   function q(id) {
     return document.getElementById(id);
@@ -64,6 +65,17 @@
     container.appendChild(viewportEl);
     container.appendChild(hint);
     fileInfo.parentNode.insertBefore(container, fileInfo.nextSibling);
+
+    // Watermark only — drag the stamp to reposition it. Pointer Events unify
+    // mouse/touch/pen, same shape as image-cropper.js's own onPointerDown/
+    // onPointerMove/onPointerUp.
+    if (opts.mode === 'watermark') {
+      canvasEl.classList.add('page-proof__canvas--draggable');
+      canvasEl.addEventListener('pointerdown', onWatermarkPointerDown);
+      canvasEl.addEventListener('pointermove', onWatermarkPointerMove);
+      canvasEl.addEventListener('pointerup', onWatermarkPointerUp);
+      canvasEl.addEventListener('pointercancel', onWatermarkPointerUp);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -101,7 +113,9 @@
       scale: 1,
       pageWidthPt: 0,
       pageHeightPt: 0,
-      pageCount: 0
+      pageCount: 0,
+      xPercent: 50, // watermark only — matches the worker's own default (page-center)
+      yPercent: 50
     };
 
     worker.onmessage = function (e) {
@@ -171,6 +185,83 @@
   }
 
   // ---------------------------------------------------------------------
+  // Watermark drag-to-position. canvasCoords() mirrors image-cropper.js's own
+  // helper: canvas.getBoundingClientRect() then scaled by
+  // canvas.width/height over the CSS box size, since the canvas's internal
+  // pixel size (DPR-scaled) and its CSS-rendered size aren't the same number.
+  // ---------------------------------------------------------------------
+  function canvasCoords(e) {
+    var box = canvasEl.getBoundingClientRect();
+    var scaleX = box.width ? canvasEl.width / box.width : 1;
+    var scaleY = box.height ? canvasEl.height / box.height : 1;
+    return {
+      x: (e.clientX - box.left) * scaleX,
+      y: (e.clientY - box.top) * scaleY
+    };
+  }
+
+  function onWatermarkPointerDown(e) {
+    if (!session || !session.bitmap) return;
+    dragging = true;
+    if (canvasEl.setPointerCapture) {
+      try {
+        canvasEl.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* pointer capture unsupported — dragging still works */
+      }
+    }
+    updateWatermarkPositionFromPointer(e);
+    e.preventDefault();
+  }
+
+  function onWatermarkPointerMove(e) {
+    if (!dragging || !session || !session.bitmap) return;
+    updateWatermarkPositionFromPointer(e);
+  }
+
+  function onWatermarkPointerUp(e) {
+    if (!dragging) return;
+    dragging = false;
+    if (canvasEl.releasePointerCapture) {
+      try {
+        canvasEl.releasePointerCapture(e.pointerId);
+      } catch (err) {
+        /* no-op */
+      }
+    }
+  }
+
+  // Snaps the watermark's anchor straight to the pointer position — no
+  // precise hit-testing against the rotated text needed, simpler and more
+  // forgiving than requiring a grab on a diagonal line.
+  //
+  // The worker's own math centers x on the anchor but anchors y at the text
+  // BASELINE (no vertical centering) — snapping yPercent straight to the
+  // pointer would put the baseline, not the visual middle, under the cursor,
+  // so the text would visually sit high of wherever it was dropped. A fixed
+  // vertical offset of half the current font size (in the same
+  // "close enough for a live preview" spirit as this file's other
+  // approximations) corrects for that, so the text appears centered on the
+  // cursor on both axes.
+  function updateWatermarkPositionFromPointer(e) {
+    var pt = canvasCoords(e);
+    var fontSizeEl = q('opt-fontSize');
+    var fontSize = fontSizeEl ? parseInt(fontSizeEl.value, 10) : 40;
+    if (isNaN(fontSize)) fontSize = 40;
+
+    var verticalOffsetPx = (fontSize * session.scale) / 2;
+    var baselineCanvasY = pt.y + verticalOffsetPx;
+
+    session.xPercent = clampPercent((pt.x / canvasEl.width) * 100);
+    session.yPercent = clampPercent(((canvasEl.height - baselineCanvasY) / canvasEl.height) * 100);
+    render();
+  }
+
+  function clampPercent(v) {
+    return Math.max(0, Math.min(100, v));
+  }
+
+  // ---------------------------------------------------------------------
   // Render — page bitmap + a live overlay of exactly what the worker draws.
   // Redraws the whole canvas from the cached bitmap on every option change
   // (cheap: one drawImage + a few canvas text calls, no re-render needed).
@@ -184,23 +275,28 @@
     else if (opts.mode === 'pageNumbers') drawPageNumberOverlay(ctx);
   }
 
-  // Mirrors watermark(bytes, text, opacity, fontSize) in pdf-lib-worker.js:
-  // centered x/y, fixed 45° rotation, gray fill — neither position nor angle
-  // is an exposed option, so the preview only reacts to the three that are.
-  // ctx.measureText() approximates pdf-lib's own AFM-table text width (a
-  // different, if similar, metric source) — close enough for a live
-  // preview whose job is "does this roughly look right," not pixel parity.
+  // Mirrors watermark(bytes, text, opacity, fontSize, xPercent, yPercent,
+  // angleDegrees) in pdf-lib-worker.js: position comes from session.xPercent/
+  // yPercent (dragged, or the 50/50 page-center default), rotation from
+  // #opt-angle (defaulting to 45, same fallback shape every other option
+  // read here already has). ctx.measureText() approximates pdf-lib's own
+  // AFM-table text width (a different, if similar, metric source) — close
+  // enough for a live preview whose job is "does this roughly look right,"
+  // not pixel parity.
   function drawWatermarkOverlay(ctx) {
     var textEl = q('opt-text');
     var opacityEl = q('opt-opacity');
     var fontSizeEl = q('opt-fontSize');
+    var angleEl = q('opt-angle');
     var text = textEl && textEl.value ? textEl.value : 'CONFIDENTIAL';
     if (!text.trim()) return;
 
     var opacityPercent = opacityEl ? parseInt(opacityEl.value, 10) : 30;
     var fontSize = fontSizeEl ? parseInt(fontSizeEl.value, 10) : 40;
+    var angle = angleEl ? parseInt(angleEl.value, 10) : 45;
     if (isNaN(opacityPercent)) opacityPercent = 30;
     if (isNaN(fontSize)) fontSize = 40;
+    if (isNaN(angle)) angle = 45;
 
     var scale = session.scale;
     var fontPx = fontSize * scale;
@@ -208,8 +304,8 @@
     ctx.save();
     ctx.font = 'bold ' + fontPx + 'px Helvetica, Arial, sans-serif';
     var textWidthPt = ctx.measureText(text).width / scale;
-    var xPt = session.pageWidthPt / 2 - textWidthPt / 2;
-    var yPt = session.pageHeightPt / 2;
+    var xPt = (session.xPercent / 100) * session.pageWidthPt - textWidthPt / 2;
+    var yPt = (session.yPercent / 100) * session.pageHeightPt;
     var xPx = xPt * scale;
     var yPx = (session.pageHeightPt - yPt) * scale; // PDF y grows up; canvas y grows down
 
@@ -218,10 +314,10 @@
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.translate(xPx, yPx);
-    // pdf-lib's rotate(45) is +45° counter-clockwise in PDF's y-up space —
-    // the same visual tilt as CSS/canvas's y-down, clockwise-positive
-    // rotate(-45deg): both read bottom-left to top-right.
-    ctx.rotate((-45 * Math.PI) / 180);
+    // pdf-lib's rotate(angle) is +angle° counter-clockwise in PDF's y-up
+    // space — the same visual tilt as CSS/canvas's y-down, clockwise-positive
+    // rotate(-angle deg): both read bottom-left to top-right.
+    ctx.rotate((-angle * Math.PI) / 180);
     ctx.fillText(text, 0, 0);
     ctx.restore();
   }
@@ -296,6 +392,7 @@
     pendingFile = null;
     teardownWorker();
     session = null;
+    dragging = false; // an in-progress drag's pointerup/pointercancel may never reach the canvas
     if (container) container.classList.add('hidden');
   }
 
@@ -320,7 +417,7 @@
 
       var optionIds =
         opts.mode === 'watermark'
-          ? ['opt-text', 'opt-opacity', 'opt-fontSize']
+          ? ['opt-text', 'opt-opacity', 'opt-fontSize', 'opt-angle']
           : ['opt-position', 'opt-startNumber', 'opt-format'];
       optionIds.forEach(function (id) {
         var el = q(id);
@@ -328,6 +425,15 @@
         el.addEventListener('input', render);
         el.addEventListener('change', render);
       });
+    },
+    // pdf-watermark.js has no natural hidden-input spec to mirror position
+    // into (unlike Remove/Extract's page-list string), so it reads this
+    // directly at Convert time instead.
+    getWatermarkPosition: function () {
+      return {
+        xPercent: session ? session.xPercent : 50,
+        yPercent: session ? session.yPercent : 50
+      };
     }
   };
 })();
