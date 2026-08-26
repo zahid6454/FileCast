@@ -12,6 +12,8 @@ output_extension: .svg
 output_is_data_url: true
 wrap_text: true
 fixed_preview_size: true
+input_max_bytes: 2331
+input_limit_caption: "QR codes can hold up to about 2,331 bytes of text — fewer once you use non-ASCII characters."
 js_module: converters/qr-code-generator.js
 js_libs: []
 max_file_size: 5MB

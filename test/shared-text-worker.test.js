@@ -506,3 +506,225 @@ describe('shared-text.js — Copy to Clipboard fallback (tool UI audit §7)', ()
     expect(copyBtn.textContent).toBe("Couldn't copy — select manually.");
   });
 });
+
+// Tool UI audit round 2, §3: the flat output table's per-row copy icon
+// (hash-generator.js's Algorithm/Hash rows) rendered with no click handler
+// at all — clicking it did nothing, silently.
+describe('shared-text.js — per-row copy icon (tool UI audit round 2, §3)', () => {
+  it("copies the clicked row's own value, not the whole result, and shows a checkmark", async () => {
+    const dom = await setupTextToolPage(FlatTableTextWorker);
+    dom.window.navigator.clipboard = { writeText: vi.fn(() => Promise.resolve()) };
+
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const icons = dom.window.document.querySelectorAll('.copy-icon');
+    expect(icons).toHaveLength(2);
+
+    icons[1].dispatchEvent(new dom.window.Event('click'));
+    expect(dom.window.navigator.clipboard.writeText).toHaveBeenCalledWith('def');
+    await flush(); // writeText()'s .then() lands as a microtask, not synchronously
+    expect(icons[1].textContent).toBe('✓');
+
+    // Only the clicked row's icon changes — its sibling stays untouched.
+    expect(icons[0].textContent).toBe('⧉');
+  });
+
+  it('is keyboard-operable (Enter/Space), same as a real button', async () => {
+    const dom = await setupTextToolPage(FlatTableTextWorker);
+    dom.window.navigator.clipboard = { writeText: vi.fn(() => Promise.resolve()) };
+
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const icon = dom.window.document.querySelectorAll('.copy-icon')[0];
+    const event = new dom.window.KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+    icon.dispatchEvent(event);
+    expect(dom.window.navigator.clipboard.writeText).toHaveBeenCalledWith('abc');
+  });
+
+  it('shows a fallback instead of silently doing nothing when navigator.clipboard does not exist', async () => {
+    const dom = await setupTextToolPage(FlatTableTextWorker);
+    expect(dom.window.navigator.clipboard).toBeUndefined();
+
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const icon = dom.window.document.querySelectorAll('.copy-icon')[0];
+    icon.dispatchEvent(new dom.window.Event('click'));
+    expect(icon.textContent).toBe('!');
+  });
+
+  it('resets to the rest glyph even if a click lands while the icon is already showing the checkmark (race regression)', async () => {
+    // flash() used to capture icon.textContent as "original" at call time.
+    // A second click before the first flash's 1200ms reset fires captured
+    // '✓' itself as "original", so the correct first reset was immediately
+    // clobbered back to '✓' by the second timer, permanently. Reproduced
+    // directly here — the icon showing '✓' when clicked (whatever the
+    // cause) must never become the thing a later reset restores it to.
+    const dom = await setupTextToolPage(FlatTableTextWorker);
+    dom.window.navigator.clipboard = { writeText: vi.fn(() => Promise.resolve()) };
+
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const icon = dom.window.document.querySelectorAll('.copy-icon')[0];
+    icon.textContent = '✓';
+    icon.dispatchEvent(new dom.window.Event('click'));
+    await flush();
+
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    expect(icon.textContent).toBe('⧉');
+  });
+});
+
+// Tool UI audit round 2, §4: a hard content limit (Barcode Generator's 80
+// characters, QR Code Generator's ~2,331 bytes) used to only ever surface as
+// a rejection after clicking Convert. TOOL_CONFIG's optional
+// input_max_length/input_max_bytes turn #char-count/#byte-count into a live
+// gauge instead, so the limit is visible before the click.
+describe('shared-text.js — character/byte limit gauge (tool UI audit round 2, §4)', () => {
+  it('keeps the plain "N chars"/"N Bytes" counters when no limit is declared', async () => {
+    const dom = await setupTextToolPage(IdentityTextWorker);
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+
+    const charCount = dom.window.document.getElementById('char-count');
+    const byteCount = dom.window.document.getElementById('byte-count');
+    expect(charCount.textContent).toBe('5 chars');
+    expect(byteCount.textContent).toBe('5 Bytes');
+    expect(charCount.className).toBe('');
+    expect(byteCount.className).toBe('');
+  });
+
+  it('drives #char-count as a count/max gauge when input_max_length is set, coloring it as the limit is approached and exceeded', async () => {
+    const dom = await setupTextToolPage(IdentityTextWorker);
+    dom.window.TOOL_CONFIG.input_max_length = 10;
+    const input = dom.window.document.getElementById('text-input');
+    const charCount = dom.window.document.getElementById('char-count');
+
+    input.value = '12345'; // 5/10 — under the 80% warn threshold
+    input.dispatchEvent(new dom.window.Event('input'));
+    expect(charCount.textContent).toBe('5 / 10 chars');
+    expect(charCount.classList.contains('limit-ok')).toBe(true);
+
+    input.value = '123456789'; // 9/10 — past 80%, not yet over
+    input.dispatchEvent(new dom.window.Event('input'));
+    expect(charCount.textContent).toBe('9 / 10 chars');
+    expect(charCount.classList.contains('limit-warn')).toBe(true);
+
+    input.value = '12345678901'; // 11/10 — over the limit
+    input.dispatchEvent(new dom.window.Event('input'));
+    expect(charCount.textContent).toBe('11 / 10 chars');
+    expect(charCount.classList.contains('limit-over')).toBe(true);
+  });
+
+  it('drives #byte-count as a count/max gauge when input_max_bytes is set instead', async () => {
+    const dom = await setupTextToolPage(IdentityTextWorker);
+    dom.window.TOOL_CONFIG.input_max_bytes = 10;
+    const input = dom.window.document.getElementById('text-input');
+    const byteCount = dom.window.document.getElementById('byte-count');
+
+    input.value = '12345678901'; // 11 bytes > 10
+    input.dispatchEvent(new dom.window.Event('input'));
+    expect(byteCount.textContent).toBe('11 / 10 Bytes');
+    expect(byteCount.classList.contains('limit-over')).toBe(true);
+  });
+});
+
+// Tool UI audit round 2, §2: a number-kind input can declare input_presets
+// (tools/uuid-generator.yaml's 1/5/10/25/50/100) — quick-pick chips that
+// render into #number-presets but, until now, had no click wiring at all.
+describe('shared-text.js — number-input presets (tool UI audit round 2, §2)', () => {
+  function numberToolPageHtml() {
+    return `
+      <input id="text-input" type="number" value="5">
+      <span id="char-count"></span>
+      <span id="byte-count"></span>
+      <div id="number-presets">
+        <button type="button" class="chip" data-value="1">1</button>
+        <button type="button" class="chip chip--active" data-value="5">5</button>
+        <button type="button" class="chip" data-value="10">10</button>
+      </div>
+      <button id="convert-btn"></button>
+      <div id="progress" class="hidden"><div id="progress-fill"></div></div>
+      <div id="text-result" class="hidden">
+        <div id="result-info"></div>
+        <div id="text-output-table" class="hidden"></div>
+        <div id="text-output-editor"><textarea id="text-output"></textarea></div>
+        <img id="text-image-preview" class="hidden" alt="Converted image preview">
+        <button id="copy-btn">Copy to Clipboard</button>
+        <button id="download-btn"></button>
+      </div>
+      <button id="reset-btn"></button>
+      <div id="error-msg" class="hidden"></div>
+      <button id="format-btn" class="hidden"></button>
+      <div id="a11y-status"></div>
+    `;
+  }
+
+  async function setupNumberToolPage() {
+    const dom = createDom(numberToolPageHtml());
+    dom.window.gtag = vi.fn();
+    dom.window.Worker = IdentityTextWorker;
+    evalScript(dom, 'fc-util.js');
+    dom.window.TOOL_CONFIG = {
+      id: 'uuid-generator',
+      ui_type: 'text-input',
+      input_format: 'Count',
+      output_format: 'UUID',
+      type: 'client-side',
+      max_file_size_bytes: 5 * 1024 * 1024,
+      max_file_size: '5MB',
+      text_converter_src: '/js/converters/uuid-generator.js',
+      text_converter_worker_src: '/js/workers/text-converter-worker.js'
+    };
+    await boot(dom, 'shared-text.js');
+    return dom;
+  }
+
+  it('sets the number input’s value and marks the clicked chip active (class + aria-pressed) on click', async () => {
+    const dom = await setupNumberToolPage();
+    const input = dom.window.document.getElementById('text-input');
+    const chips = dom.window.document.querySelectorAll('.chip');
+
+    chips[2].dispatchEvent(new dom.window.Event('click')); // "10"
+    expect(input.value).toBe('10');
+    expect(chips[2].classList.contains('chip--active')).toBe(true);
+    expect(chips[2].getAttribute('aria-pressed')).toBe('true');
+    expect(chips[1].classList.contains('chip--active')).toBe(false); // was "5"
+    expect(chips[1].getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('re-syncs which chip is active when the value is typed directly, and clears it for a value with no matching chip', async () => {
+    const dom = await setupNumberToolPage();
+    const input = dom.window.document.getElementById('text-input');
+    const chips = dom.window.document.querySelectorAll('.chip');
+
+    input.value = '1';
+    input.dispatchEvent(new dom.window.Event('input'));
+    expect(chips[0].classList.contains('chip--active')).toBe(true);
+    expect(chips[1].classList.contains('chip--active')).toBe(false);
+
+    input.value = '42';
+    input.dispatchEvent(new dom.window.Event('input'));
+    expect(dom.window.document.querySelectorAll('.chip--active')).toHaveLength(0);
+  });
+});

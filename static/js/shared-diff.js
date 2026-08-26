@@ -170,8 +170,12 @@
     var outputText = output.text;
 
     els.outputArea.value = outputText;
-    refreshLineNumbers(els.outputArea);
+    // Unhide before refreshing the gutter, not after: #text-result (and the
+    // output textarea inside it) starts display:none, and the gutter's
+    // matchHeight() reads textarea.offsetHeight — 0 while still hidden. Same
+    // fix as shared-text.js's showResult(), same shared gutter module.
     els.textResult.classList.remove('hidden');
+    refreshLineNumbers(els.outputArea);
 
     var outputBytes = new Blob([outputText]).size;
     els.resultInfo.textContent =

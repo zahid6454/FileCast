@@ -42,11 +42,38 @@
     }
   }
 
+  // A tool with a hard content limit (Barcode Generator: input_max_length
+  // chars, QR Code Generator: input_max_bytes) used to only reveal it as a
+  // rejection after clicking Convert. Whichever field the tool declares
+  // turns that counter into a live "count / max" gauge instead of a plain
+  // count, so the limit is visible before the click, not after.
+  function clearGauge(el) {
+    el.classList.remove('limit-ok', 'limit-warn', 'limit-over');
+  }
+  function setGauge(el, count, max, unit) {
+    el.textContent = count.toLocaleString() + ' / ' + max.toLocaleString() + ' ' + unit;
+    clearGauge(el);
+    el.classList.add(count > max ? 'limit-over' : count > max * 0.8 ? 'limit-warn' : 'limit-ok');
+  }
+
   function updateMeta() {
     var text = els.inputArea.value;
     var bytes = new Blob([text]).size;
-    els.charCount.textContent = text.length.toLocaleString() + ' chars';
-    els.byteCount.textContent = formatBytes(bytes);
+    var config = window.TOOL_CONFIG || {};
+
+    if (config.input_max_length) {
+      setGauge(els.charCount, text.length, config.input_max_length, 'chars');
+    } else {
+      els.charCount.textContent = text.length.toLocaleString() + ' chars';
+      clearGauge(els.charCount);
+    }
+
+    if (config.input_max_bytes) {
+      setGauge(els.byteCount, bytes, config.input_max_bytes, 'Bytes');
+    } else {
+      els.byteCount.textContent = formatBytes(bytes);
+      clearGauge(els.byteCount);
+    }
   }
 
   function validate(text) {
@@ -175,8 +202,14 @@
     var outputText = output.text;
 
     els.outputArea.value = outputText;
-    refreshLineNumbers(els.outputArea);
+    // Unhide before refreshing the gutter, not after: #text-result (and the
+    // output textarea inside it) starts display:none, and the gutter's
+    // matchHeight() reads textarea.offsetHeight — 0 while still hidden. Once
+    // per conversion is cheap; getting it backwards left the output gutter
+    // pinned to 0 height behind a visible textarea until the next manual
+    // resize nudged the ResizeObserver.
     els.textResult.classList.remove('hidden');
+    refreshLineNumbers(els.outputArea);
     renderOutputTable(output);
 
     if (els.imagePreview) {
@@ -270,6 +303,11 @@
   // reusing this {label, value} shape would silently get the wrong headers.
   // Not worth a `headers` field for one consumer; revisit if a second one
   // shows up.
+  // The per-row copy icon's one and only rest state — used both to create
+  // it and (in wireRowCopy's flash()) to reset it, so the two can never
+  // drift out of sync with each other.
+  var COPY_ICON_REST = '⧉';
+
   function buildFlatOutputTable(rows) {
     var table = document.createElement('table');
     table.className = 'out-table';
@@ -286,7 +324,15 @@
       tdValue.textContent = row.value;
       var tdCopy = document.createElement('td');
       tdCopy.className = 'copy';
-      tdCopy.textContent = '⧉';
+      var copyIcon = document.createElement('span');
+      copyIcon.className = 'copy-icon';
+      copyIcon.textContent = COPY_ICON_REST;
+      copyIcon.title = 'Copy';
+      copyIcon.setAttribute('role', 'button');
+      copyIcon.setAttribute('tabindex', '0');
+      copyIcon.setAttribute('aria-label', 'Copy ' + row.label + ' value');
+      wireRowCopy(copyIcon, row.value);
+      tdCopy.appendChild(copyIcon);
       tr.appendChild(tdLabel);
       tr.appendChild(tdValue);
       tr.appendChild(tdCopy);
@@ -294,6 +340,49 @@
     });
     table.appendChild(tbody);
     return table;
+  }
+
+  // Per-row copy icon in the flat output table (hash-generator.js's
+  // Algorithm/Hash rows) — separate from copyOutput()/els.copyBtn below,
+  // which always copies the *whole* result, since a row only wants its own
+  // value. Same synchronous-throw guard: accessing navigator.clipboard on
+  // an unsupported/non-HTTPS context throws before any promise exists.
+  function wireRowCopy(icon, value) {
+    // Resets to the fixed rest glyph, not whatever icon.textContent happens
+    // to be at call time — a second click inside the previous flash's
+    // 1200ms window used to capture '✓' itself as "original", so the first
+    // timeout's correct reset was immediately clobbered by the second
+    // timeout resetting back to '✓', permanently. The rest state never
+    // varies per icon, so there's nothing to capture.
+    function flash(text) {
+      icon.textContent = text;
+      icon.classList.add('copy-icon--done');
+      setTimeout(function () {
+        icon.textContent = COPY_ICON_REST;
+        icon.classList.remove('copy-icon--done');
+      }, 1200);
+    }
+    function doCopy() {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        flash('!');
+        return;
+      }
+      navigator.clipboard
+        .writeText(value)
+        .then(function () {
+          flash('✓');
+        })
+        .catch(function () {
+          flash('!');
+        });
+    }
+    icon.addEventListener('click', doCopy);
+    icon.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        doCopy();
+      }
+    });
   }
 
   function buildGroupedOutputTable(groups) {
@@ -524,6 +613,30 @@
       els.errorMsg.classList.add('hidden');
       els.convertBtn.disabled = !els.inputArea.value.trim();
     });
+
+    // Quick-pick counts (a number-kind input's optional input_presets in
+    // tools/*.yaml, e.g. UUID Generator's 1/5/10/25/50/100) — the container
+    // only exists in the DOM when a tool declares presets, so this is a
+    // no-op for every other text-input tool.
+    var presetWrap = document.getElementById('number-presets');
+    if (presetWrap) {
+      var presetChips = presetWrap.querySelectorAll('.chip');
+      var syncActiveChip = function () {
+        for (var i = 0; i < presetChips.length; i++) {
+          var isActive = presetChips[i].dataset.value === els.inputArea.value;
+          presetChips[i].classList.toggle('chip--active', isActive);
+          presetChips[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        }
+      };
+      for (var p = 0; p < presetChips.length; p++) {
+        presetChips[p].addEventListener('click', function () {
+          els.inputArea.value = this.dataset.value;
+          els.inputArea.dispatchEvent(new Event('input'));
+          syncActiveChip();
+        });
+      }
+      els.inputArea.addEventListener('input', syncActiveChip);
+    }
 
     els.convertBtn.addEventListener('click', startConversion);
     els.copyBtn.addEventListener('click', copyOutput);

@@ -38,6 +38,19 @@
     function syncScroll() {
       inner.style.transform = 'translateY(-' + textarea.scrollTop + 'px)';
     }
+    // The gutter has no height of its own — normally it matches the textarea
+    // via `.text-editor`'s flex `align-items: stretch`. But a <textarea> with
+    // native `resize` doesn't reliably keep participating in that stretch
+    // after the user drags its handle (browsers treat a manually-resized
+    // textarea's box somewhat like an out-of-flow override), so a drag can
+    // leave the gutter's box a different height than the textarea next to
+    // it — not just its numbers out of sync, but the whole column mismatched.
+    // Setting the height explicitly here, driven by the same ResizeObserver
+    // as syncScroll() below, keeps the two boxes pinned together regardless
+    // of how the browser resolves the flex stretch.
+    function matchHeight() {
+      gutter.style.height = textarea.offsetHeight + 'px';
+    }
 
     textarea.addEventListener('input', function () {
       render();
@@ -46,13 +59,32 @@
     textarea.addEventListener('scroll', syncScroll);
 
     render();
+    matchHeight();
     syncScroll();
+
+    // Manual resize (drag handle) fires neither 'input' nor 'scroll' — a
+    // ResizeObserver is the only way to catch it and re-run both fixups.
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () {
+        matchHeight();
+        syncScroll();
+      }).observe(textarea);
+    }
 
     // Exposed so code that sets `.value` programmatically (worker results,
     // reset, the Prettier button) can ask the gutter to catch up — those
-    // assignments don't fire an 'input' event.
+    // assignments don't fire an 'input' event. Also re-runs matchHeight():
+    // the output textarea's wrapper starts hidden (display: none, so
+    // offsetHeight is 0 at wire() time) and only gets its real size once
+    // shared-text.js's showResult() reveals it — this is the call that
+    // fires right after that reveal, so it can't skip the same fixup
+    // syncScroll() gets. Not left to the ResizeObserver above alone: a
+    // display:none-to-visible transition should also fire it, but that path
+    // has no test coverage here (jsdom has no ResizeObserver at all), so
+    // this call stays the guaranteed, synchronous path.
     textarea._refreshLineNumbers = function () {
       render();
+      matchHeight();
       syncScroll();
     };
   }

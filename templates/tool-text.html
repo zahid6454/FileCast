@@ -114,10 +114,24 @@
      numeric keypad on mobile and native spinner arrows on desktop for free.
      shared-text.js never needs to change: every els.inputArea access it makes
      (.value/.trim()/'input' listener) works identically on <input>. #}
-  <input type="number" inputmode="numeric" class="text-input-number" id="text-input"
-    min="{{ tool.get('input_min', '') }}" max="{{ tool.get('input_max', '') }}"
-    value="{{ tool.get('input_default', '') }}"
-    placeholder="{{ tool.get('input_placeholder', '') }}">
+  <div class="tool-number-input">
+    <input type="number" inputmode="numeric" class="text-input-number" id="text-input"
+      min="{{ tool.get('input_min', '') }}" max="{{ tool.get('input_max', '') }}"
+      value="{{ tool.get('input_default', '') }}"
+      placeholder="{{ tool.get('input_placeholder', '') }}">
+    {% if tool.get('input_presets') %}
+    {# Quick-pick counts — see shared-text.js's presetWrap wiring. Fills the
+       space a bare number field leaves empty in the same panel padding a
+       full textarea tool uses, and matches the preset-chip pattern common
+       to other count/length generators. #}
+    <div class="tool-number-presets" id="number-presets" role="group" aria-label="Quick counts">
+      {% for n in tool.input_presets %}
+      {% set is_default = (n|string) == (tool.get('input_default', '')|string) %}
+      <button type="button" class="chip{% if is_default %} chip--active{% endif %}" data-value="{{ n }}" aria-pressed="{{ 'true' if is_default else 'false' }}">{{ n }}</button>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
   {% else %}
   <div class="text-editor{% if wrap_input %} text-editor--wrap{% endif %}">
     {% if not wrap_input %}
@@ -125,6 +139,15 @@
     {% endif %}
     <textarea class="text-input-area" id="text-input" placeholder="{{ tool.get('input_placeholder', 'Paste your ' + tool.input_format + ' here...') }}">{{- tool.get('input_default', '') -}}</textarea>
   </div>
+  {% endif %}
+  {# A hard content limit (Barcode Generator's 80 characters, QR Code
+     Generator's ~2,331 bytes) used to only ever surface as a rejection after
+     clicking Convert — the visitor had no way to know it existed until they
+     hit it. input_max_length/input_max_bytes make it visible upfront: this
+     caption states the limit in plain language, and updateMeta() below
+     colors #char-count as a live gauge against whichever field is set. #}
+  {% if tool.get('input_max_length') or tool.get('input_max_bytes') %}
+  <p class="text-editor__caption">{{ tool.get('input_limit_caption', 'Keep this under the tool\'s content limit for a reliable result.') }}</p>
   {% endif %}
   {# char/byte count is meaningless next to a number spinner (input_kind:
      number) — kept in the DOM either way since shared-text.js's updateMeta()
@@ -148,7 +171,7 @@
      "Convert to X" phrasing, which reads oddly when input_format equals
      output_format (e.g. "Convert to JSON" on a JSON Formatter). Conversion
      tools don't set it, so they keep the exact same default text. #}
-  <div class="convert-action">
+  <div class="convert-action{% if tool.get('input_kind') == 'number' %} convert-action--tight{% endif %}">
     <button class="btn btn--primary btn--lg" id="convert-btn">
       {{ tool.get('action_label', 'Convert to ' + tool.output_format) }}
     </button>
@@ -281,6 +304,8 @@
   "output_is_data_url": {{ tool.get('output_is_data_url', false)|tojson }},
   "max_file_size": {{ tool.max_file_size|tojson }},
   "max_file_size_bytes": {{ tool.max_file_size_bytes|tojson }},
+  "input_max_length": {{ tool.get('input_max_length', none)|tojson }},
+  "input_max_bytes": {{ tool.get('input_max_bytes', none)|tojson }},
   "category": {{ tool.category|tojson }}{% if tool.js_module is defined and tool.js_module %}{% set tool_js = assets.get('js/' + tool.js_module) %}{% set text_worker_asset = assets.get('js/workers/text-converter-worker.js') %}{% if tool_js and text_worker_asset %},
   "text_converter_src": {{ ("/" + tool_js.path)|tojson }},
   "text_converter_worker_src": {{ ("/" + text_worker_asset.path)|tojson }}{% endif %}{% endif %}
