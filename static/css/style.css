@@ -1333,6 +1333,30 @@ img { max-width: 100%; display: block; }
    shared-multi.js's window._fileListRenderer hook — same shape .file-list
    already has, plus a live estimate line). --- */
 .file-estimate-list { margin-top: var(--space-4); }
+/* Fixed-height scroll window (~320px, ~5 rows) instead of letting the list
+   push the whole page — same treatment as Merge's .file-grid__list
+   (TOOL_PREVIEW_PAGINATION_PLAN.md §2), extended here since this list hits
+   the same max_files: 10 cap and grows the page just as tall. Reuses the
+   exact scrollbar treatment so it reads as the same system. */
+.file-estimate-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--brand-blue) transparent;
+}
+.file-estimate-list::-webkit-scrollbar {
+  width: 8px;
+}
+.file-estimate-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.file-estimate-list::-webkit-scrollbar-thumb {
+  background-image: linear-gradient(180deg, var(--brand-blue), var(--brand-green));
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-bg-raised);
+  background-clip: padding-box;
+}
 .file-estimate-row {
   display: flex;
   align-items: center;
@@ -2229,8 +2253,32 @@ table.kv-table tr.group-title th .eyebrow {
   font-weight: var(--weight-bold);
 }
 
-/* --- Multi-file Tool (tool-multi.html) --- */
+/* --- Multi-file Tool (tool-multi.html) — JPG/PNG/Image-to-PDF's plain list
+   (Merge and Bulk Image Compressor take over #file-list with their own
+   renderer and styling instead; see .file-grid__list/.file-estimate-list). --- */
 .file-list { margin-top: var(--space-4); }
+/* Fixed-height scroll window instead of letting the list push the whole
+   page — same treatment as .file-grid__list/.file-estimate-list, since this
+   list hits the same max_files: 10 cap. */
+.file-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--brand-blue) transparent;
+}
+.file-list::-webkit-scrollbar {
+  width: 8px;
+}
+.file-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.file-list::-webkit-scrollbar-thumb {
+  background-image: linear-gradient(180deg, var(--brand-blue), var(--brand-green));
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-bg-raised);
+  background-clip: padding-box;
+}
 .file-list__item {
   display: flex;
   align-items: center;
