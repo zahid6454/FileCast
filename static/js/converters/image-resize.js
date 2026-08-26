@@ -28,6 +28,13 @@
   var locked = true;
   var syncing = false; // re-entrancy guard: the auto-filled field's own 'input' handler must not re-trigger a sync
 
+  // Width/Height unit — 'px' (default, exact pixels) or 'percent' (scale
+  // relative to the source image, e.g. 50 = half size). Both fields always
+  // share one unit; switching converts whatever's currently typed so the
+  // visitor's values keep meaning the same output size where possible.
+  var unit = 'px';
+  var unitToggleEl = null;
+
   // The one active preview session (file + loaded Image). Rebuilt whenever a
   // new file is picked; null before any file has been picked. convertFile()
   // reuses session.img for the matching file so the image isn't decoded twice.
@@ -39,6 +46,103 @@
   function heightEl() {
     return document.getElementById('opt-height');
   }
+
+  // ---------------------------------------------------------------------
+  // px / % unit toggle — lives in the #tool-options block (present on page
+  // load, before any file is picked), unlike the rest of this file's UI
+  // which only exists once ensureUI() runs after a file loads.
+  // ---------------------------------------------------------------------
+  function ensureUnitToggle() {
+    var optionsEl = document.getElementById('tool-options');
+    if (!optionsEl || unitToggleEl) return;
+
+    var row = document.createElement('div');
+    row.className = 'tool-options__row image-resizer__unit-row';
+
+    var label = document.createElement('span');
+    label.className = 'tool-options__label';
+    label.textContent = 'Unit';
+
+    var group = document.createElement('div');
+    group.className = 'image-resizer__unit-group';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Width/height unit');
+
+    ['px', 'percent'].forEach(function (u) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chip';
+      btn.textContent = u === 'percent' ? '%' : 'px';
+      btn.dataset.unit = u;
+      btn.addEventListener('click', function () {
+        setUnit(u);
+      });
+      group.appendChild(btn);
+    });
+
+    row.appendChild(label);
+    row.appendChild(group);
+    optionsEl.appendChild(row);
+    unitToggleEl = group;
+    syncUnitUI();
+  }
+
+  function syncUnitUI() {
+    if (!unitToggleEl) return;
+    var buttons = unitToggleEl.querySelectorAll('button');
+    for (var i = 0; i < buttons.length; i++) {
+      var isActive = buttons[i].dataset.unit === unit;
+      buttons[i].classList.toggle('chip--active', isActive);
+      buttons[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    }
+    var suffix = unit === 'percent' ? '%' : 'px';
+    var maxVal = unit === 'percent' ? '1000' : '10000';
+    ['width', 'height'].forEach(function (id) {
+      var suffixEl = document.getElementById('suffix-' + id);
+      if (suffixEl) suffixEl.textContent = suffix;
+      var input = document.getElementById('opt-' + id);
+      if (input) input.max = maxVal;
+    });
+  }
+
+  // Switches unit and converts whatever's currently typed so the fields keep
+  // meaning roughly the same output size. Without a loaded image there's no
+  // original dimension to convert against, so the raw numbers just carry
+  // over as-is (e.g. "50" stays "50") — the visitor will see it re-expressed
+  // once render()/convertFile() next run against a real image.
+  function setUnit(u) {
+    if (u === unit) return;
+    var origW = session && session.img ? session.img.naturalWidth : null;
+    var origH = session && session.img ? session.img.naturalHeight : null;
+    if (origW && origH) {
+      var w = parseFloat(widthEl().value);
+      var h = parseFloat(heightEl().value);
+      if (unit === 'px' && u === 'percent') {
+        if (w) widthEl().value = round1((w / origW) * 100);
+        if (h) heightEl().value = round1((h / origH) * 100);
+      } else if (unit === 'percent' && u === 'px') {
+        if (w) widthEl().value = Math.max(1, Math.round((origW * w) / 100));
+        if (h) heightEl().value = Math.max(1, Math.round((origH * h) / 100));
+      }
+    }
+    unit = u;
+    syncUnitUI();
+    render();
+  }
+
+  function round1(n) {
+    return Math.round(n * 10) / 10;
+  }
+
+  // Resolves a raw field value (in whatever `unit` currently is) to actual
+  // target pixels against one source dimension. Shared by render() (preview)
+  // and convertFile() (real output) so both always agree.
+  function toPixels(raw, origDimension) {
+    if (!raw) return 0;
+    return unit === 'percent' ? Math.round((origDimension * raw) / 100) : Math.round(raw);
+  }
+
+  ensureUnitToggle();
 
   function ensureUI() {
     if (container) return;
@@ -109,25 +213,27 @@
   // ---------------------------------------------------------------------
   function syncFromWidth() {
     if (!locked || !session) return;
-    var w = parseInt(widthEl().value, 10);
+    var w = parseFloat(widthEl().value);
     if (!w || Number.isNaN(w)) return;
     syncing = true;
-    heightEl().value = Math.max(
-      1,
-      Math.round(session.img.naturalHeight * (w / session.img.naturalWidth))
-    );
+    // In percent mode a single shared percentage scales both dimensions
+    // equally, so the "derived" side is just the same number.
+    heightEl().value =
+      unit === 'percent'
+        ? w
+        : Math.max(1, Math.round(session.img.naturalHeight * (w / session.img.naturalWidth)));
     syncing = false;
   }
 
   function syncFromHeight() {
     if (!locked || !session) return;
-    var h = parseInt(heightEl().value, 10);
+    var h = parseFloat(heightEl().value);
     if (!h || Number.isNaN(h)) return;
     syncing = true;
-    widthEl().value = Math.max(
-      1,
-      Math.round(session.img.naturalWidth * (h / session.img.naturalHeight))
-    );
+    widthEl().value =
+      unit === 'percent'
+        ? h
+        : Math.max(1, Math.round(session.img.naturalWidth * (h / session.img.naturalHeight)));
     syncing = false;
   }
 
@@ -136,8 +242,8 @@
   // whatever's currently in the other field (width wins if both are set).
   function resyncLockedDimensions() {
     if (!locked || !session) return;
-    var w = parseInt(widthEl().value, 10);
-    var h = parseInt(heightEl().value, 10);
+    var w = parseFloat(widthEl().value);
+    var h = parseFloat(heightEl().value);
     if (w) syncFromWidth();
     else if (h) syncFromHeight();
   }
@@ -154,8 +260,8 @@
     var origW = img.naturalWidth;
     var origH = img.naturalHeight;
 
-    var newW = parseInt(widthEl() ? widthEl().value : '', 10);
-    var newH = parseInt(heightEl() ? heightEl().value : '', 10);
+    var newW = toPixels(parseFloat(widthEl() ? widthEl().value : ''), origW);
+    var newH = toPixels(parseFloat(heightEl() ? heightEl().value : ''), origH);
     if (newW && !newH) newH = Math.round(origH * (newW / origW));
     else if (newH && !newW) newW = Math.round(origW * (newH / origH));
     if (!newW || !newH) {
@@ -273,14 +379,17 @@
   // transparency vs. flatten everything else onto white).
   // ---------------------------------------------------------------------
   window.convertFile = function (file) {
-    var targetWidth = widthEl() ? parseInt(widthEl().value, 10) : 0;
-    var targetHeight = heightEl() ? parseInt(heightEl().value, 10) : 0;
-    if (!targetWidth && !targetHeight) {
+    // Raw values are in whatever unit is currently selected (px or percent);
+    // resizeToBlob() resolves them to actual pixels against the image it's
+    // given, once it knows that image's dimensions.
+    var rawWidth = widthEl() ? parseFloat(widthEl().value) : 0;
+    var rawHeight = heightEl() ? parseFloat(heightEl().value) : 0;
+    if (!rawWidth && !rawHeight) {
       return Promise.reject(new Error('Please enter a width, height, or both.'));
     }
 
     if (session && session.file === file) {
-      return resizeToBlob(file, session.img, targetWidth, targetHeight);
+      return resizeToBlob(file, session.img, rawWidth, rawHeight);
     }
     // No preview session for this exact file — either convertFile() was
     // called directly, or the preview UI never attached (e.g. this page
@@ -291,7 +400,7 @@
       var url = URL.createObjectURL(file);
       img.onload = function () {
         URL.revokeObjectURL(url);
-        resizeToBlob(file, img, targetWidth, targetHeight).then(resolve, reject);
+        resizeToBlob(file, img, rawWidth, rawHeight).then(resolve, reject);
       };
       img.onerror = function () {
         URL.revokeObjectURL(url);
@@ -301,11 +410,11 @@
     });
   };
 
-  function resizeToBlob(file, img, targetWidth, targetHeight) {
+  function resizeToBlob(file, img, rawWidth, rawHeight) {
     var origW = img.naturalWidth;
     var origH = img.naturalHeight;
-    var newW = targetWidth;
-    var newH = targetHeight;
+    var newW = toPixels(rawWidth, origW);
+    var newH = toPixels(rawHeight, origH);
 
     if (newW && !newH) {
       newH = Math.round(origH * (newW / origW));

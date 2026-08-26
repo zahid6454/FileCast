@@ -8,6 +8,24 @@ function toolPageWithOptions(widthValue, heightValue) {
   `);
 }
 
+// Includes #tool-options so ensureUnitToggle() actually builds the px/%
+// buttons — toolPageWithOptions() above omits it on purpose to also cover
+// pages/tests with no options container (ensureUnitToggle() must no-op).
+function toolPageWithUnitToggle(widthValue, heightValue) {
+  return createDom(`
+    <div id="tool-options">
+      <input id="opt-width" value="${widthValue}" />
+      <input id="opt-height" value="${heightValue}" />
+    </div>
+  `);
+}
+
+function clickPercentButton(dom) {
+  dom.window.document
+    .querySelector('.image-resizer__unit-group button[data-unit="percent"]')
+    .click();
+}
+
 describe('image-resize.js — window.convertFile', () => {
   it('rejects when neither width nor height is given', async () => {
     const dom = toolPageWithOptions('', '');
@@ -85,5 +103,42 @@ describe('image-resize.js — window.convertFile', () => {
     await dom.window.convertFile(file);
 
     expect(dom.window.TOOL_CONFIG.output_extension).toBe('.webp');
+  });
+});
+
+describe('image-resize.js — px/% unit toggle', () => {
+  it('resolves a percent width against the source image, deriving height from the ratio', async () => {
+    const dom = toolPageWithUnitToggle('50', '');
+    mockImageLoad(dom.window, { width: 800, height: 600 }); // 4:3
+    const { canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-resize.js');
+
+    clickPercentButton(dom);
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    await dom.window.convertFile(file);
+
+    expect(canvasSizes[0]).toEqual({ width: 400, height: 300 });
+  });
+
+  it('scales both dimensions by the same percent when both are given', async () => {
+    const dom = toolPageWithUnitToggle('50', '50');
+    mockImageLoad(dom.window, { width: 800, height: 600 });
+    const { canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-resize.js');
+
+    clickPercentButton(dom);
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
+    await dom.window.convertFile(file);
+
+    expect(canvasSizes[0]).toEqual({ width: 400, height: 300 });
+  });
+
+  it('does not build the toggle when the page has no #tool-options container', async () => {
+    const dom = toolPageWithOptions('400', '');
+    mockImageLoad(dom.window, { width: 800, height: 600 });
+    mockCanvas(dom.window);
+    evalScript(dom, 'converters/image-resize.js');
+
+    expect(dom.window.document.querySelector('.image-resizer__unit-group')).toBeNull();
   });
 });
