@@ -178,7 +178,7 @@
     if (data.type === 'rendered') {
       if (!data.ok || !session) return;
       var tile = session.tileEls[data.pageIndex];
-      if (tile) paintTile(tile, data.bitmap, data.rotation);
+      if (tile) paintTile(tile, data.bitmap);
     }
   }
 
@@ -273,7 +273,7 @@
     }
   }
 
-  function paintTile(tile, bitmap, rotation) {
+  function paintTile(tile, bitmap) {
     var canvas = tile._fcCanvas;
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
@@ -284,23 +284,27 @@
     tile.classList.add('is-rendered');
 
     if (opts.mode === 'rotate') {
-      tile.dataset.baseRotation = String(rotation || 0);
       applyRotationPreview(tile);
     }
   }
 
   // ---------------------------------------------------------------------
   // Rotate v1 — read-only grid, live-previews the whole-document rotation
-  // the #opt-rotation select currently has picked. Reuses the base
-  // orientation pdf-render-worker.js already reports per page (page.rotate)
-  // — rotate() in the worker ADDS the picked degrees on top of that, so the
-  // preview does the same (current + picked), never just the picked value
-  // alone, or a page that's already sideways would preview wrong.
+  // the #opt-rotation select currently has picked. pdf.js's own default
+  // viewport (page.getViewport({scale}), used by pdf-render-worker.js) sets
+  // its `rotation` param to the page's own /Rotate value unless told
+  // otherwise — the rendered bitmap already shows the page upright the way
+  // any normal viewer displays it today, current rotation baked in. rotate()
+  // in the worker sets the page's new total rotation to current + picked,
+  // so re-opened in that same normal viewer it'll look like today's upright
+  // view turned an ADDITIONAL `picked` degrees — not current + picked again
+  // on top of an already-compensated render, which would double the page's
+  // existing rotation for any already-rotated page (a common case: scans,
+  // phone camera PDFs).
   // ---------------------------------------------------------------------
   function applyRotationPreview(tile) {
-    var base = Number(tile.dataset.baseRotation || 0);
     var picked = currentRotationDegrees();
-    var total = (((base + picked) % 360) + 360) % 360;
+    var total = ((picked % 360) + 360) % 360;
     tile._fcCanvas.style.transform = 'rotate(' + total + 'deg)';
   }
 
@@ -352,6 +356,11 @@
     }
     updateStatus();
     commitChange();
+    // statusEl itself is aria-hidden (it's a persistent visible element, not a
+    // one-shot announcement) — mirror its text into #a11y-status so a screen
+    // reader user clicking through pages hears the running count, not just
+    // this one tile's own pressed-state change.
+    if (statusEl) announce(statusEl.textContent);
   }
 
   function updateStatus() {

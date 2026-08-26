@@ -89,7 +89,6 @@ function handleMessage(msg) {
       ctx.fillRect(0, 0, width, height);
       return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
         var bitmap = canvas.transferToImageBitmap();
-        var rotation = page.rotate;
         page.cleanup();
         self.postMessage(
           {
@@ -98,7 +97,6 @@ function handleMessage(msg) {
             requestId: msg.requestId,
             pageIndex: msg.pageIndex,
             bitmap: bitmap,
-            rotation: rotation,
             // Unscaled page size, in PDF points — lets a caller (shared-page-proof.js)
             // convert its own worker.js-space x/y math into this bitmap's pixel
             // space via one scale factor (bitmap.width / pageWidthPt). Note:

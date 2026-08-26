@@ -53,8 +53,19 @@
 
   function hideUI() {
     if (container) container.classList.add('hidden');
+    revokePreviewUrl();
     session = null;
     clearTimeout(debounceTimer);
+  }
+
+  // imgEl.src is always a blob: URL we created (the original on first pick,
+  // a compressed-preview one after each estimate) — revoke whichever one is
+  // showing before it's replaced or discarded, or it outlives the session.
+  function revokePreviewUrl() {
+    if (imgEl && imgEl.src) {
+      URL.revokeObjectURL(imgEl.src);
+      imgEl.src = '';
+    }
   }
 
   function currentQuality() {
@@ -168,6 +179,7 @@
     ensureUI();
     if (!container) return; // page markup doesn't have #file-info — nothing to attach to
 
+    revokePreviewUrl(); // an earlier file's still-showing preview URL, if any
     session = { file: file };
     imgEl.src = URL.createObjectURL(file); // show the original immediately while the first estimate runs
     if (statusEl) statusEl.textContent = 'Estimating…';
