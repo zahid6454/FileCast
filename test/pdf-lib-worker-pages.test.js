@@ -72,3 +72,44 @@ describe('pdf-lib-worker.js — watermark position/angle (drag-to-position + fre
     expect(opts.x).toBeCloseTo(50 - textWidth / 2);
   });
 });
+
+describe('pdf-lib-worker.js — crop() box math', () => {
+  it('converts a top-left-origin percent box into a bottom-up PDF crop box', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const bytes = await makeOnePagePdf(dom, 200, 300);
+
+    const setCropBoxSpy = vi.spyOn(dom.window.PDFLib.PDFPage.prototype, 'setCropBox');
+    await dom.window.crop(bytes, 10, 20, 60, 50);
+
+    // left = 10% of 200 = 20. top = 20% of 300 = 60. width = 60% of 200 =
+    // 120. height = 50% of 300 = 150. bottom = 300 - 60 - 150 = 90 (PDF's
+    // y-up origin vs the top-down percentages the preview box is measured in).
+    expect(setCropBoxSpy).toHaveBeenCalledWith(20, 90, 120, 150);
+  });
+
+  it('applies the same percent box to every page, proportional to each page size', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const doc = await dom.window.PDFLib.PDFDocument.create();
+    doc.addPage().setSize(200, 300);
+    doc.addPage().setSize(100, 100);
+    const bytes = await doc.save();
+
+    const setCropBoxSpy = vi.spyOn(dom.window.PDFLib.PDFPage.prototype, 'setCropBox');
+    await dom.window.crop(bytes, 0, 0, 50, 50);
+
+    expect(setCropBoxSpy).toHaveBeenNthCalledWith(1, 0, 150, 100, 150);
+    expect(setCropBoxSpy).toHaveBeenNthCalledWith(2, 0, 50, 50, 50);
+  });
+
+  it('clamps a box that would run past the page edge', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const bytes = await makeOnePagePdf(dom, 200, 300);
+
+    const setCropBoxSpy = vi.spyOn(dom.window.PDFLib.PDFPage.prototype, 'setCropBox');
+    await dom.window.crop(bytes, 90, 90, 90, 90);
+
+    // left = 90% of 200 = 180, width clamped to (200-180)=20 instead of 180.
+    // top = 90% of 300 = 270, height clamped to (300-270)=30 instead of 270.
+    expect(setCropBoxSpy).toHaveBeenCalledWith(180, 0, 20, 30);
+  });
+});

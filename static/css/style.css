@@ -1579,7 +1579,7 @@ img { max-width: 100%; display: block; }
 }
 
 /* --- Page Proof (single-page live-effect preview — PDF Watermark/Page
-   Numbers, built by shared-page-proof.js). --- */
+   Numbers/Crop, built by shared-page-proof.js). --- */
 .page-proof {
   margin-top: var(--space-4);
   text-align: center;

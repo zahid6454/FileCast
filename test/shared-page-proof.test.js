@@ -16,7 +16,9 @@ function pageProofHtml(mode) {
         <input id="opt-fontSize" value="40" />
         <input id="opt-angle" value="45" />
       `
-      : `
+      : mode === 'crop'
+        ? '' // crop has no option inputs — the box itself is the only input
+        : `
         <select id="opt-position">
           <option value="top-left" selected>Top left</option>
           <option value="bottom-center">Bottom center</option>
@@ -227,5 +229,94 @@ describe('shared-page-proof.js — page-number overlay math', () => {
 
     // 3-page doc, startNumber 1 -> lastNumber = 1 + 3 - 1 = 3.
     expect(ctx.fillText.mock.calls[ctx.fillText.mock.calls.length - 1][0]).toBe('Page 1 of 3');
+  });
+});
+
+// jsdom's default getBoundingClientRect() is all-zero (no real layout
+// engine) — canvasCoords() falls back to scale 1, offset 0 in that case
+// (same fallback image-cropper.test.js's own firePointer() comment
+// documents), so clientX/clientY map 1:1 onto canvas-pixel coordinates here
+// without needing to stub a box, unlike the watermark drag tests above.
+describe('shared-page-proof.js — crop box drag/resize', () => {
+  it('starts centered at 80% of the canvas, exposed via getCropRect()', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+
+    // canvas 200x280 -> box x=20,y=28,w=160,h=224 (10%/10%/80%/80%).
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 160, 224);
+    expect(dom.window.FCPageProof.getCropRect()).toEqual({
+      xPercent: 10,
+      yPercent: 10,
+      widthPercent: 80,
+      heightPercent: 80
+    });
+  });
+
+  it('moves the whole box on a drag from its interior', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 100, clientY: 140, bubbles: true })
+    );
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 120, clientY: 160, bubbles: true })
+    );
+
+    // +20/+20 from the interior -> box moves, same 160x224 size.
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(40, 48, 160, 224);
+  });
+
+  it('resizes from a corner handle, growing only that corner', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    // Bottom-right handle sits at (180, 252) — drag it out by (20, 20).
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 180, clientY: 252, bubbles: true })
+    );
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 200, clientY: 272, bubbles: true })
+    );
+
+    // Top-left corner (20, 28) stays put; box grows to fill the extra 20x20.
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 180, 244);
+  });
+
+  it('clamps a resize at the canvas edge instead of growing past it', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 180, clientY: 252, bubbles: true })
+    );
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 500, clientY: 500, bubbles: true })
+    );
+
+    // Canvas is only 200x280 — right/bottom clamp there instead of following
+    // the pointer off-canvas.
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 180, 252);
+  });
+
+  it('stops resizing on pointerup', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 180, clientY: 252, bubbles: true })
+    );
+    canvasEl.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true }));
+    ctx.strokeRect.mockClear();
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 0, clientY: 0, bubbles: true })
+    );
+
+    // No pointerdown preceded this move — dragging is off, no re-render.
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
   });
 });

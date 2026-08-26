@@ -3,10 +3,14 @@
 
   // Shared "page proof" component (Tool Preview/Interaction Redesign §8) —
   // renders page 1 (via pdf-render-worker.js, same as shared-page-grid.js)
-  // and draws a live overlay of exactly what the worker will draw, reacting
-  // to the tool's own option inputs. Two modes: 'watermark' and
-  // 'pageNumbers'. window.convertFile is untouched by this file — it's
-  // purely additive UI over an already-correct worker call.
+  // and draws a live overlay of exactly what the worker will draw. Three
+  // modes: 'watermark' (drag a point to reposition the stamp), 'pageNumbers'
+  // (read-only, reacts to the tool's own option inputs), and 'crop' (drag/
+  // resize a box — same corner+edge-handle interaction as image-cropper.js,
+  // adapted to a fixed-size, non-zooming proof canvas — which fully replaces
+  // a numeric-margin option input; there is no #opt-margin). window.
+  // convertFile is untouched by this file — it's purely additive UI over an
+  // already-correct worker call.
   //
   // shared.js (loaded before this file) never exposes a "file was just
   // selected" hook to converters — same note as image-cropper.js/
@@ -14,16 +18,23 @@
 
   var PROOF_CSS_WIDTH = 480; // a single, larger "proof" page, not a small grid tile
   var MAX_DPR = 2;
+  var CROP_MIN_SIZE = 20; // minimum crop rect side, in canvas pixels — mirrors image-cropper.js's MIN_SIZE
+  var CROP_HANDLE_HIT_RADIUS = 14; // mirrors image-cropper.js's HANDLE_HIT_RADIUS
+  var CROP_HANDLE_DRAW_SIZE = 10;
 
   var container = null;
   var viewportEl = null;
   var canvasEl = null;
   var loadingEl = null;
 
-  var opts = null; // { mode: 'watermark' | 'pageNumbers' }
-  var session = null; // { file, worker, bitmap, scale, pageWidthPt, pageHeightPt, pageCount, xPercent, yPercent }
+  var opts = null; // { mode: 'watermark' | 'pageNumbers' | 'crop' }
+  // { file, worker, bitmap, scale, pageWidthPt, pageHeightPt, pageCount,
+  //   xPercent, yPercent,                          -- watermark only
+  //   cropRect, cropDragMode, cropDragStart, cropRectStart }  -- crop only
+  // cropRect is { x, y, w, h } in canvas-pixel space (top-left origin).
+  var session = null;
   var pendingFile = null;
-  var dragging = false;
+  var dragging = false; // watermark only
 
   function q(id) {
     return document.getElementById(id);
@@ -59,7 +70,10 @@
 
     var hint = document.createElement('div');
     hint.className = 'page-proof__hint';
-    hint.textContent = 'Preview of page 1 — every page gets the same treatment.';
+    hint.textContent =
+      opts.mode === 'crop'
+        ? 'Drag inside the box to move it, drag an edge or corner to resize it — every page gets the same treatment.'
+        : 'Preview of page 1 — every page gets the same treatment.';
 
     container.appendChild(loadingEl);
     container.appendChild(viewportEl);
@@ -75,6 +89,17 @@
       canvasEl.addEventListener('pointermove', onWatermarkPointerMove);
       canvasEl.addEventListener('pointerup', onWatermarkPointerUp);
       canvasEl.addEventListener('pointercancel', onWatermarkPointerUp);
+    }
+
+    // Crop only — full corner/edge-handle drag-resize, mirroring
+    // image-cropper.js's own interaction (see onCropPointerDown/Move/Up
+    // below), minus its aspect-ratio presets and zoom (this canvas is a
+    // single fixed-size proof render, not a zoomable editor).
+    if (opts.mode === 'crop') {
+      canvasEl.addEventListener('pointerdown', onCropPointerDown);
+      canvasEl.addEventListener('pointermove', onCropPointerMove);
+      canvasEl.addEventListener('pointerup', onCropPointerUp);
+      canvasEl.addEventListener('pointercancel', onCropPointerUp);
     }
   }
 
@@ -181,6 +206,17 @@
     canvasEl.height = data.bitmap.height;
     canvasEl.style.aspectRatio = data.bitmap.width + ' / ' + data.bitmap.height;
 
+    // A fresh centered 80% box every file pick — same starting point as
+    // image-cropper.js's own defaultRect().
+    if (opts.mode === 'crop') {
+      session.cropRect = {
+        x: canvasEl.width * 0.1,
+        y: canvasEl.height * 0.1,
+        w: canvasEl.width * 0.8,
+        h: canvasEl.height * 0.8
+      };
+    }
+
     render();
   }
 
@@ -273,6 +309,7 @@
     ctx.drawImage(session.bitmap, 0, 0);
     if (opts.mode === 'watermark') drawWatermarkOverlay(ctx);
     else if (opts.mode === 'pageNumbers') drawPageNumberOverlay(ctx);
+    else if (opts.mode === 'crop') drawCropOverlay(ctx);
   }
 
   // Mirrors watermark(bytes, text, opacity, fontSize, xPercent, yPercent,
@@ -370,6 +407,199 @@
     ctx.restore();
   }
 
+  // Draws session.cropRect (canvas-pixel space, set by onPageRendered() and
+  // moved/resized by the pointer handlers below): dims the discarded area
+  // outside the box, outlines the kept area, and draws 4 corner handles —
+  // same visual language as image-cropper.js's own render().
+  function drawCropOverlay(ctx) {
+    var rect = session.cropRect;
+    if (!rect) return;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillRect(0, 0, canvasEl.width, rect.y); // top
+    ctx.fillRect(0, rect.y + rect.h, canvasEl.width, canvasEl.height - rect.y - rect.h); // bottom
+    ctx.fillRect(0, rect.y, rect.x, rect.h); // left
+    ctx.fillRect(rect.x + rect.w, rect.y, canvasEl.width - rect.x - rect.w, rect.h); // right
+
+    ctx.strokeStyle = '#2563EB';
+    ctx.lineWidth = Math.max(1, session.scale);
+    ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+
+    ctx.fillStyle = '#2563EB';
+    cropCorners(rect).forEach(function (c) {
+      ctx.fillRect(
+        c.x - CROP_HANDLE_DRAW_SIZE / 2,
+        c.y - CROP_HANDLE_DRAW_SIZE / 2,
+        CROP_HANDLE_DRAW_SIZE,
+        CROP_HANDLE_DRAW_SIZE
+      );
+    });
+    ctx.restore();
+  }
+
+  // ---------------------------------------------------------------------
+  // Crop drag/resize — mirrors image-cropper.js's corners()/hitCorner()/
+  // hitEdge()/hitTest()/applyResize() exactly (minus its aspect-ratio lock,
+  // which this mode doesn't offer), adapted to read/write session.cropRect
+  // instead of a module-level session.rect.
+  // ---------------------------------------------------------------------
+  function cropCorners(rect) {
+    return [
+      { id: 'tl', x: rect.x, y: rect.y },
+      { id: 'tr', x: rect.x + rect.w, y: rect.y },
+      { id: 'bl', x: rect.x, y: rect.y + rect.h },
+      { id: 'br', x: rect.x + rect.w, y: rect.y + rect.h }
+    ];
+  }
+
+  function hitCropCorner(pt, rect) {
+    var hit = null;
+    cropCorners(rect).forEach(function (c) {
+      var dx = pt.x - c.x;
+      var dy = pt.y - c.y;
+      if (Math.sqrt(dx * dx + dy * dy) <= CROP_HANDLE_HIT_RADIUS) hit = c.id;
+    });
+    return hit;
+  }
+
+  function hitCropEdge(pt, rect) {
+    var withinX =
+      pt.x >= rect.x + CROP_HANDLE_HIT_RADIUS && pt.x <= rect.x + rect.w - CROP_HANDLE_HIT_RADIUS;
+    var withinY =
+      pt.y >= rect.y + CROP_HANDLE_HIT_RADIUS && pt.y <= rect.y + rect.h - CROP_HANDLE_HIT_RADIUS;
+
+    if (withinX && Math.abs(pt.y - rect.y) <= CROP_HANDLE_HIT_RADIUS) return 'top';
+    if (withinX && Math.abs(pt.y - (rect.y + rect.h)) <= CROP_HANDLE_HIT_RADIUS) return 'bottom';
+    if (withinY && Math.abs(pt.x - rect.x) <= CROP_HANDLE_HIT_RADIUS) return 'left';
+    if (withinY && Math.abs(pt.x - (rect.x + rect.w)) <= CROP_HANDLE_HIT_RADIUS) return 'right';
+    return null;
+  }
+
+  function insideCropRect(pt, rect) {
+    return pt.x >= rect.x && pt.x <= rect.x + rect.w && pt.y >= rect.y && pt.y <= rect.y + rect.h;
+  }
+
+  function hitCropTest(pt, rect) {
+    var corner = hitCropCorner(pt, rect);
+    if (corner) return 'resize-' + corner;
+    var edge = hitCropEdge(pt, rect);
+    if (edge) return 'resize-' + edge;
+    if (insideCropRect(pt, rect)) return 'move';
+    return null;
+  }
+
+  function cropCursorForMode(mode) {
+    switch (mode) {
+      case 'resize-tl':
+      case 'resize-br':
+        return 'nwse-resize';
+      case 'resize-tr':
+      case 'resize-bl':
+        return 'nesw-resize';
+      case 'resize-top':
+      case 'resize-bottom':
+        return 'ns-resize';
+      case 'resize-left':
+      case 'resize-right':
+        return 'ew-resize';
+      case 'move':
+        return 'move';
+      default:
+        return 'default';
+    }
+  }
+
+  function clampCrop(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function applyCropResize(mode, start, dx, dy, rect) {
+    var left = start.x;
+    var top = start.y;
+    var right = start.x + start.w;
+    var bottom = start.y + start.h;
+
+    if (mode === 'resize-tl' || mode === 'resize-bl' || mode === 'resize-left')
+      left = clampCrop(start.x + dx, 0, right - CROP_MIN_SIZE);
+    if (mode === 'resize-tr' || mode === 'resize-br' || mode === 'resize-right')
+      right = clampCrop(right + dx, left + CROP_MIN_SIZE, canvasEl.width);
+    if (mode === 'resize-tl' || mode === 'resize-tr' || mode === 'resize-top')
+      top = clampCrop(start.y + dy, 0, bottom - CROP_MIN_SIZE);
+    if (mode === 'resize-bl' || mode === 'resize-br' || mode === 'resize-bottom')
+      bottom = clampCrop(bottom + dy, top + CROP_MIN_SIZE, canvasEl.height);
+
+    rect.x = left;
+    rect.y = top;
+    rect.w = right - left;
+    rect.h = bottom - top;
+  }
+
+  function onCropPointerDown(e) {
+    if (!session || !session.cropRect) return;
+    var pt = canvasCoords(e);
+    var mode = hitCropTest(pt, session.cropRect);
+    if (!mode) return;
+
+    session.cropDragMode = mode;
+    session.cropDragStart = pt;
+    session.cropRectStart = {
+      x: session.cropRect.x,
+      y: session.cropRect.y,
+      w: session.cropRect.w,
+      h: session.cropRect.h
+    };
+    canvasEl.style.cursor = cropCursorForMode(mode);
+
+    if (canvasEl.setPointerCapture) {
+      try {
+        canvasEl.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* pointer capture unsupported — dragging still works */
+      }
+    }
+    e.preventDefault();
+  }
+
+  function onCropPointerMove(e) {
+    if (!session || !session.cropRect) return;
+    var pt = canvasCoords(e);
+
+    if (!session.cropDragMode) {
+      canvasEl.style.cursor = cropCursorForMode(hitCropTest(pt, session.cropRect));
+      return;
+    }
+
+    var dx = pt.x - session.cropDragStart.x;
+    var dy = pt.y - session.cropDragStart.y;
+    var start = session.cropRectStart;
+    var rect = session.cropRect;
+
+    if (session.cropDragMode === 'move') {
+      rect.x = clampCrop(start.x + dx, 0, canvasEl.width - start.w);
+      rect.y = clampCrop(start.y + dy, 0, canvasEl.height - start.h);
+    } else {
+      applyCropResize(session.cropDragMode, start, dx, dy, rect);
+    }
+    render();
+  }
+
+  function onCropPointerUp(e) {
+    if (!session) return;
+    session.cropDragMode = null;
+    if (canvasEl.releasePointerCapture) {
+      try {
+        canvasEl.releasePointerCapture(e.pointerId);
+      } catch (err) {
+        /* no-op */
+      }
+    }
+    if (session.cropRect) {
+      var pt = canvasCoords(e);
+      canvasEl.style.cursor = cropCursorForMode(hitCropTest(pt, session.cropRect));
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Loading / teardown
   // ---------------------------------------------------------------------
@@ -415,10 +645,14 @@
         resetBtnEl.addEventListener('click', teardownSession);
       }
 
+      // Crop has no option inputs at all — the box itself is the only
+      // input, dragged directly on the canvas (see onCropPointerDown/Move).
       var optionIds =
         opts.mode === 'watermark'
           ? ['opt-text', 'opt-opacity', 'opt-fontSize', 'opt-angle']
-          : ['opt-position', 'opt-startNumber', 'opt-format'];
+          : opts.mode === 'crop'
+            ? []
+            : ['opt-position', 'opt-startNumber', 'opt-format'];
       optionIds.forEach(function (id) {
         var el = q(id);
         if (!el) return;
@@ -433,6 +667,26 @@
       return {
         xPercent: session ? session.xPercent : 50,
         yPercent: session ? session.yPercent : 50
+      };
+    },
+    // pdf-crop.js reads this at Convert time — same "no natural hidden-input
+    // spec" reasoning as getWatermarkPosition() above. Percentages are
+    // measured from the page's top-left, matching cropRect's own canvas
+    // (top-left-origin) coordinate space; pdf-lib-worker.js's crop() is the
+    // one place that converts to PDF's bottom-up space. The 10/10/80/80
+    // fallback mirrors image-cropper.js's own centered-80%-box default, for
+    // when convertFile() runs without ever having rendered a proof (e.g. the
+    // worker-level unit tests, which eval pdf-crop.js alone).
+    getCropRect: function () {
+      if (!session || !session.cropRect || !canvasEl || !canvasEl.width || !canvasEl.height) {
+        return { xPercent: 10, yPercent: 10, widthPercent: 80, heightPercent: 80 };
+      }
+      var rect = session.cropRect;
+      return {
+        xPercent: (rect.x / canvasEl.width) * 100,
+        yPercent: (rect.y / canvasEl.height) * 100,
+        widthPercent: (rect.w / canvasEl.width) * 100,
+        heightPercent: (rect.h / canvasEl.height) * 100
       };
     }
   };
