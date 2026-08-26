@@ -121,7 +121,7 @@
       {% elif opt.type == 'number' %}
       <input class="tool-options__input" type="number" id="opt-{{ opt.id }}"
              min="{{ opt.min }}" max="{{ opt.max }}" value="{{ opt.default }}" placeholder="{{ opt.placeholder or '' }}">
-      <span class="tool-options__value">{{ opt.suffix or '' }}</span>
+      <span class="tool-options__value" id="suffix-{{ opt.id }}">{{ opt.suffix or '' }}</span>
       {% elif opt.type == 'select' %}
       <select class="tool-options__input" id="opt-{{ opt.id }}">
         {% for choice in opt.choices %}
