@@ -215,6 +215,16 @@
     pagerEls.range.textContent = 'Pages ' + startPage + '–' + endPage + ' of ' + session.pageCount;
 
     renderPagerPills(current, total);
+
+    // Batch navigation (Prev/Next, a pill, jump-to-batch, or a keyboard/drag
+    // move that crosses a batch boundary) is otherwise silent to a
+    // screen-reader user — every other state change in this file announces.
+    // Gated off during the very first mount, whose "N pages loaded"
+    // announcement (buildGrid(), right after mountBatch(0)) already covers
+    // it — announcing the range here too would just be redundant chatter.
+    if (session.pagerAnnounceReady) {
+      announce(pagerEls.range.textContent);
+    }
   }
 
   function renderPagerPills(current, total) {
@@ -416,6 +426,7 @@
     session.splitSubMode = 'every';
     session.currentBatch = 0;
     session.mountedOrigIdxs = []; // origIdx values with a live tile — see mountBatch/destroyMountedTiles
+    session.pagerAnnounceReady = false; // see updatePager() — set true right after the initial "N pages loaded"
 
     // A spec typed into #opt-pages before this file was even picked (see
     // resetGridDrivenStateForNewPick()) seeds the grid's own selection —
@@ -456,6 +467,7 @@
     updateStatus();
     commitChange();
     announce(pageCount + ' page' + (pageCount === 1 ? '' : 's') + ' loaded.');
+    session.pagerAnnounceReady = true;
   }
 
   // Mounts DOM tiles for one batch (BATCH_SIZE consecutive positions in

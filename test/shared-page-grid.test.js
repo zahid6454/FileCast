@@ -361,6 +361,24 @@ describe('shared-page-grid.js — batching + pager', () => {
     expect(dom.window.document.querySelector('[data-orig-idx="19"]')).not.toBeNull();
   });
 
+  // PR #135 review: batch navigation (Prev/Next, a pill, jump-to-batch) was
+  // the one interaction in this file that never told a screen-reader user
+  // anything changed — every other state change (initial load, marking a
+  // page, reordering, a cut toggle) announces via #a11y-status.
+  it('announces the new page range to the a11y live region when navigating batches', async () => {
+    const dom = createDom(pageGridPageHtml());
+    await setupGrid(dom, 'remove', 25);
+    const status = dom.window.document.getElementById('a11y-status');
+
+    // The initial mount announces "N pages loaded" — not also the batch
+    // range, which would just be redundant chatter on first load.
+    expect(status.textContent).toBe('25 pages loaded.');
+
+    dom.window.document.querySelector('.page-grid__pager-btn--next').click();
+
+    expect(status.textContent).toBe('Pages 11–20 of 25');
+  });
+
   it('jumping to a batch via the numeric input mounts that batch', async () => {
     const dom = createDom(pageGridPageHtml());
     await setupGrid(dom, 'remove', 25);
@@ -419,6 +437,60 @@ describe('shared-page-grid.js — batching + pager', () => {
 
     // The grid auto-flipped to the batch that now contains the moved tile.
     expect(dom.window.document.querySelector('[data-orig-idx="0"]')).not.toBeNull();
+  });
+
+  // PR #135 review nit: the edge-drag-to-flip-batch path (maybeFlipBatchForDrag)
+  // had no automated coverage at all. jsdom has no real Pointer Events
+  // implementation, so pointerdown/pointermove/pointerup are simulated with
+  // plain MouseEvents carrying the same clientX/clientY/type shape the
+  // handlers actually read — real Pointer Event support isn't needed since
+  // the handlers only touch clientX/clientY, currentTarget, and
+  // (try/catch-guarded) pointerId.
+  it('dragging a tile to the grid’s top edge flips to the previous batch', async () => {
+    const dom = createDom(pageGridPageHtml());
+    const specs = [];
+    await setupGrid(dom, 'organize', 25, (spec) => specs.push(spec));
+
+    // Navigate to batch 2 (origIdx 10-19) so there's a previous batch to flip into.
+    dom.window.document.querySelector('.page-grid__pager-btn--next').click();
+    expect(dom.window.document.querySelector('[data-orig-idx="10"]')).not.toBeNull();
+
+    const listEl = dom.window.document.querySelector('.page-grid__list');
+    listEl.getBoundingClientRect = () => ({
+      top: 100,
+      bottom: 500,
+      left: 0,
+      right: 300,
+      width: 300,
+      height: 400,
+      x: 0,
+      y: 100
+    });
+
+    // Drag the batch's first tile (origIdx 10) toward the top edge.
+    const tile = dom.window.document.querySelector('[data-orig-idx="10"]');
+    tile.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true }));
+    dom.window.document.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { bubbles: true, clientX: 50, clientY: 110 })
+    );
+
+    // The flip lands origIdx 10 as the last tile of the (now-mounted)
+    // previous batch — see maybeFlipBatchForDrag's "last position of the
+    // previous batch" comment — displacing the old batch (origIdx 10-19).
+    expect(dom.window.document.querySelector('[data-orig-idx="10"]')).not.toBeNull();
+    expect(dom.window.document.querySelector('[data-orig-idx="0"]')).not.toBeNull();
+    expect(dom.window.document.querySelector('[data-orig-idx="19"]')).toBeNull();
+    // reacquireDragTile() re-applies the dragging visual state to the
+    // rebuilt tile after the flip destroyed and recreated it.
+    expect(
+      dom.window.document.querySelector('[data-orig-idx="10"]').classList.contains('is-dragging')
+    ).toBe(true);
+
+    dom.window.document.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true }));
+
+    const lastOrder = specs[specs.length - 1].split(',').map(Number);
+    expect(lastOrder.length).toBe(25);
+    expect(lastOrder.indexOf(11)).toBe(9); // page 11 (origIdx 10) landed at position 10 (1-indexed)
   });
 
   // Fix 3: attachCutToggles() was previously called only once per sub-mode
