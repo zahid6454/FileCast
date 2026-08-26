@@ -397,7 +397,12 @@ describe('shared-page-grid.js — batching + pager', () => {
   // reorder, not just the mounted batch — the moment session.tileEls[oi] was
   // undefined for an unmounted page, appendChild(undefined) threw. A
   // keyboard move that crosses a batch boundary (Home/End, or Arrow at a
-  // batch edge) is the case that used to hit this.
+  // batch edge) is the case that used to hit this. Note this doesn't show up
+  // as a synchronous throw from dispatchEvent() itself — a listener
+  // exception is reported, not propagated to the dispatch call — so the
+  // real symptom pre-fix is worse than "throws": onOrganizeKeyDown aborts
+  // partway through and the reorder never commits, which the value
+  // assertions below catch (they fail with the *original*, pre-move order).
   it('reordering across a batch boundary does not throw, and the final order is correct', async () => {
     const dom = createDom(pageGridPageHtml());
     const specs = [];
@@ -414,6 +419,72 @@ describe('shared-page-grid.js — batching + pager', () => {
 
     // The grid auto-flipped to the batch that now contains the moved tile.
     expect(dom.window.document.querySelector('[data-orig-idx="0"]')).not.toBeNull();
+  });
+
+  // Fix 3: attachCutToggles() was previously called only once per sub-mode
+  // switch, so any batch mounted AFTER switching to "at marked points" never
+  // got its cut-toggle button. Only reachable on a >10 page document, since
+  // that's what makes a second batch exist at all.
+  it('attaches cut toggles to a batch mounted after switching to "at marked points"', async () => {
+    const dom = createDom(pageGridPageHtml());
+    await setupGrid(dom, 'preview', 25);
+
+    const markedBtn = Array.from(
+      dom.window.document.querySelectorAll('.page-grid__split-mode-btn')
+    ).find((b) => b.textContent === 'At marked points');
+    markedBtn.click();
+    expect(
+      dom.window.document.querySelector('[data-orig-idx="0"] .page-grid__cut-toggle')
+    ).not.toBeNull();
+
+    // Batch 2 (origIdx 10-19) mounts for the first time AFTER the sub-mode
+    // switch above — pre-fix, attachCutToggles() never ran again for it.
+    dom.window.document.querySelector('.page-grid__pager-btn--next').click();
+
+    expect(
+      dom.window.document.querySelector('[data-orig-idx="10"] .page-grid__cut-toggle')
+    ).not.toBeNull();
+    // Still no toggle on the very last page of the document (no meaningful
+    // cut point after it) — the batch-scoped iteration in attachCutToggles()
+    // must keep honoring that.
+    expect(
+      dom.window.document.querySelector('[data-orig-idx="19"] .page-grid__cut-toggle')
+    ).not.toBeNull();
+  });
+
+  // Fix 4: onWorkerMessage's 'rendered' handler had no `else` — a render
+  // reply for a tile already torn down by a batch change was neither
+  // painted nor closed, leaking the ImageBitmap until GC.
+  it('closes the bitmap of a render reply that arrives after its tile was torn down by a batch change', async () => {
+    const dom = createDom(pageGridPageHtml());
+    const instances = mockRenderWorker(dom.window, { pageCount: 25 });
+    mockIntersectionObserver(dom.window);
+    mockCanvas(dom.window);
+    dom.window.TOOL_CONFIG = {
+      pdf_src: '/lib/pdf.min.js',
+      pdf_render_worker_src: '/js/workers/pdf-render-worker.js'
+    };
+    evalScript(dom, 'shared-page-grid.js');
+    dom.window.FCPageGrid.init({ mode: 'remove', onChange: function () {} });
+
+    const input = dom.window.document.getElementById('file-input');
+    const file = new dom.window.File([new Uint8Array(10)], 'doc.pdf', { type: 'application/pdf' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    await flush();
+
+    const worker = instances[instances.length - 1];
+    // Move to batch 2 — batch 1's tiles (including origIdx 0) are torn down.
+    dom.window.document.querySelector('.page-grid__pager-btn--next').click();
+    expect(dom.window.document.querySelector('[data-orig-idx="0"]')).toBeNull();
+
+    // Simulate a slow render reply for origIdx 0 arriving only now.
+    const staleBitmap = { width: 100, height: 140, close: vi.fn() };
+    worker.onmessage({
+      data: { ok: true, type: 'rendered', requestId: 999, pageIndex: 0, bitmap: staleBitmap }
+    });
+
+    expect(staleBitmap.close).toHaveBeenCalled();
   });
 });
 

@@ -682,27 +682,30 @@
   }
 
   // Every tile except the last gets a toggle (cutting "after the last page"
-  // isn't a meaningful cut point).
+  // isn't a meaningful cut point). Iterates session.mountedOrigIdxs, not
+  // 0..pageCount — since batching, this runs on every batch mount (see
+  // mountBatch()), and only one batch is ever mounted at a time, so scanning
+  // the full page range on every mount would be O(pageCount) wasted work per
+  // flip on a large document instead of O(BATCH_SIZE).
   function attachCutToggles() {
     if (!session) return;
-    for (var i = 0; i < session.pageCount - 1; i++) {
+    session.mountedOrigIdxs.forEach(function (i) {
+      if (i >= session.pageCount - 1) return;
       var tile = session.tileEls[i];
-      if (!tile || tile._fcCutToggle) continue;
+      if (!tile || tile._fcCutToggle) return;
       var toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'page-grid__cut-toggle';
       toggle.setAttribute('aria-label', 'Toggle cut after page ' + (i + 1));
       toggle.setAttribute('aria-pressed', session.cutPoints.has(i) ? 'true' : 'false');
       toggle.classList.toggle('is-active', session.cutPoints.has(i));
-      (function (origIdx) {
-        toggle.addEventListener('click', function (e) {
-          e.stopPropagation();
-          toggleCutPoint(origIdx);
-        });
-      })(i);
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        toggleCutPoint(i);
+      });
       tile.appendChild(toggle);
       tile._fcCutToggle = toggle;
-    }
+    });
   }
 
   function detachCutToggles() {
