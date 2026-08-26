@@ -295,7 +295,10 @@
   "category": {{ tool.category|tojson }}{% if tool.js_libs is defined and 'pdf.min.js' in tool.js_libs %}{% set worker_asset = assets.get('lib/pdf.worker.min.js') %}{% if worker_asset %},
   "pdf_worker_src": {{ ("/" + worker_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.worker_libs is defined and 'pdf-lib.min.js' in tool.worker_libs %}{% set pdf_lib_asset = assets.get('lib/pdf-lib.min.js') %}{% set pdf_lib_worker_asset = assets.get('js/workers/pdf-lib-worker.js') %}{% if pdf_lib_asset and pdf_lib_worker_asset %},
   "pdf_lib_src": {{ ("/" + pdf_lib_asset.path)|tojson }},
-  "pdf_lib_worker_src": {{ ("/" + pdf_lib_worker_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.worker_libs is defined and 'utif.min.js' in tool.worker_libs %}{% set utif_asset = assets.get('lib/utif.min.js') %}{% set tiff_worker_asset = assets.get('js/workers/tiff-worker.js') %}{% if utif_asset and tiff_worker_asset %},
+  "pdf_lib_worker_src": {{ ("/" + pdf_lib_worker_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.worker_libs is defined and 'pdf.min.js' in tool.worker_libs %}{% set pdf_asset = assets.get('lib/pdf.min.js') %}{% set pdf_worker_asset = assets.get('lib/pdf.worker.min.js') %}{% set pdf_render_worker_asset = assets.get('js/workers/pdf-render-worker.js') %}{% if pdf_asset and pdf_worker_asset and pdf_render_worker_asset %},
+  "pdf_src": {{ ("/" + pdf_asset.path)|tojson }},
+  "pdf_worker_src": {{ ("/" + pdf_worker_asset.path)|tojson }},
+  "pdf_render_worker_src": {{ ("/" + pdf_render_worker_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.worker_libs is defined and 'utif.min.js' in tool.worker_libs %}{% set utif_asset = assets.get('lib/utif.min.js') %}{% set tiff_worker_asset = assets.get('js/workers/tiff-worker.js') %}{% if utif_asset and tiff_worker_asset %},
   "utif_src": {{ ("/" + utif_asset.path)|tojson }},
   "tiff_worker_src": {{ ("/" + tiff_worker_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.worker_libs is defined and 'avif_dec.js' in tool.worker_libs %}{% set avif_dec_lib_asset = assets.get('lib/avif_dec.js') %}{% set avif_dec_wasm_asset = assets.get('lib/avif_dec.wasm') %}{% set avif_worker_asset = assets.get('js/workers/avif-worker.js') %}{% if avif_dec_lib_asset and avif_dec_wasm_asset and avif_worker_asset %},
   "avif_worker_src": {{ ("/" + avif_worker_asset.path)|tojson }},
@@ -335,6 +338,21 @@
 {% if server_js %}
 <script src="/{{ server_js.path }}" integrity="{{ server_js.sri }}" crossorigin="anonymous" defer></script>
 {% endif %}
+{% endif %}
+
+{# Shared component JS (opt-in, first-party) — loaded before the tool's own
+   converter JS so a shared global (e.g. window.FCPageGrid) exists by the time
+   the converter runs. Small first-party files only; unlike js_libs/worker_libs
+   these are eager-loaded on every page that declares them, since the whole
+   point of a shared component is that several tools' converter JS depends on
+   it being present at parse time. #}
+{% if tool.shared_js is defined and tool.shared_js %}
+{% for shared in tool.shared_js %}
+{% set shared_asset = assets.get('js/' + shared) %}
+{% if shared_asset %}
+<script src="/{{ shared_asset.path }}" integrity="{{ shared_asset.sri }}" crossorigin="anonymous" defer></script>
+{% endif %}
+{% endfor %}
 {% endif %}
 
 {# Tool converter JS #}

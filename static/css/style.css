@@ -1239,6 +1239,146 @@ img { max-width: 100%; display: block; }
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Page Grid (thumbnail grid, built by shared-page-grid.js) — the shared
+   component behind PDF Remove Pages/Extract Pages/Organize: click-to-mark in
+   the first two, drag/keyboard-to-reorder in the third. --- */
+.page-grid {
+  margin-top: var(--space-4);
+}
+.page-grid__loading {
+  padding: var(--space-6) 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.page-grid__status {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.page-grid__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: center;
+  max-height: 520px;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+/* Reuses the scrollbar look every other scrollable tool surface shares
+   (.image-cropper__viewport, the text/diff areas) — see that rule's own note. */
+.page-grid__list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--brand-blue) transparent;
+}
+.page-grid__list::-webkit-scrollbar {
+  width: 8px;
+}
+.page-grid__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.page-grid__list::-webkit-scrollbar-thumb {
+  background-image: linear-gradient(180deg, var(--brand-blue), var(--brand-green));
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-bg-raised);
+  background-clip: padding-box;
+}
+.page-grid__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 120px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-raised);
+  cursor: pointer;
+  touch-action: none; /* pointer drag reorders instead of scrolling the page (Organize) */
+  transition: border-color var(--transition-base), box-shadow var(--transition-base), opacity var(--transition-base);
+}
+.page-grid__tile:hover,
+.page-grid__tile:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-brand-hover);
+  outline: none;
+}
+.page-grid__tile.is-dragging {
+  opacity: 0.5;
+}
+.page-grid__tile-canvas-wrap {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-bg);
+  /* Placeholder aspect ratio before a real thumbnail arrives — most source
+     PDFs are portrait; the canvas gets its own exact ratio the moment
+     paintTile() sets canvas.style.aspectRatio from the rendered bitmap. */
+  aspect-ratio: 3 / 4;
+}
+.page-grid__tile-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.page-grid__tile-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.page-grid__tile-check::before,
+.page-grid__tile-check::after {
+  content: "";
+  position: absolute;
+  background: #fff;
+  border-radius: var(--radius-full);
+}
+.page-grid__tile-check::before {
+  left: 5px;
+  top: 10px;
+  width: 7px;
+  height: 2px;
+  transform: rotate(45deg);
+}
+.page-grid__tile-check::after {
+  left: 8px;
+  top: 6px;
+  width: 10px;
+  height: 2px;
+  transform: rotate(-45deg);
+}
+.page-grid__tile.is-marked {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-brand-hover);
+}
+.page-grid__tile.is-marked .page-grid__tile-check {
+  opacity: 1;
+  transform: scale(1);
+}
+.page-grid__tile-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.page-grid__hint {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
 /* --- Privacy Page --- */
 .privacy-section { margin-bottom: var(--space-8); }
 .privacy-section h2 { font-size: var(--text-xl); font-weight: var(--weight-bold); margin-bottom: var(--space-3); }

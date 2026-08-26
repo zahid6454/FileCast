@@ -11,7 +11,11 @@ accept_extensions: [.pdf]
 output_extension: .pdf
 js_module: converters/pdf-remove-pages.js
 # pdf-lib runs inside a dedicated Worker (P4 §36) — see static/js/workers/pdf-lib-worker.js.
-worker_libs: [pdf-lib.min.js]
+# pdf.js runs inside a second dedicated Worker (static/js/workers/pdf-render-worker.js)
+# to build the page-thumbnail grid — worker_libs (not js_libs), same lazy-load
+# posture: no eager <script> tag, loaded via importScripts only once a file is picked.
+worker_libs: [pdf-lib.min.js, pdf.min.js]
+shared_js: [shared-page-grid.js]
 max_file_size: 50MB
 bulk_support: false
 ui_type: standard
