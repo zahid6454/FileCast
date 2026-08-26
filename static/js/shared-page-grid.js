@@ -23,17 +23,22 @@
 
   var THUMB_CSS_WIDTH = 120; // display width, in CSS px, requested from the render worker
   var MAX_DPR = 2; // cap devicePixelRatio scaling so a 3x/4x phone doesn't over-render
+  var BATCH_SIZE = 10; // mounted tiles at a time — bounds DOM/canvas/ImageBitmap count on huge PDFs
+  var EDGE_PX = 40; // organize drag: pointer-to-listEl-edge distance (CSS px) that triggers a batch flip
+  var BATCH_FLIP_DEBOUNCE_MS = 400; // don't re-flip on every pointermove while the pointer sits in the edge zone
 
   var container = null;
   var statusEl = null;
   var listEl = null;
   var loadingEl = null;
   var optionsRowEl = null; // #tool-options — stays visible for every mode; see setOptionsInputReadOnly
+  var pagerEls = null; // { row, prevBtn, nextBtn, pills, jumpInput, range } — built once in ensureUI
 
   var opts = null; // { mode: 'remove'|'extract'|'organize', onChange: fn(spec) }
   var session = null; // rebuilt on every file pick; null before any pick / after fallback
   var hintEl = null;
   var splitModeButtons = null; // { every: <button>, marked: <button> } — 'preview' mode only
+  var lastBatchFlipAt = 0; // Date.now() of the last organize-drag edge flip, for the debounce above
 
   function q(id) {
     return document.getElementById(id);
@@ -81,6 +86,7 @@
     container.appendChild(loadingEl);
     container.appendChild(statusEl);
     container.appendChild(listEl);
+    container.appendChild(buildPagerRow());
     if (opts.mode === 'preview') {
       container.appendChild(buildSplitModeRow());
     }
@@ -120,6 +126,149 @@
     row.appendChild(markedBtn);
     splitModeButtons = { every: everyBtn, marked: markedBtn };
     return row;
+  }
+
+  // ---------------------------------------------------------------------
+  // Pager — prev/next, numbered batch pills (ellipsis-collapsed), a "jump to
+  // batch" input, and a "Pages X-Y of N" range label. Built once here (like
+  // buildSplitModeRow above) and hidden whenever the whole document fits in
+  // one batch, via updatePager() — see mountBatch().
+  // ---------------------------------------------------------------------
+  function buildPagerRow() {
+    var row = document.createElement('div');
+    row.className = 'page-grid__pager hidden';
+
+    var prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.className = 'page-grid__pager-btn page-grid__pager-btn--prev';
+    prevBtn.textContent = 'Prev';
+    prevBtn.addEventListener('click', function () {
+      if (session) mountBatch(session.currentBatch - 1);
+    });
+
+    var pills = document.createElement('div');
+    pills.className = 'page-grid__pager-pills';
+
+    var nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.className = 'page-grid__pager-btn page-grid__pager-btn--next';
+    nextBtn.textContent = 'Next';
+    nextBtn.addEventListener('click', function () {
+      if (session) mountBatch(session.currentBatch + 1);
+    });
+
+    var jumpLabel = document.createElement('label');
+    jumpLabel.className = 'page-grid__pager-jump';
+    jumpLabel.appendChild(document.createTextNode('Go to batch '));
+    var jumpInput = document.createElement('input');
+    jumpInput.type = 'number';
+    jumpInput.className = 'page-grid__pager-jump-input';
+    jumpInput.min = '1';
+    jumpInput.addEventListener('change', function () {
+      var n = parseInt(jumpInput.value, 10);
+      if (!session || !n || n < 1) return;
+      mountBatch(n - 1);
+    });
+    jumpLabel.appendChild(jumpInput);
+
+    var range = document.createElement('div');
+    range.className = 'page-grid__pager-range';
+
+    row.appendChild(prevBtn);
+    row.appendChild(pills);
+    row.appendChild(nextBtn);
+    row.appendChild(jumpLabel);
+    row.appendChild(range);
+
+    pagerEls = {
+      row: row,
+      prevBtn: prevBtn,
+      nextBtn: nextBtn,
+      pills: pills,
+      jumpInput: jumpInput,
+      range: range
+    };
+    return row;
+  }
+
+  function batchCount() {
+    if (!session) return 1;
+    return Math.max(1, Math.ceil(session.pageCount / BATCH_SIZE));
+  }
+
+  function updatePager() {
+    if (!pagerEls || !session) return;
+    var total = batchCount();
+    if (total <= 1) {
+      pagerEls.row.classList.add('hidden');
+      return;
+    }
+    pagerEls.row.classList.remove('hidden');
+    var current = session.currentBatch;
+    pagerEls.prevBtn.disabled = current === 0;
+    pagerEls.nextBtn.disabled = current === total - 1;
+    pagerEls.jumpInput.max = String(total);
+    pagerEls.jumpInput.value = String(current + 1);
+
+    var startPage = current * BATCH_SIZE + 1;
+    var endPage = Math.min(startPage + BATCH_SIZE - 1, session.pageCount);
+    pagerEls.range.textContent = 'Pages ' + startPage + '–' + endPage + ' of ' + session.pageCount;
+
+    renderPagerPills(current, total);
+
+    // Batch navigation (Prev/Next, a pill, jump-to-batch, or a keyboard/drag
+    // move that crosses a batch boundary) is otherwise silent to a
+    // screen-reader user — every other state change in this file announces.
+    // Gated off during the very first mount, whose "N pages loaded"
+    // announcement (buildGrid(), right after mountBatch(0)) already covers
+    // it — announcing the range here too would just be redundant chatter.
+    if (session.pagerAnnounceReady) {
+      announce(pagerEls.range.textContent);
+    }
+  }
+
+  function renderPagerPills(current, total) {
+    pagerEls.pills.innerHTML = '';
+    pagerPageList(current, total).forEach(function (item) {
+      if (item === '...') {
+        var span = document.createElement('span');
+        span.className = 'page-grid__pager-ellipsis';
+        span.setAttribute('aria-hidden', 'true');
+        span.textContent = '…';
+        pagerEls.pills.appendChild(span);
+        return;
+      }
+      var pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'page-grid__pager-pill';
+      if (item === current) pill.classList.add('is-active');
+      pill.textContent = String(item + 1);
+      pill.setAttribute('aria-current', item === current ? 'true' : 'false');
+      pill.addEventListener('click', function () {
+        mountBatch(item);
+      });
+      pagerEls.pills.appendChild(pill);
+    });
+  }
+
+  // Simple windowing, not a precise formula: always keep the first batch,
+  // the last batch, and the current batch ± 1, collapsing any gap into a
+  // single ellipsis marker.
+  function pagerPageList(current, total) {
+    var keep = new Set([0, total - 1, current]);
+    if (current > 0) keep.add(current - 1);
+    if (current < total - 1) keep.add(current + 1);
+    var sorted = Array.from(keep).sort(function (a, b) {
+      return a - b;
+    });
+    var result = [];
+    var prev = null;
+    sorted.forEach(function (n) {
+      if (prev !== null && n - prev > 1) result.push('...');
+      result.push(n);
+      prev = n;
+    });
+    return result;
   }
 
   function hintText() {
@@ -254,7 +403,14 @@
     if (data.type === 'rendered') {
       if (!data.ok || !session) return;
       var tile = session.tileEls[data.pageIndex];
-      if (tile) paintTile(tile, data.bitmap);
+      if (tile) {
+        paintTile(tile, data.bitmap);
+      } else if (data.bitmap && typeof data.bitmap.close === 'function') {
+        // The render response arrived after its tile was torn down by a
+        // batch change — paintTile() (which would otherwise close it) never
+        // runs, so close it here or it leaks until GC.
+        data.bitmap.close();
+      }
     }
   }
 
@@ -268,11 +424,14 @@
     session.marked = new Set();
     session.cutPoints = new Set(); // 'preview' mode, "at marked points" sub-mode only
     session.splitSubMode = 'every';
+    session.currentBatch = 0;
+    session.mountedOrigIdxs = []; // origIdx values with a live tile — see mountBatch/destroyMountedTiles
+    session.pagerAnnounceReady = false; // see updatePager() — set true right after the initial "N pages loaded"
 
     // A spec typed into #opt-pages before this file was even picked (see
     // resetGridDrivenStateForNewPick()) seeds the grid's own selection —
     // buildTile() below reads session.marked to paint each tile's initial
-    // state, so this must run before that loop.
+    // state, so this must run before the first batch mounts.
     if (opts.mode === 'remove' || opts.mode === 'extract') {
       var pagesEl = q('opt-pages');
       if (pagesEl && pagesEl.value) {
@@ -283,15 +442,10 @@
     }
 
     listEl.innerHTML = '';
-    session.tileEls = new Array(pageCount);
+    session.tileEls = new Array(pageCount); // sparse — only the mounted batch's indices are set
     session.observer = new IntersectionObserver(onIntersect, { rootMargin: '600px 0px' });
 
-    for (var idx = 0; idx < pageCount; idx++) {
-      var tile = buildTile(idx);
-      session.tileEls[idx] = tile;
-      listEl.appendChild(tile);
-      session.observer.observe(tile);
-    }
+    mountBatch(0);
 
     hideLoading();
     listEl.classList.remove('hidden');
@@ -313,6 +467,53 @@
     updateStatus();
     commitChange();
     announce(pageCount + ' page' + (pageCount === 1 ? '' : 's') + ' loaded.');
+    session.pagerAnnounceReady = true;
+  }
+
+  // Mounts DOM tiles for one batch (BATCH_SIZE consecutive positions in
+  // session.order) at a time, destroying the outgoing batch's tiles first —
+  // caching every visited batch would defeat the point of batching (bounding
+  // live DOM/canvas/ImageBitmap count on a huge PDF). Batches are positions
+  // in session.order, not raw page indices, so Organize's reordering and
+  // Remove/Extract/Preview/Rotate's identity order share one implementation.
+  function mountBatch(batchIdx) {
+    if (!session) return;
+    var total = batchCount();
+    batchIdx = Math.max(0, Math.min(batchIdx, total - 1));
+
+    destroyMountedTiles();
+    session.currentBatch = batchIdx;
+
+    var start = batchIdx * BATCH_SIZE;
+    var end = Math.min(start + BATCH_SIZE, session.pageCount);
+    for (var pos = start; pos < end; pos++) {
+      var origIdx = session.order[pos];
+      var tile = buildTile(origIdx);
+      session.tileEls[origIdx] = tile;
+      session.mountedOrigIdxs.push(origIdx);
+      listEl.appendChild(tile);
+      session.observer.observe(tile);
+    }
+
+    // Fix 3: attachCutToggles() was previously called only once per sub-mode
+    // switch, so pages in batches visited afterward never got a toggle.
+    if (opts.mode === 'preview' && session.splitSubMode === 'marked') {
+      attachCutToggles();
+    }
+
+    updatePager();
+  }
+
+  function destroyMountedTiles() {
+    if (!session || !session.mountedOrigIdxs) return;
+    session.mountedOrigIdxs.forEach(function (origIdx) {
+      var tile = session.tileEls[origIdx];
+      if (!tile) return;
+      session.observer.unobserve(tile);
+      if (tile.parentNode) tile.parentNode.removeChild(tile);
+      session.tileEls[origIdx] = undefined;
+    });
+    session.mountedOrigIdxs = [];
   }
 
   // Organize's #tool-options row has a single text input (#opt-order) that
@@ -493,27 +694,30 @@
   }
 
   // Every tile except the last gets a toggle (cutting "after the last page"
-  // isn't a meaningful cut point).
+  // isn't a meaningful cut point). Iterates session.mountedOrigIdxs, not
+  // 0..pageCount — since batching, this runs on every batch mount (see
+  // mountBatch()), and only one batch is ever mounted at a time, so scanning
+  // the full page range on every mount would be O(pageCount) wasted work per
+  // flip on a large document instead of O(BATCH_SIZE).
   function attachCutToggles() {
     if (!session) return;
-    for (var i = 0; i < session.pageCount - 1; i++) {
+    session.mountedOrigIdxs.forEach(function (i) {
+      if (i >= session.pageCount - 1) return;
       var tile = session.tileEls[i];
-      if (!tile || tile._fcCutToggle) continue;
+      if (!tile || tile._fcCutToggle) return;
       var toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'page-grid__cut-toggle';
       toggle.setAttribute('aria-label', 'Toggle cut after page ' + (i + 1));
       toggle.setAttribute('aria-pressed', session.cutPoints.has(i) ? 'true' : 'false');
       toggle.classList.toggle('is-active', session.cutPoints.has(i));
-      (function (origIdx) {
-        toggle.addEventListener('click', function (e) {
-          e.stopPropagation();
-          toggleCutPoint(origIdx);
-        });
-      })(i);
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        toggleCutPoint(i);
+      });
       tile.appendChild(toggle);
       tile._fcCutToggle = toggle;
-    }
+    });
   }
 
   function detachCutToggles() {
@@ -609,19 +813,26 @@
   // would fight the visitor's cursor. See onPagesInputTyped/onPagesInputCommitted.
   function setMarkedFromSet(newMarked) {
     if (!session) return;
-    session.tileEls.forEach(function (tile, idx) {
+    // Iterates every page, not just session.tileEls (sparse once batched) —
+    // a typed spec like "1-200" must update session.marked for every page it
+    // covers even when only one batch's tiles are mounted, or buildSpec()/
+    // commitChange()'s output would silently be clipped to the visible
+    // batch. Tile DOM/CSS is only touched for indices that happen to be
+    // mounted right now.
+    for (var idx = 0; idx < session.pageCount; idx++) {
       var shouldBeMarked = newMarked.has(idx);
-      if (shouldBeMarked === session.marked.has(idx)) return;
+      if (shouldBeMarked === session.marked.has(idx)) continue;
       if (shouldBeMarked) {
         session.marked.add(idx);
-        tile.classList.add('is-marked');
-        tile.setAttribute('aria-pressed', 'true');
       } else {
         session.marked.delete(idx);
-        tile.classList.remove('is-marked');
-        tile.setAttribute('aria-pressed', 'false');
       }
-    });
+      var tile = session.tileEls[idx];
+      if (tile) {
+        tile.classList.toggle('is-marked', shouldBeMarked);
+        tile.setAttribute('aria-pressed', shouldBeMarked ? 'true' : 'false');
+      }
+    }
     updateStatus();
   }
 
@@ -716,12 +927,51 @@
 
   function onDragPointerMove(e) {
     if (!session || session.dragOrigIdx == null) return;
+    if (maybeFlipBatchForDrag(e)) return; // batch just changed — the dragged tile moved, re-sync next move
     var target = document.elementFromPoint(e.clientX, e.clientY);
     var targetTile = target && target.closest && target.closest('.page-grid__tile');
     if (!targetTile || !listEl.contains(targetTile)) return;
     var targetOrigIdx = Number(targetTile.dataset.origIdx);
     if (targetOrigIdx === session.dragOrigIdx) return;
     moveInOrder(session.dragOrigIdx, session.order.indexOf(targetOrigIdx));
+  }
+
+  // Dragging a tile to the grid's top/bottom edge flips to the previous/next
+  // batch, so a page can be moved across a batch boundary — there's no
+  // autoscroll precedent anywhere else in this codebase to build on, so this
+  // is its own small edge-geometry + debounce implementation. Debounced so
+  // holding the pointer in the edge zone doesn't fire a flip on every
+  // pointermove. Returns true if a flip happened.
+  function maybeFlipBatchForDrag(e) {
+    if (batchCount() <= 1) return false;
+    var now = Date.now();
+    if (now - lastBatchFlipAt < BATCH_FLIP_DEBOUNCE_MS) return false;
+    var rect = listEl.getBoundingClientRect();
+    var origIdx = session.dragOrigIdx;
+    var currentBatch = session.currentBatch;
+
+    if (e.clientY < rect.top + EDGE_PX && currentBatch > 0) {
+      lastBatchFlipAt = now;
+      moveInOrder(origIdx, currentBatch * BATCH_SIZE - 1); // last position of the previous batch
+      mountBatch(currentBatch - 1);
+      reacquireDragTile(origIdx);
+      return true;
+    }
+    if (e.clientY > rect.bottom - EDGE_PX && currentBatch < batchCount() - 1) {
+      lastBatchFlipAt = now;
+      moveInOrder(origIdx, (currentBatch + 1) * BATCH_SIZE); // first position of the next batch
+      mountBatch(currentBatch + 1);
+      reacquireDragTile(origIdx);
+      return true;
+    }
+    return false;
+  }
+
+  // Re-applies the dragging visual state to the freshly-mounted tile for
+  // origIdx after a batch flip destroyed and rebuilt it.
+  function reacquireDragTile(origIdx) {
+    var tile = session.tileEls[origIdx];
+    if (tile) tile.classList.add('is-dragging');
   }
 
   function onDragPointerUp() {
@@ -758,15 +1008,27 @@
     e.preventDefault();
     if (newPos < 0 || newPos >= session.order.length) return;
     moveInOrder(origIdx, newPos);
+    // Arrow/Home/End can legitimately land in a batch that isn't mounted —
+    // route through the same batch-flip mechanism edge-drag uses, rather
+    // than a second one-off implementation.
+    var targetBatch = Math.floor(newPos / BATCH_SIZE);
+    if (targetBatch !== session.currentBatch) {
+      mountBatch(targetBatch);
+    }
     commitChange();
     announce('Page ' + (origIdx + 1) + ' moved to position ' + (newPos + 1) + '.');
-    session.tileEls[origIdx].focus();
+    var tile = session.tileEls[origIdx];
+    if (tile) tile.focus();
   }
 
   // Moves the tile whose original page index is origIdx to display position
   // newPos in session.order, then re-syncs DOM order + labels. appendChild()
   // on an already-attached node MOVES it (no clone, no focus loss), so this
-  // is safe to call mid-keyboard-focus or mid-pointer-drag.
+  // is safe to call mid-keyboard-focus or mid-pointer-drag. session.order is
+  // the sole source of truth for page order — newPos can land in a batch
+  // that isn't currently mounted (a cross-batch keyboard move, or the
+  // mid-drag moment right before a batch flip), so DOM/label updates are
+  // guarded to only touch tiles that actually have a mounted element.
   function moveInOrder(origIdx, newPos) {
     var order = session.order;
     var curPos = order.indexOf(origIdx);
@@ -774,8 +1036,11 @@
     order.splice(curPos, 1);
     order.splice(newPos, 0, origIdx);
     order.forEach(function (oi) {
-      listEl.appendChild(session.tileEls[oi]);
-      updateTileLabel(session.tileEls[oi], oi);
+      var tile = session.tileEls[oi];
+      if (tile) {
+        listEl.appendChild(tile);
+        updateTileLabel(tile, oi);
+      }
     });
   }
 
