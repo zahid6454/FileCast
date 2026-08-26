@@ -320,6 +320,103 @@ describe('shared-page-grid.js — remove/extract spec building', () => {
   });
 });
 
+describe('shared-page-grid.js — batching + pager', () => {
+  // TOOL_PREVIEW_PAGINATION_PLAN.md §1: buildGrid() mounts one 10-tile batch
+  // at a time instead of all pageCount pages. Nothing here exercises fixes 1
+  // and 2 directly (see below) — these just confirm the pager's own
+  // presence/absence and mount/unmount behavior.
+
+  it('does not render a pager for a document that fits in one batch (<=10 pages)', async () => {
+    const dom = createDom(pageGridPageHtml());
+    await setupGrid(dom, 'remove', 7);
+
+    expect(
+      dom.window.document.querySelector('.page-grid__pager').classList.contains('hidden')
+    ).toBe(true);
+    expect(dom.window.document.querySelectorAll('.page-grid__tile').length).toBe(7);
+  });
+
+  it('renders a pager and mounts only the first batch for a >10 page document', async () => {
+    const dom = createDom(pageGridPageHtml());
+    await setupGrid(dom, 'remove', 25);
+
+    expect(
+      dom.window.document.querySelector('.page-grid__pager').classList.contains('hidden')
+    ).toBe(false);
+    expect(dom.window.document.querySelectorAll('.page-grid__tile').length).toBe(10);
+    expect(dom.window.document.querySelector('[data-orig-idx="0"]')).not.toBeNull();
+    expect(dom.window.document.querySelector('[data-orig-idx="9"]')).not.toBeNull();
+    expect(dom.window.document.querySelector('[data-orig-idx="10"]')).toBeNull();
+  });
+
+  it('clicking Next mounts the next batch, destroying the previous one', async () => {
+    const dom = createDom(pageGridPageHtml());
+    await setupGrid(dom, 'remove', 25);
+
+    dom.window.document.querySelector('.page-grid__pager-btn--next').click();
+
+    expect(dom.window.document.querySelectorAll('.page-grid__tile').length).toBe(10);
+    expect(dom.window.document.querySelector('[data-orig-idx="0"]')).toBeNull();
+    expect(dom.window.document.querySelector('[data-orig-idx="10"]')).not.toBeNull();
+    expect(dom.window.document.querySelector('[data-orig-idx="19"]')).not.toBeNull();
+  });
+
+  it('jumping to a batch via the numeric input mounts that batch', async () => {
+    const dom = createDom(pageGridPageHtml());
+    await setupGrid(dom, 'remove', 25);
+    const jumpInput = dom.window.document.querySelector('.page-grid__pager-jump-input');
+
+    jumpInput.value = '3';
+    jumpInput.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+
+    // Batch 3 (1-indexed) = positions 20-24 (origIdx 20-24), 5 tiles.
+    expect(dom.window.document.querySelectorAll('.page-grid__tile').length).toBe(5);
+    expect(dom.window.document.querySelector('[data-orig-idx="20"]')).not.toBeNull();
+    expect(dom.window.document.querySelector('[data-orig-idx="24"]')).not.toBeNull();
+  });
+
+  // Fix 2: setMarkedFromSet() used to iterate session.tileEls (sparse once
+  // batched) instead of 0..pageCount, silently dropping out-of-batch pages
+  // from session.marked itself — not just the display — which corrupted
+  // buildSpec()'s output. A typed cross-batch range must mark every page it
+  // covers, not just the mounted batch's.
+  it('typing a cross-batch range marks every page it covers, not clipped to the mounted batch', async () => {
+    const dom = createDom(pageGridPageHtml());
+    const specs = [];
+    await setupGrid(dom, 'remove', 20, (spec) => specs.push(spec));
+    const input = dom.window.document.getElementById('opt-pages');
+
+    input.value = '1-15';
+    input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    input.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+
+    expect(specs[specs.length - 1]).toBe('1-15');
+  });
+
+  // Fix 1: moveInOrder() used to re-append EVERY page's tile on every
+  // reorder, not just the mounted batch — the moment session.tileEls[oi] was
+  // undefined for an unmounted page, appendChild(undefined) threw. A
+  // keyboard move that crosses a batch boundary (Home/End, or Arrow at a
+  // batch edge) is the case that used to hit this.
+  it('reordering across a batch boundary does not throw, and the final order is correct', async () => {
+    const dom = createDom(pageGridPageHtml());
+    const specs = [];
+    await setupGrid(dom, 'organize', 15, (spec) => specs.push(spec));
+
+    const tile0 = dom.window.document.querySelector('[data-orig-idx="0"]');
+    expect(() => {
+      tile0.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    }).not.toThrow();
+
+    const lastOrder = specs[specs.length - 1].split(',').map(Number);
+    expect(lastOrder.length).toBe(15);
+    expect(lastOrder[lastOrder.length - 1]).toBe(1); // page 1 (origIdx 0) moved to the very last position
+
+    // The grid auto-flipped to the batch that now contains the moved tile.
+    expect(dom.window.document.querySelector('[data-orig-idx="0"]')).not.toBeNull();
+  });
+});
+
 describe('shared-page-grid.js — organize reorder', () => {
   it('keyboard arrow-key reorder emits a flat 1-indexed permutation, not ranges', async () => {
     const dom = createDom(pageGridPageHtml());

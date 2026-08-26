@@ -1578,6 +1578,89 @@ img { max-width: 100%; display: block; }
   text-align: center;
 }
 
+/* Pager (batches of BATCH_SIZE tiles — shared-page-grid.js's mountBatch()) —
+   hidden entirely when the whole document fits in one batch, so a short
+   document's grid stays pixel-identical to before batching existed. */
+.page-grid__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+}
+.page-grid__pager-btn {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-raised);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base);
+}
+.page-grid__pager-btn:hover:not(:disabled),
+.page-grid__pager-btn:focus-visible {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  outline: none;
+}
+.page-grid__pager-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.page-grid__pager-pills {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.page-grid__pager-pill {
+  min-width: 1.75em;
+  height: 1.75em;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-raised);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
+}
+.page-grid__pager-pill:hover,
+.page-grid__pager-pill:focus-visible {
+  border-color: var(--color-primary);
+  outline: none;
+}
+.page-grid__pager-pill.is-active {
+  border-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  background: var(--color-primary);
+}
+.page-grid__pager-ellipsis {
+  color: var(--color-text-light);
+  padding: 0 var(--space-1);
+}
+.page-grid__pager-jump {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+}
+.page-grid__pager-jump-input {
+  width: 3.5em;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.page-grid__pager-range {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Page Proof (single-page live-effect preview — PDF Watermark/Page
    Numbers/Crop, built by shared-page-proof.js). --- */
 .page-proof {
@@ -2190,6 +2273,31 @@ table.kv-table tr.group-title th .eyebrow {
    Merge doesn't look like a different tool, plus a drag handle, thumbnail,
    and position badge. --- */
 .file-grid { margin-top: var(--space-4); }
+/* Fixed-height scroll window (~320px, ~5 rows) instead of pagination — Merge
+   has no page-count-driven cost the way the page grid does (one row per
+   uploaded file, capped today at max_files: 10 in tools/pdf-merge.yaml), so
+   a simple scroll box is enough regardless of how many files are in play.
+   Reuses the exact scrollbar treatment .page-grid__list already uses, so it
+   reads as the same system. */
+.file-grid__list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--brand-blue) transparent;
+}
+.file-grid__list::-webkit-scrollbar {
+  width: 8px;
+}
+.file-grid__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.file-grid__list::-webkit-scrollbar-thumb {
+  background-image: linear-gradient(180deg, var(--brand-blue), var(--brand-green));
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-bg-raised);
+  background-clip: padding-box;
+}
 .file-grid__row {
   display: flex;
   align-items: center;
