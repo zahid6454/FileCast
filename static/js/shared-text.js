@@ -303,6 +303,11 @@
   // reusing this {label, value} shape would silently get the wrong headers.
   // Not worth a `headers` field for one consumer; revisit if a second one
   // shows up.
+  // The per-row copy icon's one and only rest state — used both to create
+  // it and (in wireRowCopy's flash()) to reset it, so the two can never
+  // drift out of sync with each other.
+  var COPY_ICON_REST = '⧉';
+
   function buildFlatOutputTable(rows) {
     var table = document.createElement('table');
     table.className = 'out-table';
@@ -321,7 +326,7 @@
       tdCopy.className = 'copy';
       var copyIcon = document.createElement('span');
       copyIcon.className = 'copy-icon';
-      copyIcon.textContent = '⧉';
+      copyIcon.textContent = COPY_ICON_REST;
       copyIcon.title = 'Copy';
       copyIcon.setAttribute('role', 'button');
       copyIcon.setAttribute('tabindex', '0');
@@ -343,12 +348,17 @@
   // value. Same synchronous-throw guard: accessing navigator.clipboard on
   // an unsupported/non-HTTPS context throws before any promise exists.
   function wireRowCopy(icon, value) {
+    // Resets to the fixed rest glyph, not whatever icon.textContent happens
+    // to be at call time — a second click inside the previous flash's
+    // 1200ms window used to capture '✓' itself as "original", so the first
+    // timeout's correct reset was immediately clobbered by the second
+    // timeout resetting back to '✓', permanently. The rest state never
+    // varies per icon, so there's nothing to capture.
     function flash(text) {
-      var original = icon.textContent;
       icon.textContent = text;
       icon.classList.add('copy-icon--done');
       setTimeout(function () {
-        icon.textContent = original;
+        icon.textContent = COPY_ICON_REST;
         icon.classList.remove('copy-icon--done');
       }, 1200);
     }

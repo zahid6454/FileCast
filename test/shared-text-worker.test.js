@@ -566,6 +566,32 @@ describe('shared-text.js — per-row copy icon (tool UI audit round 2, §3)', ()
     icon.dispatchEvent(new dom.window.Event('click'));
     expect(icon.textContent).toBe('!');
   });
+
+  it('resets to the rest glyph even if a click lands while the icon is already showing the checkmark (race regression)', async () => {
+    // flash() used to capture icon.textContent as "original" at call time.
+    // A second click before the first flash's 1200ms reset fires captured
+    // '✓' itself as "original", so the correct first reset was immediately
+    // clobbered back to '✓' by the second timer, permanently. Reproduced
+    // directly here — the icon showing '✓' when clicked (whatever the
+    // cause) must never become the thing a later reset restores it to.
+    const dom = await setupTextToolPage(FlatTableTextWorker);
+    dom.window.navigator.clipboard = { writeText: vi.fn(() => Promise.resolve()) };
+
+    const input = dom.window.document.getElementById('text-input');
+    input.value = 'hello';
+    input.dispatchEvent(new dom.window.Event('input'));
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const icon = dom.window.document.querySelectorAll('.copy-icon')[0];
+    icon.textContent = '✓';
+    icon.dispatchEvent(new dom.window.Event('click'));
+    await flush();
+
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    expect(icon.textContent).toBe('⧉');
+  });
 });
 
 // Tool UI audit round 2, §4: a hard content limit (Barcode Generator's 80
