@@ -67,7 +67,14 @@ self.onmessage = function (e) {
 
 function handleMessage(msg) {
   if (msg.op === 'load') {
+    // This worker stays alive across many 'load' calls in one session
+    // (shared-file-grid.js keeps one worker for the whole Merge file list,
+    // loading each file in turn) — destroy() the previous document first, or
+    // its own nested pdf.js parser worker (spawned per getDocument() call)
+    // leaks for every file after the first.
+    var previousDoc = pdfDoc;
     pdfDoc = null;
+    if (previousDoc) previousDoc.destroy();
     return self.pdfjsLib.getDocument({ data: msg.file }).promise.then(function (doc) {
       pdfDoc = doc;
       self.postMessage({ ok: true, type: 'loaded', pageCount: doc.numPages });
