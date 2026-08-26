@@ -20,6 +20,7 @@ input_min: 1
 input_max: 100
 input_default: "5"
 input_placeholder: "1-100"
+input_presets: [1, 5, 10, 25, 50, 100]
 tagline: "Generate random, standards-compliant UUIDs (v4)"
 tagline_long: "Generate cryptographically random UUID v4 values instantly in your browser — pick how many you need and copy or download the list."
 meta:

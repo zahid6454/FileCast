@@ -16,11 +16,16 @@ const WIDTHS = [320, 375, 480, 768, 1024, 1200, 1440];
 
 // One page per template: standard (has a range slider), multi-file (slider +
 // markdown tables), text-input (markdown tables), plus the homepage.
+// uuid-generator covers the text-input template's other input_kind (a
+// number field + quick-pick preset chips instead of a textarea) — a flex
+// row of chips is exactly the kind of control this file exists to catch
+// overflowing at 320px.
 const PAGES = [
   '/',
   '/convert/image-compress/',
   '/convert/bulk-image-compress/',
-  '/convert/json-to-yaml/'
+  '/convert/json-to-yaml/',
+  '/convert/uuid-generator/'
 ];
 
 async function unreachableOverflow(page) {
