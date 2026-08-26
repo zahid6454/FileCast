@@ -1,6 +1,17 @@
 (function () {
   'use strict';
 
+  // Page-proof preview (Tool Preview/Interaction Redesign §9) —
+  // shared-page-proof.js (loaded before this file, see pdf-watermark.yaml's
+  // shared_js) renders page 1 and overlays a live watermark reacting to
+  // #opt-text/#opt-opacity/#opt-fontSize. convertFile() below is unchanged
+  // — the worker call already matches those three options 1:1. Absent
+  // (window.FCPageProof undefined) in the worker-level unit tests, which
+  // eval this file alone.
+  if (window.FCPageProof) {
+    window.FCPageProof.init({ mode: 'watermark' });
+  }
+
   var activeWorker = null;
 
   window.cancelConversion = function () {

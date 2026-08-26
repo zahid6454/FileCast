@@ -98,7 +98,17 @@ function handleMessage(msg) {
             requestId: msg.requestId,
             pageIndex: msg.pageIndex,
             bitmap: bitmap,
-            rotation: rotation
+            rotation: rotation,
+            // Unscaled page size, in PDF points — lets a caller (shared-page-proof.js)
+            // convert its own worker.js-space x/y math into this bitmap's pixel
+            // space via one scale factor (bitmap.width / pageWidthPt). Note:
+            // pdf.js's viewport width/height already account for the page's own
+            // /Rotate entry; pdf-lib's page.getSize() (what watermark()/
+            // pageNumbers() actually draw against) does not — the two agree for
+            // the overwhelming majority of real PDFs (no page-level /Rotate),
+            // and diverge only for an already-rotated page, a known v1 gap.
+            pageWidthPt: baseViewport.width,
+            pageHeightPt: baseViewport.height
           },
           [bitmap]
         );

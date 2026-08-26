@@ -1,6 +1,17 @@
 (function () {
   'use strict';
 
+  // File-grid preview (Tool Preview/Interaction Redesign §6) — shared-file-grid.js
+  // (loaded before this file, see pdf-merge.yaml's shared_js) takes over
+  // #file-list entirely via shared-multi.js's window._fileListRenderer hook,
+  // rendering the merge order as thumbnailed, drag/keyboard-reorderable rows.
+  // window.convertFiles() below is unchanged — shared-multi.js's own
+  // selectedFiles (kept in sync by the grid via window._fileListReorder) is
+  // still what gets passed in, in array order, same as before this existed.
+  if (window.FCFileGrid) {
+    window.FCFileGrid.init();
+  }
+
   var activeWorker = null;
 
   // Local PDF-lib work runs off the main thread (P4 §36) — terminate() gives

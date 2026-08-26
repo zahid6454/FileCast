@@ -1,6 +1,17 @@
 (function () {
   'use strict';
 
+  // Page-proof preview (Tool Preview/Interaction Redesign §10) —
+  // shared-page-proof.js (loaded before this file, see
+  // pdf-page-numbers.yaml's shared_js) renders page 1 and overlays a live
+  // position badge reacting to #opt-position/#opt-startNumber/#opt-format.
+  // convertFile() below is unchanged — the worker call already matches
+  // those three options 1:1. Absent (window.FCPageProof undefined) in the
+  // worker-level unit tests, which eval this file alone.
+  if (window.FCPageProof) {
+    window.FCPageProof.init({ mode: 'pageNumbers' });
+  }
+
   var activeWorker = null;
 
   window.cancelConversion = function () {

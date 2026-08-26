@@ -2,8 +2,11 @@
   'use strict';
 
   // Shared "page grid" component (Tool Preview/Interaction Redesign §1) — one
-  // thumbnail grid, three interaction modes: click-to-mark (Remove/Extract)
-  // and drag/keyboard-to-reorder (Organize). Each mode's converter file calls
+  // thumbnail grid, five modes: click-to-mark (Remove/Extract),
+  // drag/keyboard-to-reorder (Organize), a read-only confirmation strip
+  // (Split v1's "every page" preview), and a read-only strip that also
+  // live-previews a whole-document rotation (Rotate v1, reacting to the
+  // tool's own #opt-rotation select). Each mode's converter file calls
   // window.FCPageGrid.init({ mode, onChange }) at load time; this module owns
   // everything else — DOM, the render Worker, selection state.
   //
@@ -85,6 +88,12 @@
     }
     if (opts.mode === 'extract') {
       return 'Click a page to select it for extraction.';
+    }
+    if (opts.mode === 'preview') {
+      return 'Every page becomes its own PDF.';
+    }
+    if (opts.mode === 'rotate') {
+      return 'Preview of how every page will look after rotating.';
     }
     return 'Click a page to mark it for removal.';
   }
@@ -169,7 +178,7 @@
     if (data.type === 'rendered') {
       if (!data.ok || !session) return;
       var tile = session.tileEls[data.pageIndex];
-      if (tile) paintTile(tile, data.bitmap);
+      if (tile) paintTile(tile, data.bitmap, data.rotation);
     }
   }
 
@@ -196,7 +205,11 @@
     hideLoading();
     listEl.classList.remove('hidden');
     statusEl.classList.remove('hidden');
-    if (optionsRowEl) optionsRowEl.classList.add('hidden');
+    // Remove/Extract/Organize replace their tool's own text-input option, so
+    // that row is hidden once the grid takes over. Rotate's #opt-rotation
+    // select is NOT replaced — the live preview reacts to it, so it has to
+    // stay visible and usable. Split (preview) has no options row at all.
+    if (optionsRowEl && opts.mode !== 'rotate') optionsRowEl.classList.add('hidden');
     container.classList.remove('hidden');
     var preview = q('file-preview');
     if (preview) preview.classList.add('hidden');
@@ -214,6 +227,8 @@
       tile.setAttribute('role', 'option');
       tile.addEventListener('pointerdown', onDragPointerDown);
       tile.addEventListener('keydown', onOrganizeKeyDown);
+    } else if (opts.mode === 'preview' || opts.mode === 'rotate') {
+      tile = document.createElement('div');
     } else {
       tile = document.createElement('button');
       tile.type = 'button';
@@ -222,7 +237,7 @@
         toggleMark(idx);
       });
     }
-    tile.className = 'page-grid__tile';
+    tile.className = 'page-grid__tile page-grid__tile--' + opts.mode;
     tile.dataset.origIdx = String(idx);
 
     var canvasWrap = document.createElement('div');
@@ -258,7 +273,7 @@
     }
   }
 
-  function paintTile(tile, bitmap) {
+  function paintTile(tile, bitmap, rotation) {
     var canvas = tile._fcCanvas;
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
@@ -267,6 +282,38 @@
     ctx.drawImage(bitmap, 0, 0);
     bitmap.close();
     tile.classList.add('is-rendered');
+
+    if (opts.mode === 'rotate') {
+      tile.dataset.baseRotation = String(rotation || 0);
+      applyRotationPreview(tile);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Rotate v1 — read-only grid, live-previews the whole-document rotation
+  // the #opt-rotation select currently has picked. Reuses the base
+  // orientation pdf-render-worker.js already reports per page (page.rotate)
+  // — rotate() in the worker ADDS the picked degrees on top of that, so the
+  // preview does the same (current + picked), never just the picked value
+  // alone, or a page that's already sideways would preview wrong.
+  // ---------------------------------------------------------------------
+  function applyRotationPreview(tile) {
+    var base = Number(tile.dataset.baseRotation || 0);
+    var picked = currentRotationDegrees();
+    var total = (((base + picked) % 360) + 360) % 360;
+    tile._fcCanvas.style.transform = 'rotate(' + total + 'deg)';
+  }
+
+  function currentRotationDegrees() {
+    var el = q('opt-rotation');
+    return el ? parseInt(el.value, 10) || 0 : 0;
+  }
+
+  function applyRotationPreviewToAllTiles() {
+    if (!session) return;
+    session.tileEls.forEach(function (tile) {
+      if (tile && tile.classList.contains('is-rendered')) applyRotationPreview(tile);
+    });
   }
 
   // Renders only thumbnails in/near the viewport (600px buffer above/below):
@@ -316,6 +363,9 @@
     } else if (opts.mode === 'extract') {
       statusEl.textContent =
         marked + ' of ' + total + ' page' + (total === 1 ? '' : 's') + ' selected.';
+    } else if (opts.mode === 'preview') {
+      statusEl.textContent =
+        total + ' page' + (total === 1 ? '' : 's') + ' — will split into ' + total + ' files.';
     } else {
       statusEl.textContent = total + ' page' + (total === 1 ? '' : 's') + '.';
     }
@@ -501,6 +551,13 @@
       var resetBtnEl = q('reset-btn');
       if (resetBtnEl) {
         resetBtnEl.addEventListener('click', teardownSession);
+      }
+
+      if (opts.mode === 'rotate') {
+        var rotationEl = q('opt-rotation');
+        if (rotationEl) {
+          rotationEl.addEventListener('change', applyRotationPreviewToAllTiles);
+        }
       }
     }
   };

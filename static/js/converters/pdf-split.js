@@ -1,6 +1,17 @@
 (function () {
   'use strict';
 
+  // Page-grid preview (Tool Preview/Interaction Redesign §7, v1 scope) —
+  // shared-page-grid.js (loaded before this file, see pdf-split.yaml's
+  // shared_js) shows a read-only thumbnail strip confirming what split()
+  // already does today (every page becomes its own PDF) — no marking, no
+  // options, so convertFile() below needs no changes at all. Absent
+  // (window.FCPageGrid undefined) in the worker-level unit tests, which eval
+  // this file alone.
+  if (window.FCPageGrid) {
+    window.FCPageGrid.init({ mode: 'preview' });
+  }
+
   var activeWorker = null;
 
   // Local PDF-lib work runs off the main thread now (P4 §36) — terminate()

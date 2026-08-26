@@ -250,7 +250,10 @@
   "max_files": {{ tool.get('max_files', 10)|tojson }},
   "category": {{ tool.category|tojson }}{% if tool.worker_libs is defined and 'pdf-lib.min.js' in tool.worker_libs %}{% set pdf_lib_asset = assets.get('lib/pdf-lib.min.js') %}{% set pdf_lib_worker_asset = assets.get('js/workers/pdf-lib-worker.js') %}{% if pdf_lib_asset and pdf_lib_worker_asset %},
   "pdf_lib_src": {{ ("/" + pdf_lib_asset.path)|tojson }},
-  "pdf_lib_worker_src": {{ ("/" + pdf_lib_worker_asset.path)|tojson }}{% endif %}{% endif %}
+  "pdf_lib_worker_src": {{ ("/" + pdf_lib_worker_asset.path)|tojson }}{% endif %}{% endif %}{% if tool.worker_libs is defined and 'pdf.min.js' in tool.worker_libs %}{% set pdf_asset = assets.get('lib/pdf.min.js') %}{% set pdf_worker_asset = assets.get('lib/pdf.worker.min.js') %}{% set pdf_render_worker_asset = assets.get('js/workers/pdf-render-worker.js') %}{% if pdf_asset and pdf_worker_asset and pdf_render_worker_asset %},
+  "pdf_src": {{ ("/" + pdf_asset.path)|tojson }},
+  "pdf_worker_src": {{ ("/" + pdf_worker_asset.path)|tojson }},
+  "pdf_render_worker_src": {{ ("/" + pdf_render_worker_asset.path)|tojson }}{% endif %}{% endif %}
 }
 </script>
 
@@ -273,6 +276,17 @@
 {% set lib_asset = assets.get('lib/' + lib) %}
 {% if lib_asset %}
 <script src="/{{ lib_asset.path }}" integrity="{{ lib_asset.sri }}" crossorigin="anonymous" defer></script>
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{# Shared component JS (opt-in, first-party) — see tool.html for the same
+   block's rationale. #}
+{% if tool.shared_js is defined and tool.shared_js %}
+{% for shared in tool.shared_js %}
+{% set shared_asset = assets.get('js/' + shared) %}
+{% if shared_asset %}
+<script src="/{{ shared_asset.path }}" integrity="{{ shared_asset.sri }}" crossorigin="anonymous" defer></script>
 {% endif %}
 {% endfor %}
 {% endif %}

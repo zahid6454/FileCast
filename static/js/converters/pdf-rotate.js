@@ -1,6 +1,18 @@
 (function () {
   'use strict';
 
+  // Page-grid preview (Tool Preview/Interaction Redesign §5, v1 scope) —
+  // shared-page-grid.js (loaded before this file, see pdf-rotate.yaml's
+  // shared_js) shows a read-only thumbnail strip that live-previews the
+  // whole-document rotation #opt-rotation currently has picked, reacting to
+  // its change event on its own. convertFile() below is unchanged — rotate()
+  // already applies one degrees value to every page, exactly what the
+  // preview shows. Absent (window.FCPageGrid undefined) in the worker-level
+  // unit tests, which eval this file alone.
+  if (window.FCPageGrid) {
+    window.FCPageGrid.init({ mode: 'rotate' });
+  }
+
   var activeWorker = null;
 
   window.cancelConversion = function () {
