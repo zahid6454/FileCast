@@ -8,9 +8,13 @@
   // (read-only, reacts to the tool's own option inputs), and 'crop' (drag/
   // resize a box — same corner+edge-handle interaction as image-cropper.js,
   // adapted to a fixed-size, non-zooming proof canvas — which fully replaces
-  // a numeric-margin option input; there is no #opt-margin). window.
-  // convertFile is untouched by this file — it's purely additive UI over an
-  // already-correct worker call.
+  // a numeric-margin option input; there is no #opt-margin). Crop's box is
+  // also keyboard-operable (arrow keys move it, Shift+arrow keys resize it
+  // anchored at its own top-left corner) — unlike image-cropper.js, which
+  // has no keyboard path at all, this mode is replacing a fully
+  // keyboard-accessible number input, so it needs one of its own rather than
+  // regressing to mouse/touch-only. window.convertFile is untouched by this
+  // file — it's purely additive UI over an already-correct worker call.
   //
   // shared.js (loaded before this file) never exposes a "file was just
   // selected" hook to converters — same note as image-cropper.js/
@@ -21,6 +25,7 @@
   var CROP_MIN_SIZE = 20; // minimum crop rect side, in canvas pixels — mirrors image-cropper.js's MIN_SIZE
   var CROP_HANDLE_HIT_RADIUS = 14; // mirrors image-cropper.js's HANDLE_HIT_RADIUS
   var CROP_HANDLE_DRAW_SIZE = 10;
+  var CROP_KEY_STEP = 4; // canvas px per arrow-key press
 
   var container = null;
   var viewportEl = null;
@@ -43,6 +48,13 @@
   function getExt(name) {
     var m = /\.[^.]+$/.exec(name || '');
     return m ? m[0].toLowerCase() : '';
+  }
+
+  // Mirrors shared-page-grid.js's own announce() — #a11y-status is a global
+  // sr-only live region every tool page template already renders.
+  function announce(text) {
+    var status = q('a11y-status');
+    if (status) status.textContent = text;
   }
 
   // ---------------------------------------------------------------------
@@ -94,12 +106,18 @@
     // Crop only — full corner/edge-handle drag-resize, mirroring
     // image-cropper.js's own interaction (see onCropPointerDown/Move/Up
     // below), minus its aspect-ratio presets and zoom (this canvas is a
-    // single fixed-size proof render, not a zoomable editor).
+    // single fixed-size proof render, not a zoomable editor). Also
+    // keyboard-operable (see onCropKeyDown) — tabIndex/role/aria-label make
+    // it a focusable, announced custom control, since a <canvas> has no
+    // interactive semantics of its own.
     if (opts.mode === 'crop') {
       canvasEl.addEventListener('pointerdown', onCropPointerDown);
       canvasEl.addEventListener('pointermove', onCropPointerMove);
       canvasEl.addEventListener('pointerup', onCropPointerUp);
       canvasEl.addEventListener('pointercancel', onCropPointerUp);
+      canvasEl.tabIndex = 0;
+      canvasEl.setAttribute('role', 'application');
+      canvasEl.addEventListener('keydown', onCropKeyDown);
     }
   }
 
@@ -407,6 +425,40 @@
     ctx.restore();
   }
 
+  // Canvas-pixel cropRect -> percent-of-page (top-left origin), shared by
+  // getCropRect() (what pdf-crop.js reads at Convert time) and the
+  // keyboard-accessibility aria-label/announcements below.
+  function cropRectToPercent(rect) {
+    return {
+      xPercent: (rect.x / canvasEl.width) * 100,
+      yPercent: (rect.y / canvasEl.height) * 100,
+      widthPercent: (rect.w / canvasEl.width) * 100,
+      heightPercent: (rect.h / canvasEl.height) * 100
+    };
+  }
+
+  // Keeps the canvas's aria-label describing the crop box's current state —
+  // a screen-reader user tabbing to it (or after any move/resize) needs to
+  // hear where it is, since a <canvas> exposes nothing else. Rounded percents
+  // are plenty precise for this; getCropRect() (Convert-time) uses the exact
+  // float values from cropRectToPercent() instead.
+  function updateCropAriaLabel() {
+    if (!canvasEl || !session || !session.cropRect) return;
+    var pct = cropRectToPercent(session.cropRect);
+    canvasEl.setAttribute(
+      'aria-label',
+      'Crop box: ' +
+        Math.round(pct.widthPercent) +
+        '% wide, ' +
+        Math.round(pct.heightPercent) +
+        '% tall, ' +
+        Math.round(pct.xPercent) +
+        '% from the left, ' +
+        Math.round(pct.yPercent) +
+        '% from the top. Arrow keys move the box, Shift+arrow keys resize it.'
+    );
+  }
+
   // Draws session.cropRect (canvas-pixel space, set by onPageRendered() and
   // moved/resized by the pointer handlers below): dims the discarded area
   // outside the box, outlines the kept area, and draws 4 corner handles —
@@ -436,6 +488,7 @@
       );
     });
     ctx.restore();
+    updateCropAriaLabel();
   }
 
   // ---------------------------------------------------------------------
@@ -586,6 +639,10 @@
 
   function onCropPointerUp(e) {
     if (!session) return;
+    // A pointerdown that never actually hit the box (hitCropTest returned
+    // null so cropDragMode was never set — see onCropPointerDown) shouldn't
+    // announce a "new" state that never changed.
+    var wasDragging = !!session.cropDragMode;
     session.cropDragMode = null;
     if (canvasEl.releasePointerCapture) {
       try {
@@ -598,6 +655,52 @@
       var pt = canvasCoords(e);
       canvasEl.style.cursor = cropCursorForMode(hitCropTest(pt, session.cropRect));
     }
+    if (wasDragging) announceCropChange();
+  }
+
+  // Arrow keys move the box (clamped to stay on-canvas); Shift+arrow keys
+  // resize it, anchored at its own top-left corner (right/bottom edges move)
+  // — the same anchor a bottom-right-corner mouse drag uses. Doesn't cover
+  // every corner/edge a mouse can grab, but gives keyboard/screen-reader
+  // users the same two core actions (move, resize) a numeric margin input
+  // never offered either, unlike the old #opt-margin field this replaced.
+  function onCropKeyDown(e) {
+    if (!session || !session.cropRect) return;
+    var dx = 0;
+    var dy = 0;
+    if (e.key === 'ArrowLeft') dx = -CROP_KEY_STEP;
+    else if (e.key === 'ArrowRight') dx = CROP_KEY_STEP;
+    else if (e.key === 'ArrowUp') dy = -CROP_KEY_STEP;
+    else if (e.key === 'ArrowDown') dy = CROP_KEY_STEP;
+    else return;
+
+    e.preventDefault();
+    var rect = session.cropRect;
+    if (e.shiftKey) {
+      rect.w = clampCrop(rect.w + dx, CROP_MIN_SIZE, canvasEl.width - rect.x);
+      rect.h = clampCrop(rect.h + dy, CROP_MIN_SIZE, canvasEl.height - rect.y);
+    } else {
+      rect.x = clampCrop(rect.x + dx, 0, canvasEl.width - rect.w);
+      rect.y = clampCrop(rect.y + dy, 0, canvasEl.height - rect.h);
+    }
+    render();
+    announceCropChange();
+  }
+
+  function announceCropChange() {
+    if (!session || !session.cropRect) return;
+    var pct = cropRectToPercent(session.cropRect);
+    announce(
+      'Crop box now ' +
+        Math.round(pct.widthPercent) +
+        '% by ' +
+        Math.round(pct.heightPercent) +
+        '%, at ' +
+        Math.round(pct.xPercent) +
+        '% from the left, ' +
+        Math.round(pct.yPercent) +
+        '% from the top.'
+    );
   }
 
   // ---------------------------------------------------------------------
@@ -681,13 +784,7 @@
       if (!session || !session.cropRect || !canvasEl || !canvasEl.width || !canvasEl.height) {
         return { xPercent: 10, yPercent: 10, widthPercent: 80, heightPercent: 80 };
       }
-      var rect = session.cropRect;
-      return {
-        xPercent: (rect.x / canvasEl.width) * 100,
-        yPercent: (rect.y / canvasEl.height) * 100,
-        widthPercent: (rect.w / canvasEl.width) * 100,
-        heightPercent: (rect.h / canvasEl.height) * 100
-      };
+      return cropRectToPercent(session.cropRect);
     }
   };
 })();

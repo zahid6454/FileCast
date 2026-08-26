@@ -33,6 +33,7 @@ function pageProofHtml(mode) {
     <div id="file-info"></div>
     <input id="file-input" type="file" />
     <button id="reset-btn"></button>
+    <div id="a11y-status"></div>
     ${options}
   `;
 }
@@ -345,5 +346,85 @@ describe('shared-page-proof.js — crop box drag/resize', () => {
 
     // No pointerdown preceded this move — dragging is off, no re-render.
     expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+});
+
+describe('shared-page-proof.js — crop box keyboard accessibility', () => {
+  it('is a focusable, announced custom control', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    expect(canvasEl.tabIndex).toBe(0);
+    expect(canvasEl.getAttribute('role')).toBe('application');
+    // Default box is 10%/10%/80%/80%.
+    expect(canvasEl.getAttribute('aria-label')).toContain('80% wide');
+    expect(canvasEl.getAttribute('aria-label')).toContain('80% tall');
+  });
+
+  it('moves the box with arrow keys', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+    );
+
+    // Default box x=20 -> +4 step -> 24. Size unchanged (160x224).
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(24, 28, 160, 224);
+  });
+
+  it('resizes the box with Shift+arrow keys, anchored at its own top-left', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true })
+    );
+
+    // Width grows 160 -> 164; x/y/height untouched.
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 164, 224);
+  });
+
+  it('clamps a keyboard move at the canvas edge', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    // Default x=20, step=4 -> 5 presses reaches exactly 0; a 6th must clamp,
+    // not go negative.
+    for (let i = 0; i < 6; i++) {
+      canvasEl.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })
+      );
+    }
+
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(0, 28, 160, 224);
+  });
+
+  it('ignores non-arrow keys', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+    ctx.strokeRect.mockClear();
+
+    canvasEl.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+
+  it('announces the new box position/size to #a11y-status on every key move', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })
+    );
+
+    const status = dom.window.document.getElementById('a11y-status');
+    expect(status.textContent).toContain('Crop box now');
   });
 });
