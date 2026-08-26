@@ -75,10 +75,20 @@ function handleMessage(msg) {
     var previousDoc = pdfDoc;
     pdfDoc = null;
     if (previousDoc) previousDoc.destroy();
-    return self.pdfjsLib.getDocument({ data: msg.file }).promise.then(function (doc) {
-      pdfDoc = doc;
-      self.postMessage({ ok: true, type: 'loaded', pageCount: doc.numPages });
-    });
+    // disableFontFace: true — pdf.js's default text path registers glyphs via
+    // the browser's Font Loading API (`document.fonts.add(new FontFace(...))`),
+    // which doesn't exist in a Worker (only `window` is aliased above, never
+    // `document`). Left on its default, that registration fails per-font and
+    // pdf.js silently falls back to drawing nothing for that font's glyphs —
+    // text position/layout renders correctly, but every character shows as an
+    // empty notdef box. Forcing this off makes pdf.js draw glyphs as vector
+    // paths instead, which needs only the canvas context, not `document`.
+    return self.pdfjsLib
+      .getDocument({ data: msg.file, disableFontFace: true })
+      .promise.then(function (doc) {
+        pdfDoc = doc;
+        self.postMessage({ ok: true, type: 'loaded', pageCount: doc.numPages });
+      });
   }
   if (msg.op === 'render') {
     if (!pdfDoc) {
