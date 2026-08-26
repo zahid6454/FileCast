@@ -1,6 +1,22 @@
 (function () {
   'use strict';
 
+  // Page-grid preview (Tool Preview/Interaction Redesign §2) — shared-page-grid.js
+  // (loaded before this file, see pdf-remove-pages.yaml's shared_js) owns the
+  // click-to-mark thumbnail UI entirely; this just keeps #opt-pages in sync with
+  // the grid's selection so convertFile() below needs no changes at all. Absent
+  // (window.FCPageGrid undefined) in the worker-level unit tests, which eval
+  // this file alone — guarded so those keep exercising the plain text box.
+  if (window.FCPageGrid) {
+    window.FCPageGrid.init({
+      mode: 'remove',
+      onChange: function (spec) {
+        var pagesEl = document.getElementById('opt-pages');
+        if (pagesEl) pagesEl.value = spec;
+      }
+    });
+  }
+
   var activeWorker = null;
 
   window.cancelConversion = function () {

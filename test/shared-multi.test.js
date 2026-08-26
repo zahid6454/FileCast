@@ -166,3 +166,106 @@ describe('shared-multi.js — error visibility (tool UI audit §1)', () => {
     );
   });
 });
+
+describe('shared-multi.js — file-list takeover hook (Tool Preview/Interaction Redesign §6)', () => {
+  it('leaves the default #file-list rendering untouched when no takeover is set', async () => {
+    const dom = await setupToolPage();
+    const good = makeFile(dom, 'photo.jpg', 1024);
+    selectFiles(dom, [good]);
+    await flush();
+
+    const fileList = dom.window.document.getElementById('file-list');
+    expect(fileList.classList.contains('hidden')).toBe(false);
+    expect(fileList.textContent).toContain('photo.jpg');
+  });
+
+  it('calls window._fileListRenderer instead of building the plain list when set', async () => {
+    const dom = await setupToolPage({ accept_extensions: ['.pdf'], output_extension: '.pdf' });
+    const calls = [];
+    dom.window._fileListRenderer = function (files) {
+      calls.push(files.map((f) => f.name));
+    };
+
+    const a = makeFile(dom, 'a.pdf', 1024);
+    const b = makeFile(dom, 'b.pdf', 2048);
+    selectFiles(dom, [a, b]);
+    await flush();
+
+    expect(calls).toEqual([['a.pdf', 'b.pdf']]);
+    // The default list stays empty/hidden — the takeover owns rendering.
+    const fileList = dom.window.document.getElementById('file-list');
+    expect(fileList.innerHTML).toBe('');
+    // shared-multi.js still owns the count text.
+    const count = dom.window.document.getElementById('file-list-count');
+    expect(count.textContent).toBe('2 files selected');
+    expect(count.classList.contains('hidden')).toBe(false);
+  });
+
+  it('window._fileListReorder commits a new order that convertFiles() receives', async () => {
+    const dom = await setupToolPage({ accept_extensions: ['.pdf'], output_extension: '.pdf' });
+    dom.window._fileListRenderer = function () {};
+
+    const a = makeFile(dom, 'a.pdf', 1024);
+    const b = makeFile(dom, 'b.pdf', 2048);
+    selectFiles(dom, [a, b]);
+    await flush();
+
+    dom.window._fileListReorder([b, a]);
+
+    let received = null;
+    dom.window.convertFiles = function (files) {
+      received = files;
+      return Promise.resolve({
+        blob: new dom.window.Blob([new Uint8Array(8)], { type: 'application/pdf' }),
+        filename: 'merged.pdf'
+      });
+    };
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    expect(received.map((f) => f.name)).toEqual(['b.pdf', 'a.pdf']);
+  });
+
+  it('window._fileListRemove removes a file the same way the default × button does', async () => {
+    const dom = await setupToolPage({ accept_extensions: ['.pdf'], output_extension: '.pdf' });
+    const renders = [];
+    dom.window._fileListRenderer = function (files) {
+      renders.push(files.map((f) => f.name));
+    };
+
+    const a = makeFile(dom, 'a.pdf', 1024);
+    const b = makeFile(dom, 'b.pdf', 2048);
+    selectFiles(dom, [a, b]);
+    await flush();
+
+    dom.window._fileListRemove(0);
+
+    expect(renders[renders.length - 1]).toEqual(['b.pdf']);
+  });
+
+  it('clears the takeover UI (calls it with an empty array) on reset', async () => {
+    const dom = await setupToolPage({ accept_extensions: ['.pdf'], output_extension: '.pdf' });
+    const renders = [];
+    dom.window._fileListRenderer = function (files) {
+      renders.push(files.length);
+    };
+    dom.window.convertFiles = function () {
+      return Promise.resolve({
+        blob: new dom.window.Blob([new Uint8Array(8)], { type: 'application/pdf' }),
+        filename: 'merged.pdf'
+      });
+    };
+
+    const a = makeFile(dom, 'a.pdf', 1024);
+    selectFiles(dom, [a]);
+    await flush();
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    dom.window.document.getElementById('result-actions').querySelector('button:last-child').click();
+
+    expect(renders[renders.length - 1]).toBe(0);
+  });
+});

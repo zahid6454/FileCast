@@ -13,7 +13,11 @@ js_module: converters/pdf-merge.js
 # pdf-lib runs inside a dedicated Worker (P4 §36), not on the main thread — see
 # static/js/workers/pdf-lib-worker.js. worker_libs (not js_libs) so no unused
 # 500KB <script> tag loads on the page itself.
-worker_libs: [pdf-lib.min.js]
+# pdf.js runs inside a second dedicated Worker (static/js/workers/pdf-render-worker.js)
+# to thumbnail each file's first page in the merge-order list — same lazy-load
+# posture, loaded only once a file is picked.
+worker_libs: [pdf-lib.min.js, pdf.min.js]
+shared_js: [shared-file-grid.js]
 max_file_size: 50MB
 max_files: 10
 bulk_support: true

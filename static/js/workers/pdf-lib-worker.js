@@ -47,7 +47,12 @@ function merge(files) {
     });
 }
 
-function split(bytes) {
+// `groups`, when given, is an array of [startIdx, endIdxInclusive] pairs
+// (0-indexed) produced client-side from the UI's sorted cut points — always
+// contiguous/complete by construction, but validated anyway (same defensive
+// posture as parsePagePermutation's duplicate/missing-page check). Omitted/
+// falsy keeps today's exact behavior: every page becomes its own file.
+function split(bytes, groups) {
   return PDFLib.PDFDocument.load(bytes).then(function (srcDoc) {
     var pageCount = srcDoc.getPageCount();
     if (pageCount < 2) {
@@ -56,29 +61,71 @@ function split(bytes) {
       throw new Error('This PDF has only one page. There is nothing to split.');
     }
 
+    var effectiveGroups =
+      groups && groups.length
+        ? groups
+        : rangeOf(pageCount).map(function (i) {
+            return [i, i];
+          });
+    validateSplitGroups(effectiveGroups, pageCount);
+
     var chain = Promise.resolve();
     var parts = [];
-    for (var i = 0; i < pageCount; i++) {
-      (function (pageIdx) {
-        chain = chain
-          .then(function () {
-            return PDFLib.PDFDocument.create();
-          })
-          .then(function (newDoc) {
-            return newDoc.copyPages(srcDoc, [pageIdx]).then(function (pages) {
-              newDoc.addPage(pages[0]);
-              return newDoc.save();
-            });
-          })
-          .then(function (partBytes) {
-            parts.push({ bytes: partBytes, pageNum: pageIdx + 1 });
+    effectiveGroups.forEach(function (group) {
+      var start = group[0];
+      var end = group[1];
+      chain = chain
+        .then(function () {
+          return PDFLib.PDFDocument.create();
+        })
+        .then(function (newDoc) {
+          var pageIndices = rangeOf(end - start + 1).map(function (i) {
+            return start + i;
           });
-      })(i);
-    }
+          return newDoc.copyPages(srcDoc, pageIndices).then(function (pages) {
+            pages.forEach(function (p) {
+              newDoc.addPage(p);
+            });
+            return newDoc.save();
+          });
+        })
+        .then(function (partBytes) {
+          var label =
+            start === end ? 'Page ' + (start + 1) : 'Pages ' + (start + 1) + '-' + (end + 1);
+          parts.push({ bytes: partBytes, pageNum: start + 1, label: label });
+        });
+    });
     return chain.then(function () {
       return { pageCount: pageCount, parts: parts };
     });
   });
+}
+
+function rangeOf(length) {
+  var out = new Array(length);
+  for (var i = 0; i < length; i++) out[i] = i;
+  return out;
+}
+
+// Every page 0..pageCount-1 covered exactly once, in increasing order —
+// catches a gap, an overlap, or an out-of-range group.
+function validateSplitGroups(groups, pageCount) {
+  var expectedStart = 0;
+  for (var i = 0; i < groups.length; i++) {
+    var start = groups[i][0];
+    var end = groups[i][1];
+    if (start !== expectedStart || end < start || end >= pageCount) {
+      throw new Error(
+        'Invalid split groups: pages must be contiguous, in order, and cover every page once.'
+      );
+    }
+    expectedStart = end + 1;
+  }
+  if (expectedStart !== pageCount) {
+    throw new Error(
+      'Invalid split groups: pages must be contiguous, in order, and cover every page once.'
+    );
+  }
 }
 
 function rotate(bytes, degrees) {
@@ -96,7 +143,15 @@ function rotate(bytes, degrees) {
     });
 }
 
-function watermark(bytes, text, opacity, fontSize) {
+// xPercent/yPercent/angleDegrees are optional, trailing, and default to
+// today's exact values (page-center, 45°) — a 4-arg call behaves
+// byte-for-byte identically to before drag-to-position/free-rotation existed.
+// yPercent is percent FROM THE BOTTOM (PDF's native y-up convention), matching
+// the sign convention shared-page-proof.js's overlay math already uses.
+function watermark(bytes, text, opacity, fontSize, xPercent, yPercent, angleDegrees) {
+  var xPct = typeof xPercent === 'number' ? xPercent : 50;
+  var yPct = typeof yPercent === 'number' ? yPercent : 50;
+  var angle = typeof angleDegrees === 'number' ? angleDegrees : 45;
   return PDFLib.PDFDocument.load(bytes)
     .then(function (pdfDoc) {
       return pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold).then(function (font) {
@@ -105,13 +160,13 @@ function watermark(bytes, text, opacity, fontSize) {
           var size = page.getSize();
           var textWidth = font.widthOfTextAtSize(text, fontSize);
           page.drawText(text, {
-            x: size.width / 2 - textWidth / 2,
-            y: size.height / 2,
+            x: (xPct / 100) * size.width - textWidth / 2,
+            y: (yPct / 100) * size.height,
             size: fontSize,
             font: font,
             color: PDFLib.rgb(0.5, 0.5, 0.5),
             opacity: opacity,
-            rotate: PDFLib.degrees(45)
+            rotate: PDFLib.degrees(angle)
           });
         });
         return pdfDoc.save();
@@ -1787,11 +1842,19 @@ self.onmessage = function (e) {
     if (msg.op === 'merge') {
       result = merge(msg.files);
     } else if (msg.op === 'split') {
-      result = split(msg.file);
+      result = split(msg.file, msg.groups);
     } else if (msg.op === 'rotate') {
       result = rotate(msg.file, msg.degrees);
     } else if (msg.op === 'watermark') {
-      result = watermark(msg.file, msg.text, msg.opacity, msg.fontSize);
+      result = watermark(
+        msg.file,
+        msg.text,
+        msg.opacity,
+        msg.fontSize,
+        msg.xPercent,
+        msg.yPercent,
+        msg.angle
+      );
     } else if (msg.op === 'pageNumbers') {
       result = pageNumbers(msg.file, msg.position, msg.startNumber, msg.format);
     } else if (msg.op === 'crop') {

@@ -116,7 +116,29 @@
     }
   }
 
+  // Opt-in takeover (Tool Preview/Interaction Redesign §6), gated to whichever
+  // tool's own JS sets window._fileListRenderer — every other multi-file tool
+  // (jpg-to-pdf/png-to-pdf/image-to-pdf) never touches it, so their plain list
+  // is completely unchanged. When set, it OWNS #file-list's job (building the
+  // visible row UI); this function still keeps selectedFiles/the count text
+  // as the single source of truth. window._fileListReorder lets the takeover
+  // UI commit a new file order back into selectedFiles (e.g. after a drag),
+  // and window._fileListRemove reuses this file's own removeFile() so a
+  // takeover row's remove button behaves identically to the default list's ×.
+  window._fileListReorder = function (newOrder) {
+    selectedFiles = newOrder;
+  };
+  window._fileListRemove = removeFile;
+
   function renderFileList() {
+    if (typeof window._fileListRenderer === 'function') {
+      window._fileListRenderer(selectedFiles.slice());
+      els.fileListCount.textContent =
+        selectedFiles.length + ' file' + (selectedFiles.length === 1 ? '' : 's') + ' selected';
+      els.fileListCount.classList.remove('hidden');
+      return;
+    }
+
     els.fileList.innerHTML = '';
     for (var i = 0; i < selectedFiles.length; i++) {
       var file = selectedFiles[i];
@@ -436,6 +458,7 @@
     els.fileList.innerHTML = '';
     els.fileList.classList.add('hidden');
     els.fileListCount.classList.add('hidden');
+    if (typeof window._fileListRenderer === 'function') window._fileListRenderer([]);
     els.resultActions.innerHTML = '';
     els.progressFill.style.width = '0%';
     els.progress.classList.remove('progress--indeterminate');
