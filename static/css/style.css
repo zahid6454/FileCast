@@ -878,7 +878,17 @@ img { max-width: 100%; display: block; }
 .content-block p { color: var(--color-text-secondary); line-height: var(--leading-relaxed); margin-bottom: var(--space-2); }
 .content-block ul { color: var(--color-text-secondary); line-height: var(--leading-relaxed); padding-left: var(--space-6); margin-bottom: var(--space-3); }
 .content-block li { margin-bottom: var(--space-1); }
-.content-block table { width: 100%; border-collapse: collapse; margin: var(--space-3) 0; font-size: var(--text-sm); }
+/* display: block + overflow-x: auto (rather than a wrapper div — this is
+   markdown-rendered HTML, no markup hook to add one) turns the table itself
+   into the scrollable box on a narrow viewport. A no-op when the table
+   already fits (json-to-yaml's comparison table, say): no scrollbar
+   appears, nothing looks different. A table whose content genuinely can't
+   shrink to fit 320px (long unbroken phrases, e.g. UUID Generator's
+   comparison table) scrolls horizontally instead of overflowing the page,
+   where the root `overflow-x: clip` would hide the far column with no way
+   to reach it. table-row/-cell children keep their normal table layout —
+   only the table's own outer box becomes a block-level scroll container. */
+.content-block table { display: block; overflow-x: auto; width: 100%; border-collapse: collapse; margin: var(--space-3) 0; font-size: var(--text-sm); }
 .content-block th, .content-block td { padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); text-align: left; }
 .content-block th { background: var(--color-bg-sunken); font-weight: var(--weight-semibold); }
 /* Markdown tables overflow a 320px viewport by ~11px, and the root
