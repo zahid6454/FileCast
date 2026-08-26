@@ -10,7 +10,7 @@ No. Cropping only changes the visible/printable boundary of each page — it doe
 
 ### Can I crop a different amount on each side?
 
-Not with this tool — it trims the same margin evenly from all four sides of every page. If you need different margins per side, a full-featured PDF editor with a visual crop tool would give you that control.
+Yes. Drag any edge or corner of the crop box on the preview to trim each side by a different amount — the box doesn't have to stay centered or symmetric. Whatever box you leave it on is applied to every page.
 
 ### Will cropping affect the quality of my pages?
 

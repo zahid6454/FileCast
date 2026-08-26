@@ -127,7 +127,7 @@
       return 'Drag a page to reorder it, or focus a page and use the arrow keys.';
     }
     if (opts.mode === 'extract') {
-      return 'Click a page to select it for extraction.';
+      return 'Click a page to select it for extraction, or type a page list above (e.g. "1-3, 5").';
     }
     if (opts.mode === 'preview') {
       return session && session.splitSubMode === 'marked'
@@ -137,7 +137,7 @@
     if (opts.mode === 'rotate') {
       return 'Preview of how every page will look after rotating.';
     }
-    return 'Click a page to mark it for removal.';
+    return 'Click a page to mark it for removal, or type a page list above (e.g. "1-3, 5").';
   }
 
   function updateHintText() {
@@ -167,7 +167,14 @@
       if (typeof opts.onChange === 'function') opts.onChange(null);
       return;
     }
-    if (opts.mode === 'remove' || opts.mode === 'extract' || opts.mode === 'organize') {
+    // Organize's field stays read-only end to end (see setOptionsInputReadOnly)
+    // and its spec must list every page exactly once, so a stale order from a
+    // differently-sized previous PDF can't carry over — wiped the same as
+    // before. Remove/Extract's field is now editable at all times and its
+    // value survives a new pick on purpose: buildGrid() below seeds
+    // session.marked from it (parseSpecLenient()), so typing a spec BEFORE
+    // picking a file is honored instead of being silently discarded.
+    if (opts.mode === 'organize') {
       var row = q('tool-options');
       var input = row && row.querySelector('.tool-options__input');
       if (input) input.value = '';
@@ -262,6 +269,19 @@
     session.cutPoints = new Set(); // 'preview' mode, "at marked points" sub-mode only
     session.splitSubMode = 'every';
 
+    // A spec typed into #opt-pages before this file was even picked (see
+    // resetGridDrivenStateForNewPick()) seeds the grid's own selection —
+    // buildTile() below reads session.marked to paint each tile's initial
+    // state, so this must run before that loop.
+    if (opts.mode === 'remove' || opts.mode === 'extract') {
+      var pagesEl = q('opt-pages');
+      if (pagesEl && pagesEl.value) {
+        parseSpecLenient(pagesEl.value, pageCount).forEach(function (idx) {
+          session.marked.add(idx);
+        });
+      }
+    }
+
     listEl.innerHTML = '';
     session.tileEls = new Array(pageCount);
     session.observer = new IntersectionObserver(onIntersect, { rootMargin: '600px 0px' });
@@ -276,10 +296,13 @@
     hideLoading();
     listEl.classList.remove('hidden');
     statusEl.classList.remove('hidden');
-    // Remove/Extract/Organize mirror the grid's selection into their tool's
-    // own text-input option (see setOptionsInputReadOnly) rather than hiding
-    // that row — kept visible, read-only, so the exact spec the grid
-    // produces stays there for verification.
+    // Organize's own text-input option is a full permutation of every page
+    // (order matters, every page listed exactly once) — clicking/dragging is
+    // the only editor for that, so it stays read-only (see
+    // setOptionsInputReadOnly) purely as a live confirmation of the grid's
+    // order. Remove/Extract's field is a plain marked-page list, editable in
+    // both directions (see onPagesInputTyped/onPagesInputCommitted below) —
+    // setOptionsInputReadOnly() no-ops for those modes now.
     setOptionsInputReadOnly(true);
     container.classList.remove('hidden');
     var preview = q('file-preview');
@@ -292,14 +315,15 @@
     announce(pageCount + ' page' + (pageCount === 1 ? '' : 's') + ' loaded.');
   }
 
-  // Remove/Extract/Organize's #tool-options row has a single text input
-  // (#opt-pages/#opt-order) that commitChange()'s onChange callback already
-  // mirrors the grid's selection into — made read-only once the grid is
-  // driving it, so it stays visible as a live confirmation of the exact spec
+  // Organize's #tool-options row has a single text input (#opt-order) that
+  // commitChange()'s onChange callback already mirrors the grid's order
+  // into — made read-only once the grid is driving it (a permutation of
+  // every page has no simple live-typing story the way a marked-page list
+  // does), so it stays visible as a live confirmation of the exact spec
   // rather than an editable field two sources could fight over.
   function setOptionsInputReadOnly(readOnly) {
     if (!optionsRowEl) return;
-    if (opts.mode !== 'remove' && opts.mode !== 'extract' && opts.mode !== 'organize') return;
+    if (opts.mode !== 'organize') return;
     var input = optionsRowEl.querySelector('.tool-options__input');
     if (input) input.readOnly = readOnly;
   }
@@ -317,12 +341,17 @@
     } else {
       tile = document.createElement('button');
       tile.type = 'button';
-      tile.setAttribute('aria-pressed', 'false');
+      // session.marked may already have idx here — buildGrid() seeds it from
+      // a typed #opt-pages spec before this loop runs (see there).
+      tile.setAttribute('aria-pressed', session.marked.has(idx) ? 'true' : 'false');
       tile.addEventListener('click', function () {
         toggleMark(idx);
       });
     }
     tile.className = 'page-grid__tile page-grid__tile--' + opts.mode;
+    if ((opts.mode === 'remove' || opts.mode === 'extract') && session.marked.has(idx)) {
+      tile.classList.add('is-marked');
+    }
     tile.dataset.origIdx = String(idx);
 
     var canvasWrap = document.createElement('div');
@@ -541,8 +570,76 @@
   }
 
   // ---------------------------------------------------------------------
-  // Remove / Extract — click to toggle
+  // Remove / Extract — click to toggle, or type #opt-pages directly
   // ---------------------------------------------------------------------
+
+  // Lenient mirror of pdf-lib-worker.js's own parsePageList() (P4 §36) —
+  // used only to keep the grid's marked-tile highlighting in sync with
+  // whatever the visitor is typing live, so unlike the worker's own parser it
+  // silently skips anything invalid/incomplete/out-of-range (e.g. a
+  // mid-typing "8-" or a page number past pageCount) instead of throwing.
+  // Convert-time validation still goes through the worker's own strict
+  // parsePageList(), unchanged — this never affects what actually gets
+  // extracted/removed, only which tiles look marked while typing.
+  function parseSpecLenient(spec, pageCount) {
+    var indices = new Set();
+    if (!spec) return indices;
+    var parts = spec.split(',');
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i].trim();
+      if (!part) continue;
+      var rangeMatch = part.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (rangeMatch) {
+        var start = parseInt(rangeMatch[1], 10);
+        var end = parseInt(rangeMatch[2], 10);
+        if (start < 1 || end > pageCount || start > end) continue;
+        for (var p = start; p <= end; p++) indices.add(p - 1);
+      } else if (/^\d+$/.test(part)) {
+        var num = parseInt(part, 10);
+        if (num >= 1 && num <= pageCount) indices.add(num - 1);
+      }
+    }
+    return indices;
+  }
+
+  // Bulk-applies a new marked set to the grid's tiles (diffed against the
+  // current session.marked, same per-tile class/aria-pressed side effects as
+  // toggleMark() below) without calling commitChange() — the caller already
+  // *is* #opt-pages's own current value, so writing it back mid-keystroke
+  // would fight the visitor's cursor. See onPagesInputTyped/onPagesInputCommitted.
+  function setMarkedFromSet(newMarked) {
+    if (!session) return;
+    session.tileEls.forEach(function (tile, idx) {
+      var shouldBeMarked = newMarked.has(idx);
+      if (shouldBeMarked === session.marked.has(idx)) return;
+      if (shouldBeMarked) {
+        session.marked.add(idx);
+        tile.classList.add('is-marked');
+        tile.setAttribute('aria-pressed', 'true');
+      } else {
+        session.marked.delete(idx);
+        tile.classList.remove('is-marked');
+        tile.setAttribute('aria-pressed', 'false');
+      }
+    });
+    updateStatus();
+  }
+
+  function onPagesInputTyped(e) {
+    if (!session) return;
+    setMarkedFromSet(parseSpecLenient(e.target.value, session.pageCount));
+  }
+
+  // On blur/Enter (native 'change', not 'input') — normalizes the typed spec
+  // to the same range-collapsed form clicking produces (buildSpec(), via
+  // commitChange() -> the converter's onChange -> #opt-pages.value = spec),
+  // so a value like "1,2,3" settles into "1-3" once the visitor's done typing
+  // rather than being rewritten on every keystroke.
+  function onPagesInputCommitted() {
+    if (!session) return;
+    commitChange();
+  }
+
   function toggleMark(origIdx) {
     var tile = session.tileEls[origIdx];
     if (session.marked.has(origIdx)) {
@@ -782,6 +879,19 @@
         var rotationEl = q('opt-rotation');
         if (rotationEl) {
           rotationEl.addEventListener('change', applyRotationPreviewToAllTiles);
+        }
+      }
+
+      // Remove/Extract — #opt-pages stays editable at all times (see
+      // setOptionsInputReadOnly). 'input' fires per keystroke, live-marking
+      // tiles as the visitor types (see parseSpecLenient); 'change' fires on
+      // blur, normalizing the value to the same range-collapsed form
+      // clicking produces.
+      if (opts.mode === 'remove' || opts.mode === 'extract') {
+        var pagesEl = q('opt-pages');
+        if (pagesEl) {
+          pagesEl.addEventListener('input', onPagesInputTyped);
+          pagesEl.addEventListener('change', onPagesInputCommitted);
         }
       }
     }

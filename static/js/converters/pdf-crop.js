@@ -1,6 +1,17 @@
 (function () {
   'use strict';
 
+  // Page-proof preview (Tool Preview/Interaction Redesign follow-up) —
+  // shared-page-proof.js (loaded before this file, see pdf-crop.yaml's
+  // shared_js) renders page 1 and lets the visitor drag/resize a crop box
+  // directly on it. There is no numeric margin option — the box itself is
+  // the only input, read at Convert time via FCPageProof.getCropRect().
+  // Absent (window.FCPageProof undefined) in the worker-level unit tests,
+  // which eval this file alone.
+  if (window.FCPageProof) {
+    window.FCPageProof.init({ mode: 'crop' });
+  }
+
   var activeWorker = null;
 
   window.cancelConversion = function () {
@@ -11,14 +22,17 @@
   };
 
   window.convertFile = function (file) {
-    var marginEl = document.getElementById('opt-margin');
-    var margin = marginEl ? parseFloat(marginEl.value) : 36;
-    if (isNaN(margin) || margin < 0) margin = 0;
-
     var config = window.TOOL_CONFIG || {};
     if (!config.pdf_lib_worker_src || !config.pdf_lib_src) {
       return Promise.reject(new Error('Crop is unavailable right now. Please refresh the page.'));
     }
+
+    // FCPageProof is absent in the worker-level unit tests, which eval this
+    // file alone — default to a centered 80% box, matching
+    // FCPageProof.getCropRect()'s own no-session fallback.
+    var box = window.FCPageProof
+      ? window.FCPageProof.getCropRect()
+      : { xPercent: 10, yPercent: 10, widthPercent: 80, heightPercent: 80 };
 
     return file.arrayBuffer().then(function (bytes) {
       return new Promise(function (resolve, reject) {
@@ -44,7 +58,17 @@
           reject(new Error((err && err.message) || 'This PDF could not be cropped.'));
         };
 
-        worker.postMessage({ op: 'crop', file: bytes, margin: margin }, [bytes]);
+        worker.postMessage(
+          {
+            op: 'crop',
+            file: bytes,
+            xPercent: box.xPercent,
+            yPercent: box.yPercent,
+            widthPercent: box.widthPercent,
+            heightPercent: box.heightPercent
+          },
+          [bytes]
+        );
       });
     });
   };

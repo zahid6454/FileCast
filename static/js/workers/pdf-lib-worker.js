@@ -221,14 +221,28 @@ function pageNumbers(bytes, position, startNumber, format) {
     });
 }
 
-function crop(bytes, margin) {
+// xPercent/yPercent/widthPercent/heightPercent describe the kept box as
+// percentages of each page's own size, measured from the page's top-left —
+// the same top-down, per-page-relative convention watermark()/pageNumbers()
+// use for their own xPercent/yPercent, and what the page-proof crop-box
+// overlay's drag/resize produces. Applied identically to every page (same
+// "same treatment every page" contract every other crop/watermark/page-number
+// tool here has), so pages of differing sizes each get the proportionally
+// same box rather than one absolute rect.
+function crop(bytes, xPercent, yPercent, widthPercent, heightPercent) {
   return PDFLib.PDFDocument.load(bytes)
     .then(function (pdfDoc) {
       var pages = pdfDoc.getPages();
       pages.forEach(function (page) {
         var size = page.getSize();
-        var m = Math.max(0, Math.min(margin, size.width / 2 - 1, size.height / 2 - 1));
-        page.setCropBox(m, m, size.width - 2 * m, size.height - 2 * m);
+        var left = Math.max(0, Math.min((xPercent / 100) * size.width, size.width - 1));
+        var top = Math.max(0, Math.min((yPercent / 100) * size.height, size.height - 1));
+        var width = Math.max(1, Math.min((widthPercent / 100) * size.width, size.width - left));
+        var height = Math.max(1, Math.min((heightPercent / 100) * size.height, size.height - top));
+        // PDF's crop box origin is bottom-left and y grows up; top/height
+        // above are measured from the page's top edge, y-down.
+        var bottom = size.height - top - height;
+        page.setCropBox(left, bottom, width, height);
       });
       return pdfDoc.save();
     })
@@ -1858,7 +1872,7 @@ self.onmessage = function (e) {
     } else if (msg.op === 'pageNumbers') {
       result = pageNumbers(msg.file, msg.position, msg.startNumber, msg.format);
     } else if (msg.op === 'crop') {
-      result = crop(msg.file, msg.margin);
+      result = crop(msg.file, msg.xPercent, msg.yPercent, msg.widthPercent, msg.heightPercent);
     } else if (msg.op === 'flatten') {
       result = flatten(msg.file);
     } else if (msg.op === 'toPdfA') {

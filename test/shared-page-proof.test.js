@@ -16,7 +16,9 @@ function pageProofHtml(mode) {
         <input id="opt-fontSize" value="40" />
         <input id="opt-angle" value="45" />
       `
-      : `
+      : mode === 'crop'
+        ? '' // crop has no option inputs — the box itself is the only input
+        : `
         <select id="opt-position">
           <option value="top-left" selected>Top left</option>
           <option value="bottom-center">Bottom center</option>
@@ -31,6 +33,7 @@ function pageProofHtml(mode) {
     <div id="file-info"></div>
     <input id="file-input" type="file" />
     <button id="reset-btn"></button>
+    <div id="a11y-status"></div>
     ${options}
   `;
 }
@@ -227,5 +230,201 @@ describe('shared-page-proof.js — page-number overlay math', () => {
 
     // 3-page doc, startNumber 1 -> lastNumber = 1 + 3 - 1 = 3.
     expect(ctx.fillText.mock.calls[ctx.fillText.mock.calls.length - 1][0]).toBe('Page 1 of 3');
+  });
+});
+
+// jsdom's default getBoundingClientRect() is all-zero (no real layout
+// engine) — canvasCoords() falls back to scale 1, offset 0 in that case
+// (same fallback image-cropper.test.js's own firePointer() comment
+// documents), so clientX/clientY map 1:1 onto canvas-pixel coordinates here
+// without needing to stub a box, unlike the watermark drag tests above.
+describe('shared-page-proof.js — crop box drag/resize', () => {
+  it('starts centered at 80% of the canvas, exposed via getCropRect()', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+
+    // canvas 200x280 -> box x=20,y=28,w=160,h=224 (10%/10%/80%/80%).
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 160, 224);
+    expect(dom.window.FCPageProof.getCropRect()).toEqual({
+      xPercent: 10,
+      yPercent: 10,
+      widthPercent: 80,
+      heightPercent: 80
+    });
+  });
+
+  it('moves the whole box on a drag from its interior', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 100, clientY: 140, bubbles: true })
+    );
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 120, clientY: 160, bubbles: true })
+    );
+
+    // +20/+20 from the interior -> box moves, same 160x224 size.
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(40, 48, 160, 224);
+    // getCropRect() is what pdf-crop.js actually sends the worker at Convert
+    // time — a canvas-pixel drag/resize is worthless if this conversion is
+    // wrong, so it's asserted end-to-end here rather than only at the
+    // untouched-default state above.
+    expect(dom.window.FCPageProof.getCropRect()).toEqual({
+      xPercent: 20, // 40/200*100
+      yPercent: (48 / 280) * 100,
+      widthPercent: 80, // 160/200*100
+      heightPercent: 80 // 224/280*100
+    });
+  });
+
+  it('resizes from a corner handle, growing only that corner', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    // Bottom-right handle sits at (180, 252) — drag it out by (20, 20).
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 180, clientY: 252, bubbles: true })
+    );
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 200, clientY: 272, bubbles: true })
+    );
+
+    // Top-left corner (20, 28) stays put; box grows to fill the extra 20x20.
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 180, 244);
+  });
+
+  it('resizes from a mid-edge handle, changing only that one dimension', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    // Right-edge midpoint sits at (180, 140) — drag it out by 10.
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 180, clientY: 140, bubbles: true })
+    );
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 190, clientY: 140, bubbles: true })
+    );
+
+    // Only width changes (160 -> 170); x/y/height untouched.
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 170, 224);
+  });
+
+  it('clamps a resize at the canvas edge instead of growing past it', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 180, clientY: 252, bubbles: true })
+    );
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 500, clientY: 500, bubbles: true })
+    );
+
+    // Canvas is only 200x280 — right/bottom clamp there instead of following
+    // the pointer off-canvas.
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 180, 252);
+  });
+
+  it('stops resizing on pointerup', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 180, clientY: 252, bubbles: true })
+    );
+    canvasEl.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true }));
+    ctx.strokeRect.mockClear();
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 0, clientY: 0, bubbles: true })
+    );
+
+    // No pointerdown preceded this move — dragging is off, no re-render.
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+});
+
+describe('shared-page-proof.js — crop box keyboard accessibility', () => {
+  it('is a focusable, announced custom control', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    expect(canvasEl.tabIndex).toBe(0);
+    expect(canvasEl.getAttribute('role')).toBe('application');
+    // Default box is 10%/10%/80%/80%.
+    expect(canvasEl.getAttribute('aria-label')).toContain('80% wide');
+    expect(canvasEl.getAttribute('aria-label')).toContain('80% tall');
+  });
+
+  it('moves the box with arrow keys', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+    );
+
+    // Default box x=20 -> +4 step -> 24. Size unchanged (160x224).
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(24, 28, 160, 224);
+  });
+
+  it('resizes the box with Shift+arrow keys, anchored at its own top-left', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true })
+    );
+
+    // Width grows 160 -> 164; x/y/height untouched.
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 164, 224);
+  });
+
+  it('clamps a keyboard move at the canvas edge', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    // Default x=20, step=4 -> 5 presses reaches exactly 0; a 6th must clamp,
+    // not go negative.
+    for (let i = 0; i < 6; i++) {
+      canvasEl.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })
+      );
+    }
+
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(0, 28, 160, 224);
+  });
+
+  it('ignores non-arrow keys', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+    ctx.strokeRect.mockClear();
+
+    canvasEl.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
+  });
+
+  it('announces the new box position/size to #a11y-status on every key move', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    canvasEl.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })
+    );
+
+    const status = dom.window.document.getElementById('a11y-status');
+    expect(status.textContent).toContain('Crop box now');
   });
 });

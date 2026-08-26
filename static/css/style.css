@@ -1579,7 +1579,7 @@ img { max-width: 100%; display: block; }
 }
 
 /* --- Page Proof (single-page live-effect preview — PDF Watermark/Page
-   Numbers, built by shared-page-proof.js). --- */
+   Numbers/Crop, built by shared-page-proof.js). --- */
 .page-proof {
   margin-top: var(--space-4);
   text-align: center;
@@ -1603,6 +1603,16 @@ img { max-width: 100%; display: block; }
 }
 .page-proof__canvas--draggable {
   cursor: move;
+}
+/* Crop's canvas is keyboard-focusable (arrow keys move the box, Shift+arrow
+   resizes it — see shared-page-proof.js's onCropKeyDown) — same
+   focus-visible treatment as .page-grid__tile, since a plain default outline
+   would sit flush against the canvas's own edge, easy to miss against the
+   page background. */
+.page-proof__canvas:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-border-focus);
+  border-radius: var(--radius-sm);
 }
 .page-proof__hint {
   margin-top: var(--space-3);

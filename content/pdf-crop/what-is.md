@@ -1,6 +1,6 @@
 ## What Is PDF Crop?
 
-PDF Crop trims an even margin off every page of a PDF, removing excess white space around the actual content. The underlying page content doesn't move — the visible boundary of the page is just pulled in closer to what's on it.
+PDF Crop trims the margin off every page of a PDF, removing excess white space around the actual content. The underlying page content doesn't move — the visible boundary of the page is just pulled in closer to what's on it.
 
 This is different from cropping an image, where pixels outside the crop area are permanently discarded. A cropped PDF page still contains everything it did before; only the visible/printable area changes.
 
@@ -12,4 +12,4 @@ Trimming it tightens the page around the actual content, which is especially use
 
 ### How This Tool Works
 
-This tool runs entirely in your browser. When you drop a PDF onto the page and choose a margin to trim, your device adjusts every page's visible boundary locally, in your device's memory. Your file is never uploaded to any server. The cropped PDF is ready to download in seconds.
+This tool runs entirely in your browser. When you drop a PDF onto the page, a live preview of page 1 appears with a draggable crop box over it — drag its edges or corners to set exactly what's kept, then convert. Your device adjusts every page's visible boundary to match, locally, in your device's memory. Your file is never uploaded to any server. The cropped PDF is ready to download in seconds.

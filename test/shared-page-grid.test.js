@@ -111,24 +111,28 @@ describe('shared-page-grid.js — remove/extract spec building', () => {
     expect(specs[specs.length - 1]).toBe('1,3-5,7');
   });
 
-  it('never hides #tool-options, and makes the mirrored input read-only once the grid builds', async () => {
+  it('never hides #tool-options, and leaves the mirrored input editable once the grid builds', async () => {
     const dom = createDom(pageGridPageHtml());
     await setupGrid(dom, 'remove', 4);
 
     const toolOptions = dom.window.document.getElementById('tool-options');
     const input = dom.window.document.getElementById('opt-pages');
     expect(toolOptions.classList.contains('hidden')).toBe(false);
-    expect(input.readOnly).toBe(true);
+    expect(input.readOnly).toBe(false);
   });
 
-  it('extract/organize also keep #tool-options visible and read-only', async () => {
+  it('extract also keeps #tool-options visible and editable; organize stays read-only', async () => {
     const extractDom = createDom(pageGridPageHtml());
     await setupGrid(extractDom, 'extract', 3);
-    expect(extractDom.window.document.getElementById('opt-pages').readOnly).toBe(true);
+    expect(extractDom.window.document.getElementById('opt-pages').readOnly).toBe(false);
     expect(
       extractDom.window.document.getElementById('tool-options').classList.contains('hidden')
     ).toBe(false);
 
+    // Organize's field is a full permutation of every page — order matters,
+    // and every page must be listed exactly once — so unlike remove/extract's
+    // plain marked-page list, it has no simple live-typing story and stays
+    // read-only, driven only by the drag/keyboard grid.
     const organizeDom = createDom(pageGridPageHtml());
     await setupGrid(organizeDom, 'organize', 3);
     expect(organizeDom.window.document.getElementById('opt-pages').readOnly).toBe(true);
@@ -137,9 +141,9 @@ describe('shared-page-grid.js — remove/extract spec building', () => {
     ).toBe(false);
   });
 
-  it('restores the input to editable on teardown (fallback to the plain text box)', async () => {
+  it("restores organize's input to editable on teardown (fallback to the plain text box)", async () => {
     const dom = createDom(pageGridPageHtml());
-    await setupGrid(dom, 'remove', 3);
+    await setupGrid(dom, 'organize', 3);
     expect(dom.window.document.getElementById('opt-pages').readOnly).toBe(true);
 
     dom.window.document.getElementById('reset-btn').click();
@@ -147,15 +151,59 @@ describe('shared-page-grid.js — remove/extract spec building', () => {
     expect(dom.window.document.getElementById('opt-pages').readOnly).toBe(false);
   });
 
-  it('clears the mirrored spec synchronously on a new file pick (closes a race with the Convert button)', async () => {
+  it("clears organize's mirrored spec synchronously on a new file pick (closes a race with the Convert button)", async () => {
     // shared.js enables Convert the instant a file is selected, before this
     // module's async pdf.js load/buildGrid() ever runs for the NEW file — the
-    // old spec (marked for the PREVIOUS, different-page-count document) must
-    // already be cleared by the time dispatchEvent() returns, or a Convert
-    // click landing in that gap would apply it to the wrong document.
-    // onChange writes into #opt-pages itself, same as the real converters
-    // (e.g. pdf-remove-pages.js) do — setupGrid()'s own default onChange is a
-    // no-op, so it wouldn't otherwise reach the DOM the way production does.
+    // old spec (a permutation sized for the PREVIOUS, different-page-count
+    // document) must already be cleared by the time dispatchEvent() returns,
+    // or a Convert click landing in that gap would apply it to the wrong
+    // document. onChange writes into #opt-pages itself, same as the real
+    // converters (e.g. pdf-organize.js) do — setupGrid()'s own default
+    // onChange is a no-op, so it wouldn't otherwise reach the DOM the way
+    // production does.
+    const dom = createDom(pageGridPageHtml());
+    const input = dom.window.document.getElementById('opt-pages');
+    await setupGrid(dom, 'organize', 3, function (spec) {
+      input.value = spec;
+    });
+    expect(input.value).toBe('1,2,3');
+
+    const fileInput = dom.window.document.getElementById('file-input');
+    const file2 = new dom.window.File([new Uint8Array(10)], 'doc2.pdf', {
+      type: 'application/pdf'
+    });
+    Object.defineProperty(fileInput, 'files', { value: [file2], configurable: true });
+    fileInput.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+
+    expect(input.value).toBe('');
+  });
+
+  it('seeds the grid from a spec typed before a file was ever picked, instead of discarding it', async () => {
+    // The opposite of organize's clear-on-pick guarantee above: remove/
+    // extract's field is meant to survive a pick unchanged (synchronously)
+    // and then seed session.marked once the grid actually builds.
+    const dom = createDom(pageGridPageHtml());
+    const input = dom.window.document.getElementById('opt-pages');
+    input.value = '1,3-4';
+    const specs = [];
+    await setupGrid(dom, 'remove', 7, (spec) => specs.push(spec));
+
+    // Seeded tiles start visually marked...
+    expect(
+      dom.window.document.querySelector('[data-orig-idx="0"]').classList.contains('is-marked')
+    ).toBe(true);
+    expect(
+      dom.window.document.querySelector('[data-orig-idx="2"]').classList.contains('is-marked')
+    ).toBe(true);
+    expect(
+      dom.window.document.querySelector('[data-orig-idx="1"]').classList.contains('is-marked')
+    ).toBe(false);
+    // ...and the field is normalized to the same range-collapsed form
+    // clicking would have produced.
+    expect(specs[specs.length - 1]).toBe('1,3-4');
+  });
+
+  it('does not wipe #opt-pages synchronously on a new pick — it seeds the next grid instead', async () => {
     const dom = createDom(pageGridPageHtml());
     const input = dom.window.document.getElementById('opt-pages');
     await setupGrid(dom, 'remove', 7, function (spec) {
@@ -171,7 +219,83 @@ describe('shared-page-grid.js — remove/extract spec building', () => {
     Object.defineProperty(fileInput, 'files', { value: [file2], configurable: true });
     fileInput.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
 
-    expect(input.value).toBe('');
+    // Unlike organize above, this is NOT cleared synchronously.
+    expect(input.value).toBe('1');
+  });
+
+  it('marks tiles live as the visitor types into #opt-pages, without waiting for blur', async () => {
+    const dom = createDom(pageGridPageHtml());
+    await setupGrid(dom, 'remove', 7);
+    const input = dom.window.document.getElementById('opt-pages');
+
+    input.value = '2,4-5';
+    input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+    [1, 3, 4].forEach((origIdx) => {
+      expect(
+        dom.window.document
+          .querySelector('[data-orig-idx="' + origIdx + '"]')
+          .classList.contains('is-marked')
+      ).toBe(true);
+    });
+    expect(
+      dom.window.document.querySelector('[data-orig-idx="0"]').classList.contains('is-marked')
+    ).toBe(false);
+  });
+
+  it('ignores out-of-range and malformed tokens while typing instead of throwing', async () => {
+    const dom = createDom(pageGridPageHtml());
+    await setupGrid(dom, 'remove', 3);
+    const input = dom.window.document.getElementById('opt-pages');
+
+    // "99" is past pageCount (3), "8-" is a mid-typing incomplete range —
+    // both silently skipped; "2" still marks normally.
+    expect(() => {
+      input.value = '2, 99, 8-';
+      input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    }).not.toThrow();
+
+    expect(
+      dom.window.document.querySelector('[data-orig-idx="1"]').classList.contains('is-marked')
+    ).toBe(true);
+  });
+
+  it('normalizes the typed value to range-collapsed form on blur (native "change")', async () => {
+    const dom = createDom(pageGridPageHtml());
+    const specs = [];
+    await setupGrid(dom, 'remove', 7, (spec) => specs.push(spec));
+    const input = dom.window.document.getElementById('opt-pages');
+
+    // setupGrid()'s own initial buildGrid() already committed once (empty
+    // marks -> '') — capture that count so "no commit yet" below means no
+    // commit *since typing started*, not zero ever.
+    const countBeforeTyping = specs.length;
+
+    input.value = '1,2,3';
+    input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    expect(specs.length).toBe(countBeforeTyping); // no commit yet — still mid-typing
+
+    input.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    expect(specs[specs.length - 1]).toBe('1-3');
+  });
+
+  it('composes a typed mark with a clicked mark instead of one clobbering the other', async () => {
+    // Both paths mutate the same session.marked Set — typing (input event,
+    // no commit) followed by a click (which does commit) should reflect
+    // both, not just whichever happened last.
+    const dom = createDom(pageGridPageHtml());
+    const specs = [];
+    await setupGrid(dom, 'remove', 7, (spec) => specs.push(spec));
+    const input = dom.window.document.getElementById('opt-pages');
+
+    input.value = '2';
+    input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    // Click marks origIdx 4 (page 5) — a plain click never fires a real
+    // browser blur/change on the input in jsdom, so this exercises the two
+    // handlers composing without an intervening normalize.
+    dom.window.document.querySelector('[data-orig-idx="4"]').click();
+
+    expect(specs[specs.length - 1]).toBe('2,5');
   });
 
   it('announces the running "marked / will remain" count to the a11y live region on every click', async () => {
