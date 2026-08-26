@@ -266,6 +266,16 @@ describe('shared-page-proof.js — crop box drag/resize', () => {
 
     // +20/+20 from the interior -> box moves, same 160x224 size.
     expect(ctx.strokeRect).toHaveBeenLastCalledWith(40, 48, 160, 224);
+    // getCropRect() is what pdf-crop.js actually sends the worker at Convert
+    // time — a canvas-pixel drag/resize is worthless if this conversion is
+    // wrong, so it's asserted end-to-end here rather than only at the
+    // untouched-default state above.
+    expect(dom.window.FCPageProof.getCropRect()).toEqual({
+      xPercent: 20, // 40/200*100
+      yPercent: (48 / 280) * 100,
+      widthPercent: 80, // 160/200*100
+      heightPercent: 80 // 224/280*100
+    });
   });
 
   it('resizes from a corner handle, growing only that corner', async () => {
@@ -283,6 +293,23 @@ describe('shared-page-proof.js — crop box drag/resize', () => {
 
     // Top-left corner (20, 28) stays put; box grows to fill the extra 20x20.
     expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 180, 244);
+  });
+
+  it('resizes from a mid-edge handle, changing only that one dimension', async () => {
+    const dom = createDom(pageProofHtml('crop'));
+    const ctx = await setupProof(dom, 'crop');
+    const canvasEl = dom.window.document.querySelector('.page-proof__canvas');
+
+    // Right-edge midpoint sits at (180, 140) — drag it out by 10.
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointerdown', { clientX: 180, clientY: 140, bubbles: true })
+    );
+    canvasEl.dispatchEvent(
+      new dom.window.MouseEvent('pointermove', { clientX: 190, clientY: 140, bubbles: true })
+    );
+
+    // Only width changes (160 -> 170); x/y/height untouched.
+    expect(ctx.strokeRect).toHaveBeenLastCalledWith(20, 28, 170, 224);
   });
 
   it('clamps a resize at the canvas edge instead of growing past it', async () => {

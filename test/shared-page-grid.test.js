@@ -279,6 +279,25 @@ describe('shared-page-grid.js — remove/extract spec building', () => {
     expect(specs[specs.length - 1]).toBe('1-3');
   });
 
+  it('composes a typed mark with a clicked mark instead of one clobbering the other', async () => {
+    // Both paths mutate the same session.marked Set — typing (input event,
+    // no commit) followed by a click (which does commit) should reflect
+    // both, not just whichever happened last.
+    const dom = createDom(pageGridPageHtml());
+    const specs = [];
+    await setupGrid(dom, 'remove', 7, (spec) => specs.push(spec));
+    const input = dom.window.document.getElementById('opt-pages');
+
+    input.value = '2';
+    input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    // Click marks origIdx 4 (page 5) — a plain click never fires a real
+    // browser blur/change on the input in jsdom, so this exercises the two
+    // handlers composing without an intervening normalize.
+    dom.window.document.querySelector('[data-orig-idx="4"]').click();
+
+    expect(specs[specs.length - 1]).toBe('2,5');
+  });
+
   it('announces the running "marked / will remain" count to the a11y live region on every click', async () => {
     const dom = createDom(pageGridPageHtml());
     await setupGrid(dom, 'remove', 4);

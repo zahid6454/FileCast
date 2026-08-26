@@ -6,7 +6,7 @@ Trimming margins from a PDF can be done a few different ways depending on what's
 |---|---|---|---|
 | Works when you only have the PDF | Yes | No — requires the original file | Yes, but only affects the printed copy |
 | Changes the file itself | Yes, permanently | Yes, permanently | No — the PDF file is unchanged |
-| Precision over the trimmed amount | Yes, exact margin in points | Depends on the software | Limited, driver-dependent |
+| Precision over the trimmed amount | Yes — drag the crop box against a live preview | Depends on the software | Limited, driver-dependent |
 | Speed | Seconds | Requires reopening and re-exporting | Set per print job, not saved |
 
 ### Use This Tool When
