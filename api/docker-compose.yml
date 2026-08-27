@@ -149,8 +149,21 @@ services:
       - DATABASE_URL=postgresql+psycopg://filecast:${POSTGRES_PASSWORD:-filecast_dev}@postgres:5432/filecast
       - REDIS_URL=redis://redis:6379/0
     depends_on:
+      # NOT service_healthy, unlike `api`'s own gotenberg dependency below —
+      # Phase 3 stress test, Finding 2: a gotenberg still catching up from a
+      # restart (unhealthy, not yet passing its own healthcheck) previously
+      # blocked `docker compose up -d worker` outright ("dependency failed
+      # to start: container api-gotenberg-1 is unhealthy"), so a worker
+      # crash couldn't come back up until a human separately fixed
+      # gotenberg first — turning one recoverable failure into two. The
+      # worker doesn't actually need gotenberg healthy at its own startup:
+      # every tool call already goes through _gotenberg_request's own
+      # queue-timeout/busy handling, so a job claimed before gotenberg is
+      # ready just gets the honest "busy, try again" outcome instead of
+      # hanging. `api` keeps service_healthy — a visitor-facing request
+      # arriving before gotenberg is ready has no such graceful path.
       gotenberg:
-        condition: service_healthy
+        condition: service_started
       postgres:
         condition: service_healthy
         required: false
@@ -183,6 +196,11 @@ services:
       start_period: 20s
     mem_limit: 512m
     cpus: 0.5
+    # Opts this container into `autoheal`'s restart sweep below — see that
+    # service's own comment for why a healthcheck alone (this one already
+    # existed) was never enough on its own.
+    labels:
+      - "autoheal=true"
 
   # Local Redis sidecar (Phase 3) — backs the cross-process rate limiter
   # (middleware.py) and the conversion worker's wake-up signal (job_worker.py
@@ -228,18 +246,28 @@ services:
       - "gotenberg"
       - "--chromium-deny-list=.*(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|::1|10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.|169\\.254\\.|\\bapi\\b|\\bpostgres\\b|\\bpurge\\b|\\bgotenberg\\b).*"
       # STRESS_TEST_REPORT.md Finding 1: 6 concurrent html-to-pdf jobs on a
-      # realistic ~12MB HTML upload maxed out this container's 1GB mem_limit
-      # and wedged it permanently (CPU ~20x a core, memory 98%+, still
-      # unhealthy 2+ minutes later, needed a manual restart) — the factory
-      # default of 6 lets in more simultaneous Chromium renders than fit in
-      # 1GB for realistic documents. Verified locally with scripts/stress_test.py
-      # (same repro: 6 concurrent ~12.7MB html-to-pdf requests) that 1, 2, and 3
-      # all avoid the permanent lockup — each recovers to idle memory within
-      # a few seconds instead of staying pinned. 2 is the highest of those
-      # that still leaves real headroom (1 and 3 both still touched ~100% of
-      # the 1GB limit on a single render of the heavy test file; the
-      # difference is recovery speed, not peak) while giving more real
-      # concurrency than serializing everything at 1.
+      # realistic ~12MB HTML upload maxed out this container's original 1GB
+      # mem_limit and wedged it permanently (CPU ~20x a core, memory 98%+,
+      # still unhealthy 2+ minutes later, needed a manual restart) — the
+      # factory default of 6 lets in more simultaneous Chromium renders than
+      # fit in 1GB for realistic documents. Verified locally with
+      # scripts/stress_test.py (same repro: 6 concurrent ~12.7MB html-to-pdf
+      # requests) that 1, 2, and 3 all avoid the permanent lockup — each
+      # recovers to idle memory within a few seconds instead of staying
+      # pinned. 2 is the highest of those that still leaves real headroom.
+      #
+      # STRESS_TEST_PHASE3_REPORT.md Finding 1 (round two): a HEAVIER but
+      # still-realistic file — same overall size, more embedded images (32
+      # vs. the original repro's fewer/larger ones) — reproduced the exact
+      # same permanent-lockup behavior essentially unchanged at this same
+      # concurrency=2, and dropping to 1 only delayed the onset (Gotenberg's
+      # own logs showed its *internal Chromium browser health check*
+      # starting to fail — "context deadline exceeded" — i.e. the browser
+      # subprocess itself was going unresponsive under memory pressure, not
+      # just queueing behind other work). Concurrency alone can't fix that:
+      # even one render of this file shape gets close enough to a 1GB
+      # ceiling to risk it. See mem_limit below — the fix that actually
+      # changed the outcome in testing was headroom, not a lower cap here.
       - "--chromium-max-concurrency=2"
       # Default is unlimited — once max-concurrency is hit, every extra
       # request just waits in an ever-growing line (the 30s queue wait in
@@ -257,16 +285,19 @@ services:
     tmpfs:
       - /tmp
       - /home/gotenberg/.cache
-    mem_limit: 1g
-    # Previously the only service here with no CPU limit — Finding 1 showed
-    # it can burn ~20x a core when overloaded. That alone doesn't stop a
-    # lockup, but it stops the lockup from also starving `api`/`purge` and
-    # taking the whole site down (today the API's own health check depends
-    # on gotenberg, so a gotenberg lockup reads as a full outage). Prod is a
-    # 2 OCPU box (DEVELOPMENT.md) with api already at 1.5 and purge at 0.25;
-    # 1.0 leaves gotenberg genuine room to do real rendering work without
-    # being the container that can single-handedly claim the whole box.
-    cpus: 1.0
+    # STRESS_TEST_PHASE3_REPORT.md Finding 1 (round two): raised from the
+    # original 1g/1.0 — verified locally (scripts/stress_test.py, the same
+    # 6-concurrent heavy-file repro that broke 1g at every concurrency
+    # setting from 1-3) that headroom, not a tighter concurrency cap, is
+    # what actually stops the permanent wedge. At 3g/1.5, the identical
+    # burst produced at least one real success, honest 503 "busy" responses
+    # for the rest (not silent/unresponsive), and a full self-recovery to
+    # idle memory within under 2 minutes with no manual restart — none of
+    # which happened at 1g regardless of concurrency. 12GB VM (DEVELOPMENT.md)
+    # with api(2g)/purge(256m)/worker(512m)/redis(64m) totaling ~2.8GB
+    # together leaves ample room for gotenberg's extra 2g here.
+    mem_limit: 3g
+    cpus: 1.5
     # NOT `db` — see the top-level `networks:` comment. This is the
     # structural half of the SSRF fix: gotenberg has no route to postgres
     # at all, regardless of what hostname/IP a malicious upload references.
@@ -278,6 +309,87 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    # Opts this container into `autoheal`'s restart sweep below — see that
+    # service's own comment for why this existing healthcheck was never
+    # enough on its own to recover from a wedge (STRESS_TEST_PHASE3_REPORT.md
+    # Finding 1: the container's own top-level process never crashes even
+    # while its internal Chromium browser is unresponsive, so
+    # `restart: unless-stopped` — which only reacts to the container process
+    # exiting, not to healthcheck status — never fires).
+    labels:
+      - "autoheal=true"
+
+  # STRESS_TEST_PHASE3_REPORT.md Finding 1 (and its Gotenberg-side half of
+  # Finding 2): gotenberg's own container process can go unresponsive
+  # (internal Chromium browser wedged) without ever exiting, so plain
+  # `restart: unless-stopped` never fires — it only reacts to the container
+  # process exiting, never to HEALTHCHECK status — and a human has to notice
+  # and run a manual restart. Docker Compose (outside Swarm) has no native
+  # "restart on unhealthy" behavior of its own — the HEALTHCHECKs above
+  # already detect this correctly, nothing before this ever acted on it.
+  # willfarrell/autoheal is a small (~5MB), single-purpose, widely-used image
+  # built for exactly this: it polls the Docker API for containers matching
+  # `health=unhealthy`, restarting any labeled `autoheal=true` (only the two
+  # containers with that label above — gotenberg, worker — not every
+  # container on the host; `api`/`purge` don't opt in, so a real bug in
+  # either still surfaces normally instead of being silently restarted away).
+  #
+  # Scope note (confirmed by reading its entrypoint, not assumed): Docker's
+  # `health` filter only ever matches a container that is still RUNNING —
+  # this can NOT recover a container that has fully exited (Finding 2's
+  # actual repro: `docker kill` on `worker` exits it outright, no lingering
+  # "unhealthy" state to match). That gap is squarely `restart: unless-stopped`
+  # native Docker Engine behavior's job, which is standard, well-documented
+  # behavior on a real Linux host (production, per DEVELOPMENT.md) — a local
+  # dev-environment quirk made this specific path inconclusive to verify
+  # end-to-end here (see this PR's description). What this DOES cover for
+  # `worker`: an event-loop deadlock that leaves the process alive but its
+  # heartbeat stale (worker's own HEALTHCHECK already catches that) — a
+  # different, real failure mode from Finding 2's SIGKILL repro.
+  #
+  # Needs the Docker socket to call the Docker API — a broad grant (whoever
+  # holds it can control any container on the host), which is exactly why
+  # it lives in its own minimal single-purpose container instead of being
+  # added to `api`/`worker`, both of which process untrusted uploads and
+  # must never hold this. no-new-privileges/cap_drop mirror gotenberg's own
+  # hardening; `network_mode: none` because this container makes no outbound
+  # network calls of its own beyond the Docker socket (a filesystem bind
+  # mount, unaffected by this) — explicit, not just "happens not to use"
+  # convert/db. An empty `networks: []` was tried first and confirmed (via
+  # `docker compose config`) to normalize right back to Compose's implicit
+  # default network, same as omitting the key entirely — `network_mode: none`
+  # is the actual way to opt a service out of networking altogether.
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      # PR review follow-up: this is NOT a per-incident grace period re-applied
+      # every time a container goes unhealthy — confirmed by reading autoheal's
+      # entrypoint, it's a single `sleep $AUTOHEAL_START_PERIOD` executed once
+      # before its monitoring loop starts at all, measured from when the
+      # autoheal container itself boots. Its only job is to cover both labeled
+      # containers' worst-case time-to-first-healthcheck-result on a fresh
+      # `docker compose up` (gotenberg: 15s start_period + 5*10s=50s ≈ 65s;
+      # worker: 20s start_period + 3*30s=90s ≈ 110s) so autoheal doesn't fire
+      # on transient state during a normal boot — not a bound this needs to
+      # exceed exactly, since Docker itself won't report either container
+      # unhealthy any sooner than that regardless of this setting. After this
+      # one-time delay, autoheal restarts anything Docker already reports
+      # unhealthy on its very next poll (AUTOHEAL_INTERVAL below) — there's no
+      # further per-incident grace beyond what each container's own
+      # retries*interval already bakes into Docker's own unhealthy verdict.
+      - AUTOHEAL_START_PERIOD=90
+      - AUTOHEAL_INTERVAL=15
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    network_mode: none
+    security_opt:
+      - no-new-privileges
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    mem_limit: 64m
+    cpus: 0.1
 
   # Local-only Postgres for dev. Not started by a bare `docker compose up` —
   # requires `--profile dev-only` (see dev.bat/README.md). Prod points
