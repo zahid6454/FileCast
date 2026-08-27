@@ -980,8 +980,9 @@ async def test_metrics_endpoint_requires_admin(client, user_client):
 
 
 async def test_health_endpoint_responds(client):
-    # Gotenberg host isn't resolvable from the test process → degraded, but the
-    # endpoint must still respond 200 with a status.
+    # No Gotenberg health signal has ever been probed into Redis in this test
+    # environment (only data/job_worker.py's --loop probes it) → degraded, but
+    # the endpoint must still respond 200 with a status.
     r = await client.get("/api/v1/health")
     assert r.status_code == 200
     body = r.json()
@@ -1037,13 +1038,10 @@ async def test_health_endpoint_bounds_a_hanging_db_connect(client, monkeypatch):
 
     # wait_for is the assertion, not just a safety net: if the internal bound
     # didn't apply, the hanging connect (sleep(10)) would blow past this and
-    # fail loudly with TimeoutError instead of silently passing. 8s, not
-    # ~0.05s, because the Gotenberg check runs concurrently (asyncio.gather)
-    # and unrelatedly — its httpx timeout only bounds the CONNECT phase, and a
-    # DNS failure for the unresolvable test-env hostname can itself take a
-    # couple of seconds; the margin absorbs that without weakening what this
-    # test actually proves (nowhere near the 10s the hanging connect would
-    # take unbounded).
+    # fail loudly with TimeoutError instead of silently passing. 8s margin,
+    # not ~0.05s, kept generous even though the Gotenberg check (running
+    # concurrently via asyncio.gather) is now a cheap Redis exists() rather
+    # than a live HTTP call with its own DNS/connect latency.
     r = await asyncio.wait_for(client.get("/api/v1/health"), timeout=8.0)
     assert r.status_code == 200
     body = r.json()
@@ -1247,7 +1245,7 @@ async def test_gotenberg_non_busy_rejection_marks_job_failed_with_accurate_messa
     assert "LibreOffice" not in status["error"]
 
 
-async def test_gotenberg_connection_failure_marks_job_failed_with_generic_error(
+async def test_gotenberg_connection_failure_marks_job_failed_with_busy_error(
     client, monkeypatch
 ):
     # Boundary check for the Finding 4 fix above: only an actual HTTP-level
@@ -1256,10 +1254,15 @@ async def test_gotenberg_connection_failure_marks_job_failed_with_generic_error(
     # conversion_error ValidationError message. A genuine connectivity
     # failure (Gotenberg's container down/unreachable) never reaches that
     # branch at all — the exception happens at `await client.post(...)`
-    # itself, before there's any `resp` to check the status of — so it must
-    # still fall through to the generic catch-all mapping in
-    # converter._classify_conversion_error: that really is a server-side
-    # problem, not a bad file.
+    # itself, before there's any `resp` to check the status of.
+    #
+    # Phase 3 stress test, Finding 3: this used to fall through all the way to
+    # converter._classify_conversion_error's generic catch-all — "The file may
+    # be corrupted or password-protected" — for what is actually a server-side
+    # problem, not a bad file. httpx.ConnectError (and the TimeoutException
+    # family) now get their own honest "busy, try again" mapping instead, the
+    # same one ConversionQueueTimeout already used for our own queue giving
+    # up.
     async def post_impl():
         raise converter.httpx.ConnectError("Connection refused")
 
@@ -1278,7 +1281,31 @@ async def test_gotenberg_connection_failure_marks_job_failed_with_generic_error(
     )
     status = await _run_and_finish(client, job_id)
     assert status["status"] == "failed"
-    assert status["error_type"] == "conversion_error"
+    assert status["error_type"] == "queue_timeout"
+    assert "busy" in status["error"].lower()
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        converter.httpx.WriteTimeout("timed out mid-upload"),
+        converter.httpx.ReadTimeout("timed out waiting for response"),
+        converter.httpx.ConnectTimeout("timed out connecting"),
+        converter.httpx.PoolTimeout("timed out waiting for a pool connection"),
+        converter.httpx.ConnectError("connection refused"),
+    ],
+)
+def test_classify_conversion_error_maps_network_failures_to_busy(exc):
+    # Direct unit check for the exact exception class the Phase 3 stress
+    # test's Finding 1/3 logged (httpx.WriteTimeout, raised while uploading to
+    # an overloaded Gotenberg) — and its siblings. All of these are the same
+    # "Gotenberg unreachable or too slow" situation as ConversionQueueTimeout,
+    # just caught one layer down; none of them say anything about the
+    # visitor's own file.
+    message, error_type = converter._classify_conversion_error(exc)
+    assert error_type == "queue_timeout"
+    assert "busy" in message.lower()
+    assert "corrupted" not in message.lower()
 
 
 # --------------------------------------------------------------------------- #
@@ -1503,3 +1530,83 @@ async def test_check_worker_fails_closed_when_redis_unreachable(monkeypatch):
 
     monkeypatch.setattr(converter, "redis_client", _BoomRedis())
     assert await converter._check_worker() is False
+
+
+# --------------------------------------------------------------------------- #
+# Gotenberg liveness in /health (Phase 3 stress test, Finding 1's health-check
+# half): _check_gotenberg() used to make its own live, blocking HTTP call to
+# Gotenberg on every single /health request — so once Gotenberg wedged under
+# load, /health took 5+ seconds on every poll for as long as the wedge
+# lasted, reading to an uptime monitor as the whole site being down. It now
+# reads a cached signal data/job_worker.py's loop probes into Redis on its
+# own timer, the same pattern _check_worker() already used for the worker
+# heartbeat.
+# --------------------------------------------------------------------------- #
+
+
+async def test_health_endpoint_reports_gotenberg_down_with_no_cached_signal(client):
+    # No GOTENBERG_HEALTH_KEY set in the isolated test Redis DB — matches this
+    # test environment, where data/job_worker.py's --loop probe never runs.
+    r = await client.get("/api/v1/health")
+    body = r.json()
+    assert body["gotenberg"] == "down"
+    assert body["status"] == "degraded"
+
+
+async def test_health_endpoint_reports_gotenberg_up_with_fresh_cached_signal(client):
+    from data.redis_client import redis_client
+
+    await redis_client.set(converter.GOTENBERG_HEALTH_KEY, "1", ex=60)
+    try:
+        r = await client.get("/api/v1/health")
+        assert r.json()["gotenberg"] == "up"
+    finally:
+        await redis_client.delete(converter.GOTENBERG_HEALTH_KEY)
+
+
+async def test_check_gotenberg_fails_closed_when_redis_unreachable(monkeypatch):
+    class _BoomRedis:
+        async def exists(self, *a, **kw):
+            raise ConnectionError("redis down")
+
+    monkeypatch.setattr(converter, "redis_client", _BoomRedis())
+    assert await converter._check_gotenberg() is False
+
+
+async def test_health_endpoint_never_touches_gotenberg_over_the_network(
+    client, monkeypatch
+):
+    # Reproduces Finding 1's burst-test observation directly: before this fix,
+    # _check_gotenberg() made its own live httpx call on every /health
+    # request, so a wedged/unresolvable Gotenberg cost every poll up to its
+    # full 5s timeout. Proves the fix by making that live call an error if
+    # /health ever reaches it — /health must resolve fast regardless, using
+    # only the cached Redis signal.
+    import asyncio
+    import time
+
+    was_called = {"value": False}
+
+    class _AsyncClientMustNotBeUsed:
+        def __init__(self, *a, **kw):
+            was_called["value"] = True
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def get(self, *a, **kw):
+            raise AssertionError("unreachable")
+
+    monkeypatch.setattr(converter.httpx, "AsyncClient", _AsyncClientMustNotBeUsed)
+
+    start = time.monotonic()
+    r = await asyncio.wait_for(client.get("/api/v1/health"), timeout=1.0)
+    elapsed = time.monotonic() - start
+
+    assert r.status_code == 200
+    assert r.json()["gotenberg"] == "down"
+    assert elapsed < 1.0
+    assert was_called["value"] is False

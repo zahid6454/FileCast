@@ -1,10 +1,11 @@
 """Middleware for rate limiting, CORS, request logging, and tracing."""
 
+import asyncio
 import time
 
 from data.config import settings
 from data.netutil import get_client_ip
-from data.redis_client import redis_client
+from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -321,8 +322,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         now = time.time()
 
         try:
-            allowed, count, oldest_score_str = await self._script(
-                keys=[key, f"{key}:seq"], args=[now, RATE_WINDOW, limit]
+            allowed, count, oldest_score_str = await asyncio.wait_for(
+                self._script(keys=[key, f"{key}:seq"], args=[now, RATE_WINDOW, limit]),
+                timeout=REDIS_CALL_TIMEOUT_SECONDS,
             )
             oldest_score = float(oldest_score_str)
         except Exception:

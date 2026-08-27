@@ -128,6 +128,7 @@
       var progressFill = document.getElementById('progress-fill');
       var progressEl = document.getElementById('progress');
       var progressLabel = document.getElementById('progress-label');
+      var cancelBtn = document.getElementById('cancel-btn');
 
       // With a repeating poll loop, aborting only the *current* in-flight
       // request isn't enough — the loop would just schedule another one.
@@ -149,6 +150,16 @@
           reject(new Error('Cancelled.'));
         }
       };
+
+      // shared.js's own visibility check (startConversion()) runs
+      // synchronously, before this Promise executor — which assigns
+      // window.cancelConversion — has had a chance to run at all, so it
+      // always sees `undefined` and hides the button on a page's first
+      // conversion (Phase 3 stress test, Finding 5). Showing it here,
+      // right where cancelConversion's lifecycle actually starts, fixes
+      // that; shared.js's setState() already re-hides it on every other
+      // state transition.
+      if (cancelBtn) cancelBtn.classList.remove('hidden');
 
       function maybeShowLongWaitMessage() {
         if (longWaitShown || !progressLabel) return;

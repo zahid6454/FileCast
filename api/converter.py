@@ -22,7 +22,7 @@ from xml.etree import ElementTree as ET
 import httpx
 from data.db import async_engine, get_session
 from data.models import ConversionJob, User
-from data.redis_client import redis_client
+from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 from data.security import current_user_for_convert, require_admin
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
@@ -1160,6 +1160,18 @@ JOB_WAKE_QUEUE_KEY = "conversion_jobs:wake"
 # clock-skew concerns, since Redis's own expiry does that work.
 WORKER_HEARTBEAT_KEY = "worker:heartbeat"
 
+# Same pattern as WORKER_HEARTBEAT_KEY, one level down: data/job_worker.py's
+# loop probes Gotenberg's own /health endpoint directly on a timer (separate
+# from, and not blocked by, whatever conversions are running in its
+# background tasks) and SETs this key with a TTL only when Gotenberg answers
+# 200. /health below reads this cached signal instead of making its own live
+# blocking call to Gotenberg on every single request — that live call used to
+# take 5+ seconds on every /health poll for as long as Gotenberg stayed
+# wedged (Phase 3 stress test, Finding 1's health-check half): an uptime
+# monitor polling /health read that as the whole site being down, not "one
+# dependency is degraded".
+GOTENBERG_HEALTH_KEY = "gotenberg:health"
+
 
 @dataclass
 class ToolSpec:
@@ -1274,6 +1286,18 @@ def _classify_conversion_error(exc: Exception) -> tuple[str, str]:
         return exc.message, exc.error_type
     if isinstance(exc, ConversionQueueTimeout):
         return str(exc), "queue_timeout"
+    if isinstance(exc, httpx.TimeoutException | httpx.ConnectError):
+        # Gotenberg unreachable or too overloaded to respond in time — caught
+        # here one layer below ConversionQueueTimeout (that's OUR OWN queue
+        # giving up; this is the live HTTP call to Gotenberg itself timing out
+        # or failing to connect, e.g. httpx.WriteTimeout mid-upload under the
+        # load Findings 1/2 produce). Same underlying situation, same honest
+        # "busy" framing — not the file's fault, so not the generic message
+        # below (Phase 3 stress test, Finding 3).
+        return (
+            "The conversion service is busy right now. Please try again in a moment.",
+            "queue_timeout",
+        )
     if isinstance(exc, subprocess.TimeoutExpired):
         return "Conversion timed out. Try a simpler or smaller file.", "timeout"
     return (
@@ -1339,7 +1363,10 @@ async def _enqueue_conversion(
     # Postgres row already exists regardless, and data/job_worker.py's
     # periodic GC-sweep loop is the eventual-consistency fallback pickup.
     try:
-        await redis_client.lpush(JOB_WAKE_QUEUE_KEY, job_id)
+        await asyncio.wait_for(
+            redis_client.lpush(JOB_WAKE_QUEUE_KEY, job_id),
+            timeout=REDIS_CALL_TIMEOUT_SECONDS,
+        )
     except Exception:
         logger.warning(
             "Redis push failed for job wake-up — worker will still pick this "
@@ -1562,11 +1589,26 @@ async def download_job(job_id: str, db: AsyncSession = Depends(get_session)):
     return Response(content=content, media_type=output_mime, headers=headers)
 
 
-async def _check_gotenberg() -> bool:
+async def _probe_gotenberg_live() -> bool:
+    """The actual live, blocking HTTP call to Gotenberg's own /health —
+    called by data/job_worker.py's loop on its own timer, NOT from the
+    /health request path (see GOTENBERG_HEALTH_KEY)."""
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{GOTENBERG_URL}/health")
         return resp.status_code == 200
+    except Exception:
+        return False
+
+
+async def _check_gotenberg() -> bool:
+    try:
+        return bool(
+            await asyncio.wait_for(
+                redis_client.exists(GOTENBERG_HEALTH_KEY),
+                timeout=REDIS_CALL_TIMEOUT_SECONDS,
+            )
+        )
     except Exception:
         return False
 
@@ -1578,7 +1620,12 @@ async def _check_worker() -> bool:
     # job IS the worker's own loop). WORKER_HEARTBEAT_KEY's TTL is what makes
     # this a freshness check, not just an existence check.
     try:
-        return bool(await redis_client.exists(WORKER_HEARTBEAT_KEY))
+        return bool(
+            await asyncio.wait_for(
+                redis_client.exists(WORKER_HEARTBEAT_KEY),
+                timeout=REDIS_CALL_TIMEOUT_SECONDS,
+            )
+        )
     except Exception:
         return False
 

@@ -51,11 +51,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from converter import (
+    GOTENBERG_HEALTH_KEY,
     JOB_RESULTS_DIR,
     JOB_WAKE_QUEUE_KEY,
     TOOL_REGISTRY,
     WORKER_HEARTBEAT_KEY,
     _classify_conversion_error,
+    _probe_gotenberg_live,
     _safe_filename,
 )
 from log import get_logger
@@ -63,7 +65,7 @@ from sqlalchemy import select, update
 
 from data.db import async_session_factory
 from data.models import ConversionJob
-from data.redis_client import redis_client
+from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 
 logger = get_logger("job_worker")
 
@@ -104,6 +106,16 @@ HEARTBEAT_PATH = Path(tempfile.gettempdir()) / "worker-heartbeat"
 # iteration doesn't flap /health before the container healthcheck itself
 # would consider the worker unhealthy.
 WORKER_HEARTBEAT_TTL_SECONDS = 150
+
+# Gated the same way GC_SWEEP_INTERVAL_SECONDS is below — probed on a timer,
+# independent of whatever job traffic is or isn't flowing through this
+# worker's background tasks, so converter.py's /health route always has a
+# signal fresh to within one probe interval instead of going stale during an
+# idle spell. TTL is a few probes' worth of slack so one slow-but-fine probe
+# doesn't flap /health, while a genuinely wedged Gotenberg (Phase 3 stress
+# test, Finding 1) still reads as "down" within well under a minute.
+GOTENBERG_HEALTH_PROBE_INTERVAL_SECONDS = 10
+GOTENBERG_HEALTH_TTL_SECONDS = 30
 
 
 async def _claim_one(db, job_id: str) -> bool:
@@ -405,6 +417,7 @@ async def _loop() -> None:
         )
 
     last_gc = 0.0
+    last_gotenberg_probe = 0.0
     while True:
         try:
             await redis_client.brpop(JOB_WAKE_QUEUE_KEY, timeout=BRPOP_TIMEOUT_SECONDS)
@@ -442,10 +455,38 @@ async def _loop() -> None:
                 )
             last_gc = now
 
+        if now - last_gotenberg_probe > GOTENBERG_HEALTH_PROBE_INTERVAL_SECONDS:
+            try:
+                if await _probe_gotenberg_live():
+                    await asyncio.wait_for(
+                        redis_client.set(
+                            GOTENBERG_HEALTH_KEY, "1", ex=GOTENBERG_HEALTH_TTL_SECONDS
+                        ),
+                        timeout=REDIS_CALL_TIMEOUT_SECONDS,
+                    )
+                else:
+                    # Don't wait out the TTL for a probe that already knows
+                    # Gotenberg is down — delete so /health flips immediately
+                    # instead of continuing to report the last-good result.
+                    await asyncio.wait_for(
+                        redis_client.delete(GOTENBERG_HEALTH_KEY),
+                        timeout=REDIS_CALL_TIMEOUT_SECONDS,
+                    )
+            except Exception:  # noqa: BLE001 — a Redis blip must not stop the loop
+                logger.warning(
+                    "Gotenberg health probe/write failed — /health may report "
+                    "Gotenberg as down until this succeeds again",
+                    extra={"data": {"event": "gotenberg_health_probe_failed"}},
+                )
+            last_gotenberg_probe = now
+
         HEARTBEAT_PATH.write_text(datetime.now(UTC).isoformat())
         try:
-            await redis_client.set(
-                WORKER_HEARTBEAT_KEY, "1", ex=WORKER_HEARTBEAT_TTL_SECONDS
+            await asyncio.wait_for(
+                redis_client.set(
+                    WORKER_HEARTBEAT_KEY, "1", ex=WORKER_HEARTBEAT_TTL_SECONDS
+                ),
+                timeout=REDIS_CALL_TIMEOUT_SECONDS,
             )
         except Exception:  # noqa: BLE001 — a Redis blip must not stop the loop
             logger.warning(
