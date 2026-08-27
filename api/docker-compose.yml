@@ -319,29 +319,46 @@ services:
     labels:
       - "autoheal=true"
 
-  # STRESS_TEST_PHASE3_REPORT.md Findings 1 & 2: both are, underneath their
-  # different triggers (a heavy burst vs. a worker crash mid-request),
-  # ultimately the same problem — gotenberg (and observed here, the worker
-  # too) can end up unhealthy/dead without its own container process ever
-  # exiting, so plain `restart: unless-stopped` never fires and a human has
-  # to notice and run a manual restart. Docker Compose (outside Swarm) has
-  # no native "restart on unhealthy" behavior of its own — the container
-  # HEALTHCHECKs above already detect this correctly, nothing before this
-  # ever acted on it. willfarrell/autoheal is a small (~5MB), single-purpose,
-  # widely-used image built for exactly this: it watches the Docker API for
-  # containers whose HEALTHCHECK has been failing and restarts them. Scoped
-  # to only the two containers labeled `autoheal=true` above (`gotenberg`,
-  # `worker`) via AUTOHEAL_CONTAINER_LABEL, not every container on the host —
-  # `api`/`purge` don't opt in, so a real bug in either still surfaces
-  # normally instead of being silently restarted away.
+  # STRESS_TEST_PHASE3_REPORT.md Finding 1 (and its Gotenberg-side half of
+  # Finding 2): gotenberg's own container process can go unresponsive
+  # (internal Chromium browser wedged) without ever exiting, so plain
+  # `restart: unless-stopped` never fires — it only reacts to the container
+  # process exiting, never to HEALTHCHECK status — and a human has to notice
+  # and run a manual restart. Docker Compose (outside Swarm) has no native
+  # "restart on unhealthy" behavior of its own — the HEALTHCHECKs above
+  # already detect this correctly, nothing before this ever acted on it.
+  # willfarrell/autoheal is a small (~5MB), single-purpose, widely-used image
+  # built for exactly this: it polls the Docker API for containers matching
+  # `health=unhealthy`, restarting any labeled `autoheal=true` (only the two
+  # containers with that label above — gotenberg, worker — not every
+  # container on the host; `api`/`purge` don't opt in, so a real bug in
+  # either still surfaces normally instead of being silently restarted away).
+  #
+  # Scope note (confirmed by reading its entrypoint, not assumed): Docker's
+  # `health` filter only ever matches a container that is still RUNNING —
+  # this can NOT recover a container that has fully exited (Finding 2's
+  # actual repro: `docker kill` on `worker` exits it outright, no lingering
+  # "unhealthy" state to match). That gap is squarely `restart: unless-stopped`
+  # native Docker Engine behavior's job, which is standard, well-documented
+  # behavior on a real Linux host (production, per DEVELOPMENT.md) — a local
+  # dev-environment quirk made this specific path inconclusive to verify
+  # end-to-end here (see this PR's description). What this DOES cover for
+  # `worker`: an event-loop deadlock that leaves the process alive but its
+  # heartbeat stale (worker's own HEALTHCHECK already catches that) — a
+  # different, real failure mode from Finding 2's SIGKILL repro.
   #
   # Needs the Docker socket to call the Docker API — a broad grant (whoever
   # holds it can control any container on the host), which is exactly why
   # it lives in its own minimal single-purpose container instead of being
   # added to `api`/`worker`, both of which process untrusted uploads and
   # must never hold this. no-new-privileges/cap_drop mirror gotenberg's own
-  # hardening; this container makes no outbound network calls of its own
-  # beyond the Docker socket, so it isn't attached to `convert` or `db`.
+  # hardening; `network_mode: none` because this container makes no outbound
+  # network calls of its own beyond the Docker socket (a filesystem bind
+  # mount, unaffected by this) — explicit, not just "happens not to use"
+  # convert/db. An empty `networks: []` was tried first and confirmed (via
+  # `docker compose config`) to normalize right back to Compose's implicit
+  # default network, same as omitting the key entirely — `network_mode: none`
+  # is the actual way to opt a service out of networking altogether.
   autoheal:
     image: willfarrell/autoheal:1.2.0
     environment:
@@ -353,6 +370,7 @@ services:
       - AUTOHEAL_INTERVAL=15
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    network_mode: none
     security_opt:
       - no-new-privileges
     cap_drop:
