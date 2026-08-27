@@ -17,4 +17,15 @@ import redis.asyncio as redis
 
 from data.config import settings
 
-redis_client: redis.Redis = redis.from_url(settings.redis_url, decode_responses=True)
+# Both timeouts default to unbounded in redis-py, so a down/unreachable Redis
+# left every caller waiting on the OS's own TCP timeout (measured 3.3-7s
+# depending on how many sequential Redis calls a request made) before the
+# fail-open path could even start (Phase 3 stress test, Finding 4). A short
+# explicit bound makes "Redis is down" fail fast into that already-correct
+# fail-open behavior instead of eating multiple seconds of latency first.
+redis_client: redis.Redis = redis.from_url(
+    settings.redis_url,
+    decode_responses=True,
+    socket_connect_timeout=1,
+    socket_timeout=1,
+)

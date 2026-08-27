@@ -250,8 +250,17 @@
     // P4 §36). Converters with no cancel handle (canvas ops, library-internal
     // workers we don't hold a reference to) get no button rather than one that
     // silently does nothing.
-    if (els.cancelBtn) {
-      els.cancelBtn.classList.toggle('hidden', typeof window.cancelConversion !== 'function');
+    //
+    // server-upload.js assigns window.cancelConversion asynchronously, inside
+    // convertFile() itself (called below via Promise.resolve().then(...), i.e.
+    // on the next microtask) — so checking it here, synchronously, would still
+    // see `undefined` on a page's first conversion. server-upload.js shows/hides
+    // #cancel-btn itself instead, right where it owns cancelConversion's
+    // lifecycle. Worker-based converters (pdf-crop.js etc.) assign
+    // window.cancelConversion synchronously at module load, well before
+    // startConversion() ever runs, so this check here still works for them.
+    if (els.cancelBtn && typeof window.cancelConversion === 'function') {
+      els.cancelBtn.classList.remove('hidden');
     }
 
     // A converter that renders its own multi-output result UI (e.g. per-page
