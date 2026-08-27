@@ -1172,6 +1172,20 @@ async def test_gotenberg_own_busy_response_marks_job_failed_not_generic_error(
     # classification ``test_gotenberg_queue_timeout_marks_job_failed`` above
     # already verifies for OUR OWN queue timeout — not the generic "may be
     # corrupted" message.
+    #
+    # Log level differs by status though (PR review follow-up): 429/503 are
+    # Gotenberg's own deliberate, configured load-shedding signals, so they
+    # log at warning — Sentry's default LoggingIntegration auto-captures
+    # every logger.error() as an error event (main.py's sentry_sdk.init() has
+    # no explicit integrations=[]), and this queue bound exists specifically
+    # to make busy periods resolve in ~200ms instead of hanging, so logging
+    # those two as error would flood Sentry with "working as designed" noise.
+    # 500 is Gotenberg's generic internal-error status, not something this
+    # project configured — the same code covers both the resource-pressure
+    # case here AND a genuine persistent bug that 500s on every call, so it
+    # still logs at error: the user gets the same honest "busy" message
+    # either way, but ops still gets a Sentry alert if it never stops.
+    expected_level = {429: "WARNING", 500: "ERROR", 503: "WARNING"}
     for gotenberg_status in (429, 500, 503):
 
         async def post_impl(status=gotenberg_status):
@@ -1200,18 +1214,11 @@ async def test_gotenberg_own_busy_response_marks_job_failed_not_generic_error(
         assert status["status"] == "failed", gotenberg_status
         assert status["error_type"] == "queue_timeout"
         assert "corrupted" not in (status["error"] or "").lower()
-        # Sentry's default LoggingIntegration auto-captures every
-        # logger.error() as an error event (main.py's sentry_sdk.init() has
-        # no explicit integrations=[]) — this queue-size bound exists
-        # specifically to make busy periods resolve in ~200ms instead of
-        # hanging, so it must log at warning (like the app's own queue
-        # timeout does), not error, or every "working as designed" rejection
-        # floods Sentry during exactly the traffic spike this PR targets.
         gotenberg_records = [r for r in caplog.records if "Gotenberg" in r.getMessage()]
         assert gotenberg_records, gotenberg_status
-        assert all(r.levelname == "WARNING" for r in gotenberg_records), [
-            (r.levelname, r.getMessage()) for r in gotenberg_records
-        ]
+        assert all(
+            r.levelname == expected_level[gotenberg_status] for r in gotenberg_records
+        ), [(r.levelname, r.getMessage()) for r in gotenberg_records]
 
 
 async def test_gotenberg_non_busy_rejection_marks_job_failed_with_accurate_message(

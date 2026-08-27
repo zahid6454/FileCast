@@ -363,9 +363,21 @@ services:
     image: willfarrell/autoheal:1.2.0
     environment:
       - AUTOHEAL_CONTAINER_LABEL=autoheal
-      # A touch above the labeled containers' own retries*interval (gotenberg:
-      # 5*10s=50s, worker: 3*30s=90s) so autoheal acts on a healthcheck that's
-      # already had a fair chance to recover on its own, not the first blip.
+      # PR review follow-up: this is NOT a per-incident grace period re-applied
+      # every time a container goes unhealthy — confirmed by reading autoheal's
+      # entrypoint, it's a single `sleep $AUTOHEAL_START_PERIOD` executed once
+      # before its monitoring loop starts at all, measured from when the
+      # autoheal container itself boots. Its only job is to cover both labeled
+      # containers' worst-case time-to-first-healthcheck-result on a fresh
+      # `docker compose up` (gotenberg: 15s start_period + 5*10s=50s ≈ 65s;
+      # worker: 20s start_period + 3*30s=90s ≈ 110s) so autoheal doesn't fire
+      # on transient state during a normal boot — not a bound this needs to
+      # exceed exactly, since Docker itself won't report either container
+      # unhealthy any sooner than that regardless of this setting. After this
+      # one-time delay, autoheal restarts anything Docker already reports
+      # unhealthy on its very next poll (AUTOHEAL_INTERVAL below) — there's no
+      # further per-incident grace beyond what each container's own
+      # retries*interval already bakes into Docker's own unhealthy verdict.
       - AUTOHEAL_START_PERIOD=90
       - AUTOHEAL_INTERVAL=15
     volumes:
