@@ -166,18 +166,28 @@ async def _gotenberg_request(endpoint: str, files: dict, tool_id: str) -> bytes:
         # Gotenberg itself signaling "busy" — 429 is its own
         # --chromium-max-queue-size/--libreoffice-max-queue-size rejection
         # (STRESS_TEST_REPORT.md Finding 1's fix, docker-compose.yml), 503 is
-        # its --api-timeout expiring under load. Both are the same "try again
-        # shortly" condition GOTENBERG_QUEUE_TIMEOUT_SECONDS already handles
-        # above for OUR OWN queue (logged at warning there) — log these the
-        # same way, not at error: main.py's sentry_sdk.init() has no explicit
-        # integrations=[], so the default LoggingIntegration auto-captures
-        # every logger.error() as a Sentry event, and this queue-size bound
-        # exists specifically to make busy periods resolve in ~200ms instead
-        # of hanging — logging that as an error would flood Sentry with
+        # its --api-timeout expiring under load. 500 is included too (Phase 3
+        # stress test, Finding 1 round two): under real resource pressure,
+        # Gotenberg can also fail with a plain 500 before it ever gets to
+        # render anything -- e.g. "get multipart form: read tcp ...: i/o
+        # timeout" reading the upload itself, observed directly in a heavy
+        # concurrent-burst repro. That's Gotenberg failing for its own
+        # reasons, not Gotenberg looking at the file's content and rejecting
+        # it (which surfaces as 400, not 500) -- the same "try again shortly"
+        # condition as 429/503, and the exact class of misleading-message bug
+        # Findings 4/7 already fixed for other triggers, just for this one.
+        # All three are the same "try again shortly" condition
+        # GOTENBERG_QUEUE_TIMEOUT_SECONDS already handles above for OUR OWN
+        # queue (logged at warning there) — log these the same way, not at
+        # error: main.py's sentry_sdk.init() has no explicit integrations=[],
+        # so the default LoggingIntegration auto-captures every
+        # logger.error() as a Sentry event, and this queue-size bound exists
+        # specifically to make busy periods resolve in ~200ms instead of
+        # hanging — logging that as an error would flood Sentry with
         # "working as designed" noise during exactly the traffic spikes this
         # is meant to survive gracefully. Any other status is a genuine
         # unexpected error and still logs at error.
-        is_busy = resp.status_code in (429, 503)
+        is_busy = resp.status_code in (429, 500, 503)
         (logger.warning if is_busy else logger.error)(
             "Gotenberg %s: %s returned %s",
             "busy" if is_busy else "error",

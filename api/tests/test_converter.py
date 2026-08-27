@@ -1162,11 +1162,17 @@ async def test_gotenberg_own_busy_response_marks_job_failed_not_generic_error(
 ):
     # STRESS_TEST_REPORT.md Finding 1 fix: Gotenberg itself now rejects with
     # 429 once --chromium-max-queue-size/--libreoffice-max-queue-size is full,
-    # and can still 503 on its own --api-timeout. Both must route through the
-    # same honest "service busy" queue_timeout classification
-    # ``test_gotenberg_queue_timeout_marks_job_failed`` above already verifies
-    # for OUR OWN queue timeout — not the generic "may be corrupted" message.
-    for gotenberg_status in (429, 503):
+    # and can still 503 on its own --api-timeout. STRESS_TEST_PHASE3_REPORT.md
+    # Finding 1 (round two) added 500: observed directly under a heavy
+    # concurrent-burst repro as a plain 500 ("read tcp ...: i/o timeout")
+    # before Gotenberg ever got to render anything — Gotenberg failing for
+    # its own resource reasons, not rejecting the file's content (which
+    # surfaces as 400, per test_gotenberg_non_busy_rejection_... below). All
+    # three must route through the same honest "service busy" queue_timeout
+    # classification ``test_gotenberg_queue_timeout_marks_job_failed`` above
+    # already verifies for OUR OWN queue timeout — not the generic "may be
+    # corrupted" message.
+    for gotenberg_status in (429, 500, 503):
 
         async def post_impl(status=gotenberg_status):
             return _FakeResponse(status_code=status, content=b"busy")
