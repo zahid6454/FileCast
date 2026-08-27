@@ -22,7 +22,7 @@ from xml.etree import ElementTree as ET
 import httpx
 from data.db import async_engine, get_session
 from data.models import ConversionJob, User
-from data.redis_client import redis_client
+from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 from data.security import current_user_for_convert, require_admin
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
@@ -1363,7 +1363,10 @@ async def _enqueue_conversion(
     # Postgres row already exists regardless, and data/job_worker.py's
     # periodic GC-sweep loop is the eventual-consistency fallback pickup.
     try:
-        await redis_client.lpush(JOB_WAKE_QUEUE_KEY, job_id)
+        await asyncio.wait_for(
+            redis_client.lpush(JOB_WAKE_QUEUE_KEY, job_id),
+            timeout=REDIS_CALL_TIMEOUT_SECONDS,
+        )
     except Exception:
         logger.warning(
             "Redis push failed for job wake-up — worker will still pick this "
@@ -1600,7 +1603,12 @@ async def _probe_gotenberg_live() -> bool:
 
 async def _check_gotenberg() -> bool:
     try:
-        return bool(await redis_client.exists(GOTENBERG_HEALTH_KEY))
+        return bool(
+            await asyncio.wait_for(
+                redis_client.exists(GOTENBERG_HEALTH_KEY),
+                timeout=REDIS_CALL_TIMEOUT_SECONDS,
+            )
+        )
     except Exception:
         return False
 
@@ -1612,7 +1620,12 @@ async def _check_worker() -> bool:
     # job IS the worker's own loop). WORKER_HEARTBEAT_KEY's TTL is what makes
     # this a freshness check, not just an existence check.
     try:
-        return bool(await redis_client.exists(WORKER_HEARTBEAT_KEY))
+        return bool(
+            await asyncio.wait_for(
+                redis_client.exists(WORKER_HEARTBEAT_KEY),
+                timeout=REDIS_CALL_TIMEOUT_SECONDS,
+            )
+        )
     except Exception:
         return False
 

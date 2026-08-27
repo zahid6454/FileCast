@@ -65,7 +65,7 @@ from sqlalchemy import select, update
 
 from data.db import async_session_factory
 from data.models import ConversionJob
-from data.redis_client import redis_client
+from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 
 logger = get_logger("job_worker")
 
@@ -458,14 +458,20 @@ async def _loop() -> None:
         if now - last_gotenberg_probe > GOTENBERG_HEALTH_PROBE_INTERVAL_SECONDS:
             try:
                 if await _probe_gotenberg_live():
-                    await redis_client.set(
-                        GOTENBERG_HEALTH_KEY, "1", ex=GOTENBERG_HEALTH_TTL_SECONDS
+                    await asyncio.wait_for(
+                        redis_client.set(
+                            GOTENBERG_HEALTH_KEY, "1", ex=GOTENBERG_HEALTH_TTL_SECONDS
+                        ),
+                        timeout=REDIS_CALL_TIMEOUT_SECONDS,
                     )
                 else:
                     # Don't wait out the TTL for a probe that already knows
                     # Gotenberg is down — delete so /health flips immediately
                     # instead of continuing to report the last-good result.
-                    await redis_client.delete(GOTENBERG_HEALTH_KEY)
+                    await asyncio.wait_for(
+                        redis_client.delete(GOTENBERG_HEALTH_KEY),
+                        timeout=REDIS_CALL_TIMEOUT_SECONDS,
+                    )
             except Exception:  # noqa: BLE001 — a Redis blip must not stop the loop
                 logger.warning(
                     "Gotenberg health probe/write failed — /health may report "
@@ -476,8 +482,11 @@ async def _loop() -> None:
 
         HEARTBEAT_PATH.write_text(datetime.now(UTC).isoformat())
         try:
-            await redis_client.set(
-                WORKER_HEARTBEAT_KEY, "1", ex=WORKER_HEARTBEAT_TTL_SECONDS
+            await asyncio.wait_for(
+                redis_client.set(
+                    WORKER_HEARTBEAT_KEY, "1", ex=WORKER_HEARTBEAT_TTL_SECONDS
+                ),
+                timeout=REDIS_CALL_TIMEOUT_SECONDS,
             )
         except Exception:  # noqa: BLE001 — a Redis blip must not stop the loop
             logger.warning(

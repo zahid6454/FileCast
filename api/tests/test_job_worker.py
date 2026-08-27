@@ -4,13 +4,38 @@ Redis loop needed — mirrors data/tasks.py's own testing shape, per
 STRESS_TEST_PHASE3_PLAN.md's test-impact note).
 """
 
+import time
 from datetime import UTC, datetime, timedelta
 
 import converter
 import pytest
 from data import job_worker
 from data.models import ConversionJob
+from data.redis_client import redis_client
 from validation import ALLOWED_EXTENSIONS
+
+
+async def test_redis_client_does_not_cut_off_a_legitimate_brpop_block():
+    # Regression guard for a real bug introduced (and caught by live Docker
+    # verification, not by this suite) while fixing the Phase 3 stress
+    # test's Finding 4: a blanket socket_timeout=1 on the shared redis_client
+    # made data/job_worker.py's loop log "Redis BRPOP failed" continuously,
+    # even with Redis perfectly healthy, because BRPOP legitimately blocks
+    # waiting for a job for up to BRPOP_TIMEOUT_SECONDS (5s) and a 1s
+    # client-side socket_timeout fired on every idle wait. redis_client must
+    # only bound the connect phase (socket_connect_timeout) — never pair it
+    # with a blanket socket_timeout shorter than a real blocking command's
+    # own timeout.
+    block_seconds = 2  # > REDIS_CALL_TIMEOUT_SECONDS (1s) — proves no premature cutoff
+    key = "test:brpop-timeout-guard"
+    await redis_client.delete(key)
+
+    start = time.monotonic()
+    result = await redis_client.brpop(key, timeout=block_seconds)
+    elapsed = time.monotonic() - start
+
+    assert result is None  # nothing ever pushed — a real, full-length block
+    assert elapsed >= block_seconds - 0.5
 
 
 def _make_job(tool_id="docx-to-pdf", status="queued", **kw):
