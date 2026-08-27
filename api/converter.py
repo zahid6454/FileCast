@@ -1286,7 +1286,7 @@ def _classify_conversion_error(exc: Exception) -> tuple[str, str]:
         return exc.message, exc.error_type
     if isinstance(exc, ConversionQueueTimeout):
         return str(exc), "queue_timeout"
-    if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)):
+    if isinstance(exc, httpx.TimeoutException | httpx.ConnectError):
         # Gotenberg unreachable or too overloaded to respond in time — caught
         # here one layer below ConversionQueueTimeout (that's OUR OWN queue
         # giving up; this is the live HTTP call to Gotenberg itself timing out
