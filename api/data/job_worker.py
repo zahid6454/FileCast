@@ -89,8 +89,6 @@ STUCK_JOB_MAX_AGE_SECONDS = 30 * 60
 # for one dropped download connection to retry once.
 FINISHED_JOB_FILE_GRACE_SECONDS = 5 * 60
 
-GC_SWEEP_INTERVAL_SECONDS = 60 * 60
-
 # _discovery_wake() itself is instant and near-free on a real BRPOP push (a
 # job was actually enqueued) — that path is untouched. This bounds the
 # OTHER trigger: the BRPOP-timeout branch, which used to run the same DB
@@ -98,10 +96,30 @@ GC_SWEEP_INTERVAL_SECONDS = 60 * 60
 # queued. On Neon (serverless Postgres, autosuspend after 5min idle), a
 # query landing more often than that never lets the idle clock finish
 # counting down, so compute stays active around the clock and burns the
-# free tier's CU-hrs on pure "just checking" traffic. Matches
-# GC_SWEEP_INTERVAL_SECONDS and UptimeRobot's own /health cadence (both
-# also DB-touching) so there's one interval to reason about, not three.
-DISCOVERY_FALLBACK_INTERVAL_SECONDS = 60 * 60
+# free tier's CU-hrs on pure "just checking" traffic.
+#
+# Must stay safely BELOW STUCK_JOB_MAX_AGE_SECONDS (30min): if a Redis push
+# is dropped, this fallback is the ONLY thing that ever claims that job —
+# gc_sweep below only ever fails rows, it never claims/runs one. So this
+# has to fire, and win the race, while the row is still well short of
+# gc_sweep's stuck-age cutoff, or gc_sweep force-fails a job this fallback
+# was about to legitimately rescue (PR #141 review). 15min leaves a wide
+# margin under the 30min cutoff — comfortably more than any real
+# conversion takes (bounded by GOTENBERG_QUEUE_TIMEOUT_SECONDS/
+# GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS, both well under that) — while still
+# being 20x less frequent than the original 5s cadence.
+DISCOVERY_FALLBACK_INTERVAL_SECONDS = 15 * 60
+
+# Must stay >= DISCOVERY_FALLBACK_INTERVAL_SECONDS above: gc_sweep judges
+# "stuck" by created_at age, not by how long a row has actually been
+# converting, so if it ran before the discovery fallback ever got a chance
+# to rescue a dropped-push job, it would wrongly dead-letter a job that was
+# simply late to be claimed, not actually stuck (PR #141 review). Same
+# value as the fallback rather than something longer — one interval to
+# reason about — which also caps worst-case time-to-visible-failure for a
+# genuinely stuck job at STUCK_JOB_MAX_AGE_SECONDS + this (~45min), instead
+# of the ~90min a 60min sweep would have meant.
+GC_SWEEP_INTERVAL_SECONDS = 15 * 60
 
 # Mirrors data/tasks.py's HEARTBEAT_PATH idiom — touched once per loop
 # iteration so the container's HEALTHCHECK (docker-compose.yml) can tell
