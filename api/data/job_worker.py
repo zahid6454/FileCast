@@ -89,7 +89,19 @@ STUCK_JOB_MAX_AGE_SECONDS = 30 * 60
 # for one dropped download connection to retry once.
 FINISHED_JOB_FILE_GRACE_SECONDS = 5 * 60
 
-GC_SWEEP_INTERVAL_SECONDS = 3 * 60
+GC_SWEEP_INTERVAL_SECONDS = 60 * 60
+
+# _discovery_wake() itself is instant and near-free on a real BRPOP push (a
+# job was actually enqueued) — that path is untouched. This bounds the
+# OTHER trigger: the BRPOP-timeout branch, which used to run the same DB
+# query on every single 5s timeout regardless of whether anything was ever
+# queued. On Neon (serverless Postgres, autosuspend after 5min idle), a
+# query landing more often than that never lets the idle clock finish
+# counting down, so compute stays active around the clock and burns the
+# free tier's CU-hrs on pure "just checking" traffic. Matches
+# GC_SWEEP_INTERVAL_SECONDS and UptimeRobot's own /health cadence (both
+# also DB-touching) so there's one interval to reason about, not three.
+DISCOVERY_FALLBACK_INTERVAL_SECONDS = 60 * 60
 
 # Mirrors data/tasks.py's HEARTBEAT_PATH idiom — touched once per loop
 # iteration so the container's HEALTHCHECK (docker-compose.yml) can tell
@@ -418,9 +430,13 @@ async def _loop() -> None:
 
     last_gc = 0.0
     last_gotenberg_probe = 0.0
+    last_discovery_fallback = 0.0
     while True:
+        pushed = None
         try:
-            await redis_client.brpop(JOB_WAKE_QUEUE_KEY, timeout=BRPOP_TIMEOUT_SECONDS)
+            pushed = await redis_client.brpop(
+                JOB_WAKE_QUEUE_KEY, timeout=BRPOP_TIMEOUT_SECONDS
+            )
         except Exception:  # noqa: BLE001 — must survive to the next iteration
             logger.warning(
                 "Redis BRPOP failed — pausing briefly before retrying",
@@ -428,16 +444,26 @@ async def _loop() -> None:
             )
             await asyncio.sleep(BRPOP_TIMEOUT_SECONDS)
 
-        try:
-            await _discovery_wake()
-        except Exception:  # noqa: BLE001
-            logger.error(
-                "Discovery wake failed",
-                exc_info=True,
-                extra={"data": {"event": "worker_discovery_error"}},
-            )
-
         now = time.monotonic()
+        # A real push always runs discovery immediately (this is the fast
+        # path — a job showing up should be picked up right away). A BRPOP
+        # *timeout* means nothing was pushed, so there's normally nothing to
+        # discover — only worth the DB round trip on the long fallback
+        # cadence below, in case a push was somehow dropped.
+        if (
+            pushed is not None
+            or now - last_discovery_fallback > DISCOVERY_FALLBACK_INTERVAL_SECONDS
+        ):
+            try:
+                await _discovery_wake()
+            except Exception:  # noqa: BLE001
+                logger.error(
+                    "Discovery wake failed",
+                    exc_info=True,
+                    extra={"data": {"event": "worker_discovery_error"}},
+                )
+            if pushed is None:
+                last_discovery_fallback = now
         if now - last_gc > GC_SWEEP_INTERVAL_SECONDS:
             try:
                 result = await gc_sweep()
