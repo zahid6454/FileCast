@@ -172,6 +172,24 @@ ACTIVE_NODE_CACHE_TTL_SECONDS = 3
 _cached_active_node_id: str | None = None
 _cached_active_node_at: float = 0.0  # time.monotonic() of the last successful read
 
+# Serializes cache refreshes (PR #143 review): without this, two concurrent
+# cache-misses each issue their own Redis read, and out-of-order completion
+# could let a slower-but-STALE read silently overwrite a faster-but-fresher
+# one already in the cache. Double-checked locking — a caller that blocks on
+# this re-checks freshness after acquiring it, since whoever was ahead of it
+# may have already refreshed the cache, so at most one real Redis read ever
+# happens per refresh cycle and every concurrent caller observes that same
+# result. Reset to a fresh instance per test (see test_node_registry.py) so
+# pytest-asyncio's per-test event loops never contend on the same instance.
+_active_node_refresh_lock = asyncio.Lock()
+
+
+def _active_node_cache_is_fresh() -> bool:
+    return (
+        _cached_active_node_id is not None
+        and time.monotonic() - _cached_active_node_at < ACTIVE_NODE_CACHE_TTL_SECONDS
+    )
+
 
 async def get_active_node() -> str:
     """The node_id currently serving traffic (compare directly against a
@@ -187,45 +205,48 @@ async def get_active_node() -> str:
     """
     global _cached_active_node_id, _cached_active_node_at
 
-    now = time.monotonic()
-    if (
-        _cached_active_node_id is not None
-        and now - _cached_active_node_at < ACTIVE_NODE_CACHE_TTL_SECONDS
-    ):
+    if _active_node_cache_is_fresh():
         return _cached_active_node_id
 
-    try:
-        node_id = await asyncio.wait_for(
-            redis_client.get(ACTIVE_KEY), timeout=REDIS_CALL_TIMEOUT_SECONDS
+    async with _active_node_refresh_lock:
+        if _active_node_cache_is_fresh():
+            return _cached_active_node_id
+
+        try:
+            node_id = await asyncio.wait_for(
+                redis_client.get(ACTIVE_KEY), timeout=REDIS_CALL_TIMEOUT_SECONDS
+            )
+        except Exception:  # noqa: BLE001 — any failure here must fall back, not raise
+            node_id = None
+
+        if node_id:
+            _cached_active_node_id = node_id
+            # Captured AFTER the read resolves, not at call entry — the
+            # timestamp must reflect when THIS value was actually obtained.
+            _cached_active_node_at = time.monotonic()
+            return node_id
+
+        if _cached_active_node_id is not None:
+            logger.warning(
+                "Active-node lookup failed (Redis unreachable, or "
+                "filecast:nodes:active unset) — falling back to "
+                "last-known-active node_id=%s",
+                _cached_active_node_id,
+                extra={
+                    "data": {
+                        "event": "active_node_fallback",
+                        "node_id": _cached_active_node_id,
+                    }
+                },
+            )
+            return _cached_active_node_id
+
+        raise NoActiveNodeError(
+            "No active node registered, and no previously-known value to "
+            "fall back to. Either Bootstrap (NEON_FAILOVER_PLAN.md §6) has "
+            "not run yet, or this is a cold start with Redis already "
+            "unreachable."
         )
-    except Exception:  # noqa: BLE001 — any failure here must fall back, not raise
-        node_id = None
-
-    if node_id:
-        _cached_active_node_id = node_id
-        _cached_active_node_at = now
-        return node_id
-
-    if _cached_active_node_id is not None:
-        logger.warning(
-            "Active-node lookup failed (Redis unreachable, or "
-            "filecast:nodes:active unset) — falling back to last-known-active "
-            "node_id=%s",
-            _cached_active_node_id,
-            extra={
-                "data": {
-                    "event": "active_node_fallback",
-                    "node_id": _cached_active_node_id,
-                }
-            },
-        )
-        return _cached_active_node_id
-
-    raise NoActiveNodeError(
-        "No active node registered, and no previously-known value to fall back "
-        "to. Either Bootstrap (NEON_FAILOVER_PLAN.md §6) has not run yet, or "
-        "this is a cold start with Redis already unreachable."
-    )
 
 
 async def set_active_node(node_id: str) -> None:
@@ -662,6 +683,12 @@ async def update_settings(partial: dict[str, int]) -> NodeSettings:
         # clean, actionable error.
         raise ValueError(f"Unknown settings field(s): {sorted(unknown)}")
     current = await get_settings()
+    if not partial:
+        # redis-py's hset rejects an empty mapping outright (DataError) —
+        # short-circuit before reaching it rather than let that leak
+        # through as an unhandled 500 from an empty PUT body (PR #143
+        # review).
+        return current
     updated = NodeSettings.model_validate(current.model_dump() | partial)
     changed = {key: str(getattr(updated, key)) for key in partial}
     await asyncio.wait_for(

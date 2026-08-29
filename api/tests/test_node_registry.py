@@ -61,9 +61,19 @@ from pydantic import ValidationError
 def _reset_in_process_cache(monkeypatch):
     """The active-node fallback cache lives outside Redis on purpose (§7.1)
     — reset it so each test starts as a process that has "never
-    successfully read the registry", regardless of what earlier tests did."""
+    successfully read the registry", regardless of what earlier tests did.
+
+    Also gives every test a FRESH refresh lock rather than reusing the
+    module's shared instance: pytest-asyncio hands each test function its
+    own event loop, and an asyncio.Lock binds to whichever loop first
+    contends on it — reusing one instance across tests that genuinely
+    contend on it (the coalescing test below) would risk a spurious
+    "bound to a different event loop" failure in a later test, not a bug
+    in the lock itself.
+    """
     monkeypatch.setattr(node_registry, "_cached_active_node_id", None)
     monkeypatch.setattr(node_registry, "_cached_active_node_at", 0.0)
+    monkeypatch.setattr(node_registry, "_active_node_refresh_lock", asyncio.Lock())
 
 
 def _make_node(node_id="n1", neon_project_id="proj-1", status="ready") -> Node:
@@ -182,6 +192,49 @@ async def test_get_active_node_serves_from_cache_within_ttl_without_hitting_redi
     monkeypatch.setattr(redis_client, "get", boom)
     # Cache is still fresh (no time has passed) — must not touch Redis at all.
     assert await get_active_node() == "node-a"
+
+
+async def test_get_active_node_coalesces_concurrent_cache_misses(monkeypatch):
+    # Regression guard (PR #143 review): two concurrent cache-misses used
+    # to each issue their own Redis read, with no ordering guarantee on
+    # which completed last — a slower-but-STALE read could silently
+    # overwrite a faster-but-fresher one already in the cache. At most one
+    # real Redis read should ever happen per refresh cycle, and every
+    # concurrent caller should observe that single result.
+    #
+    # Deterministically orchestrates the interleaving via asyncio.Event
+    # gates rather than relying on asyncio.gather's (unspecified)
+    # scheduling to happen to race the two calls a particular way.
+    await set_active_node("node-a")
+    monkeypatch.setattr(node_registry, "_cached_active_node_id", None)
+    monkeypatch.setattr(node_registry, "_cached_active_node_at", 0.0)
+
+    redis_call_count = 0
+    second_caller_may_start = asyncio.Event()
+    first_caller_may_finish = asyncio.Event()
+    original_get = redis_client.get
+
+    async def gated_get(*args, **kwargs):
+        nonlocal redis_call_count
+        redis_call_count += 1
+        second_caller_may_start.set()
+        await first_caller_may_finish.wait()
+        return await original_get(*args, **kwargs)
+
+    monkeypatch.setattr(redis_client, "get", gated_get)
+
+    first_task = asyncio.create_task(get_active_node())
+    await second_caller_may_start.wait()
+    second_task = asyncio.create_task(get_active_node())
+    # Let the second caller run up to the point where it blocks on the
+    # refresh lock (it must NOT reach redis_client.get at all while the
+    # first caller already holds the lock).
+    await asyncio.sleep(0)
+    first_caller_may_finish.set()
+
+    assert await first_task == "node-a"
+    assert await second_task == "node-a"
+    assert redis_call_count == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -423,6 +476,17 @@ async def test_update_settings_rejects_an_unknown_field_cleanly():
 
     # Must not have partially written anything.
     assert await get_settings() == DEFAULT_NODE_SETTINGS
+
+
+async def test_update_settings_with_empty_partial_is_a_no_op():
+    # Regression guard (PR #143 review): redis-py's hset rejects an empty
+    # mapping outright (DataError) — an empty partial must short-circuit
+    # to a clean no-op instead of leaking that as an unhandled 500 (the
+    # future PUT route could receive an empty body).
+    await update_settings({"warmup_threshold_pct": 65})
+    result = await update_settings({})
+    assert result.warmup_threshold_pct == 65
+    assert result == await get_settings()
 
 
 async def test_update_settings_does_not_clobber_a_field_changed_mid_update(monkeypatch):
