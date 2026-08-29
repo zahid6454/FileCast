@@ -43,7 +43,9 @@ Review progress:
 Determine and **print the exact scope** before reviewing:
 - **Current branch (default):** base = `git merge-base origin/master HEAD`
   (fall back to `master`), then `git diff <base>...HEAD`.
-- **PR number:** `gh pr diff <n>` + `gh pr view <n>` for description/CI.
+- **PR number:** `gh pr diff <n>` + `gh pr view <n>` for description/CI, and
+  `gh pr checks <n>` for CI status (see "Verify every finding" below for how
+  this changes the exercise-it step).
 - **Named files/paths:** review those, reading enough surroundings to judge them.
 - **Uncommitted:** `git diff HEAD` and `git diff`.
 
@@ -72,8 +74,19 @@ Before reporting anything, confirm it is real — precision over volume:
   output/crash/leak. If you can't construct one, it's a question, not a defect.
 - Check whether existing code already handles it (upstream validator, wrapper,
   framework guarantee). Don't report what's already covered.
-- Where cheap, **exercise it** (run the test/build/a quick repro) and report what
-  you observed; state clearly when you did not.
+- Where cheap, **exercise it** and report what you observed; state clearly when
+  you did not:
+  - **PR exists on GitHub:** don't re-run its test suite locally — check
+    `gh pr checks <n>`. Still running → `gh pr checks <n> --watch` and wait for
+    it to finish, then read the result. A passing run on the PR's current head
+    commit is enough to proceed; re-running it locally duplicates CI's work for
+    no new signal, on a less trustworthy environment (a local machine can fail
+    for reasons that have nothing to do with the code). Only fall back to a
+    local run if CI hasn't run yet, is stale against a newer commit, failed and
+    needs local reproduction to debug, or to chase one narrow hypothesis a
+    specific finding raises — a targeted run, not the whole suite again.
+  - **No PR (current branch, uncommitted changes, or named files):** there's no
+    CI signal to check — run the relevant test/build/repro locally.
 
 **Confidence score** each finding 0–100 (0 = likely false positive, 50 = real
 but minor, 80 = confident and real, 100 = certain). **Report only ≥ 80 by
