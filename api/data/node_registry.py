@@ -33,7 +33,11 @@ from typing import Literal
 from log import get_logger
 from pydantic import BaseModel, ValidationError
 
-from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
+from data.redis_client import (
+    REDIS_CALL_TIMEOUT_SECONDS,
+    redis_client,
+    sync_redis_client,
+)
 
 logger = get_logger("node_registry")
 
@@ -253,6 +257,76 @@ async def set_active_node(node_id: str) -> None:
     await asyncio.wait_for(
         redis_client.set(ACTIVE_KEY, node_id), timeout=REDIS_CALL_TIMEOUT_SECONDS
     )
+
+
+# --------------------------------------------------------------------------- #
+# Sync counterparts to get_active_node()/get_node() (data/db.py's
+# sync_session(), §7.2) — built on sync_redis_client (a genuinely separate
+# blocking connection, data/redis_client.py) rather than asyncio.run()-ing
+# the async versions above, since sync_session() must also work when called
+# synchronously from *inside* an already-running event loop (every existing
+# test that calls it from a pytest-asyncio test function), where
+# asyncio.run() would raise.
+#
+# Deliberately a separate, smaller in-process cache from the async path's
+# module-global — the two are never read from the same "resolve" operation,
+# and giving each its own state avoids any question of thread/loop-affinity
+# between them. Same fallback shape as get_active_node(), but returns None
+# instead of raising on total failure: its only caller (db.py) already
+# treats "nothing to resolve" as "use the static fallback engine", the same
+# outcome get_active_node()'s raised NoActiveNodeError leads to on the async
+# side — a distinct exception type buys nothing extra here.
+# --------------------------------------------------------------------------- #
+
+_cached_active_node_id_sync: str | None = None
+_cached_active_node_at_sync: float = 0.0
+
+
+def get_active_node_sync() -> str | None:
+    """Sync counterpart to ``get_active_node()`` — see the module-level
+    comment above for why this can't just wrap the async version."""
+    global _cached_active_node_id_sync, _cached_active_node_at_sync
+
+    if (
+        _cached_active_node_id_sync is not None
+        and time.monotonic() - _cached_active_node_at_sync
+        < ACTIVE_NODE_CACHE_TTL_SECONDS
+    ):
+        return _cached_active_node_id_sync
+
+    try:
+        node_id = sync_redis_client.get(ACTIVE_KEY)
+    except Exception:  # noqa: BLE001 — fall back, mirroring get_active_node()
+        node_id = None
+
+    if node_id:
+        _cached_active_node_id_sync = node_id
+        _cached_active_node_at_sync = time.monotonic()
+        return node_id
+
+    return _cached_active_node_id_sync
+
+
+def get_node_sync(node_id: str) -> Node | None:
+    """Sync counterpart to ``get_node()``."""
+    try:
+        raw = sync_redis_client.hget(REGISTRY_KEY, node_id)
+    except Exception:  # noqa: BLE001 — treat as "not found", see module comment
+        return None
+    if raw is None:
+        return None
+    try:
+        return Node.model_validate_json(raw)
+    except ValidationError:
+        logger.error(
+            "Corrupt registry entry for node_id=%s",
+            node_id,
+            exc_info=True,
+            extra={
+                "data": {"event": "node_registry_corrupt_entry", "node_id": node_id}
+            },
+        )
+        return None
 
 
 # --------------------------------------------------------------------------- #

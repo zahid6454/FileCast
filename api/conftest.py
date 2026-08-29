@@ -35,6 +35,7 @@ os.environ.setdefault("FINGERPRINT_SALT", "test-salt")
 import main  # noqa: E402  (imports the app; binds engines to the test DB)
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
+from data import node_registry  # noqa: E402
 from data.db import Base, async_session_factory, sync_engine  # noqa: E402
 from data.models import Tool  # noqa: E402
 from data.redis_client import redis_client  # noqa: E402
@@ -77,10 +78,59 @@ async def _reset_rate_limiter():
     disconnecting here (not at setup) means the pool is empty by the time
     the next test's `flushdb()` runs, so it always opens a fresh connection
     on ITS OWN loop instead.
+
+    NEON_FAILOVER_PLAN.md §7.2 surfaced a second, distinct instance of this
+    same class of bug: ``connection_pool.disconnect()`` only closes actual
+    socket connections — it never touches the pool's own internal
+    ``asyncio.Lock`` (``redis/asyncio/connection.py``'s ``ConnectionPool``),
+    acquired on every single ``get_connection()`` call. ``asyncio.Lock``
+    only actually binds to an event loop the first time it's genuinely
+    *contended* (two callers needing it at the same instant) — its fast,
+    uncontended path never touches the loop at all — so this had never
+    surfaced before. `/health`'s three checks now run three concurrent
+    Redis-touching coroutines instead of two (``_check_db()`` also resolves
+    the active node via Redis, §7.2), which is just enough added concurrency
+    to trigger genuine contention reliably. Once that binds the lock to a
+    test's now-dead loop, every later test whose own concurrent Redis calls
+    contend on it crashes with "bound to a different event loop" — a
+    pytest-asyncio-only artifact (a real deployment has exactly one
+    long-lived loop for the process's whole life), but real here. Replacing
+    the lock, not just disconnecting sockets, closes this for good.
     """
     await redis_client.flushdb()
     yield
     await redis_client.connection_pool.disconnect()
+    redis_client.connection_pool._lock = asyncio.Lock()
+
+
+@pytest.fixture(autouse=True)
+def _reset_node_registry_lock(monkeypatch):
+    """NEON_FAILOVER_PLAN.md §7.2 made ``node_registry.get_active_node()``
+    reachable from nearly every DB-touching test (``data.db``'s dynamic
+    ``get_session()``/``sync_session()`` call it on every use), not just
+    ``test_node_registry.py``'s own tests, which already reset this locally.
+
+    Its module-level ``_active_node_refresh_lock`` (a bare ``asyncio.Lock()``
+    built at import time) binds to whichever event loop first acquires it —
+    reusing that same instance across tests, each with pytest-asyncio's own
+    fresh event loop (same reasoning as ``_reset_rate_limiter`` above, for
+    Redis's connection pool), crashes with "bound to a different event loop"
+    the moment a second test's cache miss reaches the lock. A fresh, never-
+    yet-acquired Lock is behaviorally identical to an already-released one,
+    so this is free to do unconditionally.
+
+    Deliberately does NOT also reset the cached active-node id/timestamp:
+    doing so forces every single test's first DB touch through a real Redis
+    round trip (via the lock above) instead of letting the cache's own
+    3-second TTL carry it across nearby tests the way it does in production
+    — multiplied across the whole suite, that measurably added Redis load
+    and was the actual cause of intermittent Redis-timeout failures in
+    unrelated tests (rate limiter, health checks) when this fixture reset
+    the cache too. Tests that specifically need a guaranteed-blank cache
+    (test_node_registry.py, test_resolve_active_db_url.py) reset it
+    themselves.
+    """
+    monkeypatch.setattr(node_registry, "_active_node_refresh_lock", asyncio.Lock())
 
 
 async def _new_client() -> AsyncClient:

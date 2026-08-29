@@ -63,7 +63,7 @@ from converter import (
 from log import get_logger
 from sqlalchemy import select, update
 
-from data.db import async_session_factory
+from data.db import get_active_session_factory
 from data.models import ConversionJob
 from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 
@@ -195,7 +195,8 @@ async def _execute_job(job_id: str) -> None:
     open" shape the plan calls for. Two short-lived sessions instead: one to
     read the job's inputs, one to write its terminal state.
     """
-    async with async_session_factory() as db:
+    session_factory = await get_active_session_factory()
+    async with session_factory() as db:
         job = await db.get(ConversionJob, job_id)
         if job is None:
             return
@@ -258,7 +259,12 @@ async def _execute_job(job_id: str) -> None:
             },
         )
 
-    async with async_session_factory() as db:
+    # Re-resolved rather than reusing the factory above: a switch (§7.4) may
+    # have happened while spec.convert() was running, and this write must
+    # target whichever node is active NOW, not whichever was active when the
+    # job started reading its input.
+    session_factory = await get_active_session_factory()
+    async with session_factory() as db:
         # Guard on status='converting': the periodic GC sweep may have
         # already force-failed this row (STUCK_JOB_MAX_AGE_SECONDS) while
         # this conversion was still running unbounded in the background —
@@ -289,7 +295,8 @@ async def run_job(job_id: str) -> None:
     """Claim (queued -> converting) and run one job end-to-end. No Redis, no
     loop required — this is what tests call directly for one job, and what
     the one-shot CLI invocation uses too."""
-    async with async_session_factory() as db:
+    session_factory = await get_active_session_factory()
+    async with session_factory() as db:
         claimed = await _claim_one(db, job_id)
     if not claimed:
         return
@@ -330,7 +337,8 @@ _background_tasks: set[asyncio.Task] = set()
 
 
 async def _discovery_wake() -> None:
-    async with async_session_factory() as db:
+    session_factory = await get_active_session_factory()
+    async with session_factory() as db:
         job_ids = await _claim_all_queued(db)
     if job_ids:
         logger.info(
@@ -359,7 +367,8 @@ async def recover_orphaned_jobs() -> dict[str, int]:
     """
     requeued = 0
     dead_lettered = 0
-    async with async_session_factory() as db:
+    session_factory = await get_active_session_factory()
+    async with session_factory() as db:
         rows = (
             (
                 await db.execute(
@@ -396,7 +405,8 @@ async def gc_sweep() -> dict[str, int]:
     stuck_failed = 0
     files_cleaned = 0
 
-    async with async_session_factory() as db:
+    session_factory = await get_active_session_factory()
+    async with session_factory() as db:
         stuck = (
             (
                 await db.execute(

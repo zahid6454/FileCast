@@ -19,7 +19,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.config import settings
-from data.db import async_session_factory, get_session
+from data.db import get_active_session_factory, get_session
 from data.models import Session, StaffGrant, User
 
 # Seeded dev users (§11) — the two dev-login identities.
@@ -137,12 +137,20 @@ async def current_user_for_convert(request: Request) -> User | None:
     session only when a cookie is present and swallows any error → treat as
     anonymous. It does **not** use ``Depends(get_session)`` — a failing session
     dependency would raise before the route runs, defeating the guarantee.
+
+    NEON_FAILOVER_PLAN.md §7.2: must resolve the session factory dynamically,
+    same as every other direct session-opening call site — otherwise this
+    keeps resolving sessions against an abandoned node after a switch, and
+    because of the `except Exception: return None` above, that failure is
+    silent: a logged-in user just quietly degrades to anonymous on every
+    ``/convert`` call, with no error, no log, no health-check signal.
     """
     token = request.cookies.get(settings.session_cookie_name)
     if not token:
         return None
     try:
-        async with async_session_factory() as db:
+        session_factory = await get_active_session_factory()
+        async with session_factory() as db:
             now = datetime.now(UTC)
             return (
                 await db.execute(

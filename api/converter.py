@@ -20,7 +20,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import httpx
-from data.db import async_engine, get_session
+from data.db import get_active_engine, get_session
 from data.models import ConversionJob, User
 from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 from data.security import current_user_for_convert, require_admin
@@ -1661,18 +1661,24 @@ async def _check_db() -> bool:
     # main.py's startup lifespan already does, just per-request instead of
     # once at boot.
     #
+    # NEON_FAILOVER_PLAN.md §7.2: must resolve the currently active node on
+    # every call via get_active_engine(), never a hardcoded engine — this is
+    # the reactive-trigger's own health signal (§7.4), so checking a stale,
+    # abandoned node after a switch would silently defeat it.
+    #
     # Post-merge audit fix: bounded with the same 5s budget as the Gotenberg
-    # check. `async_engine` (data/db.py) sets no `connect_timeout` — only the
-    # sync engine does — so an unbounded `.connect()` here could hang past a
-    # monitor's polling interval on a network partition that drops packets
-    # instead of refusing the connection outright. Unlike the lifespan's
-    # ONE-TIME startup check this pattern mirrors, this one is now
+    # check. The static async engine (data/db.py) sets no `connect_timeout`
+    # — only the sync engine does — so an unbounded `.connect()` here could
+    # hang past a monitor's polling interval on a network partition that
+    # drops packets instead of refusing the connection outright. Unlike the
+    # lifespan's ONE-TIME startup check this pattern mirrors, this one is now
     # re-triggered by every external poll, so a hang here is no longer a
     # one-off — it accumulates a stuck task (and a held pool connection) per
     # poll for as long as the partition lasts.
     try:
         async with asyncio.timeout(HEALTH_DB_TIMEOUT_SECONDS):
-            async with async_engine.connect() as conn:
+            engine = await get_active_engine()
+            async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
         return True
     except Exception:

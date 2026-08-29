@@ -13,7 +13,8 @@ counters are inherently ephemeral, and a dropped wake-up push degrades to
 slower pickup via the worker's own periodic sweep, never a lost job.
 """
 
-import redis.asyncio as redis
+import redis
+import redis.asyncio as redis_asyncio
 
 from data.config import settings
 
@@ -37,7 +38,7 @@ from data.config import settings
 # asyncio.wait_for() bound instead, right at the call site (see
 # REDIS_CALL_TIMEOUT_SECONDS below), so BRPOP's long, intentional block is
 # left alone.
-redis_client: redis.Redis = redis.from_url(
+redis_client: redis_asyncio.Redis = redis_asyncio.from_url(
     settings.redis_url,
     decode_responses=True,
     socket_connect_timeout=1,
@@ -48,3 +49,22 @@ redis_client: redis.Redis = redis.from_url(
 # the connect-phase bound alone. NOT used anywhere near
 # data/job_worker.py's BRPOP, which blocks on purpose.
 REDIS_CALL_TIMEOUT_SECONDS = 1
+
+# Sync counterpart (NEON_FAILOVER_PLAN.md §7.2) — used only where an async
+# call is genuinely impossible: data/db.py's sync_session(), for
+# data/tasks.py's purge loop (which never runs an event loop at all) and for
+# every existing test that calls sync_session() synchronously from inside
+# pytest-asyncio's already-running loop, where asyncio.run() would raise
+# "cannot be called from a running event loop". A second physical
+# connection, not a wrapper around the async client above — sync and async
+# redis-py clients don't share a connection pool.
+#
+# Unlike redis_client above, pairing socket_connect_timeout with a blanket
+# socket_timeout is safe here: this client is never used for a legitimately
+# long-blocking command like BRPOP, only plain GET/HGET reads.
+sync_redis_client: redis.Redis = redis.from_url(
+    settings.redis_url,
+    decode_responses=True,
+    socket_connect_timeout=1,
+    socket_timeout=1,
+)
