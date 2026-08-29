@@ -51,7 +51,27 @@ async def resolve() -> str:
         )
         return settings.database_url
 
-    node = await get_node(node_id)
+    try:
+        node = await get_node(node_id)
+    except Exception as exc:  # noqa: BLE001 — this is the migration-target
+        # resolver the Dockerfile CMD's `export DATABASE_URL=$(...) &&
+        # alembic upgrade head && ...` depends on: an uncaught exception
+        # here means this script exits non-zero with empty stdout, the
+        # `export` assignment itself then fails, and the `&&` chain
+        # short-circuits BEFORE alembic ever runs — the container fails to
+        # start outright on a transient Redis hiccup. get_node() (§7.1,
+        # node_registry.py) propagates Redis errors loudly by design for its
+        # other callers, but this script's whole purpose is to always
+        # resolve to a usable value, so any failure here must degrade to the
+        # static fallback exactly like the NoActiveNodeError case above.
+        print(
+            f"resolve_active_db_url: registry lookup for active "
+            f"node_id={node_id!r} failed ({exc!r}) — falling back to the "
+            "static DATABASE_URL",
+            file=sys.stderr,
+        )
+        return settings.database_url
+
     if node is None:
         print(
             f"resolve_active_db_url: active node_id={node_id!r} has no "

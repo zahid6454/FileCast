@@ -12,6 +12,7 @@ from data import node_registry
 from data.config import settings
 from data.node_registry import Node, register_node, set_active_node
 
+import scripts.resolve_active_db_url as resolve_active_db_url_module
 from scripts.resolve_active_db_url import resolve
 
 
@@ -64,6 +65,31 @@ async def test_falls_back_to_static_database_url_when_active_node_record_is_miss
     registry hash) is a distinct failure from "nothing set at all" — confirm
     it degrades the same way rather than raising."""
     await set_active_node("ghost-node-id")
+
+    resolved = await resolve()
+
+    assert resolved == settings.database_url
+
+
+async def test_falls_back_to_static_database_url_when_registry_lookup_raises(
+    monkeypatch,
+):
+    """The active pointer resolves fine, but the FOLLOW-UP registry lookup
+    (get_node()) hits a transient Redis error — distinct from both "empty
+    registry" and "record missing" above. Left unguarded, this crashes the
+    script (non-zero exit, empty stdout), which makes the Dockerfile CMD's
+    `export DATABASE_URL=$(...) && alembic upgrade head && ...` short-circuit
+    before alembic ever runs — the container fails to start outright on a
+    transient Redis hiccup, exactly the "blocks every future deploy" failure
+    mode §7.10 exists to prevent."""
+    node = _make_node("node-1", "postgresql://user:pw@ep-node1.neon.tech/filecast")
+    await register_node(node)
+    await set_active_node(node.node_id)
+
+    async def _boom(node_id):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(resolve_active_db_url_module, "get_node", _boom)
 
     resolved = await resolve()
 

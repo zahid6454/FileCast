@@ -35,6 +35,7 @@ os.environ.setdefault("FINGERPRINT_SALT", "test-salt")
 import main  # noqa: E402  (imports the app; binds engines to the test DB)
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
+from data import db as db_module  # noqa: E402
 from data import node_registry  # noqa: E402
 from data.db import Base, async_session_factory, sync_engine  # noqa: E402
 from data.models import Tool  # noqa: E402
@@ -129,8 +130,18 @@ def _reset_node_registry_lock(monkeypatch):
     the cache too. Tests that specifically need a guaranteed-blank cache
     (test_node_registry.py, test_resolve_active_db_url.py) reset it
     themselves.
+
+    ``data.db`` (imported here as ``db_module`` — the fixture below is
+    already named ``db``)'s own per-node engine cache (§7.2) has an identical
+    module-level ``asyncio.Lock()`` guarding first-time engine construction
+    for a given node_id — same failure mode, reset here for the same
+    reason, proactively: today's tests never construct two per-node engines
+    concurrently for the same node_id, so this lock has never actually been
+    exercised into binding, but a later phase's node_sync.py (source/target
+    engines touched together, §7.5) or admin panel work easily could.
     """
     monkeypatch.setattr(node_registry, "_active_node_refresh_lock", asyncio.Lock())
+    monkeypatch.setattr(db_module, "_async_node_engines_lock", asyncio.Lock())
 
 
 async def _new_client() -> AsyncClient:

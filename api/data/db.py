@@ -58,7 +58,6 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from data.config import settings
 from data.node_registry import (
     NoActiveNodeError,
-    Node,
     get_active_node,
     get_active_node_sync,
     get_node,
@@ -138,44 +137,75 @@ _async_node_engines: dict[str, _AsyncNodeEngine] = {}
 _async_node_engines_lock = asyncio.Lock()
 
 
-async def _resolve_active_node() -> Node | None:
-    """The registry record for the currently active node, or ``None`` when
-    there's nothing to resolve (Redis unreachable with no prior cache, or no
-    node ever registered) — the case every accessor below falls back to the
-    static engines above for."""
+async def _get_active_async_engine() -> _AsyncNodeEngine:
     try:
         node_id = await get_active_node()
     except NoActiveNodeError:
-        return None
-    node = await get_node(node_id)
-    if node is None:
-        logger.error(
-            "Active node id=%s has no registry record — falling back to the "
-            "static DATABASE_URL engine",
-            node_id,
-            extra={"data": {"event": "active_node_record_missing", "node_id": node_id}},
-        )
-    return node
-
-
-async def _get_active_async_engine() -> _AsyncNodeEngine:
-    node = await _resolve_active_node()
-    if node is None:
         return _AsyncNodeEngine(async_engine, async_session_factory)
 
-    cached = _async_node_engines.get(node.node_id)
+    # Checked BEFORE any registry lookup, not just before engine construction:
+    # once an engine is cached for this node_id, there's no need to re-fetch
+    # its Node record (a real Redis HGET) on every single request just to
+    # re-derive a connection_string we already built an engine from — that
+    # would turn every request into two Redis round trips instead of the one
+    # get_active_node() itself already needs.
+    cached = _async_node_engines.get(node_id)
     if cached is not None:
         return cached
+
     async with _async_node_engines_lock:
-        cached = _async_node_engines.get(node.node_id)
+        cached = _async_node_engines.get(node_id)
         if cached is not None:
             return cached
+
+        node = None
+        try:
+            node = await get_node(node_id)
+        except Exception:  # noqa: BLE001 — a registry-lookup hiccup must fall
+            # back to the static engine, not raise — get_node() (§7.1,
+            # node_registry.py) propagates Redis errors loudly by design for
+            # its OTHER (admin/provisioning) callers, but this dynamic
+            # accessor's whole contract is graceful degradation on any
+            # resolution failure, the same as the NoActiveNodeError case
+            # above. Left unguarded, a transient Redis hiccup on this one
+            # call would 500 every request through get_session() and, worse,
+            # crash job_worker.py outright at startup (recover_orphaned_jobs()
+            # has no try/except around this call chain).
+            logger.error(
+                "Registry lookup for active node_id=%s failed — falling back "
+                "to the static DATABASE_URL engine",
+                node_id,
+                exc_info=True,
+                extra={
+                    "data": {
+                        "event": "active_node_lookup_failed",
+                        "node_id": node_id,
+                    }
+                },
+            )
+        else:
+            if node is None:
+                logger.error(
+                    "Active node id=%s has no registry record — falling back "
+                    "to the static DATABASE_URL engine",
+                    node_id,
+                    extra={
+                        "data": {
+                            "event": "active_node_record_missing",
+                            "node_id": node_id,
+                        }
+                    },
+                )
+
+        if node is None:
+            return _AsyncNodeEngine(async_engine, async_session_factory)
+
         engine = create_async_engine(node.connection_string, pool_pre_ping=True)
         entry = _AsyncNodeEngine(
             engine,
             async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession),
         )
-        _async_node_engines[node.node_id] = entry
+        _async_node_engines[node_id] = entry
         return entry
 
 
@@ -239,10 +269,23 @@ class _SyncNodeEngine(NamedTuple):
 _sync_node_engines: dict[str, _SyncNodeEngine] = {}
 
 
-def _resolve_active_node_sync() -> Node | None:
+def _get_active_sync_engine() -> _SyncNodeEngine:
     node_id = get_active_node_sync()
     if node_id is None:
-        return None
+        return _SyncNodeEngine(sync_engine, sync_session_factory)
+
+    # Same reasoning as the async path above: skip the registry lookup
+    # entirely once an engine is already cached for this node_id, rather
+    # than re-fetching its connection_string (a real Redis HGET) on every
+    # call. get_node_sync() already fails safe on a Redis error (returns
+    # None), so no separate exception handling is needed here.
+    cached = _sync_node_engines.get(node_id)
+    if cached is not None:
+        return cached
+
+    # No lock: sync_session() only ever runs synchronously on a single
+    # thread at a time (a script's own call, or a test's plain function
+    # call) — never truly concurrent the way the async path above can be.
     node = get_node_sync(node_id)
     if node is None:
         logger.error(
@@ -251,27 +294,15 @@ def _resolve_active_node_sync() -> Node | None:
             node_id,
             extra={"data": {"event": "active_node_record_missing", "node_id": node_id}},
         )
-    return node
-
-
-def _get_active_sync_engine() -> _SyncNodeEngine:
-    node = _resolve_active_node_sync()
-    if node is None:
         return _SyncNodeEngine(sync_engine, sync_session_factory)
 
-    cached = _sync_node_engines.get(node.node_id)
-    if cached is not None:
-        return cached
-    # No lock: sync_session() only ever runs synchronously on a single
-    # thread at a time (a script's own call, or a test's plain function
-    # call) — never truly concurrent the way the async path above can be.
     engine = create_engine(
         _sync_url(node.connection_string),
         pool_pre_ping=True,
         connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
     )
     entry = _SyncNodeEngine(engine, sessionmaker(engine, expire_on_commit=False))
-    _sync_node_engines[node.node_id] = entry
+    _sync_node_engines[node_id] = entry
     return entry
 
 
