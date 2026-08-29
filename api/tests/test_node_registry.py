@@ -20,6 +20,7 @@ from data import node_registry
 from data.node_registry import (
     DEFAULT_NODE_SETTINGS,
     POOL_OP_LOCK_TTL_SECONDS,
+    SETTINGS_KEY,
     BootstrapAlreadyDoneError,
     NoActiveNodeError,
     Node,
@@ -104,6 +105,19 @@ async def test_node_public_dict_never_includes_connection_string():
     public = node.public_dict()
     assert "connection_string" not in public
     assert public["node_id"] == node.node_id
+
+
+async def test_get_node_returns_none_for_corrupt_json():
+    # A hand-edited or buggy Redis entry must never crash a reader.
+    await redis_client.hset(node_registry.REGISTRY_KEY, "corrupt", "not valid json")
+    assert await get_node("corrupt") is None
+
+
+async def test_list_nodes_skips_corrupt_entries_but_keeps_good_ones():
+    good = _make_node(node_id="good")
+    await register_node(good)
+    await redis_client.hset(node_registry.REGISTRY_KEY, "corrupt", "not valid json")
+    assert await list_nodes() == [good]
 
 
 # --------------------------------------------------------------------------- #
@@ -260,6 +274,9 @@ async def test_pool_operation_lock_yields_none_when_already_held():
         assert outer_token is not None
         async with pool_operation_lock("switch:inner") as inner_token:
             assert inner_token is None
+        # The inner CM's no-op exit (it never held anything) must not have
+        # released the outer lock out from under it.
+        assert await acquire_pool_lock("switch:another-contender") is None
 
 
 def test_assert_safe_operation_timeout_accepts_a_bounded_timeout():
@@ -269,6 +286,14 @@ def test_assert_safe_operation_timeout_accepts_a_bounded_timeout():
 def test_assert_safe_operation_timeout_rejects_a_timeout_at_the_lock_ttl():
     with pytest.raises(ValueError):
         assert_safe_operation_timeout(POOL_OP_LOCK_TTL_SECONDS)
+
+
+def test_assert_safe_operation_timeout_boundary_is_the_margin_below_ttl():
+    # Exactly at TTL-minus-margin still leaves the full margin — allowed.
+    assert_safe_operation_timeout(POOL_OP_LOCK_TTL_SECONDS - 30)
+    # One second closer to the TTL than the margin allows — rejected.
+    with pytest.raises(ValueError):
+        assert_safe_operation_timeout(POOL_OP_LOCK_TTL_SECONDS - 30 + 1)
 
 
 # --------------------------------------------------------------------------- #
@@ -298,6 +323,11 @@ async def test_usage_cache_round_trip():
     assert cached.ratio == 0.42
 
 
+async def test_get_usage_cache_returns_none_for_corrupt_json():
+    await redis_client.set(node_registry._usage_key("n1"), "not valid json")
+    assert await get_usage_cache("n1") is None
+
+
 async def test_last_activity_round_trip():
     assert await get_last_activity("n1") is None
     await record_activity("n1")
@@ -310,6 +340,11 @@ async def test_switch_status_round_trip():
     status = await get_switch_status("run-1")
     assert status is not None
     assert status.status == "pending"
+
+
+async def test_get_switch_status_returns_none_for_corrupt_json():
+    await redis_client.set(node_registry._switch_status_key("run-1"), "not valid json")
+    assert await get_switch_status("run-1") is None
 
 
 async def test_switch_history_is_capped(monkeypatch):
@@ -328,6 +363,22 @@ async def test_switch_history_is_capped(monkeypatch):
     assert len(history) == 3
     # Most recent first (LPUSH) — the last three appended survive the trim.
     assert [entry.source_node_id for entry in history] == ["s4", "s3", "s2"]
+
+
+async def test_get_switch_history_skips_corrupt_entries():
+    await redis_client.lpush(node_registry.SWITCH_HISTORY_KEY, "not valid json")
+    await append_switch_history(
+        SwitchHistoryEntry(
+            trigger="manual",
+            source_node_id="s1",
+            target_node_id="t1",
+            outcome="success",
+            at="2026-01-01T00:00:00+00:00",
+        )
+    )
+    history = await get_switch_history(limit=10)
+    assert len(history) == 1
+    assert history[0].source_node_id == "s1"
 
 
 # --------------------------------------------------------------------------- #
@@ -359,6 +410,51 @@ async def test_update_settings_persists_and_merges_with_defaults():
 async def test_update_settings_rejects_an_invalid_value():
     with pytest.raises(ValidationError):
         await update_settings({"reactive_failure_count": "not-a-number"})
+
+
+async def test_update_settings_rejects_an_unknown_field_cleanly():
+    # Regression guard: an unknown key used to silently vanish during
+    # NodeSettings' merge/validate (extra="ignore", kept deliberately for
+    # get_settings()'s corrupt-hash resilience) and then blow up with a
+    # confusing AttributeError when building the changed-fields mapping,
+    # instead of a clean, actionable error.
+    with pytest.raises(ValueError, match="typo_field"):
+        await update_settings({"typo_field": 1})
+
+    # Must not have partially written anything.
+    assert await get_settings() == DEFAULT_NODE_SETTINGS
+
+
+async def test_update_settings_does_not_clobber_a_field_changed_mid_update(monkeypatch):
+    # Regression guard: update_settings() used to read-modify-write the
+    # FULL settings snapshot, so a second writer changing a DIFFERENT field
+    # between this call's read and its write would have that change
+    # silently overwritten by this call's now-stale view of it. §7.12
+    # designs each of the five settings as its own independently
+    # auto-saving control (no batch submit), so two edits landing close
+    # together is a realistic scenario, not a hypothetical one.
+    #
+    # Deterministically forces the exact interleaving (read, THEN a
+    # concurrent write to a different field, THEN this call's own write)
+    # rather than relying on asyncio.gather to happen to schedule it that
+    # way — gather makes no ordering guarantee, so it could pass without
+    # ever actually exercising the race window.
+    original_get_settings = node_registry.get_settings
+
+    async def get_settings_then_concurrent_write():
+        current = await original_get_settings()
+        await redis_client.hset(SETTINGS_KEY, "cutover_threshold_pct", "90")
+        return current
+
+    monkeypatch.setattr(
+        node_registry, "get_settings", get_settings_then_concurrent_write
+    )
+    await update_settings({"warmup_threshold_pct": 65})
+    monkeypatch.setattr(node_registry, "get_settings", original_get_settings)
+
+    fetched = await get_settings()
+    assert fetched.warmup_threshold_pct == 65
+    assert fetched.cutover_threshold_pct == 90
 
 
 # --------------------------------------------------------------------------- #

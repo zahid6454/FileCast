@@ -637,15 +637,35 @@ async def get_settings() -> NodeSettings:
 async def update_settings(partial: dict[str, int]) -> NodeSettings:
     """Validate and merge a partial update into the settings hash — each
     admin-edited field takes effect immediately (§7.12/§8), no batch save.
-    Raises ``pydantic.ValidationError`` on an out-of-range value; the
-    caller (a later phase's PUT route) turns that into a 4xx."""
+    Raises ``ValueError`` for a field name that isn't one of the five known
+    settings, or ``pydantic.ValidationError`` for an out-of-range/wrong-type
+    value on a known one; the caller (a later phase's PUT route) turns
+    either into a 4xx.
+
+    Writes ONLY the fields named in ``partial`` back to the hash — never the
+    full merged snapshot. §7.12 designs each of the five settings as its
+    own independently auto-saving control (no batch submit), so two
+    concurrent edits to two DIFFERENT fields are a real scenario (two
+    browser tabs, or a slow request overlapping a fast one); a full-hash
+    read-merge-write here would let the second write's stale snapshot of
+    the FIRST field silently clobber the first write's change to it.
+    Writing only the touched field(s) makes concurrent edits to different
+    fields commute correctly instead of racing.
+    """
+    unknown = set(partial) - set(NodeSettings.model_fields)
+    if unknown:
+        # NodeSettings ignores unknown keys on validate (deliberately, so a
+        # stray/legacy field in the Redis hash doesn't sink the whole
+        # fallback-to-defaults read path in get_settings()) — so an unknown
+        # key here would otherwise silently vanish during merge/validate
+        # and then raise a confusing AttributeError below instead of a
+        # clean, actionable error.
+        raise ValueError(f"Unknown settings field(s): {sorted(unknown)}")
     current = await get_settings()
     updated = NodeSettings.model_validate(current.model_dump() | partial)
+    changed = {key: str(getattr(updated, key)) for key in partial}
     await asyncio.wait_for(
-        redis_client.hset(
-            SETTINGS_KEY,
-            mapping={k: str(v) for k, v in updated.model_dump().items()},
-        ),
+        redis_client.hset(SETTINGS_KEY, mapping=changed),
         timeout=REDIS_CALL_TIMEOUT_SECONDS,
     )
     return updated
