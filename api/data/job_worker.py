@@ -83,7 +83,13 @@ MAX_ATTEMPTS = 3
 # row, that row's own in-flight task has almost always already resolved one
 # way or another. This is a pure safety net for the rare case that
 # resolution somehow never landed, not the normal path.
-STUCK_JOB_MAX_AGE_SECONDS = 30 * 60
+#
+# Raised from 30min to 90min alongside DISCOVERY_FALLBACK_INTERVAL_SECONDS/
+# GC_SWEEP_INTERVAL_SECONDS going from 15min to 60min below (same margin,
+# just scaled up): with near-zero real traffic, a dropped push or a
+# genuinely stuck job is already rare, so trading a longer worst-case
+# rescue/failure time for a ~75% cut in idle Neon compute cost is worth it.
+STUCK_JOB_MAX_AGE_SECONDS = 90 * 60
 
 # Disk-cost driven, unrelated to the age ceiling above — just long enough
 # for one dropped download connection to retry once.
@@ -98,17 +104,25 @@ FINISHED_JOB_FILE_GRACE_SECONDS = 5 * 60
 # counting down, so compute stays active around the clock and burns the
 # free tier's CU-hrs on pure "just checking" traffic.
 #
-# Must stay safely BELOW STUCK_JOB_MAX_AGE_SECONDS (30min): if a Redis push
+# Must stay safely BELOW STUCK_JOB_MAX_AGE_SECONDS (90min): if a Redis push
 # is dropped, this fallback is the ONLY thing that ever claims that job —
 # gc_sweep below only ever fails rows, it never claims/runs one. So this
 # has to fire, and win the race, while the row is still well short of
 # gc_sweep's stuck-age cutoff, or gc_sweep force-fails a job this fallback
-# was about to legitimately rescue (PR #141 review). 15min leaves a wide
-# margin under the 30min cutoff — comfortably more than any real
+# was about to legitimately rescue (PR #141 review). 60min leaves a wide
+# margin under the 90min cutoff — comfortably more than any real
 # conversion takes (bounded by GOTENBERG_QUEUE_TIMEOUT_SECONDS/
-# GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS, both well under that) — while still
-# being 20x less frequent than the original 5s cadence.
-DISCOVERY_FALLBACK_INTERVAL_SECONDS = 15 * 60
+# GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS, both well under that).
+#
+# Raised from 15min after confirming real traffic is near zero: at 15min
+# this fallback+sweep pair alone was keeping the Neon free tier's 100
+# CU-hr/month budget under sustained pressure from pure "just checking"
+# wakes (~2 CU-hr/day) even with nothing to actually discover. 60min cuts
+# that by ~75% and, as a bonus, lines up with UptimeRobot's existing hourly
+# /health poll (which already wakes Postgres for its own SELECT 1), so this
+# mostly rides along on a wake that was happening anyway instead of adding
+# a separate one.
+DISCOVERY_FALLBACK_INTERVAL_SECONDS = 60 * 60
 
 # Must stay >= DISCOVERY_FALLBACK_INTERVAL_SECONDS above: gc_sweep judges
 # "stuck" by created_at age, not by how long a row has actually been
@@ -117,9 +131,12 @@ DISCOVERY_FALLBACK_INTERVAL_SECONDS = 15 * 60
 # simply late to be claimed, not actually stuck (PR #141 review). Same
 # value as the fallback rather than something longer — one interval to
 # reason about — which also caps worst-case time-to-visible-failure for a
-# genuinely stuck job at STUCK_JOB_MAX_AGE_SECONDS + this (~45min), instead
-# of the ~90min a 60min sweep would have meant.
-GC_SWEEP_INTERVAL_SECONDS = 15 * 60
+# genuinely stuck job at STUCK_JOB_MAX_AGE_SECONDS + this (~150min), up
+# from the ~45min the previous 15min/30min pair meant — accepted in
+# exchange for the compute-cost cut documented above, since the coarse GC
+# sweep is a rare-case backstop, not the normal path (a real conversion
+# fails via Gotenberg's own much shorter per-attempt timeout first).
+GC_SWEEP_INTERVAL_SECONDS = 60 * 60
 
 # Mirrors data/tasks.py's HEARTBEAT_PATH idiom — touched once per loop
 # iteration so the container's HEALTHCHECK (docker-compose.yml) can tell
