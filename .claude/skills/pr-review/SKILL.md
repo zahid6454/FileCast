@@ -51,6 +51,10 @@ Determine and **print the exact scope** before reviewing:
 - **Named files/paths:** review those, reading enough surroundings to judge them.
 - **Uncommitted:** `git diff HEAD` and `git diff`.
 
+Read the intent (commit messages, PR body, linked issues) and the repo's
+conventions (CLAUDE.md, neighboring files). Review against intent and existing
+patterns, not just syntax. For a large diff, use TodoWrite to track files.
+
 ### Checking CI instead of running tests locally
 
 If a PR exists for what's under review — an explicit number, or one found via
@@ -75,10 +79,6 @@ If a PR exists for what's under review — an explicit number, or one found via
   against a newer commit than the one just checked, or none is configured
   at all:** no CI signal to trust — run the relevant test/build/repro
   locally instead.
-
-Read the intent (commit messages, PR body, linked issues) and the repo's
-conventions (CLAUDE.md, neighboring files). Review against intent and existing
-patterns, not just syntax. For a large diff, use TodoWrite to track files.
 
 ### Phase 2 — High-level pass
 Before line detail: is the **approach** sound? Note architecture concerns,
