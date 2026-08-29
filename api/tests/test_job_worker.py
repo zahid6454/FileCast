@@ -71,6 +71,55 @@ async def test_run_job_claims_runs_and_marks_done(db, monkeypatch):
     (converter.JOB_RESULTS_DIR / f"{job_id}.input").unlink()
 
 
+async def test_run_job_resolves_sessions_through_the_dynamic_accessor(db, monkeypatch):
+    """NEON_FAILOVER_PLAN.md §7.2: job_worker.py is called out as "the
+    largest and easiest-to-miss gap" in the whole plan — a miss here means
+    conversions silently keep writing to an abandoned node after every
+    switch, forever, with no visible error. A passing functional test alone
+    wouldn't catch a regression back to importing `async_session_factory`
+    directly (this test environment has only one real Postgres, so the
+    wrong code path would still happen to reach it) — so this spies on
+    get_active_session_factory() to confirm run_job()'s full claim-execute
+    flow actually goes through it, touching three of the six call sites
+    (run_job's own claim, _execute_job's read session, _execute_job's write
+    session) in one pass.
+    """
+
+    async def fake_libreoffice(content, filename, extra_form=None):
+        return b"%PDF-1.4 ok"
+
+    monkeypatch.setattr(converter, "_convert_libreoffice", fake_libreoffice)
+
+    call_count = 0
+    original_accessor = job_worker.get_active_session_factory
+
+    async def _counting_accessor():
+        nonlocal call_count
+        call_count += 1
+        return await original_accessor()
+
+    # Regression guard: a revert to importing `async_session_factory`
+    # directly would make this attribute not exist on `job_worker` at all,
+    # failing this monkeypatch.setattr call outright.
+    monkeypatch.setattr(job_worker, "get_active_session_factory", _counting_accessor)
+
+    job = _make_job()
+    db.add(job)
+    await db.flush()
+    job_id = job.id
+    await db.commit()
+    (converter.JOB_RESULTS_DIR / f"{job_id}.input").write_bytes(b"PK\x03\x04fake docx")
+
+    await job_worker.run_job(job_id)
+
+    await db.refresh(job)
+    assert job.status == "done"
+    assert call_count == 3
+    output_path = converter.JOB_RESULTS_DIR / f"{job_id}.output"
+    output_path.unlink()
+    (converter.JOB_RESULTS_DIR / f"{job_id}.input").unlink()
+
+
 async def test_run_job_marks_failed_on_conversion_exception(db, monkeypatch):
     async def boom(content, filename, extra_form=None):
         raise RuntimeError("boom")

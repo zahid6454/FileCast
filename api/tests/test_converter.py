@@ -999,7 +999,17 @@ async def test_health_endpoint_reports_db_down(client, monkeypatch):
         def connect(self):
             raise RuntimeError("connection refused")
 
-    monkeypatch.setattr(converter, "async_engine", _BoomEngine())
+    # NEON_FAILOVER_PLAN.md §7.2: _check_db() now resolves the engine
+    # dynamically via get_active_engine() (an awaited call) rather than
+    # importing a fixed `async_engine` symbol — that symbol's meaning
+    # changed (it's now just the dev/test/pre-Bootstrap fallback engine,
+    # data/db.py), so the old direct monkeypatch of it no longer reaches
+    # _check_db() at all. Patch the accessor converter.py actually calls
+    # instead.
+    async def _fake_get_active_engine():
+        return _BoomEngine()
+
+    monkeypatch.setattr(converter, "get_active_engine", _fake_get_active_engine)
     r = await client.get("/api/v1/health")
     assert r.status_code == 200
     body = r.json()
@@ -1008,15 +1018,15 @@ async def test_health_endpoint_reports_db_down(client, monkeypatch):
 
 
 async def test_health_endpoint_bounds_a_hanging_db_connect(client, monkeypatch):
-    # Post-merge audit fix. `async_engine` sets no connect_timeout (only the
-    # sync engine does — data/db.py), so an unbounded `.connect()` could hang
-    # past an uptime monitor's polling interval on a network partition that
-    # drops packets rather than refusing outright — and unlike the one-time
-    # startup check this mirrors, /health is now re-triggered by every poll,
-    # so a hang here accumulates a stuck task per poll for as long as the
-    # partition lasts. Proves the bound actually applies: a connect that
-    # never completes still returns within the (shrunk, for a fast test)
-    # timeout, degraded rather than hung.
+    # Post-merge audit fix. The static async engine (data/db.py) sets no
+    # connect_timeout (only the sync engine does), so an unbounded
+    # `.connect()` could hang past an uptime monitor's polling interval on a
+    # network partition that drops packets rather than refusing outright —
+    # and unlike the one-time startup check this mirrors, /health is now
+    # re-triggered by every poll, so a hang here accumulates a stuck task per
+    # poll for as long as the partition lasts. Proves the bound actually
+    # applies: a connect that never completes still returns within the
+    # (shrunk, for a fast test) timeout, degraded rather than hung.
     import asyncio
 
     import converter
@@ -1033,7 +1043,12 @@ async def test_health_endpoint_bounds_a_hanging_db_connect(client, monkeypatch):
         def connect(self):
             return _HangingConnectCM()
 
-    monkeypatch.setattr(converter, "async_engine", _HangingEngine())
+    # See test_health_endpoint_reports_db_down above: patch the dynamic
+    # accessor, not the old `async_engine` symbol it replaced.
+    async def _fake_get_active_engine():
+        return _HangingEngine()
+
+    monkeypatch.setattr(converter, "get_active_engine", _fake_get_active_engine)
     monkeypatch.setattr(converter, "HEALTH_DB_TIMEOUT_SECONDS", 0.05)
 
     # wait_for is the assertion, not just a safety net: if the internal bound

@@ -57,23 +57,22 @@ from data.redis_client import redis_client
 from pydantic import ValidationError
 
 
+# conftest.py's global `_reset_node_registry_lock` autouse fixture resets
+# the refresh lock before every test (NEON_FAILOVER_PLAN.md §7.2 made
+# get_active_node() reachable from nearly every test, not just this file),
+# but deliberately leaves the cached active-node id/timestamp alone
+# (resetting it globally on every test measurably increased Redis load
+# across the whole suite for no correctness benefit most tests need). This
+# file's own tests, unlike most, DO depend on starting from a guaranteed-
+# blank cache, so they still reset it themselves.
 @pytest.fixture(autouse=True)
 def _reset_in_process_cache(monkeypatch):
     """The active-node fallback cache lives outside Redis on purpose (§7.1)
     — reset it so each test starts as a process that has "never
     successfully read the registry", regardless of what earlier tests did.
-
-    Also gives every test a FRESH refresh lock rather than reusing the
-    module's shared instance: pytest-asyncio hands each test function its
-    own event loop, and an asyncio.Lock binds to whichever loop first
-    contends on it — reusing one instance across tests that genuinely
-    contend on it (the coalescing test below) would risk a spurious
-    "bound to a different event loop" failure in a later test, not a bug
-    in the lock itself.
     """
     monkeypatch.setattr(node_registry, "_cached_active_node_id", None)
     monkeypatch.setattr(node_registry, "_cached_active_node_at", 0.0)
-    monkeypatch.setattr(node_registry, "_active_node_refresh_lock", asyncio.Lock())
 
 
 def _make_node(node_id="n1", neon_project_id="proj-1", status="ready") -> Node:

@@ -12,7 +12,7 @@ import sentry_sdk
 from converter import GOTENBERG_URL
 from converter import router as converter_router
 from data.config import settings
-from data.db import async_engine
+from data.db import dispose_engines, get_active_engine
 from data.routers import all_routers
 from fastapi import FastAPI
 from log import ENVIRONMENT, SERVICE_NAME, get_logger, setup_logging
@@ -83,8 +83,11 @@ if settings.sentry_dsn:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Verify DB connectivity on startup (F12 — lifespan, not @app.on_event).
+    # NEON_FAILOVER_PLAN.md §7.2: resolves the currently active node via
+    # get_active_engine(), never a hardcoded engine.
     try:
-        async with async_engine.connect() as conn:
+        engine = await get_active_engine()
+        async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         db_ok = True
     except Exception:
@@ -120,7 +123,9 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        await async_engine.dispose()
+        # Disposes whichever node's engine is actually cached, not a fixed
+        # one — §7.2.
+        await dispose_engines()
 
 
 # Interactive API docs (Swagger/ReDoc/OpenAPI) are exposed only in development;

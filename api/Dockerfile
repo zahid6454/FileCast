@@ -46,4 +46,15 @@ EXPOSE 8090
 
 # Migrate then serve — in the api service COMMAND (not a shared ENTRYPOINT) so
 # only this service applies migrations and nothing races it (§7/§16-R5).
-CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8090 --workers 4"]
+#
+# NEON_FAILOVER_PLAN.md §7.10: DATABASE_URL is a static, deploy-time env var
+# that never moves when the active node switches (node identity lives in
+# Redis, by design). A bare `alembic upgrade head` here would keep migrating
+# whichever node was active at Bootstrap, forever — silently missing real
+# schema changes on the actual active node, and eventually blocking every
+# future deploy outright once that original node is retired or exhausted.
+# resolve_active_db_url.py resolves the real active node (falling back to
+# this same static DATABASE_URL when the registry can't be read — Redis
+# down, or pre-Bootstrap) and the resolved value is exported over it before
+# alembic runs.
+CMD ["sh", "-c", "export DATABASE_URL=$(python -m scripts.resolve_active_db_url) && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8090 --workers 4"]
