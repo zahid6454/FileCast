@@ -129,11 +129,19 @@ jobs:
           expected="${{ github.sha }}"
           last="none"
           for i in $(seq 1 20); do
+            # `|| true`: GitHub Actions runs unspecified-shell steps as
+            # `bash -e {0}`, so a bare failed command substitution here
+            # (ssh exiting nonzero — e.g. the very first attempt racing the
+            # container's own startup, which this loop exists to tolerate)
+            # would abort the whole script on attempt 1 instead of retrying
+            # for the full 5 minutes. Confirmed for real on v1.4.3's release
+            # run: the step failed 0.4s after starting, before the loop
+            # could even reach its first `sleep 15`.
             body=$(ssh -i /tmp/ci_healthcheck_key \
               -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile=.github/ci-deploy-known-hosts \
               -o ConnectTimeout=10 \
-              ubuntu@${{ vars.ORACLE_VM_HOST }} exit 2>/dev/null)
+              ubuntu@${{ vars.ORACLE_VM_HOST }} exit 2>/dev/null || true)
             if [ -n "$body" ]; then
               live=$(printf '%s' "$body" | jq -r '.commit // "unknown"' 2>/dev/null || echo "unparseable")
               if [ "$live" = "$expected" ]; then
