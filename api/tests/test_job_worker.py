@@ -4,6 +4,7 @@ Redis loop needed — mirrors data/tasks.py's own testing shape, per
 STRESS_TEST_PHASE3_PLAN.md's test-impact note).
 """
 
+import asyncio
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -13,6 +14,17 @@ from data import job_worker
 from data.models import ConversionJob
 from data.redis_client import redis_client
 from validation import ALLOWED_EXTENSIONS
+
+
+@pytest.fixture(autouse=True)
+def _reset_claim_pause():
+    """job_worker._claim_paused (§7.7, Phase C) is a bare module-level
+    global, not reset by anything in conftest.py — without this, one test
+    calling pause_claiming() and not cleaning up would silently break every
+    later test in the suite that expects claiming to work normally."""
+    job_worker.resume_claiming()
+    yield
+    job_worker.resume_claiming()
 
 
 async def test_redis_client_does_not_cut_off_a_legitimate_brpop_block():
@@ -220,6 +232,117 @@ async def test_claim_all_queued_claims_every_queued_row_atomically(db):
         await db.refresh(job)
         assert job.status == "converting"
         assert job.attempts == 1
+
+
+# --------------------------------------------------------------------------- #
+# In-flight job draining (NEON_FAILOVER_PLAN.md §7.7, Phase C) — inert:
+# nothing calls any of this yet, but it must behave correctly in isolation
+# for a later phase's cutover orchestration to build on.
+# --------------------------------------------------------------------------- #
+
+
+async def test_pause_claiming_stops_claim_all_queued(db):
+    job_worker.pause_claiming()
+
+    job = _make_job()
+    db.add(job)
+    await db.flush()
+    await db.commit()
+
+    from data.db import async_session_factory
+
+    async with async_session_factory() as claim_db:
+        claimed = await job_worker._claim_all_queued(claim_db)
+    assert claimed == []
+
+    await db.refresh(job)
+    assert job.status == "queued"  # untouched — never claimed
+
+
+async def test_pause_claiming_stops_claim_one():
+    job_worker.pause_claiming()
+    assert await job_worker._claim_one(object(), "irrelevant-job-id") is False
+
+
+async def test_resume_claiming_lets_claim_all_queued_proceed_again(db):
+    job_worker.pause_claiming()
+    job_worker.resume_claiming()
+
+    job = _make_job()
+    db.add(job)
+    await db.flush()
+    job_id = job.id
+    await db.commit()
+
+    from data.db import async_session_factory
+
+    async with async_session_factory() as claim_db:
+        claimed = await job_worker._claim_all_queued(claim_db)
+    assert claimed == [job_id]
+
+
+async def test_drain_in_flight_jobs_pauses_claiming():
+    assert job_worker._claim_paused is False
+    await job_worker.drain_in_flight_jobs(timeout_seconds=5)
+    assert job_worker._claim_paused is True
+
+
+async def test_drain_in_flight_jobs_returns_true_immediately_when_nothing_converting():
+    result = await job_worker.drain_in_flight_jobs(timeout_seconds=5)
+    assert result is True
+
+
+async def test_drain_in_flight_jobs_waits_for_converting_rows_to_clear(db):
+    job = _make_job(status="converting", started_at=datetime.now(UTC))
+    db.add(job)
+    await db.flush()
+    job_id = job.id
+    await db.commit()
+
+    async def _finish_soon():
+        await asyncio.sleep(0.2)
+        from data.db import async_session_factory
+
+        async with async_session_factory() as finish_db:
+            finish_job = await finish_db.get(ConversionJob, job_id)
+            finish_job.status = "done"
+            finish_job.finished_at = datetime.now(UTC)
+            await finish_db.commit()
+
+    finisher = asyncio.create_task(_finish_soon())
+    try:
+        result = await job_worker.drain_in_flight_jobs(
+            timeout_seconds=5, poll_interval_seconds=0.05
+        )
+        assert result is True
+    finally:
+        await finisher
+
+
+async def test_drain_in_flight_jobs_times_out_with_jobs_still_converting(db):
+    job = _make_job(status="converting", started_at=datetime.now(UTC))
+    db.add(job)
+    await db.flush()
+    await db.commit()
+
+    result = await job_worker.drain_in_flight_jobs(
+        timeout_seconds=0.2, poll_interval_seconds=0.05
+    )
+    assert result is False
+
+
+def test_drain_timeout_uses_the_queue_timeout_trio_not_stuck_job_age():
+    # Regression guard for exactly the mixup the plan warns against:
+    # DRAIN_TIMEOUT_SECONDS must be built from converter.py's
+    # *_QUEUE_TIMEOUT_SECONDS trio, never STUCK_JOB_MAX_AGE_SECONDS (a
+    # different, ~9x-larger constant for an unrelated purpose — see both
+    # constants' own comments).
+    assert job_worker.DRAIN_TIMEOUT_SECONDS == max(
+        converter.GOTENBERG_QUEUE_TIMEOUT_SECONDS,
+        converter.GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS,
+        converter.CPU_BOUND_QUEUE_TIMEOUT_SECONDS,
+    )
+    assert job_worker.DRAIN_TIMEOUT_SECONDS != job_worker.STUCK_JOB_MAX_AGE_SECONDS
 
 
 async def test_recover_orphaned_jobs_requeues_under_the_attempts_cap(db):

@@ -51,7 +51,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from converter import (
+    CPU_BOUND_QUEUE_TIMEOUT_SECONDS,
+    GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS,
     GOTENBERG_HEALTH_KEY,
+    GOTENBERG_QUEUE_TIMEOUT_SECONDS,
     JOB_RESULTS_DIR,
     JOB_WAKE_QUEUE_KEY,
     TOOL_REGISTRY,
@@ -61,7 +64,7 @@ from converter import (
     _safe_filename,
 )
 from log import get_logger
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from data.db import get_active_session_factory
 from data.models import ConversionJob
@@ -94,6 +97,25 @@ STUCK_JOB_MAX_AGE_SECONDS = 90 * 60
 # Disk-cost driven, unrelated to the age ceiling above — just long enough
 # for one dropped download connection to retry once.
 FINISHED_JOB_FILE_GRACE_SECONDS = 5 * 60
+
+# NEON_FAILOVER_PLAN.md §7.7 (Phase C) — the in-flight job drain step's own
+# cap, used by drain_in_flight_jobs() below. Deliberately built from
+# converter.py's *_QUEUE_TIMEOUT_SECONDS trio (currently 600s each), NOT
+# STUCK_JOB_MAX_AGE_SECONDS above: those are two distinct, unrelated
+# constants that differ by 9x (see this module's own docstring on the three
+# distinct mechanisms) — reaching for STUCK_JOB_MAX_AGE_SECONDS here would
+# make a routine node switch block for up to 90 minutes instead of ~10. A
+# currently-`converting` row is already bounded by whichever of the three
+# per-attempt queue-wait timeouts applies to it; the largest of the three is
+# what guarantees this covers whichever category actually happens to be
+# in flight.
+DRAIN_TIMEOUT_SECONDS = max(
+    GOTENBERG_QUEUE_TIMEOUT_SECONDS,
+    GHOSTSCRIPT_QUEUE_TIMEOUT_SECONDS,
+    CPU_BOUND_QUEUE_TIMEOUT_SECONDS,
+)
+
+DRAIN_POLL_INTERVAL_SECONDS = 1.0
 
 # _discovery_wake() itself is instant and near-free on a real BRPOP push (a
 # job was actually enqueued) — that path is untouched. This bounds the
@@ -165,7 +187,91 @@ GOTENBERG_HEALTH_PROBE_INTERVAL_SECONDS = 10
 GOTENBERG_HEALTH_TTL_SECONDS = 30
 
 
+# --------------------------------------------------------------------------- #
+# In-flight job draining (NEON_FAILOVER_PLAN.md §7.7, Phase C) — nothing
+# calls any of this yet; a later phase's cutover orchestration is the first
+# real caller. Provided now so that phase doesn't need to touch this
+# module's core claim path again.
+# --------------------------------------------------------------------------- #
+
+# Single-instance, in-process flag — safe because the cutover orchestration
+# that will pause/resume claiming (§7.13) runs INSIDE this same
+# job_worker.py process, not dispatched from one of the 4 `api` processes
+# (contrast with the Redis-backed state in data/node_registry.py, which
+# genuinely is shared across multiple processes and needs to be).
+_claim_paused = False
+
+
+def pause_claiming() -> None:
+    """Stop the claim loop from picking up new `queued` rows (§7.7 step 1).
+    New *submissions* are already blocked at the HTTP layer by the
+    maintenance-mode gate (``data/node_registry.require_not_maintenance``)
+    — this only needs to stop THIS process from starting anything already
+    queued."""
+    global _claim_paused
+    _claim_paused = True
+
+
+def resume_claiming() -> None:
+    """§7.7 step 5: clear the pause once maintenance mode lifts. Easy to
+    omit — without this explicit step, a naive implementation could leave
+    the worker permanently paused after the first switch."""
+    global _claim_paused
+    _claim_paused = False
+
+
+async def drain_in_flight_jobs(
+    *,
+    timeout_seconds: float = DRAIN_TIMEOUT_SECONDS,
+    poll_interval_seconds: float = DRAIN_POLL_INTERVAL_SECONDS,
+) -> bool:
+    """Pause claiming, then wait for every currently-`converting` row to
+    reach a terminal state (§7.7 steps 1-2), capped at ``timeout_seconds``
+    (``DRAIN_TIMEOUT_SECONDS`` by default — see that constant's own comment
+    for why this is NOT ``STUCK_JOB_MAX_AGE_SECONDS``).
+
+    Returns ``True`` once the in-flight count reaches zero, ``False`` if the
+    cap was hit first with jobs still converting — a later phase's cutover
+    orchestration decides what to do with that (§7.4: abort the flip, resume
+    normal service on the still-healthy original node).
+
+    Does **not** call ``resume_claiming()`` itself — that is a deliberate,
+    separate step (§7.7 step 5) taken only once maintenance mode has
+    actually lifted, which is well after this returns (the final top-up
+    sync and the flip itself still have to happen in between).
+    """
+    pause_claiming()
+    deadline = time.monotonic() + timeout_seconds
+    session_factory = await get_active_session_factory()
+    while True:
+        async with session_factory() as db:
+            in_flight = (
+                await db.execute(
+                    select(func.count())
+                    .select_from(ConversionJob)
+                    .where(ConversionJob.status == "converting")
+                )
+            ).scalar_one()
+        if in_flight == 0:
+            return True
+        if time.monotonic() >= deadline:
+            logger.warning(
+                "Drain timed out with %d job(s) still converting",
+                in_flight,
+                extra={
+                    "data": {
+                        "event": "drain_timeout",
+                        "in_flight": in_flight,
+                    }
+                },
+            )
+            return False
+        await asyncio.sleep(poll_interval_seconds)
+
+
 async def _claim_one(db, job_id: str) -> bool:
+    if _claim_paused:
+        return False
     result = await db.execute(
         update(ConversionJob)
         .where(ConversionJob.id == job_id, ConversionJob.status == "queued")
@@ -307,6 +413,8 @@ async def _claim_all_queued(db) -> list[str]:
     """Atomically claim every currently-queued row in one round trip —
     ``FOR UPDATE SKIP LOCKED`` is cheap insurance for a future second worker
     replica, not needed for correctness with today's single instance."""
+    if _claim_paused:
+        return []
     subq = (
         select(ConversionJob.id)
         .where(ConversionJob.status == "queued")
