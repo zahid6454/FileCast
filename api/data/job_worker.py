@@ -66,6 +66,7 @@ from converter import (
 from log import get_logger
 from sqlalchemy import func, select, update
 
+from data import node_ops
 from data.db import get_active_session_factory
 from data.models import ConversionJob
 from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
@@ -466,6 +467,30 @@ async def _discovery_wake() -> None:
         task.add_done_callback(_background_tasks.discard)
 
 
+def _dispatch_wake_task(raw_value: str) -> None:
+    """NEON_FAILOVER_PLAN.md §7.13: parse one popped wake-queue value and,
+    if it's a recognized switch/provision task, fire the matching
+    ``node_ops`` executor as its own background task — same strong-
+    reference pattern as ``_discovery_wake()`` above, so a multi-minute
+    switch/sync never delays this loop's own responsiveness. A value that
+    isn't a recognized task (the legacy bare job-id shape, unchanged) is a
+    no-op here; the caller's own discovery re-poll picks it up regardless
+    of the popped value's content."""
+    task = node_ops.parse_wake_task(raw_value)
+    if task is None:
+        return
+    task_type, task_kwargs = task
+    if task_type == node_ops.TASK_TYPE_SWITCH:
+        coro = node_ops.execute_switch(**task_kwargs)
+    elif task_type == node_ops.TASK_TYPE_PROVISION:
+        coro = node_ops.execute_provision(**task_kwargs)
+    else:
+        return
+    wake_task = asyncio.create_task(coro)
+    _background_tasks.add(wake_task)
+    wake_task.add_done_callback(_background_tasks.discard)
+
+
 async def recover_orphaned_jobs() -> dict[str, int]:
     """A ``converting`` row is only ever true while THIS worker process
     instance holds a live asyncio task for it — so if the process restarts
@@ -602,6 +627,21 @@ async def _loop() -> None:
                 extra={"data": {"event": "worker_redis_error"}},
             )
             await asyncio.sleep(BRPOP_TIMEOUT_SECONDS)
+
+        # NEON_FAILOVER_PLAN.md §7.13: the wake queue now carries TWO wire
+        # shapes on the same Redis list — the legacy bare job-id string
+        # (converter.py:1391, unchanged) and a JSON task object for
+        # switch/provision dispatch (data/node_ops.py). BRPOP on a single
+        # key returns a (key, value) tuple, not the bare value, so the
+        # popped value is unpacked here. Anything that isn't a recognized
+        # task (non-JSON, or JSON without a recognized task-type) is the
+        # legacy shape — falls through to the discovery re-poll below
+        # exactly as it does today; per node_ops.py's own docstring, that's
+        # harmless even for a switch/provision push, since discovery never
+        # inspects the popped value's content anyway.
+        if pushed is not None:
+            _, raw_wake_value = pushed
+            _dispatch_wake_task(raw_wake_value)
 
         now = time.monotonic()
         # A real push always runs discovery immediately (this is the fast

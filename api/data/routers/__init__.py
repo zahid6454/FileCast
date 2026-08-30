@@ -3,6 +3,7 @@
 
 from data.routers import (
     admin_deploy,
+    admin_nodes,
     announcements,
     auth,
     conversions,
@@ -33,6 +34,7 @@ all_routers = [
     history.router,
     messages.router,
     admin_deploy.router,
+    admin_nodes.router,
     site_settings.router,
     staff.router,
 ]

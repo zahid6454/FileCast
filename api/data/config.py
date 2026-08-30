@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     # down via env once volume makes that worth doing.
     sentry_traces_sample_rate: float = 1.0
 
+    # NEON_FAILOVER_PLAN.md §7.3/§7.8: one account-level Neon API key, read-only
+    # scope is sufficient (it never creates/deletes projects). Covers every node
+    # automatically, including ones added later — no per-node key management.
+    # Empty ⇒ node provisioning (§7.8) fails clearly rather than silently
+    # skipping the "can the key see this project" check.
+    neon_api_key: str = ""
+
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 
     @property

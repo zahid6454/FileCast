@@ -24,6 +24,7 @@ failing loudly is the correct behavior, not something to paper over:
 """
 
 import asyncio
+import re
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -83,6 +84,22 @@ class Node(BaseModel):
         admin). Not called anywhere yet in this phase; the leak-prevention
         lives with the model it protects so a later router can't forget it."""
         return self.model_dump(exclude={"connection_string"})
+
+
+# A pasted-verbatim Neon connection string has no SQLAlchemy driver suffix
+# (`postgres://` or `postgresql://`) — but data/db.py's per-node engines
+# (§7.2) call create_async_engine(node.connection_string) directly, which
+# needs the `+psycopg` suffix. §7.12's Add Node form hints that this
+# normalization happens automatically so the operator can paste Neon's
+# output verbatim; this is that normalization, shared by the provisioning
+# route (§7.8) so there is exactly one place this rule lives. Idempotent: a
+# string that already carries a driver suffix (e.g. already `+psycopg`)
+# doesn't match this bare-scheme pattern and passes through unchanged.
+_BARE_SCHEME_RE = re.compile(r"^postgres(?:ql)?://")
+
+
+def normalize_connection_string(raw: str) -> str:
+    return _BARE_SCHEME_RE.sub("postgresql+psycopg://", raw.strip(), count=1)
 
 
 class NoActiveNodeError(RuntimeError):
@@ -255,9 +272,23 @@ async def get_active_node() -> str:
 
 
 async def set_active_node(node_id: str) -> None:
+    global _cached_active_node_id, _cached_active_node_at
     await asyncio.wait_for(
         redis_client.set(ACTIVE_KEY, node_id), timeout=REDIS_CALL_TIMEOUT_SECONDS
     )
+    # Update the in-process cache immediately, not just Redis (Phase D —
+    # node_ops.py's execute_switch() is the first real caller of this
+    # besides Bootstrap). Without this, the SAME process that just flipped
+    # the active pointer — job_worker.py, mid-switch — could keep reading
+    # its own stale pre-switch cached value for up to
+    # ACTIVE_NODE_CACHE_TTL_SECONDS afterward, including its own claim loop
+    # resumed moments later by this same switch. Other processes (the 4
+    # `api` workers) still only refresh within that same short TTL, same as
+    # before — that cross-process staleness is the accepted, documented
+    # residual (§7.1); this only closes the gap where a process would be
+    # stale against a change it just made itself.
+    _cached_active_node_id = node_id
+    _cached_active_node_at = time.monotonic()
 
 
 # --------------------------------------------------------------------------- #
