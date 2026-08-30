@@ -187,6 +187,39 @@ async def test_google_callback_success_creates_user_and_session(
     assert row is not None and row.role == "user"
 
 
+async def test_google_callback_503s_during_maintenance(client, monkeypatch, db):
+    # NEON_FAILOVER_PLAN.md §7.6: this GET performs a real write
+    # (upsert_google_user + apply_staff_role + db.commit()) — a verb-based
+    # gate would silently miss it. Alongside the job-download case
+    # (test_converter.py), the required §12 coverage for this route.
+    from data.models import User
+    from data.node_registry import set_maintenance
+    from sqlalchemy import select
+
+    await set_maintenance(True)
+    try:
+        r = await _callback_with(
+            client,
+            monkeypatch,
+            {
+                "email": "duringmaintenance@example.com",
+                "email_verified": True,
+                "name": "During Maintenance",
+            },
+        )
+        assert r.status_code == 503
+    finally:
+        await set_maintenance(False)
+
+    # No user was created — the gate fired before upsert_google_user ran.
+    row = (
+        await db.execute(
+            select(User).where(User.email == "duringmaintenance@example.com")
+        )
+    ).scalar_one_or_none()
+    assert row is None
+
+
 async def test_google_callback_rejects_unverified_email(client, monkeypatch, db):
     from data.models import User
     from sqlalchemy import select

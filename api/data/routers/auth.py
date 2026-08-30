@@ -20,6 +20,7 @@ from data.config import settings
 from data.db import get_session
 from data.models import UserFavorite, UserPreference
 from data.netutil import get_client_ip
+from data.node_registry import require_not_maintenance
 from data.routers._serialize import user_dict
 from data.security import (
     apply_staff_role,
@@ -134,6 +135,7 @@ async def dev_login(
     request: Request,
     response: Response,
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     # Gated: 404 unless running in development (§8).
     if settings.environment != "development":
@@ -171,6 +173,7 @@ async def logout(
     request: Request,
     response: Response,
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     await destroy_session(db, request, response)
     await db.commit()
@@ -207,6 +210,7 @@ async def google_callback(
     state: str | None = None,
     error: str | None = None,
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     """Finish sign-in: verify ``state``, exchange ``code`` server↔Google, upsert the
     user, and create the same session as dev-login. Consent-denied / token failures

@@ -18,6 +18,7 @@ from data.models import (
     UserFavorite,
     UserPreference,
 )
+from data.node_registry import require_not_maintenance
 from data.routers._serialize import user_dict
 from data.security import clear_session_cookies, require_admin, require_user
 
@@ -85,6 +86,7 @@ async def delete_my_account(
     response: Response,
     user=Depends(require_user),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     uid = user.id
     # Anonymous ratings are retained; just detach the user_id.

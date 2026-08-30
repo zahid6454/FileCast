@@ -30,6 +30,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Literal
 
+from fastapi import HTTPException
 from log import get_logger
 from pydantic import BaseModel, ValidationError
 
@@ -362,6 +363,33 @@ async def set_maintenance(enabled: bool) -> None:
         await asyncio.wait_for(
             redis_client.delete(MAINTENANCE_KEY), timeout=REDIS_CALL_TIMEOUT_SECONDS
         )
+
+
+MAINTENANCE_MESSAGE = (
+    "The database is undergoing a brief maintenance switch. Please try again "
+    "in a moment."
+)
+
+
+async def require_not_maintenance() -> None:
+    """FastAPI dependency — 503s any route that writes while a cutover is in
+    progress (§7.6). Applied inline as ``Depends(require_not_maintenance)``
+    on every write route, the same way ``data/security.py``'s
+    ``require_user``/``require_admin`` are — not called anywhere yet (Phase
+    C is inert on its own; nothing sets ``filecast:nodes:maintenance`` until
+    a later phase's cutover orchestration exists).
+
+    Deliberately does **not** use the in-process cache
+    ``get_active_node()`` uses (§7.2) — that cache exists to avoid a Redis
+    round trip on every single query, but this is checked far less often
+    (only on writes) and its whole purpose is precise timing around a
+    window measured in seconds; even a few seconds of staleness here would
+    directly undermine it. ``is_maintenance()`` itself already fails open
+    on a Redis read error (see its own docstring) — this dependency doesn't
+    need its own separate fallback.
+    """
+    if await is_maintenance():
+        raise HTTPException(status_code=503, detail=MAINTENANCE_MESSAGE)
 
 
 # --------------------------------------------------------------------------- #

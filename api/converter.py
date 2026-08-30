@@ -22,6 +22,7 @@ from xml.etree import ElementTree as ET
 import httpx
 from data.db import get_active_engine, get_session
 from data.models import ConversionJob, User
+from data.node_registry import require_not_maintenance
 from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 from data.security import current_user_for_convert, require_admin
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -1429,6 +1430,7 @@ async def docx_to_pdf(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     spec = TOOL_REGISTRY["docx-to-pdf"]
     return await _enqueue_conversion(file, "docx-to-pdf", spec.max_size_for(user), db)
@@ -1439,6 +1441,7 @@ async def xlsx_to_pdf(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     spec = TOOL_REGISTRY["xlsx-to-pdf"]
     return await _enqueue_conversion(file, "xlsx-to-pdf", spec.max_size_for(user), db)
@@ -1449,6 +1452,7 @@ async def pptx_to_pdf(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     spec = TOOL_REGISTRY["pptx-to-pdf"]
     return await _enqueue_conversion(file, "pptx-to-pdf", spec.max_size_for(user), db)
@@ -1459,6 +1463,7 @@ async def html_to_pdf(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     spec = TOOL_REGISTRY["html-to-pdf"]
     return await _enqueue_conversion(file, "html-to-pdf", spec.max_size_for(user), db)
@@ -1470,6 +1475,7 @@ async def pdf_compress(
     quality: str = Form("ebook"),
     user: User | None = Depends(current_user_for_convert),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     quality = validate_compress_quality(quality)
     spec = TOOL_REGISTRY["pdf-compress"]
@@ -1483,6 +1489,7 @@ async def pdf_to_docx(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     spec = TOOL_REGISTRY["pdf-to-docx"]
     return await _enqueue_conversion(file, "pdf-to-docx", spec.max_size_for(user), db)
@@ -1493,6 +1500,7 @@ async def pdf_to_xlsx(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     spec = TOOL_REGISTRY["pdf-to-xlsx"]
     return await _enqueue_conversion(file, "pdf-to-xlsx", spec.max_size_for(user), db)
@@ -1503,6 +1511,7 @@ async def pdf_to_pptx(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     spec = TOOL_REGISTRY["pdf-to-pptx"]
     return await _enqueue_conversion(file, "pdf-to-pptx", spec.max_size_for(user), db)
@@ -1513,6 +1522,7 @@ async def epub_to_pdf(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     spec = TOOL_REGISTRY["epub-to-pdf"]
     return await _enqueue_conversion(file, "epub-to-pdf", spec.max_size_for(user), db)
@@ -1523,6 +1533,7 @@ async def png_to_svg(
     file: UploadFile = File(...),
     user: User | None = Depends(current_user_for_convert),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     spec = TOOL_REGISTRY["png-to-svg"]
     return await _enqueue_conversion(file, "png-to-svg", spec.max_size_for(user), db)
@@ -1570,7 +1581,11 @@ async def get_job_status(job_id: str, db: AsyncSession = Depends(get_session)):
 
 
 @router.get("/convert/jobs/{job_id}/download")
-async def download_job(job_id: str, db: AsyncSession = Depends(get_session)):
+async def download_job(
+    job_id: str,
+    db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
+):
     job = await db.get(ConversionJob, job_id)
     if job is None:
         return _error_response("Job not found.", "not_found", 404)
