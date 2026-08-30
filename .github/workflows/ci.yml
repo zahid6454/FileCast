@@ -122,11 +122,36 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      # NEON_FAILOVER_PLAN.md §12: the real-binary node_sync test needs a
+      # genuine v18 SERVER, not just v18 client tools — v18 pg_dump/pg_restore
+      # embed v18-only session GUCs (e.g. `SET transaction_timeout = 0`) that
+      # the main `postgres:16` service above (matching this repo's actual
+      # production server version) rejects outright. Real Neon deployments run
+      # v18 on both sides, so this second service exists purely to let that
+      # one test exercise a matching pair for real; distinct port (5433) so it
+      # doesn't clash with the v16 service. Everything else in this job keeps
+      # targeting the v16 service above — that's still what production runs.
+      postgres18:
+        image: postgres:18
+        env:
+          POSTGRES_USER: filecast
+          POSTGRES_PASSWORD: filecast_dev
+          POSTGRES_DB: filecast_test
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U filecast"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       # Same URL for Alembic (DATABASE_URL) and the test harness (TEST_DATABASE_URL).
       DATABASE_URL: postgresql+psycopg://filecast:filecast_dev@localhost:5432/filecast_test
       TEST_DATABASE_URL: postgresql+psycopg://filecast:filecast_dev@localhost:5432/filecast_test
       TEST_REDIS_URL: redis://localhost:6379/1
+      # scripts/node_sync.py's real-binary test only: a v18 server to match
+      # the v18 client tools installed below (see the postgres18 service
+      # above for why this can't just reuse TEST_DATABASE_URL's v16 server).
+      TEST_NODE_SYNC_POSTGRES_URL: postgresql+psycopg://filecast:filecast_dev@localhost:5433/filecast_test
       ENVIRONMENT: development
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -138,6 +163,23 @@ jobs:
             api/requirements.txt
             api/requirements-dev.txt
             requirements.txt
+      # NEON_FAILOVER_PLAN.md §7.5/§12: api/scripts/node_sync.py's real-binary
+      # test needs actual pg_dump/pg_restore v18 (not this runner's default
+      # v17) at the same conventional /usr/lib/postgresql/18/bin path the
+      # Dockerfile's PGDG install produces — mirrors that same repo setup so
+      # this test exercises the identical binaries the deployed image uses,
+      # not a stand-in. The test itself skips gracefully if this step is
+      # ever unavailable; this step itself is NOT allowed to fail silently.
+      - name: Install postgresql-client-18 (PGDG apt repo)
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
       - name: Install dependencies
         # Root requirements.txt adds the SSG deps (jinja2/markdown/…) so the
         # Phase 2 build tests can drive build.py end-to-end.

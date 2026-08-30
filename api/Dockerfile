@@ -3,8 +3,26 @@
 # ecosystem (.github/dependabot.yml) keeps this digest current.
 FROM python:3.12-slim@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a
 
+# NEON_FAILOVER_PLAN.md §7.5: scripts/node_sync.py's pg_dump/pg_restore
+# must be v18, matching Neon's actual project Postgres version — this base
+# image's Debian trixie default postgresql-client metapackage resolves to
+# v17, a real version mismatch. The PGDG apt repo carries versioned packages
+# for exactly this; "trixie" is hardcoded (not detected via lsb_release)
+# since this image's base is already pinned above. curl/gnupg are only
+# needed to fetch/verify the repo signing key — removed again once
+# postgresql-client-18 itself is installed, so they don't linger in the
+# final image.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ghostscript && \
+    apt-get install -y --no-install-recommends \
+        ghostscript ca-certificates curl gnupg && \
+    install -d /usr/share/postgresql-common/pgdg && \
+    curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends postgresql-client-18 && \
+    apt-get purge -y --auto-remove curl gnupg && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
