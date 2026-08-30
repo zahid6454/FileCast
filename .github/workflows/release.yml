@@ -106,16 +106,35 @@ jobs:
       # Bounded retries — docker build+restart takes time. Mirrors deploy.yml's
       # api-drift job's posture: warn, never fail the run for an external
       # system's timing.
+      #
+      # Cloudflare's edge (Bot Fight Mode / WAF) 403s this exact request when
+      # it comes from a GitHub Actions runner IP, regardless of backend
+      # state — X-Deploy-Probe lets a Cloudflare WAF Custom Rule skip bot
+      # scoring for requests carrying the right secret value (see
+      # instructions.md's "Skip Cloudflare Bot Fight Mode for the deploy
+      # probe" entry for the dashboard side). No-op until that rule exists.
+      # Reporting the real HTTP status below (instead of collapsing every
+      # failure into "unreachable") keeps this diagnosable without SSH'ing
+      # into the VM.
       - name: Confirm the deployed commit
+        env:
+          DEPLOY_PROBE_SECRET: ${{ secrets.DEPLOY_PROBE_SECRET }}
         run: |
           set -uo pipefail
           expected="${{ github.sha }}"
+          last="none"
           for i in $(seq 1 20); do
-            live=$(curl -fsS --max-time 10 "https://api.filecast.org/" | jq -r '.commit // "unknown"' 2>/dev/null || echo "unreachable")
-            if [ "$live" = "$expected" ]; then
-              echo "::notice::API is live on this release's commit (${live:0:7})."
-              exit 0
+            http_code=$(curl -sS --max-time 10 -H "X-Deploy-Probe: $DEPLOY_PROBE_SECRET" -o /tmp/deploy_probe_body -w '%{http_code}' "https://api.filecast.org/" 2>/dev/null) || http_code="000"
+            if [ "$http_code" = "200" ]; then
+              live=$(jq -r '.commit // "unknown"' /tmp/deploy_probe_body 2>/dev/null || echo "unparseable")
+              if [ "$live" = "$expected" ]; then
+                echo "::notice::API is live on this release's commit (${live:0:7})."
+                exit 0
+              fi
+              last="commit $live"
+            else
+              last="HTTP $http_code"
             fi
             sleep 15
           done
-          echo "::warning::API did not report commit $expected after 5 minutes (last saw: ${live:-unknown}). Check the VM manually."
+          echo "::warning::API did not report commit $expected after 5 minutes (last: $last). Check the VM manually."

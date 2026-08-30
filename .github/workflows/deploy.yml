@@ -103,6 +103,12 @@ jobs:
           # Same host the site was just built against, so the two agree by
           # construction rather than by a second place to remember.
           API_URL: https://api.filecast.org
+          # Cloudflare's edge (Bot Fight Mode / WAF) 403s this exact curl
+          # from a GitHub Actions runner IP regardless of backend state —
+          # same no-op-until-configured probe as release.yml's "Confirm the
+          # deployed commit" step; see that step's comment for the full
+          # rationale.
+          DEPLOY_PROBE_SECRET: ${{ secrets.DEPLOY_PROBE_SECRET }}
         run: |
           set -uo pipefail
 
@@ -112,11 +118,17 @@ jobs:
           echo "### API drift check" >> "$GITHUB_STEP_SUMMARY"
 
           # 1. Reachable? An unreachable API is an uptime problem, not a drift
-          #    one, and UptimeRobot already owns that alert.
-          if ! body=$(curl -fsS --max-time 15 "$API_URL/"); then
-            warn "Could not reach $API_URL — skipping the drift check."
+          #    one, and UptimeRobot already owns that alert. Report the real
+          #    HTTP status rather than collapsing every failure (a 403
+          #    included) into "could not reach" — the specific status is
+          #    what makes an edge-level block distinguishable from an actual
+          #    outage without SSH'ing into the VM.
+          http_code=$(curl -sS --max-time 15 -H "X-Deploy-Probe: $DEPLOY_PROBE_SECRET" -o /tmp/api_drift_body -w '%{http_code}' "$API_URL/" 2>/dev/null) || http_code="000"
+          if [ "$http_code" != "200" ]; then
+            warn "Could not reach $API_URL (HTTP $http_code) — skipping the drift check."
             exit 0
           fi
+          body=$(cat /tmp/api_drift_body)
 
           live=$(printf '%s' "$body" | jq -r '.commit // "unknown"')
 
