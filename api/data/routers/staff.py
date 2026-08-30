@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from data.config import settings
 from data.db import get_session
 from data.models import StaffGrant, User
+from data.node_registry import require_not_maintenance
 from data.routers._serialize import user_dict
 from data.security import require_admin
 
@@ -109,6 +110,7 @@ async def grant_staff(
     body: StaffGrantBody,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     """Grant admin to ``email`` — immediate if the user exists, else a pending
     invite consumed on their first Google login. Idempotent; owner emails no-op."""
@@ -174,6 +176,7 @@ async def revoke_staff(
     email: str,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     """Revoke admin: demote any existing user + delete the grant row. Guards:
     403 for config owners, 409 for self, 409 for the last admin (§2)."""

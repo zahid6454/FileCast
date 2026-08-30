@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
 from data.models import SiteSetting
+from data.node_registry import require_not_maintenance
 from data.security import require_admin
 
 logger = get_logger("site-settings")
@@ -180,6 +181,7 @@ async def update_site_settings(
     body: SiteSettingsBody,
     admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     values = body.model_dump()
     # Race-safe singleton upsert: a plain read-then-insert lets two concurrent

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from data.db import get_session
 from data.fingerprint import compute_fingerprint
 from data.models import Rating, RatingFeedback
+from data.node_registry import require_not_maintenance
 from data.security import current_user, require_admin
 
 router = APIRouter(prefix="/api/v1/ratings", tags=["ratings"])
@@ -40,6 +41,7 @@ async def submit_rating(
     request: Request,
     db: AsyncSession = Depends(get_session),
     user=Depends(current_user),
+    _maintenance=Depends(require_not_maintenance),
 ):
     if body.vote not in ("yes", "no"):
         raise HTTPException(status_code=400, detail="vote must be 'yes' or 'no'")
@@ -70,6 +72,7 @@ async def submit_feedback(
     body: FeedbackBody,
     request: Request,
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     """Free-text "what went wrong?" follow-up on a "No" vote (P2 §18).
 

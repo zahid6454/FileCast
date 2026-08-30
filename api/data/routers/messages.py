@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
 from data.models import Message
+from data.node_registry import require_not_maintenance
 from data.security import current_user, require_admin
 
 router = APIRouter(prefix="/api/v1", tags=["messages"])
@@ -54,6 +55,7 @@ async def submit_message(
     request: Request,
     db: AsyncSession = Depends(get_session),
     user=Depends(current_user),
+    _maintenance=Depends(require_not_maintenance),
 ):
     if body.website:
         return {"ok": True}
@@ -158,6 +160,7 @@ async def update_message_status(
     body: StatusBody,
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     if body.status not in _VALID_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")

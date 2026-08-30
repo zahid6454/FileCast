@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
 from data.models import Tool
+from data.node_registry import require_not_maintenance
 from data.routers._serialize import tool_dict
 from data.security import require_admin
 
@@ -58,6 +59,7 @@ async def reorder_tools(
     body: ReorderBody,
     admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     # One transaction; sort_order = index in the submitted global ordering.
     tools = {t.id: t for t in (await db.execute(select(Tool))).scalars().all()}
@@ -86,6 +88,7 @@ async def update_tool(
     body: ToolUpdate,
     admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     tool = (
         await db.execute(select(Tool).where(Tool.id == tool_id))

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
 from data.models import UserPreference
+from data.node_registry import require_not_maintenance
 from data.security import require_user
 
 router = APIRouter(prefix="/api/v1/preferences", tags=["preferences"])
@@ -35,6 +36,7 @@ async def update_preferences(
     body: dict,
     user=Depends(require_user),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="preferences must be an object")

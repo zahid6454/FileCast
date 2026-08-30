@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
 from data.models import Announcement
+from data.node_registry import require_not_maintenance
 from data.security import require_admin
 
 router = APIRouter(prefix="/api/v1/announcements", tags=["announcements"])
@@ -174,6 +175,7 @@ async def create_announcement(
     body: AnnouncementBody,
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     a = Announcement(**body.model_dump())
     db.add(a)
@@ -191,6 +193,7 @@ async def update_announcement(
     body: AnnouncementUpdate,
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     a = (
         await db.execute(select(Announcement).where(Announcement.id == announcement_id))
@@ -211,6 +214,7 @@ async def delete_announcement(
     announcement_id: int,
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     a = (
         await db.execute(select(Announcement).where(Announcement.id == announcement_id))

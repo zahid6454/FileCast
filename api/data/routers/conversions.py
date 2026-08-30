@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from data.db import get_session
 from data.fingerprint import compute_fingerprint
 from data.models import Conversion, ConversionVisitor, UserConversion
+from data.node_registry import require_not_maintenance
 from data.security import current_user
 
 logger = get_logger("conversions")
@@ -60,6 +61,7 @@ async def track_conversion(
     request: Request,
     db: AsyncSession = Depends(get_session),
     user=Depends(current_user),
+    _maintenance=Depends(require_not_maintenance),
 ):
     successes, failures = _counts(body)
     today = datetime.now(UTC).date()

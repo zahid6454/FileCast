@@ -138,6 +138,47 @@ async def test_convert_job_download_rejects_not_yet_done(client):
     assert r.json()["error_type"] == "not_ready"
 
 
+async def test_convert_job_download_503s_during_maintenance(client, monkeypatch):
+    # NEON_FAILOVER_PLAN.md §7.6: a second GET-that-writes in this same file
+    # (it stamps `job.downloaded_at` and commits) — must be gated the same
+    # as every POST /convert/* enqueue route, alongside the OAuth-callback
+    # case (test_auth.py). Finish a real job first so this exercises the
+    # actual would-otherwise-succeed download path, not a 404/409 short
+    # circuit that would 503 for an unrelated reason.
+    async def fake_libreoffice(content, filename, extra_form=None):
+        return b"%PDF-1.4 fake pdf bytes"
+
+    monkeypatch.setattr(converter, "_convert_libreoffice", fake_libreoffice)
+    valid_docx = b"PK\x03\x04" + b"\x00" * 200
+    job_id, _ = await _enqueue(
+        client,
+        "/api/v1/convert/docx-to-pdf",
+        files={
+            "file": (
+                "report.docx",
+                valid_docx,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    status = await _run_and_finish(client, job_id)
+    assert status["status"] == "done", status
+
+    from data.node_registry import set_maintenance
+
+    await set_maintenance(True)
+    try:
+        r = await client.get(f"/api/v1/convert/jobs/{job_id}/download")
+        assert r.status_code == 503
+    finally:
+        await set_maintenance(False)
+
+    # The gate is precise, not a one-way trip — the same, still-finished job
+    # downloads normally once maintenance lifts.
+    r = await client.get(f"/api/v1/convert/jobs/{job_id}/download")
+    assert r.status_code == 200
+
+
 async def test_pdf_to_xlsx_rejects_wrong_extension(client):
     r = await client.post(
         "/api/v1/convert/pdf-to-xlsx",

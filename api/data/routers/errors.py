@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
 from data.models import Error
+from data.node_registry import require_not_maintenance
 
 router = APIRouter(prefix="/api/v1/errors", tags=["errors"])
 
@@ -23,6 +24,7 @@ class ErrorBody(BaseModel):
 async def log_error(
     body: ErrorBody,
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     message = body.error_message
     if message is not None:

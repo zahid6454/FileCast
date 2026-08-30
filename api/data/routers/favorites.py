@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.db import get_session
 from data.models import MAX_FAVORITES, UserFavorite
+from data.node_registry import require_not_maintenance
 from data.security import require_user
 
 router = APIRouter(prefix="/api/v1/favorites", tags=["favorites"])
@@ -39,6 +40,7 @@ async def add_favorite(
     body: FavoriteBody,
     user=Depends(require_user),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     # Checked before the insert, which is ON CONFLICT DO NOTHING — so re-favoriting
     # something already saved stays a no-op rather than failing at the cap.
@@ -79,6 +81,7 @@ async def remove_favorite(
     tool_id: str,
     user=Depends(require_user),
     db: AsyncSession = Depends(get_session),
+    _maintenance=Depends(require_not_maintenance),
 ):
     await db.execute(
         delete(UserFavorite).where(
