@@ -66,8 +66,10 @@ from converter import (
 from log import get_logger
 from sqlalchemy import func, select, update
 
+from data import node_ops
 from data.db import get_active_session_factory
 from data.models import ConversionJob
+from data.node_registry import recover_stale_pool_state
 from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 
 logger = get_logger("job_worker")
@@ -466,6 +468,57 @@ async def _discovery_wake() -> None:
         task.add_done_callback(_background_tasks.discard)
 
 
+def _dispatch_wake_task(raw_value: str) -> None:
+    """NEON_FAILOVER_PLAN.md §7.13: parse one popped wake-queue value and,
+    if it's a recognized switch/provision task, fire the matching
+    ``node_ops`` executor as its own background task — same strong-
+    reference pattern as ``_discovery_wake()`` above, so a multi-minute
+    switch/sync never delays this loop's own responsiveness. A value that
+    isn't a recognized task (the legacy bare job-id shape, unchanged) is a
+    no-op here; the caller's own discovery re-poll picks it up regardless
+    of the popped value's content."""
+    task = node_ops.parse_wake_task(raw_value)
+    if task is None:
+        return
+    task_type, task_kwargs = task
+    try:
+        if task_type == node_ops.TASK_TYPE_SWITCH:
+            coro = node_ops.execute_switch(**task_kwargs)
+        elif task_type == node_ops.TASK_TYPE_PROVISION:
+            coro = node_ops.execute_provision(**task_kwargs)
+        else:
+            return
+    except TypeError:
+        # A recognized task-type with a missing/extra field relative to
+        # execute_switch()/execute_provision()'s own keyword-only signature
+        # — the only thing that can go wrong at this call expression, since
+        # constructing a coroutine doesn't run its body yet. Both producers
+        # today (data/routers/admin_nodes.py's build_switch_task()/
+        # build_provision_task()) always emit a well-formed payload, so this
+        # is defense against a future schema drift or a hand-edited Redis
+        # entry, not a path real traffic takes. parse_wake_task()'s own
+        # contract is "never crash the wake loop" on a malformed push — this
+        # extends that same guarantee past parsing into dispatch, so a
+        # mismatched payload is dropped (loudly logged) instead of taking
+        # down the single process every real conversion also depends on.
+        logger.error(
+            "Wake-queue task-type %r has a payload that doesn't match its "
+            "executor's signature — dropping",
+            task_type,
+            exc_info=True,
+            extra={
+                "data": {
+                    "event": "worker_dispatch_wake_task_malformed",
+                    "task_type": task_type,
+                }
+            },
+        )
+        return
+    wake_task = asyncio.create_task(coro)
+    _background_tasks.add(wake_task)
+    wake_task.add_done_callback(_background_tasks.discard)
+
+
 async def recover_orphaned_jobs() -> dict[str, int]:
     """A ``converting`` row is only ever true while THIS worker process
     instance holds a live asyncio task for it — so if the process restarts
@@ -587,6 +640,21 @@ async def _loop() -> None:
             extra={"data": {"event": "orphan_recovery", **recovered}},
         )
 
+    # NEON_FAILOVER_PLAN.md §7.1 — same "a fresh process means anything
+    # mid-flight belongs to a dead incarnation" reasoning as the orphaned-job
+    # recovery above, applied to the pool-operation lock and the maintenance
+    # flag (data/node_ops.py's execute_switch() is their only real writer).
+    # Runs before the loop's first BRPOP below, so it can never clear state
+    # a legitimately just-dispatched switch/provision task just set.
+    pool_recovered = await recover_stale_pool_state()
+    if pool_recovered["pool_lock"] or pool_recovered["maintenance"]:
+        logger.warning(
+            "Startup pool-state recovery: cleared stale state left by a "
+            "previous incarnation: %s",
+            pool_recovered,
+            extra={"data": {"event": "pool_state_recovery", **pool_recovered}},
+        )
+
     last_gc = 0.0
     last_gotenberg_probe = 0.0
     last_discovery_fallback = 0.0
@@ -602,6 +670,21 @@ async def _loop() -> None:
                 extra={"data": {"event": "worker_redis_error"}},
             )
             await asyncio.sleep(BRPOP_TIMEOUT_SECONDS)
+
+        # NEON_FAILOVER_PLAN.md §7.13: the wake queue now carries TWO wire
+        # shapes on the same Redis list — the legacy bare job-id string
+        # (converter.py:1391, unchanged) and a JSON task object for
+        # switch/provision dispatch (data/node_ops.py). BRPOP on a single
+        # key returns a (key, value) tuple, not the bare value, so the
+        # popped value is unpacked here. Anything that isn't a recognized
+        # task (non-JSON, or JSON without a recognized task-type) is the
+        # legacy shape — falls through to the discovery re-poll below
+        # exactly as it does today; per node_ops.py's own docstring, that's
+        # harmless even for a switch/provision push, since discovery never
+        # inspects the popped value's content anyway.
+        if pushed is not None:
+            _, raw_wake_value = pushed
+            _dispatch_wake_task(raw_wake_value)
 
         now = time.monotonic()
         # A real push always runs discovery immediately (this is the fast

@@ -58,6 +58,11 @@ services:
       - DATABASE_URL=${PROD_DATABASE_URL}
       - ENVIRONMENT=production
       - REDIS_URL=redis://redis:6379/0
+      # NEON_FAILOVER_PLAN.md §7.3/§7.8 — only node_ops.execute_provision()
+      # reads this (via neon_api.verify_project_visible()), and that only
+      # ever runs as a background task dispatched inside THIS service, never
+      # in `api` — so it's wired here only, not duplicated onto `api`.
+      - NEON_API_KEY=${NEON_API_KEY}
 
   # Tunnel-only, mirrors `api.ports` above: prod has no host-side script that
   # needs to reach Redis — `api`/`worker` reach it by service name on the

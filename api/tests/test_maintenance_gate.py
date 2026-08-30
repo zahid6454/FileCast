@@ -21,9 +21,12 @@ from data.routers import all_routers
 from fastapi.routing import APIRoute
 
 # Every (method, path) NEON_FAILOVER_PLAN.md §7.6 names as a route that
-# writes. Deliberately excludes: every read route, and admin_nodes.py
-# (doesn't exist yet — a later phase) whose own coverage there is
-# "redundant-but-harmless" per §7.6, not a new requirement.
+# writes. Deliberately excludes: every read route, and every admin_nodes.py
+# route (Phase D) — those mutate Redis-backed pool state, never the
+# Postgres node this gate protects, and a second switch/provision request
+# while one is in flight is already excluded by the pool-operation lock
+# (§7.1), so the gate there would be "redundant-but-harmless" per §7.6, not
+# a new requirement.
 EXPECTED_GATED_ROUTES = {
     # converter.py — all 10 job-enqueue routes, plus the one GET-that-writes.
     ("POST", "/api/v1/convert/docx-to-pdf"),

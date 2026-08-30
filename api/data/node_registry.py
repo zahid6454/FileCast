@@ -24,6 +24,7 @@ failing loudly is the correct behavior, not something to paper over:
 """
 
 import asyncio
+import re
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -83,6 +84,22 @@ class Node(BaseModel):
         admin). Not called anywhere yet in this phase; the leak-prevention
         lives with the model it protects so a later router can't forget it."""
         return self.model_dump(exclude={"connection_string"})
+
+
+# A pasted-verbatim Neon connection string has no SQLAlchemy driver suffix
+# (`postgres://` or `postgresql://`) — but data/db.py's per-node engines
+# (§7.2) call create_async_engine(node.connection_string) directly, which
+# needs the `+psycopg` suffix. §7.12's Add Node form hints that this
+# normalization happens automatically so the operator can paste Neon's
+# output verbatim; this is that normalization, shared by the provisioning
+# route (§7.8) so there is exactly one place this rule lives. Idempotent: a
+# string that already carries a driver suffix (e.g. already `+psycopg`)
+# doesn't match this bare-scheme pattern and passes through unchanged.
+_BARE_SCHEME_RE = re.compile(r"^postgres(?:ql)?://")
+
+
+def normalize_connection_string(raw: str) -> str:
+    return _BARE_SCHEME_RE.sub("postgresql+psycopg://", raw.strip(), count=1)
 
 
 class NoActiveNodeError(RuntimeError):
@@ -255,9 +272,23 @@ async def get_active_node() -> str:
 
 
 async def set_active_node(node_id: str) -> None:
+    global _cached_active_node_id, _cached_active_node_at
     await asyncio.wait_for(
         redis_client.set(ACTIVE_KEY, node_id), timeout=REDIS_CALL_TIMEOUT_SECONDS
     )
+    # Update the in-process cache immediately, not just Redis (Phase D —
+    # node_ops.py's execute_switch() is the first real caller of this
+    # besides Bootstrap). Without this, the SAME process that just flipped
+    # the active pointer — job_worker.py, mid-switch — could keep reading
+    # its own stale pre-switch cached value for up to
+    # ACTIVE_NODE_CACHE_TTL_SECONDS afterward, including its own claim loop
+    # resumed moments later by this same switch. Other processes (the 4
+    # `api` workers) still only refresh within that same short TTL, same as
+    # before — that cross-process staleness is the accepted, documented
+    # residual (§7.1); this only closes the gap where a process would be
+    # stale against a change it just made itself.
+    _cached_active_node_id = node_id
+    _cached_active_node_at = time.monotonic()
 
 
 # --------------------------------------------------------------------------- #
@@ -507,11 +538,57 @@ async def force_release_pool_lock() -> None:
     converting rows"). A lock can only ever be legitimately held by a task
     running inside a job_worker.py process; a fresh process starting up
     means any lock still set belongs to a now-dead previous incarnation.
-    Not called anywhere yet in this phase — job_worker.py isn't touched
-    until a later phase."""
+    Called from job_worker.py's own startup via ``recover_stale_pool_state()``
+    below, not directly — see that function for why the lock and the
+    maintenance flag are cleared together."""
     await asyncio.wait_for(
         redis_client.delete(POOL_OP_LOCK_KEY), timeout=REDIS_CALL_TIMEOUT_SECONDS
     )
+
+
+async def recover_stale_pool_state() -> dict[str, bool]:
+    """job_worker.py startup recovery (§7.1), called once before the wake
+    loop's first ``BRPOP`` — mirrors ``recover_orphaned_jobs()``'s reasoning
+    for orphaned ``converting`` rows, applied to the pool-operation lock and
+    the maintenance flag together: both can only ever be legitimately
+    held/set by a switch or provisioning task running inside THIS same
+    process (single-instance, long-running by design, §7.13). A fresh
+    process starting — including an autoheal-triggered restart after a
+    crash mid-cutover — means any lock or maintenance flag still set
+    belongs to a now-dead previous incarnation; there is no legitimate
+    in-flight operation left to protect by leaving either alone.
+
+    **Cleared together, unconditionally, because they're only ever set as a
+    pair.** ``execute_switch()`` (``data/node_ops.py``) only ever turns
+    ``maintenance`` on while it also holds the pool lock — a crash between
+    the two leaves both stale together. Clearing only the lock would leave
+    the site write-blocked with nothing left that will ever clear it
+    (``maintenance`` deliberately carries no TTL — its whole purpose is
+    precise on/off timing around a real cutover, §7.6 — so a background
+    expiry would undermine that the same way a stale "on" value does here).
+    Clearing only ``maintenance`` without the lock would reopen the lock's
+    own mutual-exclusion guarantee for whatever (nonexistent) operation a
+    stale lock is still nominally protecting.
+
+    Running this before the loop's first ``BRPOP`` means it can never race
+    a legitimately just-dispatched switch/provision task — nothing has
+    been popped from the wake queue yet for this incarnation to act on.
+
+    Returns which of the two were actually found set, purely so the call
+    site can log a warning when there was something real to recover from
+    (most restarts will find nothing to clear).
+    """
+    lock_was_set = bool(
+        await asyncio.wait_for(
+            redis_client.exists(POOL_OP_LOCK_KEY), timeout=REDIS_CALL_TIMEOUT_SECONDS
+        )
+    )
+    maintenance_was_set = await is_maintenance()
+    if lock_was_set:
+        await force_release_pool_lock()
+    if maintenance_was_set:
+        await set_maintenance(False)
+    return {"pool_lock": lock_was_set, "maintenance": maintenance_was_set}
 
 
 @asynccontextmanager

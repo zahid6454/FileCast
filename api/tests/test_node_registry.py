@@ -42,8 +42,10 @@ from data.node_registry import (
     increment_health_fail_count,
     is_maintenance,
     list_nodes,
+    normalize_connection_string,
     pool_operation_lock,
     record_activity,
+    recover_stale_pool_state,
     register_node,
     release_pool_lock,
     reset_health_fail_count,
@@ -114,6 +116,40 @@ async def test_node_public_dict_never_includes_connection_string():
     public = node.public_dict()
     assert "connection_string" not in public
     assert public["node_id"] == node.node_id
+
+
+# --------------------------------------------------------------------------- #
+# normalize_connection_string (§7.12/Phase D) — the Add Node form's
+# "paste Neon's output verbatim" hint depends on this.
+# --------------------------------------------------------------------------- #
+
+
+def test_normalize_connection_string_adds_driver_suffix_to_bare_postgres_scheme():
+    assert (
+        normalize_connection_string("postgres://user:pw@host/db")
+        == "postgresql+psycopg://user:pw@host/db"
+    )
+
+
+def test_normalize_connection_string_adds_driver_suffix_to_bare_postgresql_scheme():
+    assert (
+        normalize_connection_string("postgresql://user:pw@host/db")
+        == "postgresql+psycopg://user:pw@host/db"
+    )
+
+
+def test_normalize_connection_string_is_idempotent_on_an_already_suffixed_url():
+    assert (
+        normalize_connection_string("postgresql+psycopg://user:pw@host/db")
+        == "postgresql+psycopg://user:pw@host/db"
+    )
+
+
+def test_normalize_connection_string_strips_surrounding_whitespace():
+    assert (
+        normalize_connection_string("  postgres://user:pw@host/db  ")
+        == "postgresql+psycopg://user:pw@host/db"
+    )
 
 
 async def test_get_node_returns_none_for_corrupt_json():
@@ -318,6 +354,49 @@ async def test_force_release_pool_lock_clears_regardless_of_token():
     await acquire_pool_lock("switch:leftover")
     await node_registry.force_release_pool_lock()
     token = await acquire_pool_lock("switch:fresh")
+    assert token is not None
+
+
+# --------------------------------------------------------------------------- #
+# recover_stale_pool_state (Phase D fix — job_worker.py startup recovery)
+# --------------------------------------------------------------------------- #
+
+
+async def test_recover_stale_pool_state_is_a_noop_when_nothing_is_stale():
+    result = await recover_stale_pool_state()
+    assert result == {"pool_lock": False, "maintenance": False}
+    assert await is_maintenance() is False
+    # Still acquirable — nothing was there to release.
+    token = await acquire_pool_lock("switch:after-clean-recovery")
+    assert token is not None
+
+
+async def test_recover_stale_pool_state_clears_a_stale_lock_only():
+    await acquire_pool_lock("switch:leftover")
+    result = await recover_stale_pool_state()
+    assert result == {"pool_lock": True, "maintenance": False}
+    token = await acquire_pool_lock("switch:fresh")
+    assert token is not None
+
+
+async def test_recover_stale_pool_state_clears_stale_maintenance_only():
+    await set_maintenance(True)
+    result = await recover_stale_pool_state()
+    assert result == {"pool_lock": False, "maintenance": True}
+    assert await is_maintenance() is False
+
+
+async def test_recover_stale_pool_state_clears_both_when_a_crash_left_both_set():
+    # The scenario this exists for: execute_switch() crashed mid-cutover,
+    # after set_maintenance(True) but before the finally that clears both.
+    await acquire_pool_lock("switch:crashed-mid-cutover")
+    await set_maintenance(True)
+
+    result = await recover_stale_pool_state()
+
+    assert result == {"pool_lock": True, "maintenance": True}
+    assert await is_maintenance() is False
+    token = await acquire_pool_lock("switch:post-recovery")
     assert token is not None
 
 
