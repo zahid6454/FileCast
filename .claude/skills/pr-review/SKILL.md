@@ -42,14 +42,43 @@ Review progress:
 ### Phase 1 — Scope + context
 Determine and **print the exact scope** before reviewing:
 - **Current branch (default):** base = `git merge-base origin/master HEAD`
-  (fall back to `master`), then `git diff <base>...HEAD`.
-- **PR number:** `gh pr diff <n>` + `gh pr view <n>` for description/CI.
+  (fall back to `master`), then `git diff <base>...HEAD`. Also run `gh pr
+  view` (no args) — if the branch has an open PR, its CI counts too (see
+  "Checking CI instead of running tests locally" below).
+- **PR number:** `gh pr diff <n>` + `gh pr view <n>` for description/CI — see
+  "Checking CI instead of running tests locally" below before running
+  anything locally.
 - **Named files/paths:** review those, reading enough surroundings to judge them.
 - **Uncommitted:** `git diff HEAD` and `git diff`.
 
 Read the intent (commit messages, PR body, linked issues) and the repo's
 conventions (CLAUDE.md, neighboring files). Review against intent and existing
 patterns, not just syntax. For a large diff, use TodoWrite to track files.
+
+### Checking CI instead of running tests locally
+
+If a PR exists for what's under review — an explicit number, or one found via
+`gh pr view` for the current branch — its CI run is the source of truth for
+"do the tests pass," not a local re-run:
+
+- `gh pr checks <n> --json name,bucket,state` — `bucket` is the reliable
+  pass/fail/pending signal (`gh`'s own docs point at this field specifically;
+  the plain-text table isn't meant to be parsed).
+- **Pending:** `gh pr checks <n> --watch` and wait for it, then re-check.
+  Give it a generous timeout — this repo's pytest job alone has taken 9+
+  minutes — rather than the tool default, instead of sleep-polling around it.
+- **Passed**, and on the commit actually under review (compare `gh pr view
+  <n> --json headRefOid` against the diff's head commit) — sufficient, don't
+  re-run it. Re-running a passing suite locally duplicates CI's work for no
+  new signal, on a less trustworthy environment (a local run can fail for
+  reasons that have nothing to do with the code under review).
+- **Failed:** read the failing run's own logs first (`gh run view <run-id>
+  --log-failed`, using the `link` from the checks output) — usually enough
+  to understand it. Reproduce locally only if that isn't sufficient.
+- **No PR found for what's under review, CI hasn't run yet, is stale
+  against a newer commit than the one just checked, or none is configured
+  at all:** no CI signal to trust — run the relevant test/build/repro
+  locally instead.
 
 ### Phase 2 — High-level pass
 Before line detail: is the **approach** sound? Note architecture concerns,
@@ -72,8 +101,12 @@ Before reporting anything, confirm it is real — precision over volume:
   output/crash/leak. If you can't construct one, it's a question, not a defect.
 - Check whether existing code already handles it (upstream validator, wrapper,
   framework guarantee). Don't report what's already covered.
-- Where cheap, **exercise it** (run the test/build/a quick repro) and report what
-  you observed; state clearly when you did not.
+- Where cheap, **exercise it** and report what you observed; state clearly when
+  you did not — see "Checking CI instead of running tests locally" above for
+  when that means trusting CI rather than running something yourself. A
+  narrow hypothesis a specific finding raises (patch one thing, re-run one
+  test) is always fine to chase locally even when CI already passed — that's
+  new signal CI never produced, not a duplicate of it.
 
 **Confidence score** each finding 0–100 (0 = likely false positive, 50 = real
 but minor, 80 = confident and real, 100 = certain). **Report only ≥ 80 by
