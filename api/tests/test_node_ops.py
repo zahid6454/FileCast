@@ -310,6 +310,50 @@ async def test_execute_switch_warmup_failure_with_no_reserves_left_marks_error(
     assert status.status == "error"
     assert "no reachable reserve" in status.detail.lower()
     assert await get_active_node() == "source"
+    history = await get_switch_history()
+    assert history[0].outcome == "failure"
+    assert await _lock_is_free()
+
+
+async def test_execute_switch_target_retired_during_cutover_aborts_and_resumes(
+    monkeypatch,
+):
+    # §7.4/§7.8: retiring a node is impossible while it's ACTIVE, but nothing
+    # stops an admin from retiring a RESERVE node an in-flight switch has
+    # already warmed up and is about to flip to. A stale/retired target's
+    # connection string can still connect and sync fine, so a sync-failure
+    # catch alone wouldn't catch this — must be an explicit status re-check
+    # right before the flip.
+    await register_node(_make_node("source"))
+    await register_node(_make_node("target"))
+    await set_active_node("source")
+
+    call_count = {"n": 0}
+
+    async def fake_sync(source, target):
+        call_count["n"] += 1
+        if call_count["n"] == 2:  # final top-up sync succeeds...
+            # ...but simulate a concurrent admin retiring the target right
+            # after, in the window before this switch flips to it.
+            node = await get_node("target")
+            await register_node(node.model_copy(update={"status": "retired"}))
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", fake_sync)
+
+    await node_ops.execute_switch(
+        run_id="run-retire-race", target_node_id="target", trigger="manual"
+    )
+
+    assert await get_active_node() == "source"
+    status = await get_switch_status("run-retire-race")
+    assert status.status == "error"
+    assert "no longer a ready reserve" in status.detail.lower()
+    node = await get_node("target")
+    assert node.status == "retired"  # left exactly as the admin set it
+    history = await get_switch_history()
+    assert history[0].outcome == "failure"
+    assert await is_maintenance() is False
+    assert job_worker._claim_paused is False
     assert await _lock_is_free()
 
 
@@ -363,6 +407,8 @@ async def test_execute_switch_unexpected_error_still_releases_lock_and_resumes(
     status = await get_switch_status("run-boom")
     assert status.status == "error"
     assert "unexpected" in status.detail.lower()
+    history = await get_switch_history()
+    assert history[0].outcome == "failure"
     assert await _lock_is_free()
     assert job_worker._claim_paused is False
 
@@ -481,6 +527,83 @@ async def test_execute_provision_wrong_project_id_marks_error(monkeypatch):
     assert await _lock_is_free()
 
 
+async def test_execute_provision_success_does_not_clobber_a_concurrent_retire(
+    monkeypatch,
+):
+    # §7.8 doesn't forbid retiring a still-`provisioning` node (a reasonable
+    # way to cancel one) — if an admin does that mid-flight via the retire
+    # route (a completely separate code path), this operation's own eventual
+    # success must not silently flip it back to `ready`.
+    await register_node(_make_node("source", status="ready"))
+    await set_active_node("source")
+    await register_node(_make_node("new-node", status="provisioning"))
+
+    monkeypatch.setattr(node_ops, "_check_connectivity", _noop_connectivity)
+
+    async def fake_sync(source, target):
+        # Simulate the admin's retire happening while this sync is "in
+        # flight" — a completely independent write to the same node_id.
+        node = await get_node("new-node")
+        await register_node(node.model_copy(update={"status": "retired"}))
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", fake_sync)
+
+    async def fake_verify(project_id):
+        pass
+
+    monkeypatch.setattr(neon_api, "verify_project_visible", fake_verify)
+
+    await node_ops.execute_provision(run_id="run-p-retire-race", node_id="new-node")
+
+    node = await get_node("new-node")
+    assert node.status == "retired"  # NOT clobbered back to "ready"
+    # The operation's OWN run status still reflects what it actually did —
+    # the admin's separate retire decision doesn't retroactively make the
+    # connectivity/sync/verify sequence itself a failure.
+    status = await get_switch_status("run-p-retire-race")
+    assert status.status == "done"
+    assert await _lock_is_free()
+
+
+async def test_execute_provision_lock_rejected_does_not_clobber_a_later_winner(
+    monkeypatch,
+):
+    # A narrower, opposite-direction race: two provisioning attempts for the
+    # SAME node_id (e.g. two overlapping "Retry" clicks). The loser's
+    # immediate lock-rejection marks the node "error" well before the
+    # winner's real work finishes — that must NOT be treated the same as an
+    # admin's deliberate retire, or the winner's later legitimate "ready"
+    # would be silently discarded.
+    await register_node(_make_node("source", status="ready"))
+    await set_active_node("source")
+    await register_node(_make_node("new-node", status="provisioning"))
+
+    # Simulate the loser having already been rejected (§7.4's concurrency
+    # guard) and marked "error" before the winner (this call) even starts.
+    await node_ops._mark_node_status("new-node", "error")
+    assert (await get_node("new-node")).status == "error"
+
+    monkeypatch.setattr(node_ops, "_check_connectivity", _noop_connectivity)
+
+    async def fake_sync(source, target):
+        pass
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", fake_sync)
+
+    async def fake_verify(project_id):
+        pass
+
+    monkeypatch.setattr(neon_api, "verify_project_visible", fake_verify)
+
+    await node_ops.execute_provision(run_id="run-p-winner", node_id="new-node")
+
+    node = await get_node("new-node")
+    assert node.status == "ready"  # the winner's real success is NOT discarded
+    status = await get_switch_status("run-p-winner")
+    assert status.status == "done"
+    assert await _lock_is_free()
+
+
 # --------------------------------------------------------------------------- #
 # Concurrency (§7.4/§12) — real lock contention against the real test Redis
 # --------------------------------------------------------------------------- #
@@ -542,6 +665,51 @@ async def test_concurrent_provisioning_and_switch_only_one_proceeds(monkeypatch)
     status_p = await get_switch_status("run-conc-p")
     outcomes = sorted([status_s.status, status_p.status])
     assert outcomes == ["done", "error"]
+    assert await _lock_is_free()
+
+
+async def test_concurrent_duplicate_project_id_provisioning_never_both_ready(
+    monkeypatch,
+):
+    # admin_nodes.py's duplicate-neon_project_id check (§7.1/§7.8 step 1) has
+    # its own TOCTOU window at the router level (two concurrent POSTs could
+    # both pass the pre-check before either registers) — this confirms the
+    # pool-operation lock is what actually protects the invariant that
+    # matters: two node_ids for the SAME underlying Neon project can never
+    # BOTH end up "ready" (which would double-count that project's usage,
+    # §7.1's stated concern). The router-level race can still leave a
+    # harmless extra "error" row for the same project — a cosmetic
+    # duplicate, not a data-integrity issue.
+    await register_node(_make_node("source", status="ready"))
+    await set_active_node("source")
+    await register_node(
+        _make_node("node-a", neon_project_id="shared-proj", status="provisioning")
+    )
+    await register_node(
+        _make_node("node-b", neon_project_id="shared-proj", status="provisioning")
+    )
+
+    monkeypatch.setattr(node_ops, "_check_connectivity", _noop_connectivity)
+
+    async def fake_sync(source, target):
+        pass
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", fake_sync)
+
+    async def fake_verify(project_id):
+        pass
+
+    monkeypatch.setattr(neon_api, "verify_project_visible", fake_verify)
+
+    await asyncio.gather(
+        node_ops.execute_provision(run_id="run-dup-a", node_id="node-a"),
+        node_ops.execute_provision(run_id="run-dup-b", node_id="node-b"),
+    )
+
+    node_a = await get_node("node-a")
+    node_b = await get_node("node-b")
+    statuses = sorted([node_a.status, node_b.status])
+    assert statuses == ["error", "ready"]  # never both "ready"
     assert await _lock_is_free()
 
 

@@ -278,15 +278,26 @@ async def execute_switch(
 
             next_target = await select_switch_target(tried | {source_node_id})
             if next_target is None:
+                detail = "No reachable reserve node available for warm-up."
                 await set_switch_status(
                     run_id,
                     SwitchStatus(
                         status="error",
-                        detail="No reachable reserve node available for warm-up.",
+                        detail=detail,
                         source_node_id=source_node_id,
                         target_node_id=current_target,
                         trigger=trigger,
                     ),
+                )
+                await append_switch_history(
+                    SwitchHistoryEntry(
+                        trigger=trigger,
+                        source_node_id=source_node_id,
+                        target_node_id=current_target,
+                        outcome="failure",
+                        detail=detail,
+                        at=datetime.now(UTC).isoformat(),
+                    )
                 )
                 return
             current_target = next_target
@@ -353,6 +364,58 @@ async def execute_switch(
                 )
                 return
 
+            # Re-validate the target is still a ready reserve right before
+            # the flip — a plain sync failure (caught above) isn't the only
+            # way the target could stop being a valid switch target mid-
+            # cutover: an admin could retire it out from under this switch
+            # in the window between the warm-up check (Phase 1) and here.
+            # A stale/retired target's connection string can still connect
+            # and sync just fine, so a sync-failure catch alone wouldn't
+            # catch this — only re-checking status explicitly does.
+            target_at_cutover = await get_node(current_target)
+            if target_at_cutover is None or target_at_cutover.status != "ready":
+                status_repr = (
+                    target_at_cutover.status if target_at_cutover else "missing"
+                )
+                detail = (
+                    f"Target node is no longer a ready reserve at cutover time "
+                    f"(status={status_repr})."
+                )
+                logger.error(
+                    "Target %s invalid at cutover time (status=%s) — aborting "
+                    "flip, resuming on source node %s",
+                    current_target,
+                    status_repr,
+                    source_node_id,
+                    extra={
+                        "data": {
+                            "event": "switch_cutover_target_invalid",
+                            "run_id": run_id,
+                        }
+                    },
+                )
+                await set_switch_status(
+                    run_id,
+                    SwitchStatus(
+                        status="error",
+                        detail=detail,
+                        source_node_id=source_node_id,
+                        target_node_id=current_target,
+                        trigger=trigger,
+                    ),
+                )
+                await append_switch_history(
+                    SwitchHistoryEntry(
+                        trigger=trigger,
+                        source_node_id=source_node_id,
+                        target_node_id=current_target,
+                        outcome="failure",
+                        detail=detail,
+                        at=datetime.now(UTC).isoformat(),
+                    )
+                )
+                return
+
             await set_switch_status(
                 run_id,
                 SwitchStatus(
@@ -410,16 +473,35 @@ async def execute_switch(
             exc_info=True,
             extra={"data": {"event": "switch_unexpected_error", "run_id": run_id}},
         )
+        detail = f"Unexpected error: {exc}"
         await set_switch_status(
             run_id,
             SwitchStatus(
                 status="error",
-                detail=f"Unexpected error: {exc}",
+                detail=detail,
                 source_node_id=source_node_id,
                 target_node_id=target_node_id,
                 trigger=trigger,
             ),
         )
+        if source_node_id is not None:
+            # SwitchHistoryEntry requires source_node_id (unlike SwitchStatus,
+            # where it's optional) — only append if we got far enough to
+            # resolve one. `target_node_id` (the original param, not
+            # `current_target`) is used deliberately: this except clause can
+            # be reached before Phase 1's while loop ever assigns
+            # `current_target`, and referencing an unassigned local here
+            # would raise UnboundLocalError from inside an exception handler.
+            await append_switch_history(
+                SwitchHistoryEntry(
+                    trigger=trigger,
+                    source_node_id=source_node_id,
+                    target_node_id=target_node_id,
+                    outcome="failure",
+                    detail=detail,
+                    at=datetime.now(UTC).isoformat(),
+                )
+            )
     finally:
         await release_pool_lock(token)
 
@@ -458,9 +540,28 @@ async def _check_connectivity(node: Node) -> None:
 
 
 async def _mark_node_status(node_id: str, status: str) -> Node | None:
+    """Set a node's status, unless it's already ``retired`` — §7.8 doesn't
+    forbid retiring a still-``provisioning`` node (a reasonable way for an
+    admin to cancel one), and that's a deliberate, authoritative admin
+    action taken via a completely different code path (the retire route)
+    while this operation was still in flight. This operation's own
+    eventual outcome (``ready``/``error``) must not silently clobber that.
+
+    Deliberately does **not** guard against overwriting ``error`` (only
+    ``retired``): a losing side of a lock-contention race (two ``retry``
+    dispatches racing for the same already-errored node, say) may mark this
+    same node ``error`` well before the WINNING side's real work finishes —
+    if that were also protected, the winner's later legitimate ``ready``
+    would be silently discarded because someone else's rejection got there
+    first. ``retired`` is the one status only a human admin ever sets
+    directly; ``error`` can come from either a human or a losing race, so
+    only ``retired`` is safe to treat as authoritative here.
+    """
     node = await get_node(node_id)
     if node is None:
         return None
+    if node.status == "retired":
+        return node
     updated = node.model_copy(update={"status": status})
     await register_node(updated)
     return updated

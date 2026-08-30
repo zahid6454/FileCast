@@ -42,6 +42,7 @@ from data.node_registry import (
     increment_health_fail_count,
     is_maintenance,
     list_nodes,
+    normalize_connection_string,
     pool_operation_lock,
     record_activity,
     register_node,
@@ -114,6 +115,40 @@ async def test_node_public_dict_never_includes_connection_string():
     public = node.public_dict()
     assert "connection_string" not in public
     assert public["node_id"] == node.node_id
+
+
+# --------------------------------------------------------------------------- #
+# normalize_connection_string (§7.12/Phase D) — the Add Node form's
+# "paste Neon's output verbatim" hint depends on this.
+# --------------------------------------------------------------------------- #
+
+
+def test_normalize_connection_string_adds_driver_suffix_to_bare_postgres_scheme():
+    assert (
+        normalize_connection_string("postgres://user:pw@host/db")
+        == "postgresql+psycopg://user:pw@host/db"
+    )
+
+
+def test_normalize_connection_string_adds_driver_suffix_to_bare_postgresql_scheme():
+    assert (
+        normalize_connection_string("postgresql://user:pw@host/db")
+        == "postgresql+psycopg://user:pw@host/db"
+    )
+
+
+def test_normalize_connection_string_is_idempotent_on_an_already_suffixed_url():
+    assert (
+        normalize_connection_string("postgresql+psycopg://user:pw@host/db")
+        == "postgresql+psycopg://user:pw@host/db"
+    )
+
+
+def test_normalize_connection_string_strips_surrounding_whitespace():
+    assert (
+        normalize_connection_string("  postgres://user:pw@host/db  ")
+        == "postgresql+psycopg://user:pw@host/db"
+    )
 
 
 async def test_get_node_returns_none_for_corrupt_json():
