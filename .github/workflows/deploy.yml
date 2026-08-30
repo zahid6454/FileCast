@@ -112,11 +112,20 @@ jobs:
           echo "### API drift check" >> "$GITHUB_STEP_SUMMARY"
 
           # 1. Reachable? An unreachable API is an uptime problem, not a drift
-          #    one, and UptimeRobot already owns that alert.
-          if ! body=$(curl -fsS --max-time 15 "$API_URL/"); then
-            warn "Could not reach $API_URL — skipping the drift check."
+          #    one, and UptimeRobot already owns that alert. Report the real
+          #    HTTP status rather than collapsing every failure into "could
+          #    not reach" — a 403 here is Cloudflare's own edge bot-scoring
+          #    reacting to a GitHub Actions runner IP hitting this hostname,
+          #    not an actual outage, and there's no per-request way to
+          #    exempt this check from it on this zone's plan. That makes a
+          #    403 here expected/noisy rather than actionable — only a
+          #    different status is worth investigating.
+          http_code=$(curl -sS --max-time 15 -o /tmp/api_drift_body -w '%{http_code}' "$API_URL/" 2>/dev/null) || http_code="000"
+          if [ "$http_code" != "200" ]; then
+            warn "Could not reach $API_URL (HTTP $http_code) — skipping the drift check."
             exit 0
           fi
+          body=$(cat /tmp/api_drift_body)
 
           live=$(printf '%s' "$body" | jq -r '.commit // "unknown"')
 

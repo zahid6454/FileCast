@@ -91,6 +91,13 @@ jobs:
           install -m 600 /dev/null /tmp/ci_deploy_key
           printf '%s\n' "${{ secrets.ORACLE_DEPLOY_SSH_KEY }}" > /tmp/ci_deploy_key
 
+      # Separate key from the deploy key above — see the next step's comment
+      # for why this one exists.
+      - name: Write the healthcheck key
+        run: |
+          install -m 600 /dev/null /tmp/ci_healthcheck_key
+          printf '%s\n' "${{ secrets.ORACLE_HEALTHCHECK_SSH_KEY }}" > /tmp/ci_healthcheck_key
+
       # The forced command in the VM's authorized_keys runs regardless of
       # what's requested over this connection — `exit` is enough to trigger
       # scripts/ci-deploy.sh, which always deploys the latest tag rather than
@@ -106,16 +113,37 @@ jobs:
       # Bounded retries — docker build+restart takes time. Mirrors deploy.yml's
       # api-drift job's posture: warn, never fail the run for an external
       # system's timing.
+      #
+      # Goes over SSH and asks the VM to curl its own localhost:8090 instead
+      # of curling the public https://api.filecast.org — Cloudflare's Bot
+      # Fight Mode blocks that exact request from a GitHub Actions runner IP
+      # regardless of backend health, and the plan this zone is on has no way
+      # to scope an exception around it (it's an all-or-nothing zone toggle).
+      # ORACLE_HEALTHCHECK_SSH_KEY is its own key, restricted server-side
+      # (authorized_keys forced command, same mechanism as the deploy key
+      # above) to exactly one fixed, read-only local curl — it cannot trigger
+      # a deploy or run anything else.
       - name: Confirm the deployed commit
         run: |
           set -uo pipefail
           expected="${{ github.sha }}"
+          last="none"
           for i in $(seq 1 20); do
-            live=$(curl -fsS --max-time 10 "https://api.filecast.org/" | jq -r '.commit // "unknown"' 2>/dev/null || echo "unreachable")
-            if [ "$live" = "$expected" ]; then
-              echo "::notice::API is live on this release's commit (${live:0:7})."
-              exit 0
+            body=$(ssh -i /tmp/ci_healthcheck_key \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile=.github/ci-deploy-known-hosts \
+              -o ConnectTimeout=10 \
+              ubuntu@${{ vars.ORACLE_VM_HOST }} exit 2>/dev/null)
+            if [ -n "$body" ]; then
+              live=$(printf '%s' "$body" | jq -r '.commit // "unknown"' 2>/dev/null || echo "unparseable")
+              if [ "$live" = "$expected" ]; then
+                echo "::notice::API is live on this release's commit (${live:0:7})."
+                exit 0
+              fi
+              last="commit $live"
+            else
+              last="no response"
             fi
             sleep 15
           done
-          echo "::warning::API did not report commit $expected after 5 minutes (last saw: ${live:-unknown}). Check the VM manually."
+          echo "::warning::API did not report commit $expected after 5 minutes (last: $last). Check the VM manually."
