@@ -164,6 +164,30 @@ async def test_sync_node_cleans_up_the_dump_file_even_when_restore_fails(monkeyp
     assert not written_path.exists()
 
 
+async def test_sync_node_cleans_up_the_dump_file_on_success(monkeypatch):
+    await node_registry.register_node(_make_node("src", "postgresql://h/src"))
+    await node_registry.register_node(_make_node("dst", "postgresql://h/dst"))
+
+    written_path: Path | None = None
+
+    async def fake_dump(source, dump_path, *, remaining_seconds):
+        nonlocal written_path
+        written_path = dump_path
+        dump_path.write_bytes(b"fake dump bytes")
+
+    async def fake_restore(target, dump_path, *, remaining_seconds):
+        assert dump_path.exists()  # still there for restore to read
+
+    monkeypatch.setattr(node_sync, "_run_migration", _noop3)
+    monkeypatch.setattr(node_sync, "_dump", fake_dump)
+    monkeypatch.setattr(node_sync, "_restore", fake_restore)
+
+    await node_sync.sync_node("src", "dst")
+
+    assert written_path is not None
+    assert not written_path.exists()
+
+
 async def test_sync_node_never_starts_a_step_with_no_remaining_budget(monkeypatch):
     """Regression guard for the shared-deadline design (module docstring):
     if the budget is already exhausted by the time a later step would run,
@@ -233,6 +257,23 @@ async def test_run_subprocess_raises_node_sync_error_on_nonzero_exit():
     with pytest.raises(node_sync.NodeSyncError, match="exit 3"):
         await node_sync._run_subprocess(
             [sys.executable, "-c", "import sys; sys.exit(3)"],
+            env=None,
+            remaining_seconds=10,
+            description="test",
+        )
+
+
+@skip_without_subprocess_support
+async def test_run_subprocess_wraps_a_missing_binary_as_node_sync_error():
+    # Regression guard: asyncio.create_subprocess_exec raises a bare OSError
+    # (FileNotFoundError on POSIX/Windows alike) when the binary itself
+    # doesn't exist or isn't executable — a misconfigured PG_DUMP_BIN/
+    # PG_RESTORE_BIN, say. A future caller (§7.8) is meant to catch
+    # NodeSyncError/NodeSyncTimeoutError as the complete failure contract;
+    # this must not leak a different exception type past that.
+    with pytest.raises(node_sync.NodeSyncError, match="failed to start"):
+        await node_sync._run_subprocess(
+            ["/definitely/does/not/exist/pg_dump_binary"],
             env=None,
             remaining_seconds=10,
             description="test",

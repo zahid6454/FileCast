@@ -133,7 +133,12 @@ async def _run_subprocess(
 
     Raises ``NodeSyncTimeoutError`` if ``remaining_seconds`` is already
     exhausted (killing the process if it had to be started to find out) or
-    ``NodeSyncError`` on a nonzero exit.
+    ``NodeSyncError`` on a nonzero exit — including a nonzero exit caused by
+    the binary itself being missing/unreadable, or any other OS-level
+    failure to spawn or manage the process. A future caller (§7.8: "any
+    failure at any step marks error... never left holding the lock") is
+    meant to catch exactly this two-member exception hierarchy, not have to
+    also guard against a bare OSError escaping from underneath it.
     """
     if remaining_seconds <= 0:
         raise NodeSyncTimeoutError(
@@ -141,20 +146,34 @@ async def _run_subprocess(
             f"{SYNC_OPERATION_TIMEOUT_SECONDS}s overall budget"
         )
 
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        cwd=API_DIR,
-        env=env,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            cwd=API_DIR,
+            env=env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except OSError as exc:
+        # The binary is missing/not executable, or some other OS-level
+        # failure to even start the process (e.g. PG_DUMP_BIN misconfigured)
+        # — must not escape as a bare OSError past this function's stable
+        # NodeSyncError contract.
+        raise NodeSyncError(f"{description}: failed to start ({exc})") from exc
+
     try:
         _stdout, stderr = await asyncio.wait_for(
             proc.communicate(), timeout=remaining_seconds
         )
     except TimeoutError:
-        proc.kill()
-        await proc.wait()
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            # Lost the race: the process exited on its own between the
+            # timeout firing and the kill — already gone, nothing left to
+            # clean up.
+            pass
         raise NodeSyncTimeoutError(
             f"{description} did not finish within its {remaining_seconds:.0f}s "
             "remaining budget — killed"
