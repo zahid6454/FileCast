@@ -170,6 +170,66 @@ async def select_switch_target(exclude_node_ids: set[str]) -> str | None:
 
 
 # --------------------------------------------------------------------------- #
+# Shared helpers — used by both switch execution and provisioning below
+# --------------------------------------------------------------------------- #
+
+
+async def _mark_node_status(node_id: str, status: str) -> Node | None:
+    """Set a node's status, unless it's already ``retired`` — §7.8 doesn't
+    forbid retiring a still-``provisioning`` node (a reasonable way for an
+    admin to cancel one), and that's a deliberate, authoritative admin
+    action taken via a completely different code path (the retire route)
+    while this operation was still in flight. This operation's own
+    eventual outcome (``ready``/``error``) must not silently clobber that.
+
+    Deliberately does **not** guard against overwriting ``error`` (only
+    ``retired``): a losing side of a lock-contention race (two ``retry``
+    dispatches racing for the same already-errored node, say) may mark this
+    same node ``error`` well before the WINNING side's real work finishes —
+    if that were also protected, the winner's later legitimate ``ready``
+    would be silently discarded because someone else's rejection got there
+    first. ``retired`` is the one status only a human admin ever sets
+    directly; ``error`` can come from either a human or a losing race, so
+    only ``retired`` is safe to treat as authoritative here.
+    """
+    node = await get_node(node_id)
+    if node is None:
+        return None
+    if node.status == "retired":
+        return node
+    updated = node.model_copy(update={"status": status})
+    await register_node(updated)
+    return updated
+
+
+async def _sync_or_mark_target_unsafe(source_node_id: str, target_node_id: str) -> None:
+    """Wraps ``node_sync.sync_node()`` for both switch-execution call sites
+    below (warm-up and the final cutover top-up) — unlike provisioning,
+    both write into an EXISTING ``ready`` reserve, so a failure here must
+    not leave that node's registry status unchanged.
+
+    ``sync_node()`` truncates the target before restoring into it (§7.5);
+    those two steps aren't one transaction, so ANY exception escaping it —
+    not just ``NodeSyncError`` — can mean the target's data is now
+    truncated/partially restored, not merely "not yet updated." Demoting
+    out of ``ready`` here (the same terminal state ``execute_provision()``
+    already uses for any of its own failures) means this target can never
+    be silently re-selected by a LATER, unrelated switch while its data is
+    suspect — the existing retry flow (a full re-sync) is the correct way
+    back to ``ready``, not leaving this ``ready`` and hoping the next sync
+    happens to fully overwrite whatever the failed one left behind.
+
+    Always re-raises unchanged — this only adds a side effect; callers keep
+    their existing ``NodeSyncError``-vs-anything-else control flow.
+    """
+    try:
+        await node_sync.sync_node(source_node_id, target_node_id)
+    except Exception:
+        await _mark_node_status(target_node_id, "error")
+        raise
+
+
+# --------------------------------------------------------------------------- #
 # Switch execution (§7.4/§7.7/§7.13)
 # --------------------------------------------------------------------------- #
 
@@ -247,7 +307,7 @@ async def execute_switch(
             target = await get_node(current_target)
             if target is not None and target.status == "ready":
                 try:
-                    await node_sync.sync_node(source_node_id, current_target)
+                    await _sync_or_mark_target_unsafe(source_node_id, current_target)
                     break  # warm-up succeeded
                 except node_sync.NodeSyncError as exc:
                     logger.warning(
@@ -327,7 +387,7 @@ async def execute_switch(
                 ),
             )
             try:
-                await node_sync.sync_node(source_node_id, current_target)
+                await _sync_or_mark_target_unsafe(source_node_id, current_target)
             except node_sync.NodeSyncError as exc:
                 # Target failure during final cutover (§7.4): abort the flip,
                 # resume on the original (still-healthy) node.
@@ -537,34 +597,6 @@ async def _check_connectivity(node: Node) -> None:
         ) from exc
     finally:
         await engine.dispose()
-
-
-async def _mark_node_status(node_id: str, status: str) -> Node | None:
-    """Set a node's status, unless it's already ``retired`` — §7.8 doesn't
-    forbid retiring a still-``provisioning`` node (a reasonable way for an
-    admin to cancel one), and that's a deliberate, authoritative admin
-    action taken via a completely different code path (the retire route)
-    while this operation was still in flight. This operation's own
-    eventual outcome (``ready``/``error``) must not silently clobber that.
-
-    Deliberately does **not** guard against overwriting ``error`` (only
-    ``retired``): a losing side of a lock-contention race (two ``retry``
-    dispatches racing for the same already-errored node, say) may mark this
-    same node ``error`` well before the WINNING side's real work finishes —
-    if that were also protected, the winner's later legitimate ``ready``
-    would be silently discarded because someone else's rejection got there
-    first. ``retired`` is the one status only a human admin ever sets
-    directly; ``error`` can come from either a human or a losing race, so
-    only ``retired`` is safe to treat as authoritative here.
-    """
-    node = await get_node(node_id)
-    if node is None:
-        return None
-    if node.status == "retired":
-        return node
-    updated = node.model_copy(update={"status": status})
-    await register_node(updated)
-    return updated
 
 
 async def execute_provision(*, run_id: str, node_id: str) -> None:

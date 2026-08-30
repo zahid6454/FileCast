@@ -287,6 +287,13 @@ async def test_execute_switch_warmup_failure_retries_next_best_target(monkeypatc
     assert await get_active_node() == "good-target"
     assert calls.count(("source", "bad-target")) == 1
     assert calls.count(("source", "good-target")) == 2
+    # node_sync.sync_node() truncates before restoring (§7.5) — a failed
+    # warm-up sync can leave the target's data truncated/partially
+    # restored, not just "still whatever it had before." Demoted to
+    # "error" so a LATER, unrelated switch can't silently pick this same
+    # node while its data is suspect.
+    bad_target = await get_node("bad-target")
+    assert bad_target.status == "error"
     assert await _lock_is_free()
 
 
@@ -312,6 +319,10 @@ async def test_execute_switch_warmup_failure_with_no_reserves_left_marks_error(
     assert await get_active_node() == "source"
     history = await get_switch_history()
     assert history[0].outcome == "failure"
+    # Same reasoning as the retry case above: its own sync failed, so it
+    # must not stay "ready" for a future switch to silently pick.
+    only_target = await get_node("only-target")
+    assert only_target.status == "error"
     assert await _lock_is_free()
 
 
@@ -385,6 +396,11 @@ async def test_execute_switch_cutover_failure_resumes_on_original_node(monkeypat
     assert job_worker._claim_paused is False
     history = await get_switch_history()
     assert history[0].outcome == "failure"
+    # The final top-up sync is a truncate-then-restore into "target"
+    # (§7.5) — a failure here can leave it with corrupted/incomplete data,
+    # so it must not stay "ready" for a future switch to silently pick.
+    target = await get_node("target")
+    assert target.status == "error"
     assert await _lock_is_free()
 
 
@@ -411,6 +427,13 @@ async def test_execute_switch_unexpected_error_still_releases_lock_and_resumes(
     assert history[0].outcome == "failure"
     assert await _lock_is_free()
     assert job_worker._claim_paused is False
+    # _sync_or_mark_target_unsafe() catches ANY exception escaping
+    # sync_node() — not just NodeSyncError — because truncate-then-restore
+    # (§7.5) isn't transactional: a RuntimeError mid-sync is exactly as
+    # capable of leaving "target" with corrupted data as a NodeSyncError
+    # would be, so it must be demoted the same way.
+    target = await get_node("target")
+    assert target.status == "error"
 
 
 # --------------------------------------------------------------------------- #
@@ -754,4 +777,30 @@ async def test_dispatch_wake_task_fires_execute_provision_as_background_task(
 def test_dispatch_wake_task_is_a_noop_for_legacy_bare_job_id_string():
     before = len(job_worker._background_tasks)
     job_worker._dispatch_wake_task("550e8400-e29b-41d4-a716-446655440000")
+    assert len(job_worker._background_tasks) == before
+
+
+def test_dispatch_wake_task_drops_a_recognized_task_type_with_malformed_kwargs():
+    """A recognized task-type whose payload doesn't match its executor's
+    keyword-only signature (a missing field — future schema drift, or a
+    hand-edited Redis entry) must be dropped, not crash the wake loop:
+    parse_wake_task() is only responsible for shape ("is this JSON with a
+    known task-type"), not for validating the fields underneath it, so
+    _dispatch_wake_task() itself is where that has to be caught.
+
+    Deliberately does NOT monkeypatch execute_switch: a fake with a
+    permissive ``**kwargs`` signature would silently accept the malformed
+    payload and defeat the exact thing under test — the REAL
+    execute_switch(*, run_id, target_node_id, trigger)'s keyword-only
+    signature is what must reject this call.
+    """
+    import json
+
+    # Well-formed JSON, a recognized task-type, but missing the
+    # target_node_id/trigger fields execute_switch(**kwargs) requires.
+    raw = json.dumps({"task-type": node_ops.TASK_TYPE_SWITCH, "run_id": "r1"})
+    before = len(job_worker._background_tasks)
+
+    job_worker._dispatch_wake_task(raw)  # must not raise
+
     assert len(job_worker._background_tasks) == before

@@ -69,6 +69,7 @@ from sqlalchemy import func, select, update
 from data import node_ops
 from data.db import get_active_session_factory
 from data.models import ConversionJob
+from data.node_registry import recover_stale_pool_state
 from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 
 logger = get_logger("job_worker")
@@ -480,11 +481,38 @@ def _dispatch_wake_task(raw_value: str) -> None:
     if task is None:
         return
     task_type, task_kwargs = task
-    if task_type == node_ops.TASK_TYPE_SWITCH:
-        coro = node_ops.execute_switch(**task_kwargs)
-    elif task_type == node_ops.TASK_TYPE_PROVISION:
-        coro = node_ops.execute_provision(**task_kwargs)
-    else:
+    try:
+        if task_type == node_ops.TASK_TYPE_SWITCH:
+            coro = node_ops.execute_switch(**task_kwargs)
+        elif task_type == node_ops.TASK_TYPE_PROVISION:
+            coro = node_ops.execute_provision(**task_kwargs)
+        else:
+            return
+    except TypeError:
+        # A recognized task-type with a missing/extra field relative to
+        # execute_switch()/execute_provision()'s own keyword-only signature
+        # — the only thing that can go wrong at this call expression, since
+        # constructing a coroutine doesn't run its body yet. Both producers
+        # today (data/routers/admin_nodes.py's build_switch_task()/
+        # build_provision_task()) always emit a well-formed payload, so this
+        # is defense against a future schema drift or a hand-edited Redis
+        # entry, not a path real traffic takes. parse_wake_task()'s own
+        # contract is "never crash the wake loop" on a malformed push — this
+        # extends that same guarantee past parsing into dispatch, so a
+        # mismatched payload is dropped (loudly logged) instead of taking
+        # down the single process every real conversion also depends on.
+        logger.error(
+            "Wake-queue task-type %r has a payload that doesn't match its "
+            "executor's signature — dropping",
+            task_type,
+            exc_info=True,
+            extra={
+                "data": {
+                    "event": "worker_dispatch_wake_task_malformed",
+                    "task_type": task_type,
+                }
+            },
+        )
         return
     wake_task = asyncio.create_task(coro)
     _background_tasks.add(wake_task)
@@ -610,6 +638,21 @@ async def _loop() -> None:
             "Startup orphan recovery: %s",
             recovered,
             extra={"data": {"event": "orphan_recovery", **recovered}},
+        )
+
+    # NEON_FAILOVER_PLAN.md §7.1 — same "a fresh process means anything
+    # mid-flight belongs to a dead incarnation" reasoning as the orphaned-job
+    # recovery above, applied to the pool-operation lock and the maintenance
+    # flag (data/node_ops.py's execute_switch() is their only real writer).
+    # Runs before the loop's first BRPOP below, so it can never clear state
+    # a legitimately just-dispatched switch/provision task just set.
+    pool_recovered = await recover_stale_pool_state()
+    if pool_recovered["pool_lock"] or pool_recovered["maintenance"]:
+        logger.warning(
+            "Startup pool-state recovery: cleared stale state left by a "
+            "previous incarnation: %s",
+            pool_recovered,
+            extra={"data": {"event": "pool_state_recovery", **pool_recovered}},
         )
 
     last_gc = 0.0
