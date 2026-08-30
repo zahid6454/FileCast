@@ -13,8 +13,13 @@ verify. Two exceptions exercise the real mechanism directly:
   required §12 real-binary test: two throwaway databases created on a real
   Postgres 18 SERVER (``TEST_NODE_SYNC_POSTGRES_URL`` — see
   ``two_real_databases`` below for why this has to be a v18 server, not the
-  rest of this suite's v16 ``TEST_DATABASE_URL``), a real
-  ``alembic upgrade head`` subprocess building the target's schema, and real
+  rest of this suite's v16 ``TEST_DATABASE_URL``), real ``alembic upgrade
+  head`` subprocesses building **both** the source's and the target's schema
+  (a real pool node's schema is always Alembic-managed, never
+  ``Base.metadata.create_all()`` — building only the target's schema that way
+  would leave the source with no ``alembic_version`` table at all and hide
+  the exact duplicate-key collision ``_dump()``'s
+  ``--exclude-table-data=alembic_version`` exists to prevent), and real
   ``pg_dump``/``pg_restore`` v18 binaries moving one row between them.
 
 Subprocess-spawning tests are skipped on Windows: ``asyncio`` subprocess
@@ -461,14 +466,22 @@ async def test_sync_node_moves_real_data_via_real_pg_dump_restore_v18(
     two_real_databases,
 ):
     src_url, dst_url = two_real_databases
+    src_node = _make_node("real-src", src_url)
 
-    # Source gets its schema directly (no need to shell out to alembic
-    # twice) plus one representative row — what's actually under test here
-    # is real bytes flowing src -> dst via real pg_dump/pg_restore, and the
-    # target's schema being built for real by sync_node()'s own migration
-    # step (a genuine `alembic upgrade head` subprocess).
+    # Source's schema is built via a real `alembic upgrade head` subprocess
+    # too — not Base.metadata.create_all() — because a real pool node is
+    # always Alembic-managed, and its `alembic_version` row is exactly what
+    # would collide with the target's own (also just-migrated, via
+    # sync_node()'s own migration step) `alembic_version` row if `_dump()`
+    # ever included it. create_all() would build an equivalent schema but
+    # silently skip creating `alembic_version` altogether, hiding that
+    # collision instead of exercising it.
+    await node_sync._run_migration(src_node, remaining_seconds=60)
+
+    # One representative row — what's actually under test here is real bytes
+    # flowing src -> dst via real pg_dump/pg_restore, migrated schemas on
+    # both ends included.
     src_engine = create_engine(_sync_url(src_url))
-    Base.metadata.create_all(src_engine)
     with src_engine.connect() as conn:
         conn.execute(
             Tool.__table__.insert().values(
@@ -484,7 +497,7 @@ async def test_sync_node_moves_real_data_via_real_pg_dump_restore_v18(
         conn.commit()
     src_engine.dispose()
 
-    await node_registry.register_node(_make_node("real-src", src_url))
+    await node_registry.register_node(src_node)
     await node_registry.register_node(_make_node("real-dst", dst_url))
 
     await node_sync.sync_node("real-src", "real-dst")

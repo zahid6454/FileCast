@@ -49,6 +49,17 @@ every table directly (via ``psql``, the same "clear before loading" effect
 ``conftest.py``'s own ``_clean_tables`` fixture already achieves for test
 isolation) as its own step between the dump and the restore, and
 ``_restore()`` runs with plain ``--data-only``, no ``--clean``.
+
+**``alembic_version`` is excluded from the dump.** It's Alembic's own
+bookkeeping table, not an SQLAlchemy model, so it's outside
+``Base.metadata`` and the TRUNCATE step above never clears the target's
+copy — which ``_run_migration()`` just populated correctly, immediately
+before the dump/restore. Since source and target are both Alembic-managed
+pool nodes, their ``alembic_version`` rows are normally identical, so
+restoring the dumped row would try to insert a duplicate primary key into
+a target row that's already correct — failing every real sync, not an edge
+case. ``_dump()`` passes ``--exclude-table-data=alembic_version`` so that
+row is never part of the copied payload.
 """
 
 import asyncio
@@ -220,12 +231,24 @@ async def _run_migration(target: Node, *, remaining_seconds: float) -> None:
 async def _dump(source: Node, dump_path: Path, *, remaining_seconds: float) -> None:
     """Full-database, data-only dump — every table, no curated subset (§7.5):
     session rows live in Postgres, so a partial sync that omitted, say, the
-    sessions table would silently log users out on every switch."""
+    sessions table would silently log users out on every switch.
+
+    ``alembic_version`` is the one deliberate exception. It isn't an
+    SQLAlchemy model (``Base.metadata`` doesn't know about it), so
+    ``_truncate_target()`` never clears the target's copy — and
+    ``_run_migration()`` (run against the target immediately before this)
+    already just wrote the correct row there. Source and target are both
+    Alembic-managed pool nodes, so their ``alembic_version`` rows are
+    normally identical: dumping it here and restoring it unconditionally
+    would try to ``COPY`` that row into a target row with the same primary
+    key, which ``pg_restore`` rejects — failing the sync on every real
+    invocation, not just an edge case."""
     await _run_subprocess(
         [
             PG_DUMP_BIN,
             "--format=custom",
             "--data-only",
+            "--exclude-table-data=alembic_version",
             f"--file={dump_path}",
             _libpq_url(source.connection_string),
         ],
