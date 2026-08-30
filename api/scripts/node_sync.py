@@ -26,16 +26,29 @@ requirement is that the operations the pool-operation lock guards must be
 bounded by a hard timeout strictly shorter than the lock's own TTL, so the
 lock only ever expires on a true crash, never on a merely-slow operation.
 A caller of ``sync_node()`` is expected to hold that lock for the whole
-call. Three subprocesses run per invocation (migration, dump, restore) —
-bounding each independently by the same generous timeout could let their
-sum exceed the lock's TTL even though each individual step "passed". So
-``sync_node()`` instead computes ONE overall deadline
-(``SYNC_OPERATION_TIMEOUT_SECONDS`` from the moment it's called) and gives
-each subprocess only whatever time remains in that shared budget —
-``SYNC_OPERATION_TIMEOUT_SECONDS`` itself is checked against the pool-lock's
-TTL at import time via ``node_registry.assert_safe_operation_timeout()``, so
-a regression here fails loudly at process startup, not silently in
-production.
+call. Four subprocesses run per invocation (migration, dump, truncate,
+restore — see below for why truncate is its own step) — bounding each
+independently by the same generous timeout could let their sum exceed the
+lock's TTL even though each individual step "passed". So ``sync_node()``
+instead computes ONE overall deadline (``SYNC_OPERATION_TIMEOUT_SECONDS``
+from the moment it's called) and gives each subprocess only whatever time
+remains in that shared budget — ``SYNC_OPERATION_TIMEOUT_SECONDS`` itself is
+checked against the pool-lock's TTL at import time via
+``node_registry.assert_safe_operation_timeout()``, so a regression here
+fails loudly at process startup, not silently in production.
+
+**``pg_restore --clean`` cannot be combined with ``--data-only``.** An
+earlier draft of this plan assumed it could (Postgres would emit ``DELETE``
+statements to clear existing rows before loading the fresh data) — real
+``pg_restore`` rejects the combination outright: ``options -c/--clean and
+-a/--data-only cannot be used together`` (confirmed against a real v18
+binary, not assumed from memory). The target still needs to be cleared
+before loading — a switch's whole point is that the target ends up an exact
+copy of the source, not source-plus-leftovers — so this module TRUNCATEs
+every table directly (via ``psql``, the same "clear before loading" effect
+``conftest.py``'s own ``_clean_tables`` fixture already achieves for test
+isolation) as its own step between the dump and the restore, and
+``_restore()`` runs with plain ``--data-only``, no ``--clean``.
 """
 
 import asyncio
@@ -48,6 +61,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from data import models  # noqa: F401 — populates Base.metadata
+from data.db import Base
 from data.node_registry import (
     Node,
     assert_safe_operation_timeout,
@@ -64,10 +79,10 @@ logger = get_logger("node_sync")
 API_DIR = Path(__file__).resolve().parent.parent
 
 # Whole-operation budget for one sync_node() call (migration + dump +
-# restore combined) — see the module docstring for why this is one shared
-# deadline rather than three independent per-step timeouts. Comfortably
-# under node_registry.POOL_OP_LOCK_TTL_SECONDS (20min) with its required
-# margin; validated below, not just documented.
+# truncate + restore combined) — see the module docstring for why this is
+# one shared deadline rather than four independent per-step timeouts.
+# Comfortably under node_registry.POOL_OP_LOCK_TTL_SECONDS (20min) with its
+# required margin; validated below, not just documented.
 SYNC_OPERATION_TIMEOUT_SECONDS = 15 * 60
 
 assert_safe_operation_timeout(SYNC_OPERATION_TIMEOUT_SECONDS)
@@ -82,6 +97,7 @@ assert_safe_operation_timeout(SYNC_OPERATION_TIMEOUT_SECONDS)
 # whatever v18 binaries are actually available.
 PG_DUMP_BIN = os.getenv("PG_DUMP_BIN", "/usr/lib/postgresql/18/bin/pg_dump")
 PG_RESTORE_BIN = os.getenv("PG_RESTORE_BIN", "/usr/lib/postgresql/18/bin/pg_restore")
+PSQL_BIN = os.getenv("PSQL_BIN", "/usr/lib/postgresql/18/bin/psql")
 
 # Bounds only the libpq *connect* phase of the dump/restore subprocesses —
 # the overall subprocess is separately bounded by the shared remaining-time
@@ -219,15 +235,44 @@ async def _dump(source: Node, dump_path: Path, *, remaining_seconds: float) -> N
     )
 
 
+def _truncate_all_tables_sql() -> str:
+    table_names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+    return f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"
+
+
+async def _truncate_target(target: Node, *, remaining_seconds: float) -> None:
+    """Clear every table in the target before loading the fresh copy (§7.5)
+    — safe on a brand-new, still-empty target too (truncating an empty table
+    is a no-op). A separate step from ``_restore()`` because ``pg_restore``
+    rejects ``--clean`` combined with ``--data-only`` outright (see the
+    module docstring); ``CASCADE`` covers FK ordering across all of them in
+    one statement regardless of ``Base.metadata.sorted_tables``'s own
+    topological order, and ``RESTART IDENTITY`` matches
+    ``conftest.py``'s own ``_clean_tables`` fixture so sequence-backed ids
+    don't keep climbing across repeated syncs."""
+    await _run_subprocess(
+        [
+            PSQL_BIN,
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            _truncate_all_tables_sql(),
+            _libpq_url(target.connection_string),
+        ],
+        env={**os.environ, "PGCONNECT_TIMEOUT": str(PG_CONNECT_TIMEOUT_SECONDS)},
+        remaining_seconds=remaining_seconds,
+        description=f"truncate target node {target.node_id!r} before restore",
+    )
+
+
 async def _restore(target: Node, dump_path: Path, *, remaining_seconds: float) -> None:
-    """``--clean --data-only`` (§7.5): the target's tables already exist (the
-    migration step above just ran), so this clears their existing rows
-    before loading the fresh copy — safe on a brand-new, still-empty target
-    too (deleting zero rows from an empty table is a no-op)."""
+    """``--data-only``, no ``--clean`` (§7.5 — see the module docstring for
+    why): the target was already cleared by ``_truncate_target()``
+    immediately before this runs, so a plain data-only restore is all that's
+    needed here."""
     await _run_subprocess(
         [
             PG_RESTORE_BIN,
-            "--clean",
             "--data-only",
             f"--dbname={_libpq_url(target.connection_string)}",
             str(dump_path),
@@ -265,6 +310,7 @@ async def sync_node(source_node_id: str, target_node_id: str) -> None:
     dump_path = Path(tempfile.gettempdir()) / f"node_sync_{secrets.token_hex(8)}.dump"
     try:
         await _dump(source, dump_path, remaining_seconds=deadline - time.monotonic())
+        await _truncate_target(target, remaining_seconds=deadline - time.monotonic())
         await _restore(target, dump_path, remaining_seconds=deadline - time.monotonic())
     finally:
         dump_path.unlink(missing_ok=True)

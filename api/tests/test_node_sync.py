@@ -10,12 +10,12 @@ verify. Two exceptions exercise the real mechanism directly:
   raise on nonzero exit, asyncio.create_subprocess_exec not a blocking
   subprocess.run" contract, portably, without needing pg_dump at all.
 - ``test_sync_node_moves_real_data_via_real_pg_dump_restore_v18`` is the
-  required §12 real-binary test: two throwaway databases created on the same
-  Postgres server the rest of this suite already talks to (see
-  ``two_real_databases`` below for why two logical databases stand in for
-  "two local/dev Postgres containers" here), a real ``alembic upgrade head``
-  subprocess building the target's schema, and real ``pg_dump``/``pg_restore``
-  v18 binaries moving one row between them.
+  required §12 real-binary test: two throwaway databases created on a real
+  Postgres 18 SERVER (``TEST_NODE_SYNC_POSTGRES_URL`` — see
+  ``two_real_databases`` below for why this has to be a v18 server, not the
+  rest of this suite's v16 ``TEST_DATABASE_URL``), a real
+  ``alembic upgrade head`` subprocess building the target's schema, and real
+  ``pg_dump``/``pg_restore`` v18 binaries moving one row between them.
 
 Subprocess-spawning tests are skipped on Windows: ``asyncio`` subprocess
 support requires the Proactor event loop, but conftest.py pins the Selector
@@ -24,6 +24,7 @@ a pre-existing constraint, not something new here. They run for real in CI
 (Linux) and in the deployed containers (also Linux).
 """
 
+import os
 import secrets
 import sys
 import time
@@ -31,7 +32,6 @@ from pathlib import Path
 
 import pytest
 from data import node_registry
-from data.config import settings
 from data.db import Base, _sync_url
 from data.models import Tool
 from sqlalchemy import create_engine, text
@@ -71,6 +71,22 @@ def test_libpq_url_leaves_an_already_plain_url_unchanged():
 
 
 # --------------------------------------------------------------------------- #
+# _truncate_all_tables_sql — the pg_restore --clean/--data-only workaround
+# --------------------------------------------------------------------------- #
+
+
+def test_truncate_all_tables_sql_covers_every_model_table():
+    sql = node_sync._truncate_all_tables_sql()
+    assert sql.startswith("TRUNCATE ")
+    assert sql.endswith(" RESTART IDENTITY CASCADE")
+    # Every table SQLAlchemy knows about must be named — a partial sync that
+    # skipped a table would defeat the whole point (§7.5: session rows live
+    # in Postgres too).
+    for table in Base.metadata.sorted_tables:
+        assert f'"{table.name}"' in sql
+
+
+# --------------------------------------------------------------------------- #
 # sync_node orchestration — mocked dump/restore/migration
 # --------------------------------------------------------------------------- #
 
@@ -87,7 +103,9 @@ async def test_sync_node_raises_when_target_node_missing():
         await node_sync.sync_node("src", "does-not-exist")
 
 
-async def test_sync_node_runs_migration_before_dump_before_restore(monkeypatch):
+async def test_sync_node_runs_migration_then_dump_then_truncate_then_restore(
+    monkeypatch,
+):
     await node_registry.register_node(_make_node("src", "postgresql://h/src"))
     await node_registry.register_node(_make_node("dst", "postgresql://h/dst"))
 
@@ -99,11 +117,15 @@ async def test_sync_node_runs_migration_before_dump_before_restore(monkeypatch):
     async def fake_dump(source, dump_path, *, remaining_seconds):
         call_order.append(("dump", source.node_id))
 
+    async def fake_truncate(target, *, remaining_seconds):
+        call_order.append(("truncate", target.node_id))
+
     async def fake_restore(target, dump_path, *, remaining_seconds):
         call_order.append(("restore", target.node_id))
 
     monkeypatch.setattr(node_sync, "_run_migration", fake_migration)
     monkeypatch.setattr(node_sync, "_dump", fake_dump)
+    monkeypatch.setattr(node_sync, "_truncate_target", fake_truncate)
     monkeypatch.setattr(node_sync, "_restore", fake_restore)
 
     await node_sync.sync_node("src", "dst")
@@ -111,6 +133,7 @@ async def test_sync_node_runs_migration_before_dump_before_restore(monkeypatch):
     assert call_order == [
         ("migration", "dst"),
         ("dump", "src"),
+        ("truncate", "dst"),
         ("restore", "dst"),
     ]
 
@@ -121,6 +144,7 @@ async def test_sync_node_records_activity_for_both_source_and_target(monkeypatch
 
     monkeypatch.setattr(node_sync, "_run_migration", _noop3)
     monkeypatch.setattr(node_sync, "_dump", _noop3)
+    monkeypatch.setattr(node_sync, "_truncate_target", _noop3)
     monkeypatch.setattr(node_sync, "_restore", _noop3)
 
     assert await node_registry.get_last_activity("src") is None
@@ -155,6 +179,7 @@ async def test_sync_node_cleans_up_the_dump_file_even_when_restore_fails(monkeyp
 
     monkeypatch.setattr(node_sync, "_run_migration", fake_migration)
     monkeypatch.setattr(node_sync, "_dump", fake_dump)
+    monkeypatch.setattr(node_sync, "_truncate_target", _noop3)
     monkeypatch.setattr(node_sync, "_restore", fake_restore)
 
     with pytest.raises(node_sync.NodeSyncError, match="exploded"):
@@ -180,6 +205,7 @@ async def test_sync_node_cleans_up_the_dump_file_on_success(monkeypatch):
 
     monkeypatch.setattr(node_sync, "_run_migration", _noop3)
     monkeypatch.setattr(node_sync, "_dump", fake_dump)
+    monkeypatch.setattr(node_sync, "_truncate_target", _noop3)
     monkeypatch.setattr(node_sync, "_restore", fake_restore)
 
     await node_sync.sync_node("src", "dst")
@@ -357,19 +383,48 @@ def _v18_binaries_available() -> bool:
     )
 
 
+def _node_sync_postgres_url() -> str | None:
+    """A real Postgres 18 SERVER for the real-binary test below — deliberately
+    NOT ``TEST_DATABASE_URL`` (that's the v16 server the rest of this suite
+    targets, matching this repo's actual production server version). v18
+    ``pg_dump``/``pg_restore`` embed v18-only session GUCs in their dump
+    metadata (e.g. ``SET transaction_timeout = 0``) that a v16 server
+    rejects outright — confirmed for real: running this test against a v16
+    server fails with ``unrecognized configuration parameter
+    "transaction_timeout"`` even though the truncate/restore logic itself is
+    correct. Real Neon deployments run v18 client tools against a v18
+    server, so this env var exists to let this one test exercise a genuinely
+    matching pair. ``None`` when unset (e.g. a local run without a second
+    Postgres instance standing by) — the test skips gracefully rather than
+    hard-failing; ci.yml's ``postgres18`` service sets this.
+    """
+    return os.environ.get("TEST_NODE_SYNC_POSTGRES_URL")
+
+
 @pytest.fixture
 def two_real_databases():
-    """Two throwaway logical databases on the same Postgres server
-    TEST_DATABASE_URL already points at, standing in for "two local/dev
+    """Two throwaway logical databases on the Postgres 18 server
+    ``TEST_NODE_SYNC_POSTGRES_URL`` points at, standing in for "two local/dev
     Postgres containers": pg_dump/pg_restore correctness (and the real v18
     binaries) don't depend on source and target being separate server
     processes, only separate databases reachable over a real connection —
-    and this avoids provisioning a second service container just for one
-    test. Created/dropped via an autocommit connection to the server's
-    default "postgres" maintenance database (CREATE/DROP DATABASE can't run
-    inside a transaction block).
+    and this avoids provisioning two service containers just for one test.
+    Created/dropped via an autocommit connection to the server's default
+    "postgres" maintenance database (CREATE/DROP DATABASE can't run inside a
+    transaction block).
     """
-    admin_url = str(make_url(_sync_url(settings.database_url)).set(database="postgres"))
+    # render_as_string(hide_password=False) — NOT plain str(url)/repr(url),
+    # which SQLAlchemy deliberately renders with the password masked as
+    # "***" for safe logging/display. Using the masked form here would
+    # silently try to authenticate with the literal password "***" instead
+    # of the real one (caught by CI's real Postgres service, not by a local
+    # run where this whole test skips on Windows).
+    postgres_url = _node_sync_postgres_url()
+    admin_url = (
+        make_url(_sync_url(postgres_url))
+        .set(database="postgres")
+        .render_as_string(hide_password=False)
+    )
     admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
     src_name = f"fc_node_sync_src_{secrets.token_hex(4)}"
     dst_name = f"fc_node_sync_dst_{secrets.token_hex(4)}"
@@ -377,9 +432,9 @@ def two_real_databases():
         conn.execute(text(f'CREATE DATABASE "{src_name}"'))
         conn.execute(text(f'CREATE DATABASE "{dst_name}"'))
     try:
-        base_url = make_url(settings.database_url)
-        src_url = str(base_url.set(database=src_name))
-        dst_url = str(base_url.set(database=dst_name))
+        base_url = make_url(postgres_url)
+        src_url = base_url.set(database=src_name).render_as_string(hide_password=False)
+        dst_url = base_url.set(database=dst_name).render_as_string(hide_password=False)
         yield src_url, dst_url
     finally:
         with admin_engine.connect() as conn:
@@ -394,6 +449,13 @@ def two_real_databases():
     reason="postgresql-client-18 not installed at the expected PGDG path "
     "(PG_DUMP_BIN/PG_RESTORE_BIN) — install it (see api/Dockerfile) to run "
     "this test for real",
+)
+@pytest.mark.skipif(
+    _node_sync_postgres_url() is None,
+    reason="TEST_NODE_SYNC_POSTGRES_URL not set — point it at a real "
+    "Postgres 18 server (see ci.yml's postgres18 service) to run this test "
+    "for real; the main TEST_DATABASE_URL server is v16 and will reject "
+    "v18 pg_restore's session GUCs",
 )
 async def test_sync_node_moves_real_data_via_real_pg_dump_restore_v18(
     two_real_databases,
