@@ -81,6 +81,9 @@ from data.node_registry import (
     record_activity,
 )
 from log import get_logger
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine
 
 logger = get_logger("node_sync")
 
@@ -213,6 +216,96 @@ async def _run_subprocess(
         )
 
 
+async def _ensure_search_path(target: Node, *, remaining_seconds: float) -> None:
+    """Persist a working ``search_path`` on the target's owner role (§7.5/
+    §7.8) — discovered during Phase D's first real rehearsal: a Neon
+    project created straight from the console (not via ``neonctl init``)
+    can leave its owner role's ``search_path`` empty rather than the usual
+    ``public`` default. Every unqualified statement anything in this
+    module issues then fails — "no schema has been selected to create in"
+    for DDL (the migration below), "relation ... does not exist" for
+    anything else (the truncate step) — and the same would be true of the
+    app's own regular queries via ``data/db.py``, once this node is
+    active, since the ORM doesn't schema-qualify table names either.
+
+    ``ALTER ROLE ... SET search_path`` persists at the role/database
+    level, so it's correct for every FUTURE connection to this node — not
+    just this sync. Idempotent: running it against a node whose
+    search_path is already correct (every node created via ``neonctl
+    init``, or one this has already run against) is a harmless no-op —
+    cheap enough to run unconditionally on every sync rather than trying
+    to detect when it's actually needed, same reasoning §7.10 already
+    gives for always re-running ``alembic upgrade head``.
+
+    **Not sufficient on its own for the steps that immediately follow in
+    THIS same call, though.** Neon's connection pooler can keep serving a
+    connection from a cached backend session whose state predates this
+    ALTER — confirmed by hand against the real rehearsal project: a fresh
+    connection through the pooled endpoint still showed the stale, empty
+    search_path seconds after this exact statement had already succeeded
+    through a direct, non-pooled connection. So ``_run_migration()`` (via
+    ``migrations/env.py``) and ``_truncate_target()`` each ALSO issue
+    their own session-level ``SET search_path = public`` on whatever
+    connection they open, which takes effect immediately regardless of
+    pooler timing. This function's persistent, role-level fix is what
+    makes search_path correct going forward for connections this module
+    doesn't control — the app's own traffic via ``data/db.py``, once this
+    node is active.
+    """
+    # Budget checked FIRST, before any URL parsing/validation — same
+    # fail-fast-on-zero-budget contract _run_subprocess() already
+    # guarantees for every other step, so an already-exhausted deadline
+    # never spends effort on anything, not even a cheap local check.
+    if remaining_seconds <= 0:
+        raise NodeSyncTimeoutError(
+            f"setting search_path on target node {target.node_id!r}: no "
+            f"time remaining in this sync operation's "
+            f"{SYNC_OPERATION_TIMEOUT_SECONDS}s overall budget"
+        )
+
+    url = make_url(target.connection_string)
+    if not url.username or not url.database:
+        raise NodeSyncError(
+            f"target node {target.node_id!r}'s connection string is missing "
+            "a username or database name — cannot verify/fix search_path"
+        )
+    # Postgres identifier quoting: double any embedded '"' rather than
+    # interpolating the raw value verbatim. role/database names come from
+    # an admin-supplied connection string (§7.8), not arbitrary end-user
+    # input, but a legitimate name containing '"' would otherwise produce
+    # a confusing syntax error instead of being handled correctly.
+    role = url.username.replace('"', '""')
+    database = url.database.replace('"', '""')
+
+    # A throwaway engine, not the shared per-node cache in data/db.py —
+    # same reasoning as node_ops.py's _check_connectivity(): this may be a
+    # brand-new node that isn't `ready` yet, and may never become so.
+    engine = create_async_engine(target.connection_string, pool_pre_ping=False)
+    try:
+        async with asyncio.timeout(remaining_seconds):
+            async with engine.connect() as conn:
+                await conn.execute(
+                    text(
+                        f'ALTER ROLE "{role}" IN DATABASE "{database}" '
+                        "SET search_path = public"
+                    )
+                )
+                await conn.commit()
+    except TimeoutError as exc:
+        raise NodeSyncTimeoutError(
+            f"setting search_path on target node {target.node_id!r} timed "
+            f"out after {remaining_seconds:.0f}s"
+        ) from exc
+    except NodeSyncError:
+        raise
+    except Exception as exc:
+        raise NodeSyncError(
+            f"could not set search_path on target node {target.node_id!r}: {exc}"
+        ) from exc
+    finally:
+        await engine.dispose()
+
+
 async def _run_migration(target: Node, *, remaining_seconds: float) -> None:
     """Bring the target's schema current before any data copy (§7.5/§7.10) —
     idempotent against an already-current schema, so it's safe and cheap to
@@ -272,12 +365,26 @@ async def _truncate_target(target: Node, *, remaining_seconds: float) -> None:
     one statement regardless of ``Base.metadata.sorted_tables``'s own
     topological order, and ``RESTART IDENTITY`` matches
     ``conftest.py``'s own ``_clean_tables`` fixture so sequence-backed ids
-    don't keep climbing across repeated syncs."""
+    don't keep climbing across repeated syncs.
+
+    The leading ``SET search_path = public`` guards the same gap
+    ``migrations/env.py`` closes for the migration step (see
+    ``_ensure_search_path()``'s docstring) — this opens its own fresh
+    connection, separate from anything the migration step or
+    ``_ensure_search_path()`` already fixed, and a pooled connection can
+    still serve a cached backend session with a stale/empty search_path.
+    Without it, TRUNCATE against these unqualified table names would fail
+    with "relation ... does not exist" the same way the migration's
+    unqualified CREATE TABLE failed with "no schema has been selected."
+    Multiple ``-c`` flags run as separate statements in ONE psql session,
+    so this SET is visible to the TRUNCATE that follows it."""
     await _run_subprocess(
         [
             PSQL_BIN,
             "-v",
             "ON_ERROR_STOP=1",
+            "-c",
+            "SET search_path = public",
             "-c",
             _truncate_all_tables_sql(),
             _libpq_url(target.connection_string),
@@ -292,7 +399,18 @@ async def _restore(target: Node, dump_path: Path, *, remaining_seconds: float) -
     """``--data-only``, no ``--clean`` (§7.5 — see the module docstring for
     why): the target was already cleared by ``_truncate_target()``
     immediately before this runs, so a plain data-only restore is all that's
-    needed here."""
+    needed here.
+
+    Deliberately does NOT get the same explicit ``SET search_path``
+    treatment as the migration/truncate steps above: a custom-format
+    archive's TOC records each object's own schema, and ``pg_restore``
+    issues appropriately schema-qualified statements from that TOC data —
+    it doesn't rely on the restoring session's ambient search_path to
+    resolve an unqualified name the way a hand-written ``CREATE
+    TABLE``/``TRUNCATE`` does. This is the whole reason ``pg_dump``/
+    ``pg_restore`` exist as dedicated tools rather than "dump the SQL text
+    and replay it" — restoring correctly regardless of the destination
+    session's ambient settings is part of their basic design contract."""
     await _run_subprocess(
         [
             PG_RESTORE_BIN,
@@ -328,6 +446,7 @@ async def sync_node(source_node_id: str, target_node_id: str) -> None:
     if target is None:
         raise NodeSyncError(f"target node {target_node_id!r} has no registry record")
 
+    await _ensure_search_path(target, remaining_seconds=deadline - time.monotonic())
     await _run_migration(target, remaining_seconds=deadline - time.monotonic())
 
     dump_path = Path(tempfile.gettempdir()) / f"node_sync_{secrets.token_hex(8)}.dump"

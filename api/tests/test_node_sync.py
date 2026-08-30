@@ -108,13 +108,16 @@ async def test_sync_node_raises_when_target_node_missing():
         await node_sync.sync_node("src", "does-not-exist")
 
 
-async def test_sync_node_runs_migration_then_dump_then_truncate_then_restore(
+async def test_sync_node_runs_search_path_then_migration_then_dump_then_truncate_then_restore(
     monkeypatch,
 ):
     await node_registry.register_node(_make_node("src", "postgresql://h/src"))
     await node_registry.register_node(_make_node("dst", "postgresql://h/dst"))
 
     call_order = []
+
+    async def fake_search_path(target, *, remaining_seconds):
+        call_order.append(("search_path", target.node_id))
 
     async def fake_migration(target, *, remaining_seconds):
         call_order.append(("migration", target.node_id))
@@ -128,6 +131,7 @@ async def test_sync_node_runs_migration_then_dump_then_truncate_then_restore(
     async def fake_restore(target, dump_path, *, remaining_seconds):
         call_order.append(("restore", target.node_id))
 
+    monkeypatch.setattr(node_sync, "_ensure_search_path", fake_search_path)
     monkeypatch.setattr(node_sync, "_run_migration", fake_migration)
     monkeypatch.setattr(node_sync, "_dump", fake_dump)
     monkeypatch.setattr(node_sync, "_truncate_target", fake_truncate)
@@ -136,6 +140,7 @@ async def test_sync_node_runs_migration_then_dump_then_truncate_then_restore(
     await node_sync.sync_node("src", "dst")
 
     assert call_order == [
+        ("search_path", "dst"),
         ("migration", "dst"),
         ("dump", "src"),
         ("truncate", "dst"),
@@ -147,6 +152,7 @@ async def test_sync_node_records_activity_for_both_source_and_target(monkeypatch
     await node_registry.register_node(_make_node("src", "postgresql://h/src"))
     await node_registry.register_node(_make_node("dst", "postgresql://h/dst"))
 
+    monkeypatch.setattr(node_sync, "_ensure_search_path", _noop3)
     monkeypatch.setattr(node_sync, "_run_migration", _noop3)
     monkeypatch.setattr(node_sync, "_dump", _noop3)
     monkeypatch.setattr(node_sync, "_truncate_target", _noop3)
@@ -182,6 +188,7 @@ async def test_sync_node_cleans_up_the_dump_file_even_when_restore_fails(monkeyp
     async def fake_restore(target, dump_path, *, remaining_seconds):
         raise node_sync.NodeSyncError("pg_restore exploded")
 
+    monkeypatch.setattr(node_sync, "_ensure_search_path", _noop3)
     monkeypatch.setattr(node_sync, "_run_migration", fake_migration)
     monkeypatch.setattr(node_sync, "_dump", fake_dump)
     monkeypatch.setattr(node_sync, "_truncate_target", _noop3)
@@ -208,6 +215,7 @@ async def test_sync_node_cleans_up_the_dump_file_on_success(monkeypatch):
     async def fake_restore(target, dump_path, *, remaining_seconds):
         assert dump_path.exists()  # still there for restore to read
 
+    monkeypatch.setattr(node_sync, "_ensure_search_path", _noop3)
     monkeypatch.setattr(node_sync, "_run_migration", _noop3)
     monkeypatch.setattr(node_sync, "_dump", fake_dump)
     monkeypatch.setattr(node_sync, "_truncate_target", _noop3)
@@ -219,45 +227,74 @@ async def test_sync_node_cleans_up_the_dump_file_on_success(monkeypatch):
     assert not written_path.exists()
 
 
-async def test_sync_node_never_starts_a_step_with_no_remaining_budget(monkeypatch):
+async def test_sync_node_never_starts_a_step_with_no_remaining_budget():
     """Regression guard for the shared-deadline design (module docstring):
     if the budget is already exhausted by the time a later step would run,
-    that step must never actually spawn a subprocess — it should fail fast
-    with NodeSyncTimeoutError instead.
+    that step must never actually spawn a subprocess (or open a connection)
+    — it should fail fast with NodeSyncTimeoutError instead.
 
-    ``_dump`` is deliberately left as the REAL implementation here (only
-    ``_run_migration``/``_restore`` are mocked): with the deadline already in
-    the past, its own ``_run_subprocess()`` call must raise before ever
-    touching the pg_dump binary (the same guard proven directly by
-    ``test_run_subprocess_raises_immediately_with_zero_budget_left`` below),
-    so this test needs no real Postgres client tools and runs on every
-    platform, Windows included.
+    Nothing is mocked here: ``_ensure_search_path`` is now the FIRST real
+    step ``sync_node()`` runs, and with the deadline already in the past
+    its own ``remaining_seconds <= 0`` guard must raise before ever
+    opening a connection — the same contract ``_run_subprocess()`` already
+    guarantees for the subprocess-based steps (proven directly by
+    ``test_run_subprocess_raises_immediately_with_zero_budget_left``
+    below), extended here to the one step that isn't subprocess-based.
+    Needs no real Postgres reachability at all (the guard fires before any
+    I/O), so this runs on every platform, Windows included.
     """
     await node_registry.register_node(_make_node("src", "postgresql://h/src"))
     await node_registry.register_node(_make_node("dst", "postgresql://h/dst"))
 
-    async def fake_migration(target, *, remaining_seconds):
-        return None
+    async def fail_if_called(*_args, **_kwargs):
+        raise AssertionError(
+            "must not be reached — search_path's own guard fires first"
+        )
 
-    restore_called = False
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(node_sync, "_run_migration", fail_if_called)
+        monkeypatch.setattr(node_sync, "_dump", fail_if_called)
+        monkeypatch.setattr(node_sync, "_truncate_target", fail_if_called)
+        monkeypatch.setattr(node_sync, "_restore", fail_if_called)
+        # Force the deadline to already be in the past the instant
+        # sync_node() computes it — simplest reliable way to do this
+        # without sleeping: patch the overall budget itself negative, so
+        # `deadline = time.monotonic() + SYNC_OPERATION_TIMEOUT_SECONDS`
+        # is already behind "now".
+        monkeypatch.setattr(node_sync, "SYNC_OPERATION_TIMEOUT_SECONDS", -1)
 
-    async def fake_restore(target, dump_path, *, remaining_seconds):
-        nonlocal restore_called
-        restore_called = True
+        with pytest.raises(node_sync.NodeSyncTimeoutError, match="search_path"):
+            await node_sync.sync_node("src", "dst")
 
-    monkeypatch.setattr(node_sync, "_run_migration", fake_migration)
-    monkeypatch.setattr(node_sync, "_restore", fake_restore)
-    # Force the deadline to already be in the past the instant sync_node()
-    # computes it — simplest reliable way to do this without sleeping:
-    # patch the overall budget itself negative, so
-    # `deadline = time.monotonic() + SYNC_OPERATION_TIMEOUT_SECONDS` is
-    # already behind "now".
-    monkeypatch.setattr(node_sync, "SYNC_OPERATION_TIMEOUT_SECONDS", -1)
 
-    with pytest.raises(node_sync.NodeSyncTimeoutError):
-        await node_sync.sync_node("src", "dst")
+# --------------------------------------------------------------------------- #
+# _ensure_search_path — the console-created-Neon-project fix (§7.5/§7.8).
+# Pure input-validation/budget-guard cases here; the real fix-a-broken-role
+# behavior is proven against a real server further below, alongside the
+# other real-binary tests.
+# --------------------------------------------------------------------------- #
 
-    assert restore_called is False
+
+async def test_ensure_search_path_raises_when_username_missing():
+    node = _make_node("no-user", "postgresql://h/db")
+    with pytest.raises(node_sync.NodeSyncError, match="username"):
+        await node_sync._ensure_search_path(node, remaining_seconds=30)
+
+
+async def test_ensure_search_path_raises_when_database_missing():
+    node = _make_node("no-db", "postgresql://user:pw@h/")
+    with pytest.raises(node_sync.NodeSyncError, match="database"):
+        await node_sync._ensure_search_path(node, remaining_seconds=30)
+
+
+async def test_ensure_search_path_raises_timeout_with_zero_budget_left():
+    """Mirrors _run_subprocess's own zero-budget guard (§7.1's lock-TTL-vs-
+    operation-timeout tension) — this step must fail fast without ever
+    attempting a connection, the same way every other sync_node() step
+    does, rather than trying and timing out slowly."""
+    node = _make_node("real-host-unreachable", "postgresql://user:pw@h/db")
+    with pytest.raises(node_sync.NodeSyncTimeoutError, match="no time remaining"):
+        await node_sync._ensure_search_path(node, remaining_seconds=0)
 
 
 # --------------------------------------------------------------------------- #
@@ -446,6 +483,66 @@ def two_real_databases():
             conn.execute(text(f'DROP DATABASE IF EXISTS "{src_name}" WITH (FORCE)'))
             conn.execute(text(f'DROP DATABASE IF EXISTS "{dst_name}" WITH (FORCE)'))
         admin_engine.dispose()
+
+
+@pytest.mark.skipif(
+    _node_sync_postgres_url() is None,
+    reason="TEST_NODE_SYNC_POSTGRES_URL not set — point it at a real "
+    "Postgres 18 server (see ci.yml's postgres18 service) to run this test "
+    "for real",
+)
+async def test_ensure_search_path_fixes_a_role_with_no_default_schema(
+    two_real_databases,
+):
+    """The exact bug found by hand during Phase D's first real rehearsal
+    against a console-created Neon project (§7.5/§7.8): the owner role's
+    search_path was empty rather than the usual "public", so every
+    unqualified statement (a migration's CREATE TABLE, first) failed with
+    "no schema has been selected to create in." Reproduces that against a
+    real server by breaking it the same way, then confirms
+    _ensure_search_path() fixes it — checked from a BRAND NEW connection,
+    not the one that ran the ALTER, since that's the actual failure mode
+    (Neon's pooler kept serving a cached backend session whose state
+    predated the fix). No subprocess involved (pure asyncpg/psycopg
+    connection), so — unlike the pg_dump/pg_restore tests around this one
+    — this isn't Windows-skipped, only gated on a real server being
+    available.
+    """
+    _, dst_url = two_real_databases
+    dst_node = _make_node("real-dst-searchpath", dst_url)
+    admin_url = make_url(_sync_url(dst_url))
+    role = admin_url.username
+    database = admin_url.database
+
+    admin_engine = create_engine(_sync_url(dst_url))
+    with admin_engine.connect() as conn:
+        conn.execute(
+            text(f'ALTER ROLE "{role}" IN DATABASE "{database}" SET search_path = \'\'')
+        )
+        conn.commit()
+    admin_engine.dispose()
+
+    # Confirm broken before the fix — a fresh connection, since search_path
+    # is a role/database-level default that only applies to NEW sessions.
+    # Postgres reports an empty search_path as the literal two-character
+    # string '""', not a bare empty string — confirmed by hand against a
+    # real server, not assumed.
+    broken_engine = create_engine(_sync_url(dst_url))
+    with broken_engine.connect() as conn:
+        assert conn.execute(text("SHOW search_path")).scalar_one() == '""'
+    broken_engine.dispose()
+
+    await node_sync._ensure_search_path(dst_node, remaining_seconds=30)
+
+    fixed_engine = create_engine(_sync_url(dst_url))
+    with fixed_engine.connect() as conn:
+        assert conn.execute(text("SHOW search_path")).scalar_one() == "public"
+        # Not just SHOW — an actual unqualified DDL statement, the exact
+        # kind of statement that failed against the real Neon project.
+        conn.execute(text("CREATE TABLE _search_path_probe (id int)"))
+        conn.execute(text("DROP TABLE _search_path_probe"))
+        conn.commit()
+    fixed_engine.dispose()
 
 
 @skip_without_subprocess_support
