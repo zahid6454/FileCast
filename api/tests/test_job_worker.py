@@ -281,6 +281,26 @@ async def test_resume_claiming_lets_claim_all_queued_proceed_again(db):
     assert claimed == [job_id]
 
 
+async def test_resume_claiming_lets_claim_one_proceed_again(db):
+    job_worker.pause_claiming()
+    job_worker.resume_claiming()
+
+    job = _make_job()
+    db.add(job)
+    await db.flush()
+    job_id = job.id
+    await db.commit()
+
+    from data.db import async_session_factory
+
+    async with async_session_factory() as claim_db:
+        claimed = await job_worker._claim_one(claim_db, job_id)
+    assert claimed is True
+
+    await db.refresh(job)
+    assert job.status == "converting"
+
+
 async def test_drain_in_flight_jobs_pauses_claiming():
     assert job_worker._claim_paused is False
     await job_worker.drain_in_flight_jobs(timeout_seconds=5)

@@ -242,8 +242,14 @@ async def drain_in_flight_jobs(
     """
     pause_claiming()
     deadline = time.monotonic() + timeout_seconds
-    session_factory = await get_active_session_factory()
     while True:
+        # Re-resolved every iteration, not cached across the whole loop —
+        # same reasoning _execute_job() already documents for its own
+        # re-resolve between read and write phases: this loop can run for
+        # up to timeout_seconds (minutes), and a stale factory would keep
+        # querying whichever node was active when the drain STARTED rather
+        # than whichever is active now.
+        session_factory = await get_active_session_factory()
         async with session_factory() as db:
             in_flight = (
                 await db.execute(
