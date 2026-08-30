@@ -138,6 +138,23 @@ jobs:
             api/requirements.txt
             api/requirements-dev.txt
             requirements.txt
+      # NEON_FAILOVER_PLAN.md §7.5/§12: api/scripts/node_sync.py's real-binary
+      # test needs actual pg_dump/pg_restore v18 (not this runner's default
+      # v17) at the same conventional /usr/lib/postgresql/18/bin path the
+      # Dockerfile's PGDG install produces — mirrors that same repo setup so
+      # this test exercises the identical binaries the deployed image uses,
+      # not a stand-in. The test itself skips gracefully if this step is
+      # ever unavailable; this step itself is NOT allowed to fail silently.
+      - name: Install postgresql-client-18 (PGDG apt repo)
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
       - name: Install dependencies
         # Root requirements.txt adds the SSG deps (jinja2/markdown/…) so the
         # Phase 2 build tests can drive build.py end-to-end.
