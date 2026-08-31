@@ -536,6 +536,19 @@ def _dispatch_wake_task(raw_value: str) -> None:
 # --------------------------------------------------------------------------- #
 
 
+async def _poll_one_node_usage(node) -> None:
+    try:
+        ratio = await neon_api.get_project_usage(node.neon_project_id)
+    except neon_api.NeonApiError:
+        logger.warning(
+            "Usage poll failed for node %s — keeping last cached value",
+            node.node_id,
+            extra={"data": {"event": "usage_poll_failed", "node_id": node.node_id}},
+        )
+        return
+    await set_usage_cache(node.node_id, ratio)
+
+
 async def _poll_all_node_usage() -> None:
     """§7.3: refresh every node's cached usage_ratio via Neon's
     control-plane API — never the node's own Postgres, so this never wakes
@@ -543,18 +556,16 @@ async def _poll_all_node_usage() -> None:
     cadence. A single node's failed poll is NOT a failure signal: keep
     whatever's already cached and retry next cycle — never let a Neon-API
     blip masquerade as a database-down event (that's what the reactive
-    trigger's own, separate DB health check is for, §7.4)."""
-    for node in await list_nodes():
-        try:
-            ratio = await neon_api.get_project_usage(node.neon_project_id)
-        except neon_api.NeonApiError:
-            logger.warning(
-                "Usage poll failed for node %s — keeping last cached value",
-                node.node_id,
-                extra={"data": {"event": "usage_poll_failed", "node_id": node.node_id}},
-            )
-            continue
-        await set_usage_cache(node.node_id, ratio)
+    trigger's own, separate DB health check is for, §7.4).
+
+    Every node is polled CONCURRENTLY, not one at a time — this whole call
+    is awaited inline in `_loop()`'s main body (unlike a sync/switch, a
+    usage check is cheap enough not to need its own background task), so a
+    sequential for-loop here would mean a single slow/hanging Neon API call
+    stalls this loop's own responsiveness (claiming newly-queued conversion
+    jobs) for up to ``NEON_API_TIMEOUT_SECONDS`` *per node* in a degraded-API
+    scenario, instead of once total."""
+    await asyncio.gather(*(_poll_one_node_usage(node) for node in await list_nodes()))
 
 
 def _fire_background(coro) -> None:
