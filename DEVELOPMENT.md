@@ -363,8 +363,12 @@ together, and can drift (that's what the `api-drift` CI job watches for):
    `master` and pushes it to Cloudflare Pages. Admin trigger flow:
    `POST /api/v1/admin/deploy` → GitHub Actions API dispatch (`workflow_dispatch`
    on `deploy.yml`, ref `master`, always — never a client-supplied ref) using a
-   fine-grained PAT scoped to this repo only (`Actions: read/write`) → the panel
-   polls run status via a second endpoint. The PAT lives only in the VM's
+   fine-grained PAT scoped to this repo only (`Actions: read/write`, plus
+   `Secrets: read/write` — PR #153: the same dispatch also rotates the
+   `DATABASE_URL`/`DATABASE_URL_WRITE` GitHub secrets to whichever Neon node is
+   currently active before triggering `deploy.yml`/`seed-tools.yml`, so a node
+   switch doesn't leave the build/seed pipeline reading a stale node) → the
+   panel polls run status via a second endpoint. The PAT lives only in the VM's
    `api/.env`; it is never a GitHub Actions secret, since the backend is the thing
    *dispatching* the workflow, not consuming it.
 2. **Backend (API container)** — redeployed via `release.yml` on `release:

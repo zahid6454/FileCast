@@ -19,14 +19,18 @@ back to the newest ``workflow_dispatch`` run). The POST reply key MUST be
 """
 
 import asyncio
+import base64
 import secrets
 from datetime import UTC, datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from log import get_logger
+from nacl import encoding as nacl_encoding
+from nacl import public as nacl_public
 
 from data.config import settings
+from data.node_registry import NoActiveNodeError, get_active_node, get_node
 from data.security import require_admin
 
 logger = get_logger("admin-deploy")
@@ -223,6 +227,179 @@ async def _resolve_run_id(
     return newest
 
 
+# --------------------------------------------------------------------------- #
+# Active-node secret sync (NEON_FAILOVER_PLAN.md Phase D gap, PR #153) — keep
+# DATABASE_URL/DATABASE_URL_WRITE pointed at whichever Neon node is actually
+# active, right before dispatching a workflow that reads one of them.
+# --------------------------------------------------------------------------- #
+#
+# deploy.yml (build.py) and seed-tools.yml (seed.py) both run on GitHub-hosted
+# runners with no path to production's Redis (deliberately not exposed
+# publicly — docker-compose.prod.yml), so neither script's own
+# data.db.sync_session() can resolve the active node the way every real
+# request does; it silently falls back to whatever these two GitHub secrets
+# hold. Those were set once, before Phase D existed, and never move on their
+# own: the Phase D rehearsal switched production to a new node and these two
+# secrets kept pointing at the old, now-idle one, so "Publish"/"Sync Tools"
+# kept reading from and writing to it no matter how many times an admin
+# re-ran them. Resolving the SAME active node get_active_node() resolves
+# everywhere else and rotating both secrets to it right before every
+# dispatch — rather than a one-time manual fix — is what keeps this correct
+# across every future switch, not just the current one.
+#
+# Requires the fine-grained PAT (DEVELOPMENT.md) to also carry this repo's
+# "Secrets: Read and write" permission, in addition to the "Actions: read/
+# write" it already has for dispatching workflows — without it, every
+# dispatch fails loud (502) once a node has ever been registered, rather than
+# silently reproducing the staleness bug this exists to close.
+
+
+async def _fetch_repo_public_key(client: httpx.AsyncClient) -> tuple[str, str]:
+    """GET the repo's Actions public key. GitHub's Secrets API requires every
+    secret value to be libsodium sealed-box-encrypted against it before the
+    PUT below — the same scheme GitHub's own API docs use PyNaCl for."""
+    resp = await client.get(
+        f"{_repo_base()}/actions/secrets/public-key", headers=_gh_headers()
+    )
+    if resp.status_code != 200:
+        # The likeliest real-world cause is the PAT missing the "Secrets:
+        # read/write" repository permission (DEVELOPMENT.md) — surfaced as a
+        # 403 here. Logged server-side since the admin only ever sees the
+        # resulting 502, with no other record of which secret/status caused it.
+        logger.warning(
+            "Could not fetch the repo's Actions public key (status=%s) — "
+            "secret sync will fail loud rather than dispatch with a stale "
+            "secret; check GITHUB_PAT's Secrets permission",
+            resp.status_code,
+            extra={
+                "data": {
+                    "event": "github_public_key_fetch_failed",
+                    "status": resp.status_code,
+                }
+            },
+        )
+        raise RuntimeError(
+            f"could not fetch the repo's Actions public key ({resp.status_code})"
+        )
+    try:
+        body = resp.json()
+        return body["key_id"], body["key"]
+    except (ValueError, KeyError, TypeError) as exc:
+        raise RuntimeError("repo public key response was malformed") from exc
+
+
+def _seal_for_github(public_key_b64: str, plaintext: str) -> str:
+    """Encrypt ``plaintext`` for a GitHub secrets PUT — base64 libsodium
+    sealed box, exactly the scheme GitHub's API requires."""
+    public_key = nacl_public.PublicKey(
+        public_key_b64.encode("utf-8"), nacl_encoding.Base64Encoder()
+    )
+    sealed = nacl_public.SealedBox(public_key).encrypt(plaintext.encode("utf-8"))
+    return base64.b64encode(sealed).decode("utf-8")
+
+
+async def _update_github_secret(
+    client: httpx.AsyncClient, name: str, value: str
+) -> None:
+    key_id, public_key_b64 = await _fetch_repo_public_key(client)
+    try:
+        encrypted_value = _seal_for_github(public_key_b64, value)
+    except Exception as exc:  # noqa: BLE001 — a malformed/corrupt public key
+        # (bad base64, wrong key length) raises binascii.Error or
+        # nacl.exceptions.CryptoError here — neither is a RuntimeError, so
+        # left uncaught this would escape trigger_deploy/trigger_seed's own
+        # except clauses as a bare, unhandled 500 instead of this module's
+        # otherwise-universal "never an opaque failure, always a clear
+        # 502" contract (mirrors _fetch_repo_public_key's own hardening).
+        raise RuntimeError(f"could not encrypt the {name} secret value: {exc}") from exc
+    resp = await client.put(
+        f"{_repo_base()}/actions/secrets/{name}",
+        headers=_gh_headers(),
+        json={"encrypted_value": encrypted_value, "key_id": key_id},
+    )
+    # GitHub returns 201 on first creation, 204 on every update thereafter.
+    if resp.status_code not in (201, 204):
+        logger.warning(
+            "Could not update the %s secret (status=%s)",
+            name,
+            resp.status_code,
+            extra={
+                "data": {
+                    "event": "github_secret_update_failed",
+                    "secret_name": name,
+                    "status": resp.status_code,
+                }
+            },
+        )
+        raise RuntimeError(f"could not update the {name} secret ({resp.status_code})")
+
+
+async def _resolve_active_connection_string() -> str | None:
+    """The active node's connection string, or ``None`` when there is no
+    dynamic node registered yet (pre-Bootstrap) — in that case
+    DATABASE_URL/DATABASE_URL_WRITE already hold the one-and-only static
+    value and don't need rotating."""
+    try:
+        node_id = await get_active_node()
+    except NoActiveNodeError:
+        return None
+    try:
+        node = await get_node(node_id)
+    except Exception as exc:  # noqa: BLE001 — a Redis hiccup here must become
+        # a clear, actionable RuntimeError (caught by the callers below), not
+        # escape uncaught — silently proceeding with a stale secret would
+        # reproduce the exact bug this whole mechanism exists to close.
+        logger.error(
+            "Registry lookup for active node_id=%s failed while syncing a "
+            "deploy secret — failing loud rather than dispatching with a "
+            "possibly-stale secret",
+            node_id,
+            exc_info=True,
+            extra={
+                "data": {
+                    "event": "active_node_secret_sync_lookup_failed",
+                    "node_id": node_id,
+                }
+            },
+        )
+        raise RuntimeError(
+            f"registry lookup for active node_id={node_id!r} failed: {exc}"
+        ) from exc
+    if node is None:
+        logger.error(
+            "Active node id=%s has no registry record while syncing a " "deploy secret",
+            node_id,
+            extra={
+                "data": {
+                    "event": "active_node_secret_sync_record_missing",
+                    "node_id": node_id,
+                }
+            },
+        )
+        raise RuntimeError(f"active node_id={node_id!r} has no registry record")
+    return node.connection_string
+
+
+async def _sync_active_db_secret(client: httpx.AsyncClient, secret_name: str) -> None:
+    connection_string = await _resolve_active_connection_string()
+    if connection_string is None:
+        return
+    await _update_github_secret(client, secret_name, connection_string)
+    # Deliberately does not log the connection string itself — node_id is
+    # enough to audit "which node did this dispatch target" without echoing
+    # a credential into the logs.
+    logger.info(
+        "Rotated %s to the active node's connection string before dispatch",
+        secret_name,
+        extra={
+            "data": {
+                "event": "active_node_secret_rotated",
+                "secret_name": secret_name,
+            }
+        },
+    )
+
+
 @router.post("/deploy")
 async def trigger_deploy(admin=Depends(require_admin)):
     _require_configured()
@@ -236,6 +413,11 @@ async def trigger_deploy(admin=Depends(require_admin)):
     dispatched_at = datetime.now(UTC)
     try:
         async with _make_client() as client:
+            # DATABASE_URL is deploy.yml's read-only build overlay source
+            # (build.py) — must be fresh before dispatch, not just at some
+            # earlier switch time an admin may not have re-triggered a deploy
+            # since.
+            await _sync_active_db_secret(client, "DATABASE_URL")
             resp = await client.post(dispatch_url, headers=_gh_headers(), json=payload)
             # workflow_dispatch → 204 No Content on success.
             if resp.status_code != 204:
@@ -248,6 +430,11 @@ async def trigger_deploy(admin=Depends(require_admin)):
         # Network/timeout to GitHub — a real, transient failure (NOT 501).
         raise HTTPException(
             status_code=502, detail="Could not reach GitHub to start the deploy."
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not sync the active database target before deploying: {exc}",
         ) from exc
     logger.info(
         "Deploy triggered by %s",
@@ -356,6 +543,10 @@ async def trigger_seed(admin=Depends(require_admin)):
     dispatched_at = datetime.now(UTC)
     try:
         async with _make_client() as client:
+            # DATABASE_URL_WRITE is seed-tools.yml's write-capable target
+            # (seed.py) — same freshness requirement as trigger_deploy's
+            # DATABASE_URL sync above.
+            await _sync_active_db_secret(client, "DATABASE_URL_WRITE")
             resp = await client.post(dispatch_url, headers=_gh_headers(), json=payload)
             # workflow_dispatch → 204 No Content on success.
             if resp.status_code != 204:
@@ -370,6 +561,11 @@ async def trigger_seed(admin=Depends(require_admin)):
         # Network/timeout to GitHub — a real, transient failure (NOT 501).
         raise HTTPException(
             status_code=502, detail="Could not reach GitHub to start the sync."
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not sync the active database target before seeding: {exc}",
         ) from exc
     logger.info(
         "Tool sync triggered by %s",

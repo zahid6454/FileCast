@@ -5,10 +5,18 @@ Focused on two things the existing suite didn't otherwise exercise directly:
 resilience when the registry *lookup itself* (not just the active-pointer
 read, which already has its own fallback in node_registry.py) fails, and the
 per-node engine cache actually avoiding a repeated registry read once warm.
+
+Also covers ``_register_search_path_fix`` (PR #153) against a real server —
+see the "search_path connect hook" section below.
 """
 
+import pytest
 from data import db, node_registry
 from data.node_registry import Node, register_node, set_active_node
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine
+from test_node_sync import _node_sync_postgres_url, two_real_databases  # noqa: F401
 
 
 def _make_node(node_id: str, connection_string: str) -> Node:
@@ -147,3 +155,108 @@ async def test_get_active_sync_engine_falls_back_when_active_node_record_missing
 
     assert entry.engine is db.sync_engine
     assert entry.session_factory is db.sync_session_factory
+
+
+# --------------------------------------------------------------------------- #
+# _register_search_path_fix — the Phase D rehearsal gap (PR #153).
+#
+# Reuses test_node_sync.py's real-Postgres-18-server harness
+# (TEST_NODE_SYNC_POSTGRES_URL / two_real_databases) rather than the main
+# TEST_DATABASE_URL: breaking a role's search_path with ALTER ROLE is
+# database-scoped but role-scoped too, and the shared test role/database
+# backs every other test in this suite via db.sync_engine/async_engine's
+# already-open pools — corrupting it (or racing its cleanup against pool
+# reuse from unrelated tests) would risk cross-test breakage for no benefit.
+# A throwaway database on the dedicated v18 server isolates the blast radius
+# to just these two tests, same reasoning as
+# test_ensure_search_path_fixes_a_role_with_no_default_schema.
+#
+# two_real_databases is imported, not redefined, so ruff's static analysis
+# can't see the two tests below "use" it via pytest's parameter-name fixture
+# injection — hence the F401/F811 noqa's on the import and each test's
+# signature.
+# --------------------------------------------------------------------------- #
+
+
+def _break_search_path(dst_url: str) -> None:
+    """ALTER ROLE ... SET search_path = '' on dst_url's own role/database —
+    the exact state a console-created Neon project can leave its owner role
+    in (§7.5/§7.8), and the one this fix must recover from on the very next
+    physical connection."""
+    admin_url = make_url(db._sync_url(dst_url))
+    role = admin_url.username
+    database = admin_url.database
+    admin_engine = create_engine(db._sync_url(dst_url))
+    try:
+        with admin_engine.connect() as conn:
+            conn.execute(
+                text(
+                    f'ALTER ROLE "{role}" IN DATABASE "{database}" SET search_path = \'\''
+                )
+            )
+            conn.commit()
+    finally:
+        admin_engine.dispose()
+
+
+@pytest.mark.skipif(
+    _node_sync_postgres_url() is None,
+    reason="TEST_NODE_SYNC_POSTGRES_URL not set — point it at a real "
+    "Postgres 18 server (see ci.yml's postgres18 service) to run this test "
+    "for real",
+)
+def test_register_search_path_fix_repairs_a_broken_role_sync(
+    two_real_databases,  # noqa: F811 — fixture injection, not a redefinition
+):
+    """The actual bug: a fresh sync connection from a role with a broken
+    search_path can't resolve an unqualified table name. Confirms
+    _register_search_path_fix's pool "connect" event forces it back to
+    "public" on the very first physical connection this engine ever opens —
+    and that a connection handed back to the pool and checked out again (no
+    new "connect" event) still carries it, since it was set once for that
+    connection's whole lifetime, not re-applied per checkout."""
+    _, dst_url = two_real_databases
+    _break_search_path(dst_url)
+
+    engine = create_engine(db._sync_url(dst_url))
+    db._register_search_path_fix(engine)
+    try:
+        with engine.connect() as conn:
+            assert conn.execute(text("SHOW search_path")).scalar_one() == "public"
+            conn.execute(text("CREATE TABLE _search_path_probe_sync (id int)"))
+            conn.execute(text("DROP TABLE _search_path_probe_sync"))
+            conn.commit()
+        with engine.connect() as conn:  # a reused, not a newly-connected, DBAPI conn
+            assert conn.execute(text("SHOW search_path")).scalar_one() == "public"
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.skipif(
+    _node_sync_postgres_url() is None,
+    reason="TEST_NODE_SYNC_POSTGRES_URL not set — point it at a real "
+    "Postgres 18 server (see ci.yml's postgres18 service) to run this test "
+    "for real",
+)
+async def test_register_search_path_fix_repairs_a_broken_role_async(
+    two_real_databases,  # noqa: F811 — fixture injection, not a redefinition
+):
+    """Async counterpart — current_user() (the auth dependency the Phase D
+    rehearsal actually hit, per _register_search_path_fix's own docstring)
+    runs through the ASYNC engine, so the hook must work the way db.py
+    actually attaches it: via AsyncEngine.sync_engine, not a plain sync
+    Engine."""
+    _, dst_url = two_real_databases
+    _break_search_path(dst_url)
+
+    async_engine = create_async_engine(dst_url)
+    db._register_search_path_fix(async_engine.sync_engine)
+    try:
+        async with async_engine.connect() as conn:
+            result = await conn.execute(text("SHOW search_path"))
+            assert result.scalar_one() == "public"
+            await conn.execute(text("CREATE TABLE _search_path_probe_async (id int)"))
+            await conn.execute(text("DROP TABLE _search_path_probe_async"))
+            await conn.commit()
+    finally:
+        await async_engine.dispose()

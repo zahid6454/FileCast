@@ -30,3 +30,8 @@ sentry-sdk[fastapi]==2.*
 # Phase 3: shared rate-limit store + conversion job worker wake-up signal
 # (data/redis_client.py). redis.asyncio only — no persistence configured.
 redis==5.*
+# admin_deploy.py's active-node secret sync (PR #153): GitHub's Secrets API
+# requires every value to be libsodium sealed-box-encrypted against the repo's
+# public key before the PUT — PyNaCl is what GitHub's own API docs use in
+# their worked example, rather than hand-rolling crypto_box_seal.
+pynacl==1.5.0
