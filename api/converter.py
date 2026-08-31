@@ -22,6 +22,7 @@ from xml.etree import ElementTree as ET
 import httpx
 from data.db import get_active_engine, get_session
 from data.models import ConversionJob, User
+from data.node_ops import pool_has_headroom
 from data.node_registry import require_not_maintenance
 from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 from data.security import current_user_for_convert, require_admin
@@ -1768,6 +1769,21 @@ async def health(check_db: bool = True):
         "database": "skipped" if db_ok is None else ("up" if db_ok else "down"),
         "worker": "up" if worker_ok else "down",
     }
+
+
+@router.get("/pool-health")
+async def pool_health():
+    """NEON_FAILOVER_PLAN.md §7.11 — public, unauthenticated, same posture
+    as /health above, but deliberately less detailed: a bare healthy/
+    degraded signal, computed from the same "does any reserve have
+    meaningfully more headroom" logic switch-target selection itself uses
+    (§7.4/§9) — no per-node numbers, node count, or names, which stay
+    behind admin login (§7.1). Meant to back a SEPARATE UptimeRobot monitor
+    from /health's, so the two alert emails carry unambiguous, different
+    meanings ("the pool is getting tight, plan ahead" vs. "the site is
+    actually down right now")."""
+    healthy = await pool_has_headroom()
+    return {"status": "healthy" if healthy else "degraded"}
 
 
 @router.get("/metrics")

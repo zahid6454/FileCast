@@ -684,6 +684,61 @@ async def usage_poll_cycle() -> NodeSettings:
     return node_settings
 
 
+# --------------------------------------------------------------------------- #
+# Weekly keep-alive sync (NEON_FAILOVER_PLAN.md §7.9, Phase E)
+# --------------------------------------------------------------------------- #
+
+# Neon deletes a free-tier project after 90 days with zero activity, and the
+# usage-check (§7.3) doesn't count — it's control-plane only, never touches
+# the node's own Postgres. A week is a wide margin under that 90-day cutoff
+# while still keeping every reserve's standby data reasonably fresh for a
+# reactive (no-sync) failover to a rarely-used node.
+KEEPALIVE_INTERVAL_SECONDS = 7 * 24 * 60 * 60
+
+# The sweep only needs to CHECK this often, not sync this often — checking on
+# the same cadence as the GC sweep is plenty; a reserve running up to an hour
+# past the exact 7-day mark is immaterial against the 90-day deletion window.
+KEEPALIVE_CHECK_INTERVAL_SECONDS = GC_SWEEP_INTERVAL_SECONDS
+
+
+async def weekly_keepalive_sweep() -> None:
+    """§7.9: every RESERVE node (``ready``, not the active one) whose
+    ``last_activity`` (§7.1 — updated by every real sync, in either
+    direction) is missing or older than ``KEEPALIVE_INTERVAL_SECONDS`` gets a
+    fresh sync fired as its own background task, regardless of whether a
+    switch is expected any time soon. Reuses ``node_ops.run_warmup_sync`` —
+    the exact same standalone, pool-lock-guarded sync the proactive trigger's
+    70% warm-up uses (§7.4) — since this is the same operation (sync FROM the
+    active node INTO a reserve) for a different reason."""
+    try:
+        active_node_id = await get_active_node()
+    except NoActiveNodeError:
+        return
+
+    now = datetime.now(UTC)
+    for node in await list_nodes():
+        if node.node_id == active_node_id or node.status != "ready":
+            continue
+        last_activity = await get_last_activity(node.node_id)
+        if last_activity is not None:
+            age_seconds = (now - last_activity).total_seconds()
+            if age_seconds < KEEPALIVE_INTERVAL_SECONDS:
+                continue
+        logger.info(
+            "Weekly keep-alive sync: %s -> %s",
+            active_node_id,
+            node.node_id,
+            extra={
+                "data": {
+                    "event": "keepalive_sync_triggered",
+                    "source_node_id": active_node_id,
+                    "target_node_id": node.node_id,
+                }
+            },
+        )
+        _fire_background(node_ops.run_warmup_sync(active_node_id, node.node_id))
+
+
 async def recover_orphaned_jobs() -> dict[str, int]:
     """A ``converting`` row is only ever true while THIS worker process
     instance holds a live asyncio task for it — so if the process restarts
@@ -824,6 +879,7 @@ async def _loop() -> None:
     last_gotenberg_probe = 0.0
     last_discovery_fallback = 0.0
     last_usage_poll = 0.0
+    last_keepalive_check = 0.0
     # NEON_FAILOVER_PLAN.md §7.3/§8 — usage_poll_interval_minutes is
     # admin-editable at runtime; re-read on every actual poll below so a
     # changed interval takes effect starting from the next cycle rather than
@@ -909,6 +965,17 @@ async def _loop() -> None:
                     extra={"data": {"event": "worker_usage_poll_error"}},
                 )
             last_usage_poll = now
+
+        if now - last_keepalive_check > KEEPALIVE_CHECK_INTERVAL_SECONDS:
+            try:
+                await weekly_keepalive_sweep()
+            except Exception:  # noqa: BLE001
+                logger.error(
+                    "Weekly keep-alive sweep failed",
+                    exc_info=True,
+                    extra={"data": {"event": "worker_keepalive_error"}},
+                )
+            last_keepalive_check = now
 
         if now - last_gotenberg_probe > GOTENBERG_HEALTH_PROBE_INTERVAL_SECONDS:
             try:

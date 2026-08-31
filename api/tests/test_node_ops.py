@@ -437,6 +437,68 @@ async def test_execute_switch_unexpected_error_still_releases_lock_and_resumes(
 
 
 # --------------------------------------------------------------------------- #
+# pool_has_headroom (NEON_FAILOVER_PLAN.md §7.11/§9, Phase E)
+# --------------------------------------------------------------------------- #
+
+
+async def test_pool_has_headroom_true_before_bootstrap():
+    # No active node registered at all — nothing to protect yet.
+    assert await node_ops.pool_has_headroom() is True
+
+
+async def test_pool_has_headroom_true_while_active_is_well_under_warmup_threshold():
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.05)
+    await set_usage_cache(
+        "reserve", 0.05
+    )  # equally near-zero — must not read "degraded"
+
+    assert await node_ops.pool_has_headroom() is True
+
+
+async def test_pool_has_headroom_true_when_a_reserve_has_meaningfully_less_usage():
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.85)  # past the default 70% warm-up threshold
+    await set_usage_cache("reserve", 0.1)
+
+    assert await node_ops.pool_has_headroom() is True
+
+
+async def test_pool_has_headroom_false_when_best_reserve_is_not_better_than_active():
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.85)
+    await set_usage_cache("reserve", 0.9)  # even MORE used than the active node
+
+    assert await node_ops.pool_has_headroom() is False
+
+
+async def test_pool_has_headroom_false_when_no_reserve_exists():
+    await register_node(_make_node("active"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.85)
+
+    assert await node_ops.pool_has_headroom() is False
+
+
+async def test_pool_has_headroom_ignores_a_retired_or_provisioning_reserve():
+    await register_node(_make_node("active"))
+    await register_node(_make_node("retired-reserve", status="retired"))
+    await register_node(_make_node("provisioning-reserve", status="provisioning"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.85)
+    await set_usage_cache("retired-reserve", 0.0)
+    await set_usage_cache("provisioning-reserve", 0.0)
+
+    assert await node_ops.pool_has_headroom() is False
+
+
+# --------------------------------------------------------------------------- #
 # run_warmup_sync (NEON_FAILOVER_PLAN.md §7.4, Phase E)
 # --------------------------------------------------------------------------- #
 

@@ -11,6 +11,8 @@ import zipfile
 import converter
 import pytest
 from data import job_worker
+from data import node_registry as nr
+from data.node_registry import Node, register_node, set_active_node, set_usage_cache
 
 
 async def _enqueue(client, path, files, data=None):
@@ -1152,6 +1154,82 @@ async def test_health_endpoint_check_db_false_status_ignores_db(client, monkeypa
     assert r.status_code == 200
     body = r.json()
     assert body["database"] == "skipped"
+
+
+# --------------------------------------------------------------------------- #
+# /pool-health (NEON_FAILOVER_PLAN.md §7.11, Phase E)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(autouse=True)
+def _reset_pool_health_state(monkeypatch):
+    """Same reasoning as the other node-registry test files: the
+    active-node fallback cache lives outside Redis (§7.1) and must not leak
+    between tests in this file."""
+    monkeypatch.setattr(nr, "_cached_active_node_id", None)
+    monkeypatch.setattr(nr, "_cached_active_node_at", 0.0)
+
+
+def _make_pool_node(node_id: str, *, status="ready") -> Node:
+    return Node(
+        node_id=node_id,
+        display_name=f"Node {node_id}",
+        connection_string=f"postgresql+psycopg://user:pw@ep-{node_id}.neon.tech/filecast",
+        neon_project_id=f"proj-{node_id}",
+        status=status,
+        created_at="2026-01-01T00:00:00+00:00",
+    )
+
+
+async def test_pool_health_endpoint_responds_healthy_before_bootstrap(client):
+    r = await client.get("/api/v1/pool-health")
+    assert r.status_code == 200
+    assert r.json() == {"status": "healthy"}
+
+
+async def test_pool_health_endpoint_reports_degraded_when_no_reserve_has_headroom(
+    client,
+):
+    await register_node(_make_pool_node("active"))
+    await register_node(_make_pool_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.9)
+    await set_usage_cache("reserve", 0.95)  # even more used than the active node
+
+    r = await client.get("/api/v1/pool-health")
+
+    assert r.status_code == 200
+    assert r.json() == {"status": "degraded"}
+
+
+async def test_pool_health_endpoint_reports_healthy_with_real_reserve_headroom(client):
+    await register_node(_make_pool_node("active"))
+    await register_node(_make_pool_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.9)
+    await set_usage_cache("reserve", 0.1)
+
+    r = await client.get("/api/v1/pool-health")
+
+    assert r.status_code == 200
+    assert r.json() == {"status": "healthy"}
+
+
+async def test_pool_health_endpoint_never_exposes_per_node_detail(client):
+    await register_node(_make_pool_node("active"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.9)
+
+    r = await client.get("/api/v1/pool-health")
+
+    assert set(r.json().keys()) == {"status"}
+
+
+async def test_pool_health_endpoint_requires_no_auth(client):
+    # Same public posture as /health — no Depends(require_admin) anywhere
+    # in the route, unauthenticated `client` fixture must succeed.
+    r = await client.get("/api/v1/pool-health")
+    assert r.status_code == 200
 
 
 # --------------------------------------------------------------------------- #
