@@ -12,7 +12,14 @@ import converter
 import pytest
 from data import job_worker
 from data import node_registry as nr
-from data.node_registry import Node, register_node, set_active_node, set_usage_cache
+from data.node_registry import (
+    Node,
+    get_health_fail_count,
+    register_node,
+    set_active_node,
+    set_usage_cache,
+)
+from data.redis_client import redis_client
 
 
 async def _enqueue(client, path, files, data=None):
@@ -1162,15 +1169,15 @@ async def test_health_endpoint_check_db_false_status_ignores_db(client, monkeypa
 
 
 @pytest.fixture(autouse=True)
-def _reset_pool_health_state(monkeypatch):
-    """Same reasoning as the other node-registry test files: the
-    active-node fallback cache lives outside Redis (§7.1) and must not leak
-    between tests in this file."""
+def _reset_active_node_cache(monkeypatch):
+    """The active-node fallback cache lives outside Redis on purpose (§7.1)
+    and must not leak between tests in this file; conftest's own Redis flush
+    already clears the health-fail counter itself between tests."""
     monkeypatch.setattr(nr, "_cached_active_node_id", None)
     monkeypatch.setattr(nr, "_cached_active_node_at", 0.0)
 
 
-def _make_pool_node(node_id: str, *, status="ready") -> Node:
+def _make_node(node_id: str, *, status="ready") -> Node:
     return Node(
         node_id=node_id,
         display_name=f"Node {node_id}",
@@ -1190,8 +1197,8 @@ async def test_pool_health_endpoint_responds_healthy_before_bootstrap(client):
 async def test_pool_health_endpoint_reports_degraded_when_no_reserve_has_headroom(
     client,
 ):
-    await register_node(_make_pool_node("active"))
-    await register_node(_make_pool_node("reserve"))
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
     await set_active_node("active")
     await set_usage_cache("active", 0.9)
     await set_usage_cache("reserve", 0.95)  # even more used than the active node
@@ -1203,8 +1210,8 @@ async def test_pool_health_endpoint_reports_degraded_when_no_reserve_has_headroo
 
 
 async def test_pool_health_endpoint_reports_healthy_with_real_reserve_headroom(client):
-    await register_node(_make_pool_node("active"))
-    await register_node(_make_pool_node("reserve"))
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
     await set_active_node("active")
     await set_usage_cache("active", 0.9)
     await set_usage_cache("reserve", 0.1)
@@ -1216,7 +1223,7 @@ async def test_pool_health_endpoint_reports_healthy_with_real_reserve_headroom(c
 
 
 async def test_pool_health_endpoint_never_exposes_per_node_detail(client):
-    await register_node(_make_pool_node("active"))
+    await register_node(_make_node("active"))
     await set_active_node("active")
     await set_usage_cache("active", 0.9)
 
@@ -1230,6 +1237,182 @@ async def test_pool_health_endpoint_requires_no_auth(client):
     # in the route, unauthenticated `client` fixture must succeed.
     r = await client.get("/api/v1/pool-health")
     assert r.status_code == 200
+
+
+# --------------------------------------------------------------------------- #
+# Reactive switch trigger (NEON_FAILOVER_PLAN.md §7.4 Trigger 2, Phase E) —
+# the shared Redis consecutive-failure counter wired into /health's existing
+# DB check. The DB failure itself is always simulated the same way the tests
+# above already do (monkeypatching converter.get_active_engine), but
+# get_active_node()/select_switch_target() underneath the reactive trigger
+# read the REAL node registry — so these tests register real nodes, same
+# pattern as test_admin_nodes.py.
+# --------------------------------------------------------------------------- #
+
+
+def _make_active_node(node_id: str) -> Node:
+    """A node actually resolved as ACTIVE (not just a switch target) needs a
+    REAL, working connection string whenever a test un-mocks
+    get_active_engine() — same reasoning as test_admin_nodes.py's own
+    ``_make_active_node``."""
+    from data.config import settings
+
+    return _make_node(node_id).model_copy(
+        update={"connection_string": settings.database_url}
+    )
+
+
+def _fail_db(monkeypatch) -> None:
+    class _BoomEngine:
+        def connect(self):
+            raise RuntimeError("connection refused")
+
+    async def _fake_get_active_engine():
+        return _BoomEngine()
+
+    monkeypatch.setattr(converter, "get_active_engine", _fake_get_active_engine)
+
+
+async def _pop_wake_task():
+    from data.node_ops import parse_wake_task
+
+    raw = await redis_client.rpop(converter.JOB_WAKE_QUEUE_KEY)
+    if raw is None:
+        return None
+    return parse_wake_task(raw)
+
+
+async def test_reactive_trigger_does_not_fire_below_the_default_threshold(
+    client, monkeypatch
+):
+    await register_node(_make_active_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    _fail_db(monkeypatch)
+
+    r = await client.get("/api/v1/health")
+
+    assert r.status_code == 200
+    assert r.json()["database"] == "down"
+    assert await get_health_fail_count() == 1
+    assert await _pop_wake_task() is None
+
+
+async def test_reactive_trigger_fires_on_the_nth_consecutive_failure(
+    client, monkeypatch
+):
+    await register_node(_make_active_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    _fail_db(monkeypatch)
+
+    r1 = await client.get("/api/v1/health")
+    assert await _pop_wake_task() is None  # 1st failure — below default threshold (2)
+
+    r2 = await client.get("/api/v1/health")
+    assert r1.status_code == r2.status_code == 200
+
+    task = await _pop_wake_task()
+    assert task is not None
+    task_type, kwargs = task
+    assert task_type == "switch_node"
+    assert kwargs["target_node_id"] == "reserve"
+    assert kwargs["trigger"] == "reactive"
+
+
+async def test_reactive_trigger_selects_the_least_used_reserve(client, monkeypatch):
+    # §7.4/§12: the reactive trigger must dispatch to the SAME
+    # select_switch_target() logic every other trigger uses — the lowest
+    # cached usage_ratio wins, not just "whichever reserve happens to be
+    # registered first."
+    await register_node(_make_active_node("active"))
+    await register_node(_make_node("busy-reserve"))
+    await register_node(_make_node("idle-reserve"))
+    await set_active_node("active")
+    await set_usage_cache("busy-reserve", 0.8)
+    await set_usage_cache("idle-reserve", 0.1)
+    _fail_db(monkeypatch)
+
+    await client.get("/api/v1/health")
+    await client.get("/api/v1/health")
+
+    task = await _pop_wake_task()
+    assert task is not None
+    _, kwargs = task
+    assert kwargs["target_node_id"] == "idle-reserve"
+
+
+async def test_reactive_trigger_uses_the_shared_counter_not_a_fresh_one_per_request(
+    client, monkeypatch
+):
+    # §7.1: the counter must be Redis-backed, not in-process, because `api`
+    # runs 4 worker processes and consecutive /health requests can land on
+    # any of them. Simulate "one failure already recorded by a different
+    # process" by incrementing it directly, outside of any request this test
+    # makes, then confirm a SINGLE request from here is enough to cross the
+    # default threshold of 2 and fire the dispatch.
+    from data.node_registry import increment_health_fail_count
+
+    await register_node(_make_active_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await increment_health_fail_count()
+    _fail_db(monkeypatch)
+
+    r = await client.get("/api/v1/health")
+
+    assert r.status_code == 200
+    task = await _pop_wake_task()
+    assert task is not None
+    assert task[1]["trigger"] == "reactive"
+
+
+async def test_healthy_check_resets_the_failure_counter(client, monkeypatch):
+    await register_node(_make_active_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+
+    _fail_db(monkeypatch)
+    await client.get("/api/v1/health")
+    assert await get_health_fail_count() == 1
+
+    monkeypatch.undo()  # restore the real (working, test-DB-backed) get_active_engine
+    await client.get("/api/v1/health")
+    assert await get_health_fail_count() == 0
+
+    _fail_db(monkeypatch)
+    await client.get("/api/v1/health")  # count is back to 1, not 2 — no dispatch yet
+    assert await get_health_fail_count() == 1
+    assert await _pop_wake_task() is None
+
+
+async def test_reactive_trigger_no_reserve_available_still_returns_degraded(
+    client, monkeypatch
+):
+    await register_node(_make_active_node("active"))  # no reserve registered at all
+    await set_active_node("active")
+    _fail_db(monkeypatch)
+
+    await client.get("/api/v1/health")
+    r2 = await client.get("/api/v1/health")
+
+    assert r2.status_code == 200
+    assert r2.json()["database"] == "down"
+    assert await _pop_wake_task() is None
+
+
+async def test_check_db_false_never_touches_the_failure_counter(client, monkeypatch):
+    await register_node(_make_active_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    _fail_db(monkeypatch)
+
+    for _ in range(3):
+        r = await client.get("/api/v1/health?check_db=false")
+        assert r.status_code == 200
+
+    assert await get_health_fail_count() == 0
+    assert await _pop_wake_task() is None
 
 
 # --------------------------------------------------------------------------- #
