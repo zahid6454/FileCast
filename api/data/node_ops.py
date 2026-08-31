@@ -187,9 +187,17 @@ async def pool_has_headroom() -> bool:
     against each other is meaningless (a brand new pool would otherwise
     read "degraded" just because every node's usage happens to be equally
     unmeasured or equally near zero, which is the opposite of what this
-    signal is for). Once the active node is genuinely getting used up, this
-    starts asking the real question: is there somewhere meaningfully better
-    to go.
+    signal is for).
+
+    Once the active node is genuinely getting used up, "meaningfully more
+    headroom" is deliberately NOT "the best reserve's usage is merely lower
+    than the active's by any amount" — that would call a reserve at 96%
+    usage "headroom" next to a 97% active node, which is not what an
+    operator being told "the pool is fine" should hear. Instead: does the
+    best available reserve have real room of ITS OWN, i.e. is its usage
+    still under ``cutover_threshold_pct`` (the same line this app itself
+    uses to decide a node needs replacing) — genuine runway before that
+    reserve would need replacing too, not just a smaller number.
     """
     try:
         active_node_id = await get_active_node()
@@ -209,7 +217,7 @@ async def pool_has_headroom() -> bool:
 
     target_usage = await get_usage_cache(target_node_id)
     target_ratio = target_usage.ratio if target_usage else 0.0
-    return target_ratio < active_ratio
+    return target_ratio < node_settings.cutover_threshold_pct / 100
 
 
 async def run_warmup_sync(source_node_id: str, target_node_id: str) -> bool:

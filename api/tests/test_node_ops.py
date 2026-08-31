@@ -498,6 +498,27 @@ async def test_pool_has_headroom_ignores_a_retired_or_provisioning_reserve():
     assert await node_ops.pool_has_headroom() is False
 
 
+async def test_all_nodes_low_pool_degrades_but_target_selection_still_engages():
+    # §9/§12 "all-nodes-low": every node's cached usage is forced near the
+    # cutover threshold. /pool-health must flip to degraded (no reserve has
+    # MEANINGFULLY more headroom) — but select_switch_target(), the exact
+    # mechanism both the proactive and reactive triggers dispatch through,
+    # must still return the least-bad option rather than giving up. §9:
+    # "the reactive trigger still falls back to whichever node has the
+    # least-bad amount of room left... strictly better than no fallback."
+    await register_node(_make_node("active"))
+    await register_node(_make_node("least-bad-reserve"))
+    await register_node(_make_node("worst-reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.97)
+    await set_usage_cache("least-bad-reserve", 0.95)
+    await set_usage_cache("worst-reserve", 0.99)
+
+    assert await node_ops.pool_has_headroom() is False
+    target = await node_ops.select_switch_target(exclude_node_ids={"active"})
+    assert target == "least-bad-reserve"
+
+
 # --------------------------------------------------------------------------- #
 # run_warmup_sync (NEON_FAILOVER_PLAN.md §7.4, Phase E)
 # --------------------------------------------------------------------------- #
