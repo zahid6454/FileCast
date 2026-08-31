@@ -17,3 +17,12 @@ Pillow==12.*
 sqlalchemy[asyncio]==2.0.*
 psycopg[binary]==3.*
 pydantic-settings==2.*
+# Phase 7.2: data.db now unconditionally imports data.node_registry (the N-way
+# dynamic-engine active-node resolution), which imports data.redis_client —
+# without this, the ImportError above is a ModuleNotFoundError on every single
+# build, not a graceful degrade (confirmed: this exact failure appears in every
+# deploy/release run's log, silently, since Phase 7.2 landed). Pinned to match
+# api/requirements.txt exactly, same reasoning as this file's own Pillow pin
+# above — a mismatch between the two is a hard resolver conflict elsewhere in
+# CI where both files install together, not just a version difference.
+redis==5.*

@@ -31,7 +31,6 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import HTTPException
 from log import get_logger
 from pydantic import BaseModel, ValidationError
 
@@ -420,6 +419,14 @@ async def require_not_maintenance() -> None:
     need its own separate fallback.
     """
     if await is_maintenance():
+        # Deferred — this is the only fastapi-touching line in an otherwise
+        # framework-free module. build.py/seed.py/scripts/node_sync.py all
+        # import this module for its pure registry/Redis functions (data.db's
+        # own import chain runs through here); a module-level fastapi import
+        # would force those non-router consumers to have fastapi installed
+        # just for a router-only guard they never call.
+        from fastapi import HTTPException
+
         raise HTTPException(status_code=503, detail=MAINTENANCE_MESSAGE)
 
 
