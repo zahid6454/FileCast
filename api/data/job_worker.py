@@ -44,6 +44,7 @@ itself.
 """
 
 import asyncio
+import secrets
 import sys
 import tempfile
 import time
@@ -66,10 +67,21 @@ from converter import (
 from log import get_logger
 from sqlalchemy import func, select, update
 
-from data import node_ops
+from data import neon_api, node_ops
 from data.db import get_active_session_factory
 from data.models import ConversionJob
-from data.node_registry import recover_stale_pool_state
+from data.node_registry import (
+    DEFAULT_NODE_SETTINGS,
+    NoActiveNodeError,
+    NodeSettings,
+    get_active_node,
+    get_last_activity,
+    get_settings,
+    get_usage_cache,
+    list_nodes,
+    recover_stale_pool_state,
+    set_usage_cache,
+)
 from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 
 logger = get_logger("job_worker")
@@ -519,6 +531,170 @@ def _dispatch_wake_task(raw_value: str) -> None:
     wake_task.add_done_callback(_background_tasks.discard)
 
 
+# --------------------------------------------------------------------------- #
+# Usage polling + proactive trigger (NEON_FAILOVER_PLAN.md §7.3/§7.4, Phase E)
+# --------------------------------------------------------------------------- #
+
+
+async def _poll_one_node_usage(node) -> None:
+    try:
+        ratio = await neon_api.get_project_usage(node.neon_project_id)
+    except neon_api.NeonApiError:
+        logger.warning(
+            "Usage poll failed for node %s — keeping last cached value",
+            node.node_id,
+            extra={"data": {"event": "usage_poll_failed", "node_id": node.node_id}},
+        )
+        return
+    await set_usage_cache(node.node_id, ratio)
+
+
+async def _poll_all_node_usage() -> None:
+    """§7.3: refresh every node's cached usage_ratio via Neon's
+    control-plane API — never the node's own Postgres, so this never wakes
+    compute and every node (including reserves) can be polled on the same
+    cadence. A single node's failed poll is NOT a failure signal: keep
+    whatever's already cached and retry next cycle — never let a Neon-API
+    blip masquerade as a database-down event (that's what the reactive
+    trigger's own, separate DB health check is for, §7.4).
+
+    Every node is polled CONCURRENTLY, not one at a time — this whole call
+    is awaited inline in `_loop()`'s main body (unlike a sync/switch, a
+    usage check is cheap enough not to need its own background task), so a
+    sequential for-loop here would mean a single slow/hanging Neon API call
+    stalls this loop's own responsiveness (claiming newly-queued conversion
+    jobs) for up to ``NEON_API_TIMEOUT_SECONDS`` *per node* in a degraded-API
+    scenario, instead of once total."""
+    await asyncio.gather(*(_poll_one_node_usage(node) for node in await list_nodes()))
+
+
+def _fire_background(coro) -> None:
+    """Same strong-reference pattern as _discovery_wake()/_dispatch_wake_task
+    above — a fire-and-forget asyncio.create_task() with nothing else
+    referencing it can be garbage-collected mid-run."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+async def _maybe_trigger_proactive_action(node_settings: NodeSettings) -> None:
+    """§7.4 Trigger 1 (proactive) — the two-threshold behavior, evaluated
+    against the ACTIVE node's own freshly-polled usage. Runs entirely
+    in-process: unlike the manual/reactive triggers (dispatched from an
+    `api` request process via the wake queue), this loop already IS
+    job_worker.py, so it invokes node_ops directly."""
+    try:
+        active_node_id = await get_active_node()
+    except NoActiveNodeError:
+        return  # Bootstrap hasn't run yet — nothing to evaluate.
+
+    usage = await get_usage_cache(active_node_id)
+    if usage is None:
+        return  # Never successfully polled yet.
+
+    if usage.ratio >= node_settings.cutover_threshold_pct / 100:
+        target = await node_ops.select_switch_target(exclude_node_ids={active_node_id})
+        if target is None:
+            logger.warning(
+                "Active node %s past the cutover threshold (%.0f%%) but no "
+                "reserve node is available",
+                active_node_id,
+                usage.ratio * 100,
+                extra={
+                    "data": {
+                        "event": "proactive_cutover_no_reserve",
+                        "node_id": active_node_id,
+                    }
+                },
+            )
+            return
+        run_id = f"proactive-{secrets.token_hex(8)}"
+        logger.info(
+            "Proactive cutover triggered: %s -> %s (usage=%.1f%%)",
+            active_node_id,
+            target,
+            usage.ratio * 100,
+            extra={
+                "data": {
+                    "event": "proactive_cutover_triggered",
+                    "run_id": run_id,
+                    "source_node_id": active_node_id,
+                    "target_node_id": target,
+                }
+            },
+        )
+        # execute_switch() itself acquires the pool-operation lock and is a
+        # complete no-op (logged, error status, no history entry) if one is
+        # already held — e.g. a still-running proactive switch from a
+        # previous cycle, or a concurrent manual/reactive trigger — so no
+        # extra guard is needed here (§7.4's concurrency guard).
+        _fire_background(
+            node_ops.execute_switch(
+                run_id=run_id, target_node_id=target, trigger="proactive"
+            )
+        )
+        return
+
+    if usage.ratio >= node_settings.warmup_threshold_pct / 100:
+        target = await node_ops.select_switch_target(exclude_node_ids={active_node_id})
+        if target is None:
+            logger.warning(
+                "Active node %s past the warm-up threshold (%.0f%%) but no "
+                "reserve node is available",
+                active_node_id,
+                usage.ratio * 100,
+                extra={
+                    "data": {
+                        "event": "proactive_warmup_no_reserve",
+                        "node_id": active_node_id,
+                    }
+                },
+            )
+            return
+        # Skip a redundant sync if this target was already synced within the
+        # current poll interval (a previous warm-up cycle, a weekly
+        # keep-alive, or a recent provisioning) — node_sync.sync_node() is
+        # always a full dump/restore, not incremental, so re-running it every
+        # single poll tick while usage sits in the warm-up band for hours
+        # would just repeatedly hold the pool-operation lock for no benefit.
+        last_activity = await get_last_activity(target)
+        interval_seconds = node_settings.usage_poll_interval_minutes * 60
+        if last_activity is not None:
+            age_seconds = (datetime.now(UTC) - last_activity).total_seconds()
+            if age_seconds < interval_seconds:
+                return
+        logger.info(
+            "Proactive warm-up triggered: %s -> %s (usage=%.1f%%)",
+            active_node_id,
+            target,
+            usage.ratio * 100,
+            extra={
+                "data": {
+                    "event": "proactive_warmup_triggered",
+                    "source_node_id": active_node_id,
+                    "target_node_id": target,
+                }
+            },
+        )
+        # run_warmup_sync() acquires the pool-operation lock itself and is a
+        # no-op if one is already held (§7.4's concurrency guard) — same
+        # reasoning as the cutover branch above.
+        _fire_background(node_ops.run_warmup_sync(active_node_id, target))
+
+
+async def usage_poll_cycle() -> NodeSettings:
+    """One full tick of §7.3/§7.4: refresh every node's cached usage, then
+    evaluate the proactive trigger against the (now-fresh) active-node
+    reading. Returns the settings snapshot used, so the caller's own poll
+    scheduling (§8: `usage_poll_interval_minutes` is admin-editable, no
+    redeploy required) can pick up a changed interval starting from the next
+    cycle."""
+    node_settings = await get_settings()
+    await _poll_all_node_usage()
+    await _maybe_trigger_proactive_action(node_settings)
+    return node_settings
+
+
 async def recover_orphaned_jobs() -> dict[str, int]:
     """A ``converting`` row is only ever true while THIS worker process
     instance holds a live asyncio task for it — so if the process restarts
@@ -658,6 +834,14 @@ async def _loop() -> None:
     last_gc = 0.0
     last_gotenberg_probe = 0.0
     last_discovery_fallback = 0.0
+    last_usage_poll = 0.0
+    # NEON_FAILOVER_PLAN.md §7.3/§8 — usage_poll_interval_minutes is
+    # admin-editable at runtime; re-read on every actual poll below so a
+    # changed interval takes effect starting from the next cycle rather than
+    # only at process startup. DEFAULT_NODE_SETTINGS' own value seeds the
+    # very first wait, matching §7.1's "settings are also the Redis-down
+    # fallback" contract.
+    usage_poll_interval_seconds = DEFAULT_NODE_SETTINGS.usage_poll_interval_minutes * 60
     while True:
         pushed = None
         try:
@@ -722,6 +906,20 @@ async def _loop() -> None:
                     extra={"data": {"event": "worker_gc_error"}},
                 )
             last_gc = now
+
+        if now - last_usage_poll > usage_poll_interval_seconds:
+            try:
+                node_settings = await usage_poll_cycle()
+                usage_poll_interval_seconds = (
+                    node_settings.usage_poll_interval_minutes * 60
+                )
+            except Exception:  # noqa: BLE001
+                logger.error(
+                    "Usage poll cycle failed",
+                    exc_info=True,
+                    extra={"data": {"event": "worker_usage_poll_error"}},
+                )
+            last_usage_poll = now
 
         if now - last_gotenberg_probe > GOTENBERG_HEALTH_PROBE_INTERVAL_SECONDS:
             try:

@@ -169,6 +169,61 @@ async def select_switch_target(exclude_node_ids: set[str]) -> str | None:
     return scored[0][2]
 
 
+async def run_warmup_sync(source_node_id: str, target_node_id: str) -> bool:
+    """Standalone background warm-up sync — NEON_FAILOVER_PLAN.md §7.4
+    Trigger 1's 70% threshold, Phase E. Unlike ``execute_switch``'s own
+    internal warm-up (Phase 1 below), this runs entirely outside a switch:
+    the active node keeps serving all traffic unaffected, and nothing about
+    which node is active changes.
+
+    Still reads from whatever node is currently active and truncates the
+    target (§7.5), so — same reasoning as a provisioning sync (§7.1) — it
+    must not run concurrently with a switch that could change which node is
+    active mid-copy, or with another sync into the same target. Acquires the
+    pool-operation lock itself for exactly that reason.
+
+    Returns ``False`` (a no-op) if the lock is already held by a switch or
+    provisioning operation in progress — logged and ignored, same as any
+    other trigger racing the lock (§7.4's concurrency guard); the next poll
+    cycle simply tries again. Returns ``True`` once the sync has run to
+    completion, whether it succeeded or failed (a failure already demotes
+    the target to ``error`` via ``sync_or_mark_target_unsafe``, same as
+    ``execute_switch``'s own warm-up) — never raises.
+    """
+    token = await acquire_pool_lock(f"warmup:{target_node_id}")
+    if token is None:
+        logger.info(
+            "Warm-up sync skipped: pool operation already in progress",
+            extra={
+                "data": {
+                    "event": "warmup_lock_rejected",
+                    "source_node_id": source_node_id,
+                    "target_node_id": target_node_id,
+                }
+            },
+        )
+        return False
+    try:
+        await sync_or_mark_target_unsafe(source_node_id, target_node_id)
+    except Exception:  # noqa: BLE001 — a background maintenance sync, not a switch
+        logger.warning(
+            "Warm-up sync failed: %s -> %s",
+            source_node_id,
+            target_node_id,
+            exc_info=True,
+            extra={
+                "data": {
+                    "event": "warmup_sync_failed",
+                    "source_node_id": source_node_id,
+                    "target_node_id": target_node_id,
+                }
+            },
+        )
+    finally:
+        await release_pool_lock(token)
+    return True
+
+
 # --------------------------------------------------------------------------- #
 # Shared helpers — used by both switch execution and provisioning below
 # --------------------------------------------------------------------------- #
@@ -233,11 +288,12 @@ async def _check_connectivity(node: Node) -> None:
         await engine.dispose()
 
 
-async def _sync_or_mark_target_unsafe(source_node_id: str, target_node_id: str) -> None:
-    """Wraps ``node_sync.sync_node()`` for both switch-execution call sites
-    below (warm-up and the final cutover top-up) — unlike provisioning,
-    both write into an EXISTING ``ready`` reserve, so a failure here must
-    not leave that node's registry status unchanged.
+async def sync_or_mark_target_unsafe(source_node_id: str, target_node_id: str) -> None:
+    """Wraps ``node_sync.sync_node()`` for every caller that syncs into an
+    EXISTING ``ready`` reserve — both of ``execute_switch``'s own call sites
+    (warm-up and the final cutover top-up) below, and the standalone
+    proactive-trigger warm-up in ``run_warmup_sync`` (§7.4, Phase E) — so a
+    failure here must not leave that node's registry status unchanged.
 
     ``sync_node()`` truncates the target before restoring into it (§7.5);
     those two steps aren't one transaction, so ANY exception escaping it —
@@ -380,7 +436,7 @@ async def execute_switch(
                             },
                         )
                         # It just failed a live probe — same reasoning as
-                        # _sync_or_mark_target_unsafe: don't leave it
+                        # sync_or_mark_target_unsafe: don't leave it
                         # "ready" for a later switch to trust again either.
                         await _mark_node_status(current_target, "error")
                 else:
@@ -494,7 +550,7 @@ async def execute_switch(
             target = await get_node(current_target)
             if target is not None and target.status == "ready":
                 try:
-                    await _sync_or_mark_target_unsafe(source_node_id, current_target)
+                    await sync_or_mark_target_unsafe(source_node_id, current_target)
                     break  # warm-up succeeded
                 except node_sync.NodeSyncError as exc:
                     logger.warning(
@@ -574,7 +630,7 @@ async def execute_switch(
                 ),
             )
             try:
-                await _sync_or_mark_target_unsafe(source_node_id, current_target)
+                await sync_or_mark_target_unsafe(source_node_id, current_target)
             except node_sync.NodeSyncError as exc:
                 # Target failure during final cutover (§7.4): abort the flip,
                 # resume on the original (still-healthy) node.
