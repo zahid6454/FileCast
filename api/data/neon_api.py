@@ -1,18 +1,18 @@
 """Thin client for Neon's console API (NEON_FAILOVER_PLAN.md §7.3/§7.8).
 
-Phase D only needs one call: confirming, during node provisioning, that the
+Phase D added one call: confirming, during node provisioning, that the
 account-level API key can actually see a freshly-registered project (§7.8
 step 4) — this catches a mistyped ``neon_project_id`` before it silently
-breaks §7.3's usage polling later (a later phase, not implemented here).
-That's why this module deliberately does NOT parse the response body for
-usage/quota fields yet — inventing that shape now, without a concrete need
-to verify it against, would just be a guess baked into shipped code. Phase
-E's usage-poll loop extends this module with real field parsing when it
-actually needs it.
+breaks §7.3's usage polling. Phase E adds the second: ``get_project_usage()``,
+which parses the same endpoint's response body for the actual usage/quota
+fields the usage-poll loop needs (§7.3).
 
 ``GET /projects/{project_id}`` is a control-plane call — it never connects to
 the project's own Postgres endpoint, so it costs no CU-hours to check
-(confirmed against Neon's API reference, §7.3).
+(confirmed against Neon's API reference, §7.3). This means every node in the
+pool can be polled on the same cadence, including reserves — there's no
+compute-cost tradeoff to checking a node that isn't currently serving
+traffic.
 """
 
 import httpx
@@ -39,13 +39,13 @@ def _make_client() -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=NEON_API_TIMEOUT_SECONDS)
 
 
-async def verify_project_visible(project_id: str) -> None:
-    """Raise ``NeonApiError`` unless the configured API key can see
-    ``project_id`` — one GET against the project-detail endpoint. Used by
-    node provisioning (§7.8 step 4) to catch a mistyped project id before
-    the node is marked ``ready``. Never raises for anything other than
-    "the key can't confirm this project exists"; no response body parsing
-    is attempted (see module docstring)."""
+async def _fetch_project(project_id: str) -> httpx.Response:
+    """Shared GET against the project-detail endpoint — the one
+    control-plane call both ``verify_project_visible`` and
+    ``get_project_usage`` need (§7.3/§7.8). Raises ``NeonApiError`` only for
+    "can't even ask the question" failures (unconfigured key, network/
+    timeout) — callers decide what a given status code means for their own
+    purpose."""
     if not settings.neon_api_key:
         raise NeonApiError("Neon API key is not configured (NEON_API_KEY unset).")
 
@@ -56,9 +56,19 @@ async def verify_project_visible(project_id: str) -> None:
     }
     try:
         async with _make_client() as client:
-            resp = await client.get(url, headers=headers)
+            return await client.get(url, headers=headers)
     except httpx.HTTPError as exc:
         raise NeonApiError(f"Could not reach Neon's API: {exc}") from exc
+
+
+async def verify_project_visible(project_id: str) -> None:
+    """Raise ``NeonApiError`` unless the configured API key can see
+    ``project_id`` — one GET against the project-detail endpoint. Used by
+    node provisioning (§7.8 step 4) to catch a mistyped project id before
+    the node is marked ``ready``. Never raises for anything other than
+    "the key can't confirm this project exists"; no response body parsing
+    is attempted."""
+    resp = await _fetch_project(project_id)
 
     if resp.status_code != 200:
         raise NeonApiError(
@@ -66,3 +76,53 @@ async def verify_project_visible(project_id: str) -> None:
             "— the API key may not be able to see this project, or the "
             "project id is wrong."
         )
+
+
+async def get_project_usage(project_id: str) -> float:
+    """Fetch a project's current-billing-period compute-usage ratio (§7.3):
+    ``compute_time_seconds`` (consumed so far) / ``quota.compute_time_seconds``
+    (the ceiling), both from the same project-detail response
+    ``verify_project_visible`` already uses — a control-plane call that
+    never connects to the project's own Postgres endpoint or wakes its
+    compute (module docstring), so every node in the pool can be polled on
+    the same cadence.
+
+    Raises ``NeonApiError`` on anything that makes the ratio unavailable —
+    a non-200 status, a non-JSON body, or a response missing either field
+    (which would otherwise be a division by zero, or silently reflects a
+    Neon API shape change). The usage-poll loop (§7.3, Phase E) treats a
+    single failed call as non-fatal by design: keep the last cached value,
+    retry next cycle — never let this masquerade as a database-down event.
+    """
+    resp = await _fetch_project(project_id)
+
+    if resp.status_code != 200:
+        raise NeonApiError(
+            f"Neon API returned {resp.status_code} for project {project_id!r} "
+            "while checking usage."
+        )
+
+    try:
+        body = resp.json()
+    except ValueError as exc:
+        raise NeonApiError(
+            f"Neon API returned a non-JSON response for project {project_id!r}."
+        ) from exc
+
+    project = body.get("project", body) if isinstance(body, dict) else None
+    used = project.get("compute_time_seconds") if isinstance(project, dict) else None
+    quota_obj = project.get("quota") if isinstance(project, dict) else None
+    quota = (
+        quota_obj.get("compute_time_seconds") if isinstance(quota_obj, dict) else None
+    )
+
+    if (
+        not isinstance(used, int | float)
+        or not isinstance(quota, int | float)
+        or quota <= 0
+    ):
+        raise NeonApiError(
+            f"Unexpected Neon API response shape for project {project_id!r} — "
+            "missing or invalid compute_time_seconds/quota.compute_time_seconds."
+        )
+    return used / quota
