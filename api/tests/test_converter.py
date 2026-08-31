@@ -1112,6 +1112,48 @@ async def test_health_endpoint_accepts_head(client):
     assert r.content == b""
 
 
+async def test_health_endpoint_check_db_false_never_calls_check_db(client, monkeypatch):
+    # docker-compose.yml's own container healthcheck uses ?check_db=false —
+    # this proves it's genuine opt-out, not just a cosmetic label: _check_db()
+    # (and therefore Neon) must never be invoked, since the whole point is
+    # not waking a suspended Neon compute on Docker's own independent timer.
+    import converter
+
+    called = False
+
+    async def _fake_check_db():
+        nonlocal called
+        called = True
+        return True
+
+    monkeypatch.setattr(converter, "_check_db", _fake_check_db)
+    r = await client.get("/api/v1/health?check_db=false")
+    assert r.status_code == 200
+    assert called is False
+    body = r.json()
+    assert body["database"] == "skipped"
+    assert body["status"] in ("healthy", "degraded")
+
+
+async def test_health_endpoint_check_db_false_status_ignores_db(client, monkeypatch):
+    # Skipping the DB check must not silently force "healthy" — status still
+    # reflects Gotenberg/worker, it just stops being gated on `database` at all.
+    import converter
+
+    class _BoomEngine:
+        def connect(self):
+            raise RuntimeError("connection refused")
+
+    async def _fake_get_active_engine():
+        return _BoomEngine()
+
+    monkeypatch.setattr(converter, "get_active_engine", _fake_get_active_engine)
+    r = await client.get("/api/v1/health?check_db=false")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["database"] == "skipped"
+
+
 # --------------------------------------------------------------------------- #
 # Gotenberg request queue (P3 §31) — caps concurrent Gotenberg calls with an
 # in-process asyncio.Semaphore. `_gotenberg_request` is exercised directly

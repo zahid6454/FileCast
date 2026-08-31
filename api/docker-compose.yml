@@ -61,13 +61,22 @@ services:
     # No apt package added for this — python:3.12-slim already has Python, and
     # a 200-range response IS the check (mirrors gotenberg's `curl -sf`
     # below); urlopen raises on anything else, which is a non-zero exit.
+    #
+    # ?check_db=false (converter.py's health()): this check isn't wired to any
+    # restart action (`api` doesn't carry the `autoheal=true` label below), so
+    # it only needs "process still serves requests," not "DB reachable." The
+    # default (check_db=true) already runs hourly via the external uptime
+    # monitor — adding this container's own independent hourly timer on top,
+    # each waking Neon from suspend for a full autosuspend-delay window
+    # regardless of query cost, doubled compute-hour burn on a near-idle site
+    # for no operational benefit.
     healthcheck:
       test:
         [
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8090/api/v1/health', timeout=3)"
+          "import urllib.request; urllib.request.urlopen('http://localhost:8090/api/v1/health?check_db=false', timeout=3)"
         ]
       interval: 60m
       timeout: 5s

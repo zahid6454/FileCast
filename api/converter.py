@@ -1701,7 +1701,7 @@ async def _check_db() -> bool:
 
 
 @router.api_route("/health", methods=["GET", "HEAD"])
-async def health():
+async def health(check_db: bool = True):
     # Run concurrently, not sequentially — all three checks are independently
     # bounded (5s for Gotenberg/DB, Redis's own short client timeout for the
     # worker heartbeat), but running them one after another let a partial
@@ -1709,11 +1709,29 @@ async def health():
     # total latency to their sum, right when a monitor most needs a fast
     # "degraded" signal instead of a bare timeout. gather() bounds total
     # latency at the slowest single check instead.
-    gotenberg_ok, db_ok, worker_ok = await asyncio.gather(
-        _check_gotenberg(), _check_db(), _check_worker()
-    )
+    #
+    # check_db=false (docker-compose.yml's own container healthcheck only —
+    # every external/browser caller keeps the default True): every _check_db()
+    # call wakes Neon's compute from suspend, and that costs a full
+    # autosuspend-delay window (5min default) regardless of how fast the
+    # SELECT 1 itself is. Docker's healthcheck isn't wired to any restart
+    # action for this service (autoheal only covers gotenberg/worker below),
+    # so it has nothing to gain from paying that cost on its own timer on top
+    # of the external uptime monitor's — it only needs to know this process
+    # can still serve requests.
+    if check_db:
+        gotenberg_ok, db_ok, worker_ok = await asyncio.gather(
+            _check_gotenberg(), _check_db(), _check_worker()
+        )
+    else:
+        gotenberg_ok, worker_ok = await asyncio.gather(
+            _check_gotenberg(), _check_worker()
+        )
+        db_ok = None
 
-    status = "healthy" if (gotenberg_ok and db_ok and worker_ok) else "degraded"
+    status = (
+        "healthy" if (gotenberg_ok and worker_ok and db_ok is not False) else "degraded"
+    )
     if not gotenberg_ok:
         logger.warning(
             "Health check: Gotenberg unreachable",
@@ -1724,7 +1742,7 @@ async def health():
                 }
             },
         )
-    if not db_ok:
+    if db_ok is False:
         logger.warning(
             "Health check: database unreachable",
             extra={
@@ -1747,7 +1765,7 @@ async def health():
     return {
         "status": status,
         "gotenberg": "up" if gotenberg_ok else "down",
-        "database": "up" if db_ok else "down",
+        "database": "skipped" if db_ok is None else ("up" if db_ok else "down"),
         "worker": "up" if worker_ok else "down",
     }
 
