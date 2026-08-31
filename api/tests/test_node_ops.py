@@ -88,6 +88,17 @@ async def _lock_is_free() -> bool:
     return await redis_client.get(nr.POOL_OP_LOCK_KEY) is None
 
 
+async def _noop_connectivity(node):
+    """Stub for node_ops._check_connectivity — these tests register nodes
+    with placeholder connection strings that don't point at a real
+    Postgres, and _check_connectivity is a real bounded connect + SELECT 1.
+    Used by both the provisioning tests below and the reactive-switch tests
+    (the reactive branch probes the target the same way). Tests that
+    specifically care about the probe-failure/fallback behavior override
+    this via monkeypatch themselves."""
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Wake-queue wire format (§7.13)
 # --------------------------------------------------------------------------- #
@@ -416,6 +427,7 @@ async def test_execute_switch_reactive_flips_immediately_without_sync(monkeypatc
         raise AssertionError("reactive switch must never call sync_node()")
 
     monkeypatch.setattr(node_ops.node_sync, "sync_node", boom)
+    monkeypatch.setattr(node_ops, "_check_connectivity", _noop_connectivity)
 
     await node_ops.execute_switch(
         run_id="run-reactive-ok", target_node_id="target", trigger="reactive"
@@ -433,10 +445,16 @@ async def test_execute_switch_reactive_flips_immediately_without_sync(monkeypatc
     assert await is_maintenance() is False
     assert job_worker._claim_paused is False
     assert await _lock_is_free()
-    # Target status is untouched by a reactive switch — no sync ran, so
-    # there's nothing to demote it for.
+    # Target status is untouched by a reactive switch — no sync ran, only a
+    # connectivity probe, so there's nothing to demote it for.
     target = await get_node("target")
     assert target.status == "ready"
+    # The abandoned source must not stay "ready" — see the audit-fix comment
+    # in node_ops.py's reactive branch: an untouched "ready" source would be
+    # eligible again for a LATER switch's target selection with no
+    # re-verification that it ever actually recovered.
+    source = await get_node("source")
+    assert source.status == "error"
 
 
 async def test_execute_switch_reactive_rejects_a_non_ready_target(monkeypatch):
@@ -448,6 +466,7 @@ async def test_execute_switch_reactive_rejects_a_non_ready_target(monkeypatch):
         raise AssertionError("reactive switch must never call sync_node()")
 
     monkeypatch.setattr(node_ops.node_sync, "sync_node", boom)
+    monkeypatch.setattr(node_ops, "_check_connectivity", _noop_connectivity)
 
     await node_ops.execute_switch(
         run_id="run-reactive-bad-target", target_node_id="target", trigger="reactive"
@@ -456,10 +475,14 @@ async def test_execute_switch_reactive_rejects_a_non_ready_target(monkeypatch):
     assert await get_active_node() == "source"  # unchanged
     status = await get_switch_status("run-reactive-bad-target")
     assert status.status == "error"
-    assert "not a ready reserve" in status.detail.lower()
+    assert "no reachable reserve" in status.detail.lower()
     history = await get_switch_history()
     assert history[0].outcome == "failure"
     assert await _lock_is_free()
+    # The source is presumed unreachable regardless of whether a reserve was
+    # found to switch to — it gets demoted either way.
+    source = await get_node("source")
+    assert source.status == "error"
 
 
 async def test_execute_switch_reactive_rejects_a_missing_target():
@@ -475,8 +498,62 @@ async def test_execute_switch_reactive_rejects_a_missing_target():
     assert await get_active_node() == "source"
     status = await get_switch_status("run-reactive-missing-target")
     assert status.status == "error"
-    assert "missing" in status.detail.lower()
+    assert "no reachable reserve" in status.detail.lower()
     assert await _lock_is_free()
+    source = await get_node("source")
+    assert source.status == "error"
+
+
+async def test_execute_switch_reactive_falls_back_to_next_best_when_target_unreachable(
+    monkeypatch,
+):
+    # The audit-fix regression test: a target that's still registered
+    # "ready" isn't proof it's actually reachable right now (its status
+    # only reflects its last successful sync, possibly days old, §7.9). If
+    # the live probe fails, the reactive branch must demote that target and
+    # retry against the next-best reserve — mirroring Phase 1's own
+    # warm-up-target-failed retry loop — rather than either flipping onto a
+    # dead node or giving up while a good reserve was available.
+    await register_node(_make_node("source"))
+    await register_node(_make_node("dead-reserve"))
+    await register_node(_make_node("good-reserve"))
+    await set_active_node("source")
+    # dead-reserve sorts first (lower usage) so it's picked as the initial
+    # target, forcing the fallback path to actually be exercised.
+    await set_usage_cache("dead-reserve", 0.1)
+    await set_usage_cache("good-reserve", 0.5)
+
+    async def flaky_connectivity(node):
+        if node.node_id == "dead-reserve":
+            raise node_sync.NodeSyncError("connection refused")
+        return None
+
+    monkeypatch.setattr(node_ops, "_check_connectivity", flaky_connectivity)
+
+    async def boom(source, target):
+        raise AssertionError("reactive switch must never call sync_node()")
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", boom)
+
+    await node_ops.execute_switch(
+        run_id="run-reactive-fallback",
+        target_node_id="dead-reserve",
+        trigger="reactive",
+    )
+
+    assert await get_active_node() == "good-reserve"
+    status = await get_switch_status("run-reactive-fallback")
+    assert status.status == "done"
+    assert status.target_node_id == "good-reserve"
+    history = await get_switch_history()
+    assert history[0].outcome == "success"
+    assert history[0].target_node_id == "good-reserve"
+    dead = await get_node("dead-reserve")
+    assert dead.status == "error"
+    good = await get_node("good-reserve")
+    assert good.status == "ready"
+    source = await get_node("source")
+    assert source.status == "error"
 
 
 async def test_execute_switch_reactive_respects_the_pool_lock(monkeypatch):
@@ -496,6 +573,10 @@ async def test_execute_switch_reactive_respects_the_pool_lock(monkeypatch):
     status = await get_switch_status("run-reactive-locked")
     assert status.status == "error"
     assert "already in progress" in status.detail.lower()
+    # Lock rejection happens before the reactive branch runs at all — the
+    # source must be untouched, not demoted for an attempt that never ran.
+    source = await get_node("source")
+    assert source.status == "ready"
 
 
 async def test_execute_switch_unexpected_error_still_releases_lock_and_resumes(
@@ -533,10 +614,6 @@ async def test_execute_switch_unexpected_error_still_releases_lock_and_resumes(
 # --------------------------------------------------------------------------- #
 # execute_provision — success and every documented failure mode (§7.8/§12)
 # --------------------------------------------------------------------------- #
-
-
-async def _noop_connectivity(node):
-    return None
 
 
 async def test_execute_provision_success(monkeypatch):
