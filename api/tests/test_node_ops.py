@@ -519,6 +519,25 @@ async def test_all_nodes_low_pool_degrades_but_target_selection_still_engages():
     assert target == "least-bad-reserve"
 
 
+async def test_pool_has_headroom_reports_degraded_not_raised_on_redis_error(
+    monkeypatch,
+):
+    # Regression guard (PR #158 review): get_usage_cache()/select_switch_target()
+    # don't fail open on a Redis error the way get_active_node()/get_settings()
+    # do, so pool_has_headroom() must catch it itself — this is what the public,
+    # unauthenticated /pool-health route relies on to report {"status":
+    # "degraded"} instead of a bare 500 on a transient Redis blip.
+    await register_node(_make_node("active"))
+    await set_active_node("active")  # fresh in-process cache — no redis.get needed
+
+    async def boom(*_args, **_kwargs):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(redis_client, "get", boom)
+
+    assert await node_ops.pool_has_headroom() is False
+
+
 # --------------------------------------------------------------------------- #
 # run_warmup_sync (NEON_FAILOVER_PLAN.md §7.4, Phase E)
 # --------------------------------------------------------------------------- #

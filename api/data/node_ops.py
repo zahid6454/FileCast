@@ -198,26 +198,45 @@ async def pool_has_headroom() -> bool:
     still under ``cutover_threshold_pct`` (the same line this app itself
     uses to decide a node needs replacing) — genuine runway before that
     reserve would need replacing too, not just a smaller number.
+
+    Redis is required to answer this at all (usage cache, last-activity,
+    node list). ``get_active_node()``/``get_settings()`` already fail open
+    to a cached/default value internally, but ``get_usage_cache()`` and
+    ``select_switch_target()`` below do not catch a Redis error — so a
+    transient Redis blip is caught here and reported as degraded, the same
+    "can't complete the check ⇒ not healthy" convention ``converter.py``'s
+    own ``/health`` checks already use (``_check_gotenberg``/``_check_db``/
+    ``_check_worker``), rather than raising out of the public, unauthenticated
+    ``/pool-health`` route as a bare 500 (post-review fix, PR #158).
     """
     try:
         active_node_id = await get_active_node()
     except NoActiveNodeError:
         return True  # nothing to protect yet (pre-Bootstrap) — not "degraded"
 
-    active_usage = await get_usage_cache(active_node_id)
-    active_ratio = active_usage.ratio if active_usage else 0.0
+    try:
+        active_usage = await get_usage_cache(active_node_id)
+        active_ratio = active_usage.ratio if active_usage else 0.0
 
-    node_settings = await get_settings()
-    if active_ratio < node_settings.warmup_threshold_pct / 100:
-        return True
+        node_settings = await get_settings()
+        if active_ratio < node_settings.warmup_threshold_pct / 100:
+            return True
 
-    target_node_id = await select_switch_target(exclude_node_ids={active_node_id})
-    if target_node_id is None:
+        target_node_id = await select_switch_target(exclude_node_ids={active_node_id})
+        if target_node_id is None:
+            return False
+
+        target_usage = await get_usage_cache(target_node_id)
+        target_ratio = target_usage.ratio if target_usage else 0.0
+        return target_ratio < node_settings.cutover_threshold_pct / 100
+    except Exception:  # noqa: BLE001 — see docstring: fail closed, not raise
+        logger.warning(
+            "pool_has_headroom() check failed (Redis unreachable?) — "
+            "reporting degraded rather than raising",
+            exc_info=True,
+            extra={"data": {"event": "pool_has_headroom_error"}},
+        )
         return False
-
-    target_usage = await get_usage_cache(target_node_id)
-    target_ratio = target_usage.ratio if target_usage else 0.0
-    return target_ratio < node_settings.cutover_threshold_pct / 100
 
 
 async def run_warmup_sync(source_node_id: str, target_node_id: str) -> bool:
