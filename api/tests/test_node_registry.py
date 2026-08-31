@@ -13,7 +13,9 @@ successful read could leak into another as a false "last-known-active"
 fallback.
 """
 
+import ast
 import asyncio
+from pathlib import Path
 
 import pytest
 from data import node_registry
@@ -75,6 +77,33 @@ def _reset_in_process_cache(monkeypatch):
     """
     monkeypatch.setattr(node_registry, "_cached_active_node_id", None)
     monkeypatch.setattr(node_registry, "_cached_active_node_at", 0.0)
+
+
+# --------------------------------------------------------------------------- #
+# Regression guard: build.py's DB overlay silently degraded to YAML-only on
+# every deploy (before build.py's own dependency fix) because a module-level
+# `from fastapi import HTTPException` here made data.db — and therefore
+# build.py's overlay fetch — require fastapi to be installed, which the
+# deliberately minimal root requirements.txt never did. require_not_
+# maintenance() is the only thing in this module that needs fastapi; its
+# import is deferred to inside the function body specifically so build.py/
+# seed.py/scripts/* can import this module without fastapi at all.
+# --------------------------------------------------------------------------- #
+
+
+def test_node_registry_has_no_module_level_fastapi_import():
+    """Walks only the module's TOP-LEVEL statements (not into function
+    bodies via ast.walk()) — so this can only pass with a genuinely
+    deferred, function-local import, not fastapi moved under some other
+    module-level guard."""
+    tree = ast.parse(Path(node_registry.__file__).read_text())
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module == "fastapi":
+            pytest.fail(f"module-level `from fastapi import ...` at line {node.lineno}")
+        if isinstance(node, ast.Import) and any(
+            a.name == "fastapi" for a in node.names
+        ):
+            pytest.fail(f"module-level `import fastapi` at line {node.lineno}")
 
 
 def _make_node(node_id="n1", neon_project_id="proj-1", status="ready") -> Node:
