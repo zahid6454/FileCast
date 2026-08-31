@@ -6,14 +6,50 @@ never-501-for-a-real-failure contract (§5.3a), the ``run_id`` reply key app.js
 polls on, admin-only guards, and that the PAT never leaks into a response.
 """
 
+import base64
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
+from data import node_registry
 from data.config import settings
+from data.node_registry import Node, set_active_node
 from data.routers import admin_deploy
+from nacl import encoding as nacl_encoding
+from nacl import public as nacl_public
 
 PAT = "test-pat-secret-value"
+
+
+def _make_node(node_id: str, connection_string: str) -> Node:
+    return Node(
+        node_id=node_id,
+        display_name=f"Node {node_id}",
+        connection_string=connection_string,
+        neon_project_id=f"proj-{node_id}",
+        status="ready",
+        created_at="2026-01-01T00:00:00+00:00",
+    )
+
+
+def _activate_fake_node(monkeypatch, node_id: str, connection_string: str) -> None:
+    """Make admin_deploy.py's OWN active-node resolution see a fake node,
+    without touching the real registry/Redis (register_node/set_active_node)
+    — that would also flip which engine the REST of the app resolves to,
+    including admin_client's own auth check, which would then try to
+    actually connect to this fake, unreachable hostname and break login
+    itself. Same monkeypatch-the-imported-name seam test_db.py uses for
+    db.get_node."""
+    node = _make_node(node_id, connection_string)
+
+    async def _fake_get_active_node():
+        return node_id
+
+    async def _fake_get_node(nid):
+        return node if nid == node_id else None
+
+    monkeypatch.setattr(admin_deploy, "get_active_node", _fake_get_active_node)
+    monkeypatch.setattr(admin_deploy, "get_node", _fake_get_node)
 
 
 class FakeResp:
@@ -58,6 +94,14 @@ def _configured_and_fast(monkeypatch):
     # No real sleeps between run-id polls (keeps tests instant).
     monkeypatch.setattr(admin_deploy, "_RUN_RESOLVE_DELAY", 0)
     monkeypatch.setattr(admin_deploy, "_RUN_RESOLVE_ATTEMPTS", 3)
+    # Same reasoning as test_db.py's _reset_active_node_cache: the in-process
+    # active-node cache isn't reset by conftest.py's global fixture, so a
+    # value left warm by an unrelated earlier test could make get_active_node()
+    # return stale data here instead of genuinely hitting the (just-flushed)
+    # test Redis — every test in this file except the ones that explicitly
+    # register+activate a node must see NO active node.
+    monkeypatch.setattr(node_registry, "_cached_active_node_id", None)
+    monkeypatch.setattr(node_registry, "_cached_active_node_at", 0.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -430,6 +474,133 @@ async def test_missing_pat_is_500_not_501(admin_client, monkeypatch):
     r = await admin_client.post("/api/v1/admin/deploy")
     assert r.status_code == 500
     assert r.status_code != 501
+
+
+# --------------------------------------------------------------------------- #
+# active-node secret sync (PR #153 — NEON_FAILOVER_PLAN.md Phase D gap)
+# --------------------------------------------------------------------------- #
+
+
+class SecretSyncClient(FakeClient):
+    """A real X25519 keypair stands in for the repo's Actions public key, so
+    a PUT's ``encrypted_value`` can be decrypted back to plaintext in the
+    test — verifying the actual sealed-box round trip, not just that some
+    string got sent somewhere."""
+
+    def __init__(self, run_id):
+        self.run_id = run_id
+        self.deploy_id = None
+        self.private_key = nacl_public.PrivateKey.generate()
+        self.put_calls: list[tuple[str, dict]] = []
+
+    async def get(self, url, headers=None):
+        if url.endswith("/actions/secrets/public-key"):
+            key_b64 = self.private_key.public_key.encode(nacl_encoding.Base64Encoder)
+            return FakeResp(200, {"key_id": "test-key-id", "key": key_b64.decode()})
+        return FakeResp(
+            200,
+            {
+                "workflow_runs": [
+                    {"id": self.run_id, "name": f"Deploy {self.deploy_id}"}
+                ]
+            },
+        )
+
+    async def post(self, url, headers=None, json=None):  # noqa: A002
+        self.deploy_id = json["inputs"]["deploy_id"]
+        return FakeResp(204)
+
+    async def put(self, url, headers=None, json=None):  # noqa: A002
+        self.put_calls.append((url, json))
+        return FakeResp(204)
+
+    def decrypt_put(self, index: int = -1) -> str:
+        _, payload = self.put_calls[index]
+        sealed = base64.b64decode(payload["encrypted_value"])
+        return nacl_public.SealedBox(self.private_key).decrypt(sealed).decode()
+
+
+CONN_STR = "postgresql+psycopg://user:pw@ep-active.neon.tech/filecast"
+
+
+async def test_deploy_rotates_database_url_to_the_active_node(
+    admin_client, monkeypatch
+):
+    _activate_fake_node(monkeypatch, "node-a", CONN_STR)
+
+    client = SecretSyncClient(run_id=1)
+    _use(monkeypatch, client)
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200, r.text
+
+    assert len(client.put_calls) == 1
+    url, payload = client.put_calls[0]
+    assert url.endswith("/actions/secrets/DATABASE_URL")
+    assert payload["key_id"] == "test-key-id"
+    assert client.decrypt_put() == CONN_STR
+
+
+async def test_deploy_skips_secret_sync_when_no_active_node(admin_client, monkeypatch):
+    # Pre-Bootstrap (nothing registered): DATABASE_URL already holds the
+    # one-and-only static value, so no PUT should happen at all.
+    client = SecretSyncClient(run_id=1)
+    _use(monkeypatch, client)
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 200, r.text
+    assert client.put_calls == []
+
+
+async def test_deploy_fails_loud_when_public_key_fetch_fails(admin_client, monkeypatch):
+    # A PAT missing the "Secrets: read/write" permission (or any other GitHub
+    # error here) must NOT let the dispatch proceed with a stale secret —
+    # that would silently reproduce the exact bug this mechanism closes.
+    _activate_fake_node(monkeypatch, "node-b", CONN_STR)
+
+    class BadKeyClient(FakeClient):
+        dispatched = False
+
+        async def get(self, url, headers=None):
+            if url.endswith("/actions/secrets/public-key"):
+                return FakeResp(403, {"message": "Forbidden"})
+            return FakeResp(200, {"workflow_runs": []})
+
+        async def post(self, url, headers=None, json=None):  # noqa: A002
+            type(self).dispatched = True
+            return FakeResp(204)
+
+    _use(monkeypatch, BadKeyClient())
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 502
+    assert "sync the active database target" in r.text
+    assert BadKeyClient.dispatched is False  # never reached the dispatch POST
+
+
+async def test_deploy_fails_loud_when_secret_put_fails(admin_client, monkeypatch):
+    _activate_fake_node(monkeypatch, "node-c", CONN_STR)
+
+    class BadPutClient(SecretSyncClient):
+        async def put(self, url, headers=None, json=None):  # noqa: A002
+            return FakeResp(500, {"message": "internal error"})
+
+    _use(monkeypatch, BadPutClient(run_id=1))
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 502
+    assert "sync the active database target" in r.text
+
+
+async def test_deploy_fails_loud_when_active_node_record_missing(
+    admin_client, monkeypatch
+):
+    # A dangling active pointer (registry hash entry absent) is a distinct
+    # failure from a lookup error — must still fail loud, not dispatch with
+    # a stale secret.
+    await set_active_node("ghost-node-id")
+
+    client = SecretSyncClient(run_id=1)
+    _use(monkeypatch, client)
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 502
+    assert client.put_calls == []
 
 
 # --------------------------------------------------------------------------- #

@@ -8,10 +8,23 @@ pytest's default import mode makes ``tests/`` importable as a flat namespace
 (no ``__init__.py``), so a plain module import works.
 """
 
+import base64
+
 import httpx
 import pytest
+from data import node_registry
 from data.config import settings
-from test_admin_deploy import BadJsonResp, FakeClient, FakeResp, _iso, _use
+from nacl import encoding as nacl_encoding
+from nacl import public as nacl_public
+from test_admin_deploy import (
+    CONN_STR,
+    BadJsonResp,
+    FakeClient,
+    FakeResp,
+    _activate_fake_node,
+    _iso,
+    _use,
+)
 
 SEED_PAT = "test-pat-secret-value"
 
@@ -26,6 +39,13 @@ def _configured_and_fast(monkeypatch):
     monkeypatch.setattr(settings, "github_seed_workflow", "seed-tools.yml")
     monkeypatch.setattr("data.routers.admin_deploy._RUN_RESOLVE_DELAY", 0)
     monkeypatch.setattr("data.routers.admin_deploy._RUN_RESOLVE_ATTEMPTS", 3)
+    # Same reasoning as test_admin_deploy.py's own reset: the in-process
+    # active-node cache isn't reset by conftest.py's global fixture, so a
+    # value left warm by an unrelated earlier test could make get_active_node()
+    # return stale data instead of genuinely hitting the (just-flushed) test
+    # Redis.
+    monkeypatch.setattr(node_registry, "_cached_active_node_id", None)
+    monkeypatch.setattr(node_registry, "_cached_active_node_at", 0.0)
 
 
 class ResolvingSeedClient(FakeClient):
@@ -175,6 +195,90 @@ async def test_status_unparseable_body_is_502_not_500(admin_client, monkeypatch)
     r = await admin_client.get("/api/v1/admin/seed-tools/123")
     assert r.status_code == 502
     assert r.status_code != 500
+
+
+# --------------------------------------------------------------------------- #
+# active-node secret sync (PR #153 — NEON_FAILOVER_PLAN.md Phase D gap)
+# --------------------------------------------------------------------------- #
+
+
+class SeedSecretSyncClient(FakeClient):
+    """Same pattern as test_admin_deploy.py's SecretSyncClient, adapted for
+    the "Seed {id}" run-name shape seed-tools.yml uses."""
+
+    def __init__(self, run_id):
+        self.run_id = run_id
+        self.seed_id = None
+        self.private_key = nacl_public.PrivateKey.generate()
+        self.put_calls: list[tuple[str, dict]] = []
+
+    async def get(self, url, headers=None):
+        if url.endswith("/actions/secrets/public-key"):
+            key_b64 = self.private_key.public_key.encode(nacl_encoding.Base64Encoder)
+            return FakeResp(200, {"key_id": "test-key-id", "key": key_b64.decode()})
+        return FakeResp(
+            200,
+            {"workflow_runs": [{"id": self.run_id, "name": f"Seed {self.seed_id}"}]},
+        )
+
+    async def post(self, url, headers=None, json=None):  # noqa: A002
+        self.seed_id = json["inputs"]["seed_id"]
+        return FakeResp(204)
+
+    async def put(self, url, headers=None, json=None):  # noqa: A002
+        self.put_calls.append((url, json))
+        return FakeResp(204)
+
+    def decrypt_put(self, index: int = -1) -> str:
+        _, payload = self.put_calls[index]
+        sealed = base64.b64decode(payload["encrypted_value"])
+        return nacl_public.SealedBox(self.private_key).decrypt(sealed).decode()
+
+
+async def test_seed_rotates_database_url_write_to_the_active_node(
+    admin_client, monkeypatch
+):
+    _activate_fake_node(monkeypatch, "node-a", CONN_STR)
+
+    client = SeedSecretSyncClient(run_id=1)
+    _use(monkeypatch, client)
+    r = await admin_client.post("/api/v1/admin/seed-tools")
+    assert r.status_code == 200, r.text
+
+    assert len(client.put_calls) == 1
+    url, payload = client.put_calls[0]
+    assert url.endswith("/actions/secrets/DATABASE_URL_WRITE")
+    assert client.decrypt_put() == CONN_STR
+
+
+async def test_seed_skips_secret_sync_when_no_active_node(admin_client, monkeypatch):
+    client = SeedSecretSyncClient(run_id=1)
+    _use(monkeypatch, client)
+    r = await admin_client.post("/api/v1/admin/seed-tools")
+    assert r.status_code == 200, r.text
+    assert client.put_calls == []
+
+
+async def test_seed_fails_loud_when_public_key_fetch_fails(admin_client, monkeypatch):
+    _activate_fake_node(monkeypatch, "node-b", CONN_STR)
+
+    class BadKeyClient(FakeClient):
+        dispatched = False
+
+        async def get(self, url, headers=None):
+            if url.endswith("/actions/secrets/public-key"):
+                return FakeResp(403, {"message": "Forbidden"})
+            return FakeResp(200, {"workflow_runs": []})
+
+        async def post(self, url, headers=None, json=None):  # noqa: A002
+            type(self).dispatched = True
+            return FakeResp(204)
+
+    _use(monkeypatch, BadKeyClient())
+    r = await admin_client.post("/api/v1/admin/seed-tools")
+    assert r.status_code == 502
+    assert "sync the active database target" in r.text
+    assert BadKeyClient.dispatched is False
 
 
 async def test_both_routes_require_admin(client, user_client):
