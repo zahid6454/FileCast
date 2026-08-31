@@ -682,3 +682,113 @@ async def test_usage_poll_cycle_polls_then_evaluates_the_fresh_reading(monkeypat
     assert returned_settings.cutover_threshold_pct == 80
     assert len(calls) == 1
     assert calls[0]["target_node_id"] == "reserve"
+
+
+# --------------------------------------------------------------------------- #
+# Weekly keep-alive sync (NEON_FAILOVER_PLAN.md §7.9, Phase E)
+# --------------------------------------------------------------------------- #
+
+
+async def test_weekly_keepalive_sweep_syncs_a_reserve_never_synced_before(monkeypatch):
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+
+    calls = []
+
+    async def fake_warmup(source, target):
+        calls.append((source, target))
+
+    monkeypatch.setattr(node_ops, "run_warmup_sync", fake_warmup)
+
+    await job_worker.weekly_keepalive_sweep()
+    await asyncio.sleep(0)
+
+    assert calls == [("active", "reserve")]
+
+
+async def test_weekly_keepalive_sweep_skips_a_recently_synced_reserve(monkeypatch):
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await record_activity("reserve", when=datetime.now(UTC))
+
+    calls = []
+
+    async def fake_warmup(source, target):
+        calls.append((source, target))
+
+    monkeypatch.setattr(node_ops, "run_warmup_sync", fake_warmup)
+
+    await job_worker.weekly_keepalive_sweep()
+    await asyncio.sleep(0)
+
+    assert calls == []
+
+
+async def test_weekly_keepalive_sweep_syncs_a_reserve_overdue_past_the_interval(
+    monkeypatch,
+):
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    stale = datetime.now(UTC) - timedelta(
+        seconds=job_worker.KEEPALIVE_INTERVAL_SECONDS + 3600
+    )
+    await record_activity("reserve", when=stale)
+
+    calls = []
+
+    async def fake_warmup(source, target):
+        calls.append((source, target))
+
+    monkeypatch.setattr(node_ops, "run_warmup_sync", fake_warmup)
+
+    await job_worker.weekly_keepalive_sweep()
+    await asyncio.sleep(0)
+
+    assert calls == [("active", "reserve")]
+
+
+async def test_weekly_keepalive_sweep_never_targets_the_active_node_itself(
+    monkeypatch,
+):
+    await register_node(_make_node("active"))
+    await set_active_node("active")
+
+    calls = []
+
+    async def fake_warmup(source, target):
+        calls.append((source, target))
+
+    monkeypatch.setattr(node_ops, "run_warmup_sync", fake_warmup)
+
+    await job_worker.weekly_keepalive_sweep()
+    await asyncio.sleep(0)
+
+    assert calls == []
+
+
+async def test_weekly_keepalive_sweep_ignores_non_ready_reserves(monkeypatch):
+    await register_node(_make_node("active"))
+    await register_node(_make_node("retired-reserve", status="retired"))
+    await register_node(_make_node("error-reserve", status="error"))
+    await register_node(_make_node("provisioning-reserve", status="provisioning"))
+    await set_active_node("active")
+
+    calls = []
+
+    async def fake_warmup(source, target):
+        calls.append((source, target))
+
+    monkeypatch.setattr(node_ops, "run_warmup_sync", fake_warmup)
+
+    await job_worker.weekly_keepalive_sweep()
+    await asyncio.sleep(0)
+
+    assert calls == []
+
+
+async def test_weekly_keepalive_sweep_does_nothing_without_an_active_node():
+    # Bootstrap hasn't run — must not raise.
+    await job_worker.weekly_keepalive_sweep()

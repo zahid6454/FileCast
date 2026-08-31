@@ -612,6 +612,108 @@ async def test_execute_switch_unexpected_error_still_releases_lock_and_resumes(
 
 
 # --------------------------------------------------------------------------- #
+# pool_has_headroom (NEON_FAILOVER_PLAN.md §7.11/§9, Phase E)
+# --------------------------------------------------------------------------- #
+
+
+async def test_pool_has_headroom_true_before_bootstrap():
+    # No active node registered at all — nothing to protect yet.
+    assert await node_ops.pool_has_headroom() is True
+
+
+async def test_pool_has_headroom_true_while_active_is_well_under_warmup_threshold():
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.05)
+    await set_usage_cache(
+        "reserve", 0.05
+    )  # equally near-zero — must not read "degraded"
+
+    assert await node_ops.pool_has_headroom() is True
+
+
+async def test_pool_has_headroom_true_when_a_reserve_has_meaningfully_less_usage():
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.85)  # past the default 70% warm-up threshold
+    await set_usage_cache("reserve", 0.1)
+
+    assert await node_ops.pool_has_headroom() is True
+
+
+async def test_pool_has_headroom_false_when_best_reserve_is_not_better_than_active():
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.85)
+    await set_usage_cache("reserve", 0.9)  # even MORE used than the active node
+
+    assert await node_ops.pool_has_headroom() is False
+
+
+async def test_pool_has_headroom_false_when_no_reserve_exists():
+    await register_node(_make_node("active"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.85)
+
+    assert await node_ops.pool_has_headroom() is False
+
+
+async def test_pool_has_headroom_ignores_a_retired_or_provisioning_reserve():
+    await register_node(_make_node("active"))
+    await register_node(_make_node("retired-reserve", status="retired"))
+    await register_node(_make_node("provisioning-reserve", status="provisioning"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.85)
+    await set_usage_cache("retired-reserve", 0.0)
+    await set_usage_cache("provisioning-reserve", 0.0)
+
+    assert await node_ops.pool_has_headroom() is False
+
+
+async def test_all_nodes_low_pool_degrades_but_target_selection_still_engages():
+    # §9/§12 "all-nodes-low": every node's cached usage is forced near the
+    # cutover threshold. /pool-health must flip to degraded (no reserve has
+    # MEANINGFULLY more headroom) — but select_switch_target(), the exact
+    # mechanism both the proactive and reactive triggers dispatch through,
+    # must still return the least-bad option rather than giving up. §9:
+    # "the reactive trigger still falls back to whichever node has the
+    # least-bad amount of room left... strictly better than no fallback."
+    await register_node(_make_node("active"))
+    await register_node(_make_node("least-bad-reserve"))
+    await register_node(_make_node("worst-reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.97)
+    await set_usage_cache("least-bad-reserve", 0.95)
+    await set_usage_cache("worst-reserve", 0.99)
+
+    assert await node_ops.pool_has_headroom() is False
+    target = await node_ops.select_switch_target(exclude_node_ids={"active"})
+    assert target == "least-bad-reserve"
+
+
+async def test_pool_has_headroom_reports_degraded_not_raised_on_redis_error(
+    monkeypatch,
+):
+    # Regression guard (PR #158 review): get_usage_cache()/select_switch_target()
+    # don't fail open on a Redis error the way get_active_node()/get_settings()
+    # do, so pool_has_headroom() must catch it itself — this is what the public,
+    # unauthenticated /pool-health route relies on to report {"status":
+    # "degraded"} instead of a bare 500 on a transient Redis blip.
+    await register_node(_make_node("active"))
+    await set_active_node("active")  # fresh in-process cache — no redis.get needed
+
+    async def boom(*_args, **_kwargs):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(redis_client, "get", boom)
+
+    assert await node_ops.pool_has_headroom() is False
+
+
+# --------------------------------------------------------------------------- #
 # run_warmup_sync (NEON_FAILOVER_PLAN.md §7.4, Phase E)
 # --------------------------------------------------------------------------- #
 

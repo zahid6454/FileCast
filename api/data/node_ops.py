@@ -56,6 +56,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 import scripts.node_sync as node_sync
 from data import neon_api
 from data.node_registry import (
+    NoActiveNodeError,
     Node,
     SwitchHistoryEntry,
     SwitchStatus,
@@ -65,6 +66,7 @@ from data.node_registry import (
     get_active_node,
     get_last_activity,
     get_node,
+    get_settings,
     get_usage_cache,
     list_nodes,
     register_node,
@@ -167,6 +169,74 @@ async def select_switch_target(exclude_node_ids: set[str]) -> str | None:
 
     scored.sort(key=lambda item: (item[0], item[1]))
     return scored[0][2]
+
+
+async def pool_has_headroom() -> bool:
+    """NEON_FAILOVER_PLAN.md §7.11/§9 — the shared "does any reserve node
+    have meaningfully more headroom than the active one" check behind
+    ``/pool-health`` (§7.11) and the admin panel's overview banner (§7.12,
+    a later phase). Reuses ``select_switch_target``'s own selection logic
+    rather than a separately-computed notion of "healthy" — §9's own
+    reasoning is literally "moving to an equally-drained node doesn't
+    create capacity, it only relocates the same shortage," so this isn't
+    just "some ready reserve happens to exist."
+
+    Short-circuits to healthy while the active node itself is still well
+    under ``warmup_threshold_pct`` (§8) — reusing that existing setting
+    rather than inventing a new one — since comparing near-zero-usage nodes
+    against each other is meaningless (a brand new pool would otherwise
+    read "degraded" just because every node's usage happens to be equally
+    unmeasured or equally near zero, which is the opposite of what this
+    signal is for).
+
+    Once the active node is genuinely getting used up, "meaningfully more
+    headroom" is deliberately NOT "the best reserve's usage is merely lower
+    than the active's by any amount" — that would call a reserve at 96%
+    usage "headroom" next to a 97% active node, which is not what an
+    operator being told "the pool is fine" should hear. Instead: does the
+    best available reserve have real room of ITS OWN, i.e. is its usage
+    still under ``cutover_threshold_pct`` (the same line this app itself
+    uses to decide a node needs replacing) — genuine runway before that
+    reserve would need replacing too, not just a smaller number.
+
+    Redis is required to answer this at all (usage cache, last-activity,
+    node list). ``get_active_node()``/``get_settings()`` already fail open
+    to a cached/default value internally, but ``get_usage_cache()`` and
+    ``select_switch_target()`` below do not catch a Redis error — so a
+    transient Redis blip is caught here and reported as degraded, the same
+    "can't complete the check ⇒ not healthy" convention ``converter.py``'s
+    own ``/health`` checks already use (``_check_gotenberg``/``_check_db``/
+    ``_check_worker``), rather than raising out of the public, unauthenticated
+    ``/pool-health`` route as a bare 500 (post-review fix, PR #158).
+    """
+    try:
+        active_node_id = await get_active_node()
+    except NoActiveNodeError:
+        return True  # nothing to protect yet (pre-Bootstrap) — not "degraded"
+
+    try:
+        active_usage = await get_usage_cache(active_node_id)
+        active_ratio = active_usage.ratio if active_usage else 0.0
+
+        node_settings = await get_settings()
+        if active_ratio < node_settings.warmup_threshold_pct / 100:
+            return True
+
+        target_node_id = await select_switch_target(exclude_node_ids={active_node_id})
+        if target_node_id is None:
+            return False
+
+        target_usage = await get_usage_cache(target_node_id)
+        target_ratio = target_usage.ratio if target_usage else 0.0
+        return target_ratio < node_settings.cutover_threshold_pct / 100
+    except Exception:  # noqa: BLE001 — see docstring: fail closed, not raise
+        logger.warning(
+            "pool_has_headroom() check failed (Redis unreachable?) — "
+            "reporting degraded rather than raising",
+            exc_info=True,
+            extra={"data": {"event": "pool_has_headroom_error"}},
+        )
+        return False
 
 
 async def run_warmup_sync(source_node_id: str, target_node_id: str) -> bool:

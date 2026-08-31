@@ -1164,18 +1164,12 @@ async def test_health_endpoint_check_db_false_status_ignores_db(client, monkeypa
 
 
 # --------------------------------------------------------------------------- #
-# Reactive switch trigger (NEON_FAILOVER_PLAN.md §7.4 Trigger 2, Phase E) —
-# the shared Redis consecutive-failure counter wired into /health's existing
-# DB check. The DB failure itself is always simulated the same way the tests
-# above already do (monkeypatching converter.get_active_engine), but
-# get_active_node()/select_switch_target() underneath the reactive trigger
-# read the REAL node registry — so these tests register real nodes, same
-# pattern as test_admin_nodes.py.
+# /pool-health (NEON_FAILOVER_PLAN.md §7.11, Phase E)
 # --------------------------------------------------------------------------- #
 
 
 @pytest.fixture(autouse=True)
-def _reset_reactive_trigger_state(monkeypatch):
+def _reset_active_node_cache(monkeypatch):
     """The active-node fallback cache lives outside Redis on purpose (§7.1)
     and must not leak between tests in this file; conftest's own Redis flush
     already clears the health-fail counter itself between tests."""
@@ -1192,6 +1186,68 @@ def _make_node(node_id: str, *, status="ready") -> Node:
         status=status,
         created_at="2026-01-01T00:00:00+00:00",
     )
+
+
+async def test_pool_health_endpoint_responds_healthy_before_bootstrap(client):
+    r = await client.get("/api/v1/pool-health")
+    assert r.status_code == 200
+    assert r.json() == {"status": "healthy"}
+
+
+async def test_pool_health_endpoint_reports_degraded_when_no_reserve_has_headroom(
+    client,
+):
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.9)
+    await set_usage_cache("reserve", 0.95)  # even more used than the active node
+
+    r = await client.get("/api/v1/pool-health")
+
+    assert r.status_code == 200
+    assert r.json() == {"status": "degraded"}
+
+
+async def test_pool_health_endpoint_reports_healthy_with_real_reserve_headroom(client):
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.9)
+    await set_usage_cache("reserve", 0.1)
+
+    r = await client.get("/api/v1/pool-health")
+
+    assert r.status_code == 200
+    assert r.json() == {"status": "healthy"}
+
+
+async def test_pool_health_endpoint_never_exposes_per_node_detail(client):
+    await register_node(_make_node("active"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.9)
+
+    r = await client.get("/api/v1/pool-health")
+
+    assert set(r.json().keys()) == {"status"}
+
+
+async def test_pool_health_endpoint_requires_no_auth(client):
+    # Same public posture as /health — no Depends(require_admin) anywhere
+    # in the route, unauthenticated `client` fixture must succeed.
+    r = await client.get("/api/v1/pool-health")
+    assert r.status_code == 200
+
+
+# --------------------------------------------------------------------------- #
+# Reactive switch trigger (NEON_FAILOVER_PLAN.md §7.4 Trigger 2, Phase E) —
+# the shared Redis consecutive-failure counter wired into /health's existing
+# DB check. The DB failure itself is always simulated the same way the tests
+# above already do (monkeypatching converter.get_active_engine), but
+# get_active_node()/select_switch_target() underneath the reactive trigger
+# read the REAL node registry — so these tests register real nodes, same
+# pattern as test_admin_nodes.py.
+# --------------------------------------------------------------------------- #
 
 
 def _make_active_node(node_id: str) -> Node:
