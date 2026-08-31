@@ -404,6 +404,100 @@ async def test_execute_switch_cutover_failure_resumes_on_original_node(monkeypat
     assert await _lock_is_free()
 
 
+async def test_execute_switch_reactive_flips_immediately_without_sync(monkeypatch):
+    # §7.4 Trigger 2: the source is unreachable — that's why this fired —
+    # so no warm-up/top-up sync must even be attempted. If it were, this
+    # test's fake sync would raise and the switch would (wrongly) fail.
+    await register_node(_make_node("source"))
+    await register_node(_make_node("target"))
+    await set_active_node("source")
+
+    async def boom(source, target):
+        raise AssertionError("reactive switch must never call sync_node()")
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", boom)
+
+    await node_ops.execute_switch(
+        run_id="run-reactive-ok", target_node_id="target", trigger="reactive"
+    )
+
+    assert await get_active_node() == "target"
+    status = await get_switch_status("run-reactive-ok")
+    assert status.status == "done"
+    assert status.trigger == "reactive"
+    history = await get_switch_history()
+    assert history[0].outcome == "success"
+    assert history[0].trigger == "reactive"
+    # §7.7: reactive never drains or enters maintenance — there's nothing a
+    # pause-and-wait could rescue against an unreachable source.
+    assert await is_maintenance() is False
+    assert job_worker._claim_paused is False
+    assert await _lock_is_free()
+    # Target status is untouched by a reactive switch — no sync ran, so
+    # there's nothing to demote it for.
+    target = await get_node("target")
+    assert target.status == "ready"
+
+
+async def test_execute_switch_reactive_rejects_a_non_ready_target(monkeypatch):
+    await register_node(_make_node("source"))
+    await register_node(_make_node("target", status="error"))
+    await set_active_node("source")
+
+    async def boom(source, target):
+        raise AssertionError("reactive switch must never call sync_node()")
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", boom)
+
+    await node_ops.execute_switch(
+        run_id="run-reactive-bad-target", target_node_id="target", trigger="reactive"
+    )
+
+    assert await get_active_node() == "source"  # unchanged
+    status = await get_switch_status("run-reactive-bad-target")
+    assert status.status == "error"
+    assert "not a ready reserve" in status.detail.lower()
+    history = await get_switch_history()
+    assert history[0].outcome == "failure"
+    assert await _lock_is_free()
+
+
+async def test_execute_switch_reactive_rejects_a_missing_target():
+    await register_node(_make_node("source"))
+    await set_active_node("source")
+
+    await node_ops.execute_switch(
+        run_id="run-reactive-missing-target",
+        target_node_id="does-not-exist",
+        trigger="reactive",
+    )
+
+    assert await get_active_node() == "source"
+    status = await get_switch_status("run-reactive-missing-target")
+    assert status.status == "error"
+    assert "missing" in status.detail.lower()
+    assert await _lock_is_free()
+
+
+async def test_execute_switch_reactive_respects_the_pool_lock(monkeypatch):
+    await register_node(_make_node("source"))
+    await register_node(_make_node("target"))
+    await set_active_node("source")
+
+    token = await nr.acquire_pool_lock("some-other-operation")
+    try:
+        await node_ops.execute_switch(
+            run_id="run-reactive-locked", target_node_id="target", trigger="reactive"
+        )
+    finally:
+        await nr.release_pool_lock(token)
+
+    assert await get_active_node() == "source"  # never flipped
+    status = await get_switch_status("run-reactive-locked")
+    assert status.status == "error"
+    assert "already in progress" in status.detail.lower()
+
+
 async def test_execute_switch_unexpected_error_still_releases_lock_and_resumes(
     monkeypatch,
 ):

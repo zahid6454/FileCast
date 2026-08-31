@@ -253,6 +253,11 @@ async def execute_switch(
        target fails *here* (after maintenance mode is already active),
        abort the flip and resume on the original node (§7.4) rather than
        ever leaving the app with no active node.
+
+    ``trigger="reactive"`` (§7.4 Trigger 2, Phase E) skips both phases
+    entirely — see the branch below for why: the whole reason this fires is
+    that the source is unreachable, so neither a warm-up nor a top-up sync
+    (both read FROM the source) can ever succeed here.
     """
     token = await acquire_pool_lock(f"switch:{run_id}")
     if token is None:
@@ -286,6 +291,99 @@ async def execute_switch(
                     target_node_id=target_node_id,
                     trigger=trigger,
                 ),
+            )
+            return
+
+        if trigger == "reactive":
+            # §7.4 Trigger 2: the source is unreachable — that's the entire
+            # reason this fired — so no warm-up/top-up sync is possible
+            # (both would try to read FROM it). Flip straight to whatever
+            # the target already has from its last sync (a prior warm-up, or
+            # the weekly keep-alive, §7.9); the resulting bounded staleness
+            # is the accepted cost of this path (§10), not something to try
+            # to work around here. Draining in-flight jobs (§7.7) doesn't
+            # apply either — a job that's genuinely in flight is already
+            # failing against the unreachable source; pausing and waiting
+            # for it couldn't rescue it.
+            target = await get_node(target_node_id)
+            if target is None or target.status != "ready":
+                status_repr = target.status if target else "missing"
+                detail = (
+                    "Reactive switch target is not a ready reserve "
+                    f"(status={status_repr})."
+                )
+                logger.error(
+                    "Reactive switch target %s invalid (status=%s)",
+                    target_node_id,
+                    status_repr,
+                    extra={
+                        "data": {
+                            "event": "reactive_switch_target_invalid",
+                            "run_id": run_id,
+                        }
+                    },
+                )
+                await set_switch_status(
+                    run_id,
+                    SwitchStatus(
+                        status="error",
+                        detail=detail,
+                        source_node_id=source_node_id,
+                        target_node_id=target_node_id,
+                        trigger=trigger,
+                    ),
+                )
+                await append_switch_history(
+                    SwitchHistoryEntry(
+                        trigger=trigger,
+                        source_node_id=source_node_id,
+                        target_node_id=target_node_id,
+                        outcome="failure",
+                        detail=detail,
+                        at=datetime.now(UTC).isoformat(),
+                    )
+                )
+                return
+
+            await set_active_node(target_node_id)
+            staleness_note = (
+                "No warm-up/top-up sync was possible — the source was "
+                "unreachable. The target is serving whatever it had from "
+                "its last sync (bounded staleness accepted, §10)."
+            )
+            await set_switch_status(
+                run_id,
+                SwitchStatus(
+                    status="done",
+                    detail=f"Reactive switch complete. {staleness_note}",
+                    source_node_id=source_node_id,
+                    target_node_id=target_node_id,
+                    trigger=trigger,
+                ),
+            )
+            await append_switch_history(
+                SwitchHistoryEntry(
+                    trigger=trigger,
+                    source_node_id=source_node_id,
+                    target_node_id=target_node_id,
+                    outcome="success",
+                    detail=staleness_note,
+                    at=datetime.now(UTC).isoformat(),
+                )
+            )
+            logger.warning(
+                "Reactive switch complete: %s -> %s (source was unreachable, "
+                "bounded staleness accepted)",
+                source_node_id,
+                target_node_id,
+                extra={
+                    "data": {
+                        "event": "reactive_switch_complete",
+                        "run_id": run_id,
+                        "source_node_id": source_node_id,
+                        "target_node_id": target_node_id,
+                    }
+                },
             )
             return
 

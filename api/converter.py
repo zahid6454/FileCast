@@ -8,6 +8,7 @@ import mimetypes
 import os
 import posixpath
 import re
+import secrets
 import subprocess
 import tempfile
 import time
@@ -22,7 +23,17 @@ from xml.etree import ElementTree as ET
 import httpx
 from data.db import get_active_engine, get_session
 from data.models import ConversionJob, User
-from data.node_registry import require_not_maintenance
+from data.node_ops import build_switch_task, select_switch_target
+from data.node_registry import (
+    NoActiveNodeError,
+    SwitchStatus,
+    get_active_node,
+    get_settings,
+    increment_health_fail_count,
+    require_not_maintenance,
+    reset_health_fail_count,
+    set_switch_status,
+)
 from data.redis_client import REDIS_CALL_TIMEOUT_SECONDS, redis_client
 from data.security import current_user_for_convert, require_admin
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -1700,6 +1711,126 @@ async def _check_db() -> bool:
         return False
 
 
+async def _dispatch_reactive_switch(fail_count: int) -> None:
+    """NEON_FAILOVER_PLAN.md §7.4 Trigger 2 (reactive, Phase E) — the active
+    node's own DB check just failed for the Nth consecutive time (§7.1's
+    shared, multi-process-safe counter). Dispatch a switch to the best
+    available reserve via the exact same wake-queue mechanism a manual
+    switch uses (§7.13) — this route runs inside one of the 4 `api`
+    processes, not job_worker.py, so it can't invoke node_ops directly the
+    way the proactive trigger does.
+
+    Must never raise: this runs from inside /health, which has to keep
+    answering regardless of what this side effect does. A dropped dispatch
+    (Redis blip, no reserve available right now) simply means the next
+    failing health check tries again — this fires on every check where the
+    count is already >= the configured threshold, not just the one that
+    first crossed it, so it's self-retrying by construction.
+    """
+    try:
+        active_node_id = await get_active_node()
+    except NoActiveNodeError:
+        return
+
+    target_node_id = await select_switch_target(exclude_node_ids={active_node_id})
+    if target_node_id is None:
+        logger.error(
+            "Reactive trigger: active node unreachable and no reserve node "
+            "is available",
+            extra={
+                "data": {
+                    "event": "reactive_trigger_no_reserve",
+                    "source_node_id": active_node_id,
+                    "fail_count": fail_count,
+                }
+            },
+        )
+        return
+
+    run_id = secrets.token_hex(8)
+    await set_switch_status(
+        run_id,
+        SwitchStatus(
+            status="pending",
+            detail="Reactive switch queued — active node unreachable.",
+            source_node_id=active_node_id,
+            target_node_id=target_node_id,
+            trigger="reactive",
+        ),
+    )
+    try:
+        await asyncio.wait_for(
+            redis_client.lpush(
+                JOB_WAKE_QUEUE_KEY,
+                build_switch_task(
+                    run_id=run_id, target_node_id=target_node_id, trigger="reactive"
+                ),
+            ),
+            timeout=REDIS_CALL_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        logger.error(
+            "Reactive trigger: failed to dispatch switch task — the next "
+            "failing health check will retry",
+            exc_info=True,
+            extra={
+                "data": {"event": "reactive_trigger_dispatch_failed", "run_id": run_id}
+            },
+        )
+        await set_switch_status(
+            run_id,
+            SwitchStatus(
+                status="error",
+                detail="Could not dispatch to the worker process.",
+                source_node_id=active_node_id,
+                target_node_id=target_node_id,
+                trigger="reactive",
+            ),
+        )
+        return
+
+    logger.warning(
+        "Reactive switch triggered: %s -> %s (%d consecutive DB check failures)",
+        active_node_id,
+        target_node_id,
+        fail_count,
+        extra={
+            "data": {
+                "event": "reactive_trigger_switch",
+                "run_id": run_id,
+                "source_node_id": active_node_id,
+                "target_node_id": target_node_id,
+                "fail_count": fail_count,
+            }
+        },
+    )
+
+
+async def _handle_db_health_result(db_ok: bool) -> None:
+    """Wires the shared Redis consecutive-failure counter (§7.1) into
+    /health's existing DB check — the reactive trigger's own detection
+    mechanism (§7.4). A healthy check resets the streak; a failing one
+    increments it and, once it reaches the configured threshold, dispatches
+    a switch on every subsequent failing check (not just the one that first
+    crossed it — see _dispatch_reactive_switch's own docstring for why that
+    self-retries safely). Never raises — a bookkeeping failure here must not
+    take /health down with it."""
+    try:
+        if db_ok:
+            await reset_health_fail_count()
+            return
+        node_settings = await get_settings()
+        fail_count = await increment_health_fail_count()
+        if fail_count >= node_settings.reactive_failure_count:
+            await _dispatch_reactive_switch(fail_count)
+    except Exception:
+        logger.error(
+            "Reactive-trigger bookkeeping failed",
+            exc_info=True,
+            extra={"data": {"event": "reactive_trigger_bookkeeping_failed"}},
+        )
+
+
 @router.api_route("/health", methods=["GET", "HEAD"])
 async def health(check_db: bool = True):
     # Run concurrently, not sequentially — all three checks are independently
@@ -1723,6 +1854,11 @@ async def health(check_db: bool = True):
         gotenberg_ok, db_ok, worker_ok = await asyncio.gather(
             _check_gotenberg(), _check_db(), _check_worker()
         )
+        # NEON_FAILOVER_PLAN.md §7.4 Trigger 2 (reactive, Phase E) — only
+        # evaluated when the DB was actually checked this call (never for
+        # Docker's own check_db=false healthcheck, which carries no signal
+        # either way about the database).
+        await _handle_db_health_result(db_ok)
     else:
         gotenberg_ok, worker_ok = await asyncio.gather(
             _check_gotenberg(), _check_worker()
