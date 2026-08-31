@@ -262,6 +262,22 @@ async def _fetch_repo_public_key(client: httpx.AsyncClient) -> tuple[str, str]:
         f"{_repo_base()}/actions/secrets/public-key", headers=_gh_headers()
     )
     if resp.status_code != 200:
+        # The likeliest real-world cause is the PAT missing the "Secrets:
+        # read/write" repository permission (DEVELOPMENT.md) — surfaced as a
+        # 403 here. Logged server-side since the admin only ever sees the
+        # resulting 502, with no other record of which secret/status caused it.
+        logger.warning(
+            "Could not fetch the repo's Actions public key (status=%s) — "
+            "secret sync will fail loud rather than dispatch with a stale "
+            "secret; check GITHUB_PAT's Secrets permission",
+            resp.status_code,
+            extra={
+                "data": {
+                    "event": "github_public_key_fetch_failed",
+                    "status": resp.status_code,
+                }
+            },
+        )
         raise RuntimeError(
             f"could not fetch the repo's Actions public key ({resp.status_code})"
         )
@@ -286,16 +302,35 @@ async def _update_github_secret(
     client: httpx.AsyncClient, name: str, value: str
 ) -> None:
     key_id, public_key_b64 = await _fetch_repo_public_key(client)
+    try:
+        encrypted_value = _seal_for_github(public_key_b64, value)
+    except Exception as exc:  # noqa: BLE001 — a malformed/corrupt public key
+        # (bad base64, wrong key length) raises binascii.Error or
+        # nacl.exceptions.CryptoError here — neither is a RuntimeError, so
+        # left uncaught this would escape trigger_deploy/trigger_seed's own
+        # except clauses as a bare, unhandled 500 instead of this module's
+        # otherwise-universal "never an opaque failure, always a clear
+        # 502" contract (mirrors _fetch_repo_public_key's own hardening).
+        raise RuntimeError(f"could not encrypt the {name} secret value: {exc}") from exc
     resp = await client.put(
         f"{_repo_base()}/actions/secrets/{name}",
         headers=_gh_headers(),
-        json={
-            "encrypted_value": _seal_for_github(public_key_b64, value),
-            "key_id": key_id,
-        },
+        json={"encrypted_value": encrypted_value, "key_id": key_id},
     )
     # GitHub returns 201 on first creation, 204 on every update thereafter.
     if resp.status_code not in (201, 204):
+        logger.warning(
+            "Could not update the %s secret (status=%s)",
+            name,
+            resp.status_code,
+            extra={
+                "data": {
+                    "event": "github_secret_update_failed",
+                    "secret_name": name,
+                    "status": resp.status_code,
+                }
+            },
+        )
         raise RuntimeError(f"could not update the {name} secret ({resp.status_code})")
 
 
@@ -314,10 +349,33 @@ async def _resolve_active_connection_string() -> str | None:
         # a clear, actionable RuntimeError (caught by the callers below), not
         # escape uncaught — silently proceeding with a stale secret would
         # reproduce the exact bug this whole mechanism exists to close.
+        logger.error(
+            "Registry lookup for active node_id=%s failed while syncing a "
+            "deploy secret — failing loud rather than dispatching with a "
+            "possibly-stale secret",
+            node_id,
+            exc_info=True,
+            extra={
+                "data": {
+                    "event": "active_node_secret_sync_lookup_failed",
+                    "node_id": node_id,
+                }
+            },
+        )
         raise RuntimeError(
             f"registry lookup for active node_id={node_id!r} failed: {exc}"
         ) from exc
     if node is None:
+        logger.error(
+            "Active node id=%s has no registry record while syncing a " "deploy secret",
+            node_id,
+            extra={
+                "data": {
+                    "event": "active_node_secret_sync_record_missing",
+                    "node_id": node_id,
+                }
+            },
+        )
         raise RuntimeError(f"active node_id={node_id!r} has no registry record")
     return node.connection_string
 
@@ -327,6 +385,19 @@ async def _sync_active_db_secret(client: httpx.AsyncClient, secret_name: str) ->
     if connection_string is None:
         return
     await _update_github_secret(client, secret_name, connection_string)
+    # Deliberately does not log the connection string itself — node_id is
+    # enough to audit "which node did this dispatch target" without echoing
+    # a credential into the logs.
+    logger.info(
+        "Rotated %s to the active node's connection string before dispatch",
+        secret_name,
+        extra={
+            "data": {
+                "event": "active_node_secret_rotated",
+                "secret_name": secret_name,
+            }
+        },
+    )
 
 
 @router.post("/deploy")

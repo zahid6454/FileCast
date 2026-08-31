@@ -603,6 +603,63 @@ async def test_deploy_fails_loud_when_active_node_record_missing(
     assert client.put_calls == []
 
 
+async def test_deploy_fails_loud_when_public_key_is_malformed(
+    admin_client, monkeypatch
+):
+    # A public key GitHub returns 200 for but that isn't a valid Curve25519
+    # key (here: correctly base64-encoded, but the wrong byte length) raises
+    # nacl.exceptions.ValueError — a ValueError subclass, but NOT a
+    # RuntimeError or httpx.HTTPError, so left unhandled it would escape
+    # both of trigger_deploy's except clauses as a bare 500 instead of this
+    # module's usual clear 502.
+    _activate_fake_node(monkeypatch, "node-d", CONN_STR)
+    wrong_length_key = base64.b64encode(b"too-short-to-be-a-real-key").decode()
+
+    # Subclasses SecretSyncClient (real .get()/.post()/.put() behavior) and
+    # overrides only the public-key response — a client missing .put()
+    # entirely would fail on an unrelated AttributeError before
+    # _seal_for_github ever runs, masking the real bug this test targets.
+    class MalformedKeyClient(SecretSyncClient):
+        dispatched = False
+
+        async def get(self, url, headers=None):
+            if url.endswith("/actions/secrets/public-key"):
+                return FakeResp(200, {"key_id": "bad-key-id", "key": wrong_length_key})
+            return await super().get(url, headers=headers)
+
+        async def post(self, url, headers=None, json=None):  # noqa: A002
+            type(self).dispatched = True
+            return await super().post(url, headers=headers, json=json)
+
+    _use(monkeypatch, MalformedKeyClient(run_id=1))
+    r = await admin_client.post("/api/v1/admin/deploy")
+    assert r.status_code == 502
+    assert r.status_code != 500
+    assert "sync the active database target" in r.text
+    assert MalformedKeyClient.dispatched is False
+
+
+async def test_active_node_connection_string_never_appears_in_any_response(
+    admin_client, monkeypatch
+):
+    # Same guarantee test_pat_never_appears_in_any_response makes for the
+    # PAT — CONN_STR embeds a real password shape, and no success or failure
+    # path should ever echo it back to the admin panel.
+    _activate_fake_node(monkeypatch, "node-e", CONN_STR)
+
+    _use(monkeypatch, SecretSyncClient(run_id=1))
+    ok = await admin_client.post("/api/v1/admin/deploy")
+    assert CONN_STR not in ok.text
+
+    class BadPutClient(SecretSyncClient):
+        async def put(self, url, headers=None, json=None):  # noqa: A002
+            return FakeResp(500, {"message": "internal error"})
+
+    _use(monkeypatch, BadPutClient(run_id=1))
+    fail = await admin_client.post("/api/v1/admin/deploy")
+    assert CONN_STR not in fail.text
+
+
 # --------------------------------------------------------------------------- #
 # status proxy
 # --------------------------------------------------------------------------- #
