@@ -11,9 +11,21 @@ rjsmin
 Pillow==12.*
 
 # Phase 2: build.py overlays the tool-state from Postgres via the shared api/data
-# package (sync engine), the same deps seed.py needs. These are effectively
-# optional to build.py — absent them the ImportError degrades to YAML-only (P10) —
-# but installing them here activates the overlay on host builds (Phase 2 §6.2).
+# package (sync engine), the same deps seed.py needs. Any one of these missing
+# degrades build.py's overlay fetch to YAML-only (P10) rather than failing the
+# build — each overlay function catches its own ImportError/connection error.
+#
+# redis is here for the same reason, not a separate concern: Phase 7.2 made
+# data.db unconditionally import data.node_registry (the N-way dynamic-engine
+# active-node resolution), which imports data.redis_client — so data.db is not
+# importable at all without it. This was missing here from Phase 7.2 until it
+# was noticed: every deploy/release build silently fell back to YAML-only for
+# the tool overlay, site settings, rating aggregates, and conversion total.
+# Pinned to match api/requirements.txt exactly, same reasoning as this file's
+# own Pillow pin above — a mismatch between the two is a hard resolver
+# conflict elsewhere in CI where both files install together, not just a
+# version difference.
 sqlalchemy[asyncio]==2.0.*
 psycopg[binary]==3.*
 pydantic-settings==2.*
+redis==5.*
