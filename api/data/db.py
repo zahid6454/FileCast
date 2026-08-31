@@ -46,7 +46,7 @@ from contextlib import contextmanager
 from typing import NamedTuple
 
 from log import get_logger
-from sqlalchemy import Engine, MetaData, create_engine
+from sqlalchemy import Engine, MetaData, create_engine, event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -97,8 +97,60 @@ def _sync_url(url: str) -> str:
 CONNECT_TIMEOUT_SECONDS = 5
 
 
+def _register_search_path_fix(engine: Engine) -> None:
+    """Force ``search_path = public`` on every NEW physical connection this
+    engine's pool ever opens (NEON_FAILOVER_PLAN.md §7.2/§7.5/§7.8).
+
+    Closes the gap the Phase D rehearsal actually hit in production: a Neon
+    project created straight from the console (not via ``neonctl init``) can
+    leave its owner role's ``search_path`` empty, and PR #152's fix
+    (``scripts/node_sync.py``'s ``_ensure_search_path()``, a persistent
+    role-level ``ALTER ROLE ... SET search_path``) only covers the
+    orchestration path — migration/dump/truncate/restore. It does NOT cover
+    this module, which is what every real request actually connects through
+    via ``get_session()``/``sync_session()``. During the rehearsal's live
+    cutover, ``current_user()`` (the auth dependency on every authenticated
+    route) 500'd with ``UndefinedTable: relation "users" does not exist`` for
+    ~3.5 minutes after the switch, then self-resolved — this module's engines
+    had already cached a physical connection whose session state predated
+    ``_ensure_search_path()``'s ALTER (Neon's pooler can serve a cached
+    backend connection across an ALTER ROLE the same way it can across a
+    plain SET — see that function's own docstring for the confirmed repro),
+    and every one of the 4 api worker processes keeps its own independent
+    engine/pool, so each had to individually hit and outlive a bad connection.
+
+    A per-connect hook, not a role-level fix repeated here, because this is
+    the one mechanism proven to be immediate regardless of pooler timing: it
+    fires exactly once per physical connection, at the moment SQLAlchemy's
+    pool creates it — before anything else ever uses it — so a stale
+    session-level search_path can never reach a query. This is SQLAlchemy's
+    own documented recipe for setting a Postgres session parameter on
+    connect: toggle ``autocommit`` around the ``SET`` rather than leaving it
+    inside an ordinary (rollback-able) transaction, and restore whatever
+    autocommit value the driver had before — psycopg (sync and, via
+    SQLAlchemy's greenlet-based async adapter, async) both expose
+    ``dbapi_connection.autocommit`` as a plain attribute regardless of which
+    mode constructed the connection.
+
+    Applied to all four engines this module builds (static async, static
+    sync, and both per-node async/sync constructors below) — missing any one
+    would leave this exact gap open for whichever traffic path uses it."""
+
+    @event.listens_for(engine, "connect")
+    def _set_search_path(dbapi_connection, connection_record) -> None:  # noqa: ARG001
+        existing_autocommit = dbapi_connection.autocommit
+        dbapi_connection.autocommit = True
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("SET SESSION search_path = public")
+        finally:
+            cursor.close()
+        dbapi_connection.autocommit = existing_autocommit
+
+
 # --- Static async engine — the dev/test/CI and pre-Bootstrap fallback ---
 async_engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+_register_search_path_fix(async_engine.sync_engine)
 async_session_factory = async_sessionmaker(
     async_engine, expire_on_commit=False, class_=AsyncSession
 )
@@ -110,6 +162,7 @@ sync_engine = create_engine(
     pool_pre_ping=True,
     connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
 )
+_register_search_path_fix(sync_engine)
 sync_session_factory = sessionmaker(sync_engine, expire_on_commit=False)
 
 
@@ -201,6 +254,7 @@ async def _get_active_async_engine() -> _AsyncNodeEngine:
             return _AsyncNodeEngine(async_engine, async_session_factory)
 
         engine = create_async_engine(node.connection_string, pool_pre_ping=True)
+        _register_search_path_fix(engine.sync_engine)
         entry = _AsyncNodeEngine(
             engine,
             async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession),
@@ -301,6 +355,7 @@ def _get_active_sync_engine() -> _SyncNodeEngine:
         pool_pre_ping=True,
         connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
     )
+    _register_search_path_fix(engine)
     entry = _SyncNodeEngine(engine, sessionmaker(engine, expire_on_commit=False))
     _sync_node_engines[node_id] = entry
     return entry
