@@ -257,6 +257,37 @@ async def _mark_node_status(node_id: str, status: str) -> Node | None:
     return updated
 
 
+# Bounds the throwaway connectivity-check connection only — node_sync's own
+# SYNC_OPERATION_TIMEOUT_SECONDS separately bounds the migrate+dump+restore
+# step provisioning follows this with; the reactive branch below has no such
+# follow-up (there's nothing to sync from an unreachable source).
+CONNECTIVITY_CHECK_TIMEOUT_SECONDS = 10.0
+
+
+async def _check_connectivity(node: Node) -> None:
+    """Bounded-timeout connect + ``SELECT 1`` against ``node``, using a
+    throwaway engine rather than the shared per-node cache in
+    ``data/db.py`` — used both before a brand-new node is trusted with
+    anything (§7.8 step 4, where it isn't ``ready`` yet and may never become
+    so) and by the reactive switch branch below, where a stored ``"ready"``
+    status alone only proves the node's *last* sync succeeded, not that it's
+    reachable right now."""
+    engine = create_async_engine(node.connection_string, pool_pre_ping=False)
+    try:
+        async with asyncio.timeout(CONNECTIVITY_CHECK_TIMEOUT_SECONDS):
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+    except TimeoutError as exc:
+        raise node_sync.NodeSyncError(
+            f"Connection timed out after {CONNECTIVITY_CHECK_TIMEOUT_SECONDS:.0f}s "
+            "— check the connection string."
+        ) from exc
+    except Exception as exc:
+        raise node_sync.NodeSyncError(f"Could not connect to the node: {exc}") from exc
+    finally:
+        await engine.dispose()
+
+
 async def sync_or_mark_target_unsafe(source_node_id: str, target_node_id: str) -> None:
     """Wraps ``node_sync.sync_node()`` for every caller that syncs into an
     EXISTING ``ready`` reserve — both of ``execute_switch``'s own call sites
@@ -309,6 +340,16 @@ async def execute_switch(
        target fails *here* (after maintenance mode is already active),
        abort the flip and resume on the original node (§7.4) rather than
        ever leaving the app with no active node.
+
+    ``trigger="reactive"`` (§7.4 Trigger 2, Phase E) skips both phases
+    entirely — see the branch below for why: the whole reason this fires is
+    that the source is unreachable, so neither a warm-up nor a top-up sync
+    (both read FROM the source) can ever succeed here. It also demotes the
+    source to ``error`` and probes the target's live reachability before
+    flipping (falling back to the next-best reserve otherwise) — unlike the
+    other two triggers, "the source is presumed healthy" does not hold here,
+    so a stored ``"ready"`` status can't be trusted on its own the way it is
+    for warm-up/cutover above.
     """
     token = await acquire_pool_lock(f"switch:{run_id}")
     if token is None:
@@ -342,6 +383,152 @@ async def execute_switch(
                     target_node_id=target_node_id,
                     trigger=trigger,
                 ),
+            )
+            return
+
+        if trigger == "reactive":
+            # §7.4 Trigger 2: this only ever fires because the source's own
+            # DB health check just failed N consecutive times (§7.1). Unlike
+            # proactive/manual — §7.4 Trigger 3: "the source node is presumed
+            # healthy" — the source here is presumed UNREACHABLE, not merely
+            # "no longer active." Demote it immediately, regardless of how
+            # the rest of this attempt resolves below: leaving it `"ready"`
+            # would make it eligible again for a LATER switch's own target
+            # selection with no re-verification that it ever actually came
+            # back — the exact gap that let a reactive trigger flip onto a
+            # node it had just flipped away from because it was still down.
+            # Recovery back to `"ready"` goes through the same admin retry
+            # path any other errored node already uses (§7.8/§7.12), not an
+            # automatic un-demote.
+            await _mark_node_status(source_node_id, "error")
+
+            # No warm-up/top-up sync is possible (both would read FROM the
+            # unreachable source). But unlike the other two triggers, a
+            # `"ready"` status alone isn't proof this target is reachable
+            # RIGHT NOW — it only proves its last sync succeeded, possibly up
+            # to a week ago (the weekly keep-alive, §7.9). Probe it directly
+            # before trusting it enough to flip, falling back to the
+            # next-best reserve on failure — the same "try every remaining
+            # reserve at most once" shape Phase 1's warm-up loop below uses,
+            # with a connectivity check standing in for a sync (there is
+            # nothing to sync here).
+            current_target = target_node_id
+            tried: set[str] = set()
+            while True:
+                tried.add(current_target)
+                target = await get_node(current_target)
+                if target is not None and target.status == "ready":
+                    try:
+                        await _check_connectivity(target)
+                        break  # reachable — proceed to flip below
+                    except node_sync.NodeSyncError as exc:
+                        logger.warning(
+                            "Reactive switch target %s failed a connectivity "
+                            "probe (%s) — trying next-best reserve",
+                            current_target,
+                            exc,
+                            extra={
+                                "data": {
+                                    "event": "reactive_switch_target_unreachable",
+                                    "run_id": run_id,
+                                    "target_node_id": current_target,
+                                }
+                            },
+                        )
+                        # It just failed a live probe — same reasoning as
+                        # sync_or_mark_target_unsafe: don't leave it
+                        # "ready" for a later switch to trust again either.
+                        await _mark_node_status(current_target, "error")
+                else:
+                    status_repr = target.status if target else "missing"
+                    logger.warning(
+                        "Reactive switch target %s is no longer a ready "
+                        "reserve (status=%s) — trying next-best",
+                        current_target,
+                        status_repr,
+                        extra={
+                            "data": {
+                                "event": "reactive_switch_target_invalid",
+                                "run_id": run_id,
+                                "target_node_id": current_target,
+                            }
+                        },
+                    )
+
+                next_target = await select_switch_target(tried | {source_node_id})
+                if next_target is None:
+                    detail = "No reachable reserve node available for reactive switch."
+                    logger.error(
+                        "Reactive switch: no reachable reserve available",
+                        extra={
+                            "data": {
+                                "event": "reactive_switch_no_reserve",
+                                "run_id": run_id,
+                            }
+                        },
+                    )
+                    await set_switch_status(
+                        run_id,
+                        SwitchStatus(
+                            status="error",
+                            detail=detail,
+                            source_node_id=source_node_id,
+                            target_node_id=current_target,
+                            trigger=trigger,
+                        ),
+                    )
+                    await append_switch_history(
+                        SwitchHistoryEntry(
+                            trigger=trigger,
+                            source_node_id=source_node_id,
+                            target_node_id=current_target,
+                            outcome="failure",
+                            detail=detail,
+                            at=datetime.now(UTC).isoformat(),
+                        )
+                    )
+                    return
+                current_target = next_target
+
+            await set_active_node(current_target)
+            staleness_note = (
+                "No warm-up/top-up sync was possible — the source was "
+                "unreachable. The target is serving whatever it had from "
+                "its last sync (bounded staleness accepted, §10)."
+            )
+            await set_switch_status(
+                run_id,
+                SwitchStatus(
+                    status="done",
+                    detail=f"Reactive switch complete. {staleness_note}",
+                    source_node_id=source_node_id,
+                    target_node_id=current_target,
+                    trigger=trigger,
+                ),
+            )
+            await append_switch_history(
+                SwitchHistoryEntry(
+                    trigger=trigger,
+                    source_node_id=source_node_id,
+                    target_node_id=current_target,
+                    outcome="success",
+                    detail=staleness_note,
+                    at=datetime.now(UTC).isoformat(),
+                )
+            )
+            logger.warning(
+                "Reactive switch complete: %s -> %s (source was unreachable, "
+                "bounded staleness accepted)",
+                source_node_id,
+                current_target,
+                extra={
+                    "data": {
+                        "event": "reactive_switch_complete",
+                        "run_id": run_id,
+                        "source_node_id": source_node_id,
+                        "target_node_id": current_target,
+                    }
+                },
             )
             return
 
@@ -625,34 +812,6 @@ async def execute_switch(
 # --------------------------------------------------------------------------- #
 # Node provisioning (§7.8)
 # --------------------------------------------------------------------------- #
-
-# Bounds the throwaway connectivity-check connection only — node_sync's own
-# SYNC_OPERATION_TIMEOUT_SECONDS separately bounds the migrate+dump+restore
-# step that follows.
-CONNECTIVITY_CHECK_TIMEOUT_SECONDS = 10.0
-
-
-async def _check_connectivity(node: Node) -> None:
-    """Bounded-timeout connect + ``SELECT 1`` against a brand-new node,
-    before anything else touches it (§7.8 step 4) — a throwaway engine, not
-    the shared per-node cache in ``data/db.py`` (this node isn't ``ready``
-    yet, and may never become so)."""
-    engine = create_async_engine(node.connection_string, pool_pre_ping=False)
-    try:
-        async with asyncio.timeout(CONNECTIVITY_CHECK_TIMEOUT_SECONDS):
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
-    except TimeoutError as exc:
-        raise node_sync.NodeSyncError(
-            f"Connection to the new node timed out after "
-            f"{CONNECTIVITY_CHECK_TIMEOUT_SECONDS:.0f}s — check the connection string."
-        ) from exc
-    except Exception as exc:
-        raise node_sync.NodeSyncError(
-            f"Could not connect to the new node: {exc}"
-        ) from exc
-    finally:
-        await engine.dispose()
 
 
 async def execute_provision(*, run_id: str, node_id: str) -> None:
