@@ -17,6 +17,7 @@ from data.node_registry import (
     get_health_fail_count,
     register_node,
     set_active_node,
+    set_usage_cache,
 )
 from data.redis_client import redis_client
 
@@ -1261,6 +1262,28 @@ async def test_reactive_trigger_fires_on_the_nth_consecutive_failure(
     assert task_type == "switch_node"
     assert kwargs["target_node_id"] == "reserve"
     assert kwargs["trigger"] == "reactive"
+
+
+async def test_reactive_trigger_selects_the_least_used_reserve(client, monkeypatch):
+    # §7.4/§12: the reactive trigger must dispatch to the SAME
+    # select_switch_target() logic every other trigger uses — the lowest
+    # cached usage_ratio wins, not just "whichever reserve happens to be
+    # registered first."
+    await register_node(_make_active_node("active"))
+    await register_node(_make_node("busy-reserve"))
+    await register_node(_make_node("idle-reserve"))
+    await set_active_node("active")
+    await set_usage_cache("busy-reserve", 0.8)
+    await set_usage_cache("idle-reserve", 0.1)
+    _fail_db(monkeypatch)
+
+    await client.get("/api/v1/health")
+    await client.get("/api/v1/health")
+
+    task = await _pop_wake_task()
+    assert task is not None
+    _, kwargs = task
+    assert kwargs["target_node_id"] == "idle-reserve"
 
 
 async def test_reactive_trigger_uses_the_shared_counter_not_a_fresh_one_per_request(
