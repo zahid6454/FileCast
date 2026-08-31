@@ -10,8 +10,16 @@ from datetime import UTC, datetime, timedelta
 
 import converter
 import pytest
-from data import job_worker
+from data import job_worker, neon_api, node_ops
 from data.models import ConversionJob
+from data.node_registry import (
+    Node,
+    get_usage_cache,
+    record_activity,
+    register_node,
+    set_active_node,
+    set_usage_cache,
+)
 from data.redis_client import redis_client
 from validation import ALLOWED_EXTENSIONS
 
@@ -478,3 +486,199 @@ def test_tool_registry_covers_every_tool_validation_knows_about():
     # that tool would 500 in the worker with "Unknown tool_id" the moment it
     # got claimed, having already told the visitor 202.
     assert set(ALLOWED_EXTENSIONS) == set(converter.TOOL_REGISTRY)
+
+
+# --------------------------------------------------------------------------- #
+# Usage polling + proactive trigger (NEON_FAILOVER_PLAN.md §7.3/§7.4, Phase E)
+# --------------------------------------------------------------------------- #
+
+
+def _make_node(node_id: str, *, status="ready") -> Node:
+    return Node(
+        node_id=node_id,
+        display_name=f"Node {node_id}",
+        connection_string=f"postgresql://user:pw@ep-{node_id}.neon.tech/filecast",
+        neon_project_id=f"proj-{node_id}",
+        status=status,
+        created_at="2026-01-01T00:00:00+00:00",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _reset_node_state(monkeypatch):
+    """Same reasoning as test_node_ops.py's own fixture: the active-node
+    fallback cache lives outside Redis on purpose (§7.1), so it must be
+    reset for every test in this file that touches it."""
+    import data.node_registry as nr
+
+    monkeypatch.setattr(nr, "_cached_active_node_id", None)
+    monkeypatch.setattr(nr, "_cached_active_node_at", 0.0)
+
+
+async def test_poll_all_node_usage_updates_cache_and_survives_a_single_failed_poll(
+    monkeypatch,
+):
+    await register_node(_make_node("healthy"))
+    await register_node(_make_node("flaky"))
+    await set_usage_cache("flaky", 0.42)  # pre-existing cached value
+
+    async def fake_get_usage(project_id):
+        if project_id == "proj-flaky":
+            raise neon_api.NeonApiError("Neon API blip")
+        return 0.6
+
+    monkeypatch.setattr(neon_api, "get_project_usage", fake_get_usage)
+
+    await job_worker._poll_all_node_usage()
+
+    healthy_usage = await get_usage_cache("healthy")
+    assert healthy_usage.ratio == 0.6
+    # A single failed poll must NOT clear or otherwise touch the last cached
+    # value — §7.3's "never let a usage-API blip masquerade as a
+    # database-down event."
+    flaky_usage = await get_usage_cache("flaky")
+    assert flaky_usage.ratio == 0.42
+
+
+async def test_maybe_trigger_proactive_action_does_nothing_below_thresholds():
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.5)  # below the default 70% warm-up threshold
+    node_settings = await job_worker.get_settings()
+
+    await job_worker._maybe_trigger_proactive_action(node_settings)
+
+    await asyncio.sleep(0)
+    assert len(job_worker._background_tasks) == 0
+
+
+async def test_maybe_trigger_proactive_action_does_nothing_without_an_active_node():
+    # Bootstrap hasn't run — get_active_node() raises NoActiveNodeError; the
+    # poll cycle must degrade quietly rather than crash the worker loop.
+    node_settings = await job_worker.get_settings()
+    await job_worker._maybe_trigger_proactive_action(node_settings)  # must not raise
+
+
+async def test_maybe_trigger_proactive_action_fires_warmup_at_threshold(monkeypatch):
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.75)  # >= 70% warm-up, < 80% cutover
+
+    calls = []
+
+    async def fake_warmup(source, target):
+        calls.append((source, target))
+
+    monkeypatch.setattr(node_ops, "run_warmup_sync", fake_warmup)
+
+    node_settings = await job_worker.get_settings()
+    await job_worker._maybe_trigger_proactive_action(node_settings)
+    await asyncio.sleep(0)
+
+    assert calls == [("active", "reserve")]
+
+
+async def test_maybe_trigger_proactive_action_skips_warmup_if_target_recently_synced(
+    monkeypatch,
+):
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.75)
+    await record_activity("reserve", when=datetime.now(UTC))  # just synced
+
+    calls = []
+
+    async def fake_warmup(source, target):
+        calls.append((source, target))
+
+    monkeypatch.setattr(node_ops, "run_warmup_sync", fake_warmup)
+
+    node_settings = await job_worker.get_settings()
+    await job_worker._maybe_trigger_proactive_action(node_settings)
+    await asyncio.sleep(0)
+
+    assert calls == []  # redundant warm-up skipped — already fresh
+
+
+async def test_maybe_trigger_proactive_action_fires_cutover_at_threshold(monkeypatch):
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.85)  # >= 80% cutover threshold
+
+    calls = []
+
+    async def fake_execute_switch(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(node_ops, "execute_switch", fake_execute_switch)
+
+    node_settings = await job_worker.get_settings()
+    await job_worker._maybe_trigger_proactive_action(node_settings)
+    await asyncio.sleep(0)
+
+    assert len(calls) == 1
+    assert calls[0]["target_node_id"] == "reserve"
+    assert calls[0]["trigger"] == "proactive"
+    assert calls[0]["run_id"].startswith("proactive-")
+
+
+async def test_maybe_trigger_proactive_action_cutover_takes_priority_over_warmup(
+    monkeypatch,
+):
+    # Past both thresholds at once (e.g. a poll interval that missed the
+    # warm-up band entirely) — only the cutover fires, not both.
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+    await set_usage_cache("active", 0.95)
+
+    switch_calls = []
+    warmup_calls = []
+
+    async def fake_execute_switch(**kwargs):
+        switch_calls.append(kwargs)
+
+    async def fake_warmup(source, target):
+        warmup_calls.append((source, target))
+
+    monkeypatch.setattr(node_ops, "execute_switch", fake_execute_switch)
+    monkeypatch.setattr(node_ops, "run_warmup_sync", fake_warmup)
+
+    node_settings = await job_worker.get_settings()
+    await job_worker._maybe_trigger_proactive_action(node_settings)
+    await asyncio.sleep(0)
+
+    assert len(switch_calls) == 1
+    assert warmup_calls == []
+
+
+async def test_usage_poll_cycle_polls_then_evaluates_the_fresh_reading(monkeypatch):
+    # End-to-end wiring: a fresh poll result that crosses the cutover
+    # threshold must be visible to the SAME cycle's trigger evaluation, not
+    # just the next one.
+    await register_node(_make_node("active"))
+    await register_node(_make_node("reserve"))
+    await set_active_node("active")
+
+    async def fake_get_usage(project_id):
+        return 0.9 if project_id == "proj-active" else 0.0
+
+    monkeypatch.setattr(neon_api, "get_project_usage", fake_get_usage)
+
+    calls = []
+
+    async def fake_execute_switch(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(node_ops, "execute_switch", fake_execute_switch)
+
+    returned_settings = await job_worker.usage_poll_cycle()
+    await asyncio.sleep(0)
+
+    assert returned_settings.cutover_threshold_pct == 80
+    assert len(calls) == 1
+    assert calls[0]["target_node_id"] == "reserve"

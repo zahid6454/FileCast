@@ -12,13 +12,20 @@ from data.config import settings
 
 
 class FakeResp:
-    def __init__(self, status_code):
+    def __init__(self, status_code, body=None):
         self.status_code = status_code
+        self._body = body
+
+    def json(self):
+        if self._body is None:
+            raise ValueError("no body")
+        return self._body
 
 
 class FakeClient:
-    def __init__(self, status_code=200):
+    def __init__(self, status_code=200, body=None):
         self.status_code = status_code
+        self.body = body
         self.requested_url = None
         self.requested_headers = None
 
@@ -31,7 +38,7 @@ class FakeClient:
     async def get(self, url, headers=None):
         self.requested_url = url
         self.requested_headers = headers or {}
-        return FakeResp(self.status_code)
+        return FakeResp(self.status_code, self.body)
 
 
 @pytest.fixture(autouse=True)
@@ -79,3 +86,83 @@ async def test_verify_project_visible_raises_on_network_error(monkeypatch):
 
     with pytest.raises(neon_api.NeonApiError, match="Could not reach Neon"):
         await neon_api.verify_project_visible("proj-123")
+
+
+# --------------------------------------------------------------------------- #
+# get_project_usage (NEON_FAILOVER_PLAN.md §7.3, Phase E)
+# --------------------------------------------------------------------------- #
+
+
+def _usage_body(used: float, quota: float) -> dict:
+    return {
+        "project": {
+            "compute_time_seconds": used,
+            "quota": {"compute_time_seconds": quota},
+        }
+    }
+
+
+async def test_get_project_usage_computes_ratio_from_project_body(monkeypatch):
+    client = FakeClient(status_code=200, body=_usage_body(50, 100))
+    monkeypatch.setattr(neon_api, "_make_client", lambda: client)
+
+    ratio = await neon_api.get_project_usage("proj-123")
+
+    assert ratio == 0.5
+    assert client.requested_url == f"{neon_api.NEON_API_BASE}/projects/proj-123"
+
+
+async def test_get_project_usage_accepts_a_flat_unwrapped_body(monkeypatch):
+    # Some Neon API responses may not nest under "project" — _fetch_project's
+    # shared parsing falls back to the body itself in that case.
+    body = {"compute_time_seconds": 25, "quota": {"compute_time_seconds": 100}}
+    monkeypatch.setattr(neon_api, "_make_client", lambda: FakeClient(200, body))
+
+    assert await neon_api.get_project_usage("proj-123") == 0.25
+
+
+async def test_get_project_usage_raises_on_404(monkeypatch):
+    monkeypatch.setattr(neon_api, "_make_client", lambda: FakeClient(status_code=404))
+
+    with pytest.raises(neon_api.NeonApiError, match="404"):
+        await neon_api.get_project_usage("wrong-id")
+
+
+async def test_get_project_usage_raises_when_key_unconfigured(monkeypatch):
+    monkeypatch.setattr(settings, "neon_api_key", "")
+
+    with pytest.raises(neon_api.NeonApiError, match="not configured"):
+        await neon_api.get_project_usage("proj-123")
+
+
+async def test_get_project_usage_raises_on_missing_fields(monkeypatch):
+    monkeypatch.setattr(
+        neon_api, "_make_client", lambda: FakeClient(200, {"project": {}})
+    )
+
+    with pytest.raises(neon_api.NeonApiError, match="Unexpected"):
+        await neon_api.get_project_usage("proj-123")
+
+
+async def test_get_project_usage_raises_on_zero_quota(monkeypatch):
+    monkeypatch.setattr(
+        neon_api, "_make_client", lambda: FakeClient(200, _usage_body(0, 0))
+    )
+
+    with pytest.raises(neon_api.NeonApiError, match="Unexpected"):
+        await neon_api.get_project_usage("proj-123")
+
+
+async def test_get_project_usage_raises_on_non_json_body(monkeypatch):
+    class NonJsonResp(FakeResp):
+        def json(self):
+            raise ValueError("not json")
+
+    class NonJsonClient(FakeClient):
+        async def get(self, url, headers=None):
+            return NonJsonResp(200)
+
+    monkeypatch.setattr(neon_api, "_make_client", lambda: NonJsonClient())
+
+    with pytest.raises(neon_api.NeonApiError, match="non-JSON"):
+        await neon_api.get_project_usage("proj-123")

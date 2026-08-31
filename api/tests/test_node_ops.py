@@ -437,6 +437,103 @@ async def test_execute_switch_unexpected_error_still_releases_lock_and_resumes(
 
 
 # --------------------------------------------------------------------------- #
+# run_warmup_sync (NEON_FAILOVER_PLAN.md §7.4, Phase E)
+# --------------------------------------------------------------------------- #
+
+
+async def test_run_warmup_sync_success(monkeypatch):
+    await register_node(_make_node("source"))
+    await register_node(_make_node("target"))
+    await set_active_node("source")
+
+    calls = []
+
+    async def fake_sync(source, target):
+        calls.append((source, target))
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", fake_sync)
+
+    result = await node_ops.run_warmup_sync("source", "target")
+
+    assert result is True
+    assert calls == [("source", "target")]
+    target = await get_node("target")
+    assert target.status == "ready"  # unchanged on success
+    assert await _lock_is_free()
+
+
+async def test_run_warmup_sync_failure_marks_target_error_but_does_not_raise(
+    monkeypatch,
+):
+    await register_node(_make_node("source"))
+    await register_node(_make_node("target"))
+    await set_active_node("source")
+
+    async def fake_sync(source, target):
+        raise node_sync.NodeSyncError("connection refused")
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", fake_sync)
+
+    result = await node_ops.run_warmup_sync("source", "target")
+
+    assert result is True  # ran to completion, even though the sync itself failed
+    target = await get_node("target")
+    assert target.status == "error"
+    assert await _lock_is_free()
+
+
+async def test_run_warmup_sync_unexpected_error_also_marks_target_error(monkeypatch):
+    # sync_or_mark_target_unsafe() catches ANY exception escaping sync_node()
+    # — not just NodeSyncError — since truncate-then-restore (§7.5) isn't
+    # transactional. run_warmup_sync()'s own except must be equally broad,
+    # not narrowed to NodeSyncError, or a non-NodeSyncError failure would
+    # both leave the target wrongly marked "error" from the inner helper AND
+    # propagate out of run_warmup_sync() itself, breaking its "never raises"
+    # contract (mirrors test_execute_switch_unexpected_error_still_releases_
+    # lock_and_resumes's same reasoning for execute_switch).
+    await register_node(_make_node("source"))
+    await register_node(_make_node("target"))
+    await set_active_node("source")
+
+    async def boom(source, target):
+        raise RuntimeError("something truly unexpected")
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", boom)
+
+    result = await node_ops.run_warmup_sync("source", "target")
+
+    assert result is True
+    target = await get_node("target")
+    assert target.status == "error"
+    assert await _lock_is_free()
+
+
+async def test_run_warmup_sync_skipped_when_pool_lock_already_held(monkeypatch):
+    await register_node(_make_node("source"))
+    await register_node(_make_node("target"))
+    await set_active_node("source")
+
+    calls = []
+
+    async def fake_sync(source, target):
+        calls.append((source, target))
+
+    monkeypatch.setattr(node_ops.node_sync, "sync_node", fake_sync)
+
+    token = await nr.acquire_pool_lock("some-other-operation")
+    assert token is not None
+    try:
+        result = await node_ops.run_warmup_sync("source", "target")
+    finally:
+        await nr.release_pool_lock(token)
+
+    assert result is False
+    assert calls == []  # never even attempted the sync
+    target = await get_node("target")
+    assert target.status == "ready"  # untouched
+
+
+# --------------------------------------------------------------------------- #
 # execute_provision — success and every documented failure mode (§7.8/§12)
 # --------------------------------------------------------------------------- #
 
