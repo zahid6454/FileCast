@@ -968,9 +968,7 @@
         ADMIN.emptyState({
           icon: 'inbox',
           title: 'No nodes registered',
-          text: 'Add a Neon project to start building a failover pool.',
-          actionLabel: 'Add node',
-          onAction: openAddNode
+          text: 'Add a Neon project to start building a failover pool.'
         })
       );
       return;
