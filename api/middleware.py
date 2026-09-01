@@ -102,7 +102,7 @@ def add_cors(app):
         CORSMiddleware,
         allow_origins=ALLOWED_ORIGINS,
         allow_credentials=True,  # F5 — required for credentials:'include' + cookies
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         # A literal "*" is invalid alongside credentials; be explicit (§16-R2).
         allow_headers=["Content-Type"],
         # Phase 3: browsers only expose a small safelisted set of response
