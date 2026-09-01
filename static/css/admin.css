@@ -744,6 +744,16 @@
   height: 100%;
   background: var(--color-success);
 }
+/* Escalated fills (Phase F, Nodes tab) — every other meter in the panel only
+   ever shows healthy (green) usage, so this is the first place one needs to
+   visually escalate as a node's usage climbs toward its warm-up/cutover
+   thresholds (§8). */
+.admin-meter__fill--warning {
+  background: var(--color-warning);
+}
+.admin-meter__fill--error {
+  background: var(--color-error);
+}
 .admin-meter__label {
   margin-left: var(--space-2);
   font-size: var(--text-xs);
@@ -1837,6 +1847,216 @@
 }
 .admin-msg-emptyrow {
   list-style: none;
+}
+
+/* ---- nodes (Phase F, NEON_FAILOVER_PLAN.md §7.12) ---------------------- */
+/* Everything else in this tab reuses admin-usercell/admin-badge/admin-stat/
+   admin-tablecard/admin-slideout/admin-deflist/admin-callout/admin-field/
+   admin-input/admin-card AS-IS. These are the genuinely new primitives the
+   tab needs that have no existing equivalent: a warning-tinted callout (the
+   pool-health banner and the switch-confirm warning), a mono/muted project-id
+   line, a gradient avatar for the active node, a plain health indicator, an
+   inactivity flag, per-trigger history tints, live step progress, the
+   collapsible provisioning checklist, and the auto-saving settings rows. */
+
+.admin-callout.is-warning {
+  background: var(--color-warning-light);
+  border-color: var(--color-warning);
+}
+.admin-callout.is-warning .admin-callout__icon {
+  color: var(--color-warning);
+}
+
+.node-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.node-row {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.node-row:hover {
+  background: var(--color-bg-sunken);
+}
+
+.admin-input--mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.admin-field__hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  line-height: 1.5;
+}
+
+.admin-avatar--active {
+  background: linear-gradient(135deg, var(--brand-blue), var(--brand-green));
+  color: #fff;
+}
+
+.node-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+}
+.node-health::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.node-health--ok {
+  color: var(--color-success-hover);
+}
+.node-health--bad {
+  color: var(--color-error-hover);
+}
+
+.node-flag--warning {
+  color: var(--color-warning);
+  font-weight: var(--weight-semibold);
+}
+
+/* Per-trigger tint for History cards — deliberately its own palette, not the
+   status-badge colors, since trigger type and node status are different axes. */
+.trigger-badge {
+  flex-shrink: 0;
+  min-width: 84px;
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+}
+.trigger-badge--proactive {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+.trigger-badge--reactive {
+  background: var(--color-error-light);
+  color: var(--color-error-hover);
+}
+.trigger-badge--manual {
+  background: var(--color-bg-sunken);
+  color: var(--color-text-secondary);
+}
+
+/* Live step progress (switch + add-node flows). */
+.admin-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.admin-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+.admin-step__dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--color-text-light);
+}
+.admin-step.is-done .admin-step__dot {
+  border-color: var(--color-success);
+  background: var(--color-success-subtle);
+  color: var(--color-success-hover);
+}
+.admin-step.is-active .admin-step__dot {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.admin-step.is-error .admin-step__dot {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+.admin-step__label {
+  font-size: var(--text-sm);
+  color: var(--color-text-light);
+}
+.admin-step.is-done .admin-step__label,
+.admin-step.is-error .admin-step__label {
+  color: var(--color-text);
+}
+.admin-step.is-active .admin-step__label {
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+}
+
+/* Collapsible operator checklist (Add Node). */
+.admin-checklist {
+  background: var(--color-bg-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+.admin-checklist summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+}
+.admin-checklist ul {
+  margin: var(--space-3) 0 0;
+  padding-left: 18px;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.8;
+}
+.admin-checklist code {
+  font-family: var(--font-mono);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
+/* Settings tab — auto-saving range+number rows (§7.12's deliberate departure
+   from site_settings.py's batch-and-submit form). */
+.admin-settingsgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+.admin-settingrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.admin-settingrow input[type='range'] {
+  flex: 1;
+  accent-color: var(--color-primary);
+}
+.admin-settingrow input[type='number'] {
+  width: 76px;
+  flex-shrink: 0;
+}
+.admin-unit {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .admin-settingsgrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---- responsive -------------------------------------------------------- */

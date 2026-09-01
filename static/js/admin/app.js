@@ -33,6 +33,7 @@
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'tools', label: 'Tools' },
     { id: 'announcements', label: 'Announcements' },
+    { id: 'nodes', label: 'Database' },
     { id: 'users', label: 'Users' },
     { id: 'errors', label: 'Errors' },
     { id: 'messages', label: 'Messages' },
@@ -42,6 +43,7 @@
     dashboard: 1,
     tools: 1,
     announcements: 1,
+    nodes: 1,
     users: 1,
     errors: 1,
     messages: 1,
@@ -71,6 +73,11 @@
     announcements: [
       ['path', { d: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9' }],
       ['path', { d: 'M13.73 21a2 2 0 0 1-3.46 0' }]
+    ],
+    nodes: [
+      ['ellipse', { cx: 12, cy: 5, rx: 8, ry: 3 }],
+      ['path', { d: 'M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5' }],
+      ['path', { d: 'M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6' }]
     ],
     users: [
       ['path', { d: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' }],

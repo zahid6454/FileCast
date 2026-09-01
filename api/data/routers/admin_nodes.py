@@ -55,6 +55,7 @@ from data.node_registry import (
     get_last_activity,
     get_node,
     get_settings,
+    get_switch_history,
     get_switch_status,
     get_usage_cache,
     list_nodes,
@@ -379,6 +380,22 @@ async def list_nodes_route(_admin=Depends(require_admin)):
             )
         )
     return {"nodes": result}
+
+
+@router.get("/history")
+async def list_switch_history(_admin=Depends(require_admin)):
+    """Backs §7.12's admin panel History tab. ``node_registry.py`` has
+    carried ``get_switch_history()`` since Phase A/§11 (its own docstring
+    says as much: "Plenty for the admin panel's History tab") and
+    ``node_ops.py`` has been appending to it on every switch outcome since
+    Phase D — but no route ever exposed it. A real gap in this phase's own
+    inventory, caught building the Phase F frontend that actually needs it,
+    same as the three routes §7.13 itself flagged as missing from the prior
+    revision. Entries are already newest-first (``append_switch_history``
+    ``LPUSH``s), capped at ``SWITCH_HISTORY_MAX_LEN`` — no pagination
+    needed for a list this small."""
+    history = await get_switch_history()
+    return {"history": [entry.model_dump() for entry in history]}
 
 
 @router.get("/settings")
