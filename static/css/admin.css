@@ -537,6 +537,16 @@
   margin-bottom: var(--space-5);
   flex-wrap: wrap;
 }
+/* No tab renders a page-level heading of its own except Nodes (§7.12) — every
+   other title-ish element in this panel (admin-card__title, breadcrumbs)
+   uses the softer --color-heading rather than body's near-black --color-text,
+   so a bare <h1> here would be the one exception, reading noticeably heavier. */
+.admin-page-title {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-heading);
+  margin: 0;
+}
 .admin-toolbar--right {
   justify-content: flex-end;
 }

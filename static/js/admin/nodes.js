@@ -947,7 +947,7 @@
     dom.clear(host);
 
     var toolbar = h('div', { class: 'admin-toolbar' });
-    toolbar.appendChild(h('h1', {}, 'Database nodes'));
+    toolbar.appendChild(h('h1', { class: 'admin-page-title' }, 'Database nodes'));
     var addBtn = h('button', { type: 'button', class: 'admin-btn admin-btn--primary' }, [
       ADMIN.icon('plus', 15, 'admin-btn__icon'),
       h('span', {}, 'Add node')
