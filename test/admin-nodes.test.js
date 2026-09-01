@@ -867,6 +867,16 @@ describe('admin/nodes.js — history tab', () => {
       animateCalls.push({ keyframes, opts, fake });
       return fake;
     };
+    // jsdom's real requestAnimationFrame is backed by a ~16.7ms setInterval
+    // (see jsdom's Window.js), which a fixed-tick flush() can't reliably
+    // outlast on a loaded CI runner — this raced and failed intermittently
+    // in CI (animateCalls still [] when the assertion below ran). Stub it to
+    // fire synchronously: this test cares that expand() eventually calls
+    // animate() with the right arguments, not about real frame timing.
+    dom.window.requestAnimationFrame = function (cb) {
+      cb();
+      return 0;
+    };
 
     const c = await renderOverview(dom);
     openHistory(c);
@@ -874,8 +884,7 @@ describe('admin/nodes.js — history tab', () => {
     const summary = details.querySelector('summary');
     expect(details.classList.contains('is-open')).toBe(false);
 
-    summary.click();
-    await flush(); // the expand() branch defers its animate() call one rAF
+    summary.click(); // expand()'s rAF-deferred animate() call now runs synchronously
 
     // `open` and the arrow-driving class flip immediately (synchronous with
     // the click) even though the tween itself is still mid-flight — a click
