@@ -205,7 +205,8 @@
       );
       retryBtn.addEventListener('click', function (e) {
         e.stopPropagation();
-        retryProvisioning(node);
+        retryBtn.disabled = true; // same double-submit guard as the Add-node/Switch buttons
+        retryProvisioning(node, retryBtn);
       });
       return retryBtn;
     }
@@ -281,9 +282,16 @@
     };
     document.addEventListener('keydown', drawerKeydownHandler);
 
+    // Captured locally, not read back off the module-level drawerOverlay/
+    // drawerPanel vars: if this drawer is closed (or replaced by a new one)
+    // before the browser paints the next frame, those vars have already
+    // moved on to null/a different drawer by the time this fires, which
+    // would either throw (null) or animate the wrong panel.
+    var thisOverlay = drawerOverlay;
+    var thisPanel = drawerPanel;
     requestAnimationFrame(function () {
-      drawerOverlay.classList.add('is-open');
-      drawerPanel.classList.add('is-open');
+      thisOverlay.classList.add('is-open');
+      thisPanel.classList.add('is-open');
     });
 
     return drawerPanel;
@@ -661,13 +669,14 @@
       });
   }
 
-  function retryProvisioning(node) {
+  function retryProvisioning(node, btn) {
     api
       .post('/api/v1/admin/nodes/' + encodeURIComponent(node.node_id) + '/retry')
       .then(function (res) {
         runProvisionProgress(res.run_id, node.display_name);
       })
       .catch(function (err) {
+        if (btn) btn.disabled = false;
         if (err && err.isAuthError) return ADMIN.onAuthError(err);
         ADMIN.toast((err && err.message) || 'Could not retry provisioning', 'error');
       });
