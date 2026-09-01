@@ -1961,12 +1961,115 @@
   color: var(--color-text-secondary);
 }
 
+/* A switch's source/target as two node "chips" (same round-initials style
+   the Overview table's admin-avatar uses) joined by an outcome-colored
+   connector — a switch is a transition between two *nodes*, and looking
+   like the file-format "a.pdf → a.docx" text line the rest of the site uses
+   for conversions was exactly the confusion this replaces. */
+.node-transition {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.node-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-bg-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 3px var(--space-3) 3px 3px;
+}
+.node-chip__avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  flex-shrink: 0;
+}
+.node-chip--to .node-chip__avatar {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-inverse, #fff);
+}
+.node-chip__name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+.node-transition__arrow {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.node-transition__arrow svg {
+  width: 13px;
+  height: 13px;
+}
+.node-transition__arrow.is-ok {
+  background: var(--color-success-light);
+  color: var(--color-success-hover);
+}
+.node-transition__arrow.is-fail {
+  background: var(--color-error-light);
+  color: var(--color-error-hover);
+}
+.outcome-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+}
+.outcome-pill svg {
+  width: 11px;
+  height: 11px;
+}
+.outcome-pill.is-ok {
+  background: var(--color-success-light);
+  color: var(--color-success-hover);
+}
+.outcome-pill.is-fail {
+  background: var(--color-error-light);
+  color: var(--color-error-hover);
+}
+/* Same signal as the outcome pill, redundant on purpose (color + shape, not
+   color alone) — a thin rail down the whole card reads at a glance even
+   before the eye reaches the pill. */
+.admin-annc--ok {
+  border-left: 3px solid var(--color-success);
+}
+.admin-annc--fail {
+  border-left: 3px solid var(--color-error);
+}
+.admin-annc__reason {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-1);
+}
+
 /* A failure's raw detail can be a full traceback, not just a sentence — kept
-   out of the one-line metadata caption (admin-annc__window) and tucked
-   behind this collapsed-by-default disclosure instead, so one bad entry
-   can't wreck the whole list's scannability. */
+   out of the one-line reason (admin-annc__reason) and tucked behind this
+   collapsed-by-default disclosure instead, so one bad entry can't wreck the
+   whole list's scannability. */
 .admin-annc__detail {
   margin-top: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   /* Clips during the JS-driven height tween in nodes.js's
      wireAnimatedDetails() — a plain instant open/close still works fine
      if that script can't run (no Element.animate(), or reduced motion). */
@@ -1976,35 +2079,37 @@
   cursor: pointer;
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   list-style: none;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-sunken);
+  transition: background var(--transition-base), color var(--transition-base);
 }
 .admin-annc__detail summary::-webkit-details-marker {
   display: none;
 }
-.admin-annc__detail summary::before {
-  content: '▸';
-  font-size: 10px;
+.admin-annc__detail-chevron {
+  flex-shrink: 0;
   transition: transform var(--transition-base);
 }
-/* .is-open, not [open] — the animated collapse needs the arrow to turn the
+/* .is-open, not [open] — the animated collapse needs the chevron to turn the
    instant a click happens, not only once [open] is actually removed at the
    end of the closing animation (nodes.js). */
-.admin-annc__detail.is-open summary::before {
+.admin-annc__detail.is-open .admin-annc__detail-chevron {
   transform: rotate(90deg);
 }
 .admin-annc__detail summary:hover {
-  color: var(--color-text-secondary);
+  color: var(--color-text);
+  background: var(--color-border-light);
 }
 .admin-annc__detail-body {
-  margin: var(--space-2) 0 0;
+  margin: 0;
   padding: var(--space-3);
-  background: var(--color-bg-sunken);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  background: var(--color-bg-page);
+  border-top: 1px solid var(--color-border);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-text-secondary);

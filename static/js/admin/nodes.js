@@ -221,6 +221,23 @@
     );
   }
 
+  // History-tab node "chip" — same round-initials avatar the Overview table
+  // uses (admin-avatar), so a switch visibly connects two *nodes* rather
+  // than reading like the site's file-format conversion text ("a.pdf → a.docx").
+  function nodeChip(nodeId, variant) {
+    return h('span', { class: 'node-chip' + (variant ? ' node-chip--' + variant : '') }, [
+      h('span', { class: 'node-chip__avatar' }, initials(nodeLabel(nodeId))),
+      h('span', { class: 'node-chip__name' }, nodeLabel(nodeId))
+    ]);
+  }
+
+  function outcomePill(isFailure) {
+    return h('span', { class: 'outcome-pill ' + (isFailure ? 'is-fail' : 'is-ok') }, [
+      ADMIN.icon(isFailure ? 'errors' : 'check', 11),
+      isFailure ? 'Failed' : 'Completed'
+    ]);
+  }
+
   // --- drawer (slide-out) mechanics ------------------------------------------
   //
   // Same overlay/inert/Escape pattern tools.js's openSlideout/closeSlideout
@@ -1100,34 +1117,41 @@
   }
 
   function historyCard(entry) {
-    var titleRow = h('div', { class: 'admin-annc__msg' }, [
-      h('strong', {}, nodeLabel(entry.source_node_id)),
-      ' → ',
-      h('strong', {}, nodeLabel(entry.target_node_id))
+    var isFailure = entry.outcome === 'failure';
+
+    var transition = h('div', { class: 'node-transition' }, [
+      nodeChip(entry.source_node_id),
+      h('span', { class: 'node-transition__arrow ' + (isFailure ? 'is-fail' : 'is-ok') }, [
+        ADMIN.icon('arrow-right', 13)
+      ]),
+      nodeChip(entry.target_node_id, 'to'),
+      outcomePill(isFailure)
     ]);
-    var metaParts = [];
-    if (entry.outcome === 'failure') metaParts.push('Failed');
-    metaParts.push(fmtRelative(entry.at) || entry.at);
+    var metaLine = h('div', { class: 'admin-annc__window' }, fmtRelative(entry.at) || entry.at);
 
     var reason = historyReasonText(entry);
+    var reasonLine = null;
     var fullDetail = null;
     if (reason) {
       var r = summarizeReason(reason);
-      metaParts.push(r.summary);
+      reasonLine = h('div', { class: 'admin-annc__reason' }, r.summary);
       if (r.truncated) {
         fullDetail = h('details', { class: 'admin-annc__detail' }, [
-          h('summary', {}, 'Show full error'),
+          h('summary', {}, [
+            ADMIN.icon('chevron-right', 15, 'admin-annc__detail-chevron'),
+            'Show full error'
+          ]),
           h('pre', { class: 'admin-annc__detail-body' }, reason)
         ]);
         wireAnimatedDetails(fullDetail);
       }
     }
-    var metaLine = h('div', { class: 'admin-annc__window' }, metaParts.join(' · '));
 
-    var mainKids = [titleRow, metaLine];
+    var mainKids = [transition, metaLine];
+    if (reasonLine) mainKids.push(reasonLine);
     if (fullDetail) mainKids.push(fullDetail);
 
-    return h('li', { class: 'admin-annc' }, [
+    return h('li', { class: 'admin-annc ' + (isFailure ? 'admin-annc--fail' : 'admin-annc--ok') }, [
       triggerBadge(entry.trigger),
       h('div', { class: 'admin-annc__main' }, mainKids)
     ]);

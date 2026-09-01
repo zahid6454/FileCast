@@ -164,7 +164,14 @@
     plus: [
       ['line', { x1: 12, y1: 5, x2: 12, y2: 19 }],
       ['line', { x1: 5, y1: 12, x2: 19, y2: 12 }]
-    ]
+    ],
+    // Nodes tab history: the switch-source-to-target connector.
+    'arrow-right': [
+      ['line', { x1: 5, y1: 12, x2: 19, y2: 12 }],
+      ['polyline', { points: '12 5 19 12 12 19' }]
+    ],
+    // Nodes tab history: the "Show full error" disclosure toggle.
+    'chevron-right': [['polyline', { points: '9 18 15 12 9 6' }]]
   };
 
   // The multi-color Google "G" (same paths as the main site's auth.js, 24-grid).
