@@ -72,7 +72,8 @@ For local setup, VS Code configuration, CI/CD, and production operations, see
                   |
                   v
     +-----------------------------+
-    | Neon Postgres (managed)     |
+    | Neon Postgres — active node |  one of a pool of Neon projects;
+    | (of a failover pool)        |  see note below
     +-----------------------------+
 ```
 
@@ -84,19 +85,30 @@ code ships, what watches it, what it's connected to — looks like this:
 | Frontend & Edge            |  | Backend & Data             |  | Auth & CI/CD               |
 | ---------------            |  | --------------             |  | ------------               |
 | Cloudflare Pages           |  | Oracle Cloud VPS (Docker)  |  | Google OAuth               |
-| Cloudflare Tunnel          |  | Neon Postgres              |  | GitHub Actions (5          |
-| Cloudflare DNS + Registrar |  | Gotenberg + Ghostscript    |  | workflows)                 |
+| Cloudflare Tunnel          |  | Neon Postgres (N-node      |  | GitHub Actions (5          |
+| Cloudflare DNS + Registrar |  | failover pool)             |  | workflows)                 |
+|                            |  | Redis (queue + pool state) |  |                            |
+|                            |  | Gotenberg + Ghostscript    |  |                            |
 +----------------------------+  +----------------------------+  +----------------------------+
 
 +----------------------------+  +----------------------------+
 | Analytics & SEO            |  | Monitoring                 |
 | ---------------            |  | ----------                 |
-| Google Analytics 4         |  | UptimeRobot                |
+| Google Analytics 4         |  | UptimeRobot (3 monitors)   |
 | Google Search Console      |  | Sentry (frontend +         |
 | AdSense (built, not        |  | backend)                   |
 | enabled)                   |  |                            |
 +----------------------------+  +----------------------------+
 ```
+
+FileCast's database is not a single Postgres instance — it's a small, expandable
+**pool of independent Neon projects**, with exactly one "active" at any time and the
+rest kept as warm reserves. When the active node's monthly compute quota runs low (or
+it fails outright), the app automatically fails over to a reserve node with no
+downtime and no code change — this is what lets FileCast stay entirely on Neon's free
+tier indefinitely. See
+[DEVELOPMENT.md § Database Architecture](DEVELOPMENT.md#database-architecture--multi-node-neon-pool)
+for the full design.
 
 Full detail on every piece — deploy triggers, monitoring cadence, what's live vs.
 still planned — is in [DEVELOPMENT.md](DEVELOPMENT.md#production-architecture).
@@ -113,7 +125,10 @@ for the handful of conversions a browser genuinely can't do. It also owns everyt
 that needs a database: accounts, sessions, ratings, announcements, admin actions, and
 the retention/purge job. Files are received over HTTPS, converted in memory, streamed
 back, and never persisted. If the API is down, the 89 client-side tools keep working —
-only the 10 server-side tools and account features degrade.
+only the 10 server-side tools and account features degrade. The database itself is a
+self-healing pool of Neon Postgres projects rather than a single instance — see
+[DEVELOPMENT.md § Database Architecture](DEVELOPMENT.md#database-architecture--multi-node-neon-pool)
+for how that works.
 
 See [DEVELOPMENT.md § Production Architecture](DEVELOPMENT.md#production-architecture)
 for the full infrastructure diagram (Cloudflare, Oracle VM, Neon, deploy paths).
@@ -218,9 +233,12 @@ FileCast has a real backend behind the "convert files" surface:
 - **Admin panel** (`/admin`) — a staff-only SPA with tabs for a stats dashboard, tool
   registry (enable/disable/reorder/maintenance mode, plus a "Sync Tools" button that
   re-seeds the DB from `tools/*.yaml`), announcements CRUD, user list/detail, error
-  log viewer, site settings (AdSense/GA4/Sentry toggles + site copy overrides), staff
-  management (grant/revoke admin), and a "Publish" button that triggers a full
-  frontend deploy via GitHub Actions.
+  log viewer, a **Database tab** (view/add/rename/retire Neon nodes, trigger a manual
+  failover, tune the six pool settings — see
+  [DEVELOPMENT.md](DEVELOPMENT.md#database-architecture--multi-node-neon-pool)), site
+  settings (AdSense/GA4/Sentry toggles + site copy overrides), staff management
+  (grant/revoke admin), and a "Publish" button that triggers a full frontend deploy
+  via GitHub Actions.
 - **Staff/RBAC** — a small allow-list of "config owner" emails are always admin on
   login (a break-glass path, not revocable via the UI); further admins are granted
   in-app by an existing admin.
@@ -265,16 +283,24 @@ FileCast has a real backend behind the "convert files" surface:
 FileCast/
 ├── api/                    FastAPI backend — see DEVELOPMENT.md for the full layout
 │   ├── main.py             App entrypoint, middleware stack, router registration
-│   ├── converter.py        The 10 server-side conversion endpoints
+│   ├── converter.py        The 10 server-side conversion endpoints + /health, /pool-health
 │   ├── data/
-│   │   ├── models.py       14 SQLAlchemy models (users, sessions, tools, ratings, ...)
+│   │   ├── models.py       16 SQLAlchemy models (users, sessions, tools, ratings, ...)
+│   │   ├── db.py           N-way dynamic session/engine resolution against the active Neon node
+│   │   ├── node_registry.py  Redis-backed Neon node pool state (registry, active pointer, settings)
+│   │   ├── node_ops.py     Switch/provision execution, run from job_worker.py
+│   │   ├── neon_api.py     Thin client for Neon's console API (usage polling, project checks)
+│   │   ├── job_worker.py   Async conversion worker + usage-poll/failover-trigger loop
 │   │   ├── security.py     Sessions, cookies, Google OAuth, admin bootstrap
 │   │   ├── tasks.py        Retention purge job + canary check
-│   │   └── routers/        auth, tools, admin_deploy, staff, site_settings, ...
+│   │   └── routers/        auth, tools, admin_deploy, admin_nodes, staff, site_settings, ...
+│   ├── scripts/
+│   │   ├── node_sync.py            pg_dump/pg_restore data sync between Neon nodes
+│   │   └── resolve_active_db_url.py  Resolves the active node for the Dockerfile's migration step
 │   ├── migrations/         Alembic migrations
 │   ├── tests/               pytest suite
-│   ├── docker-compose.yml       Base compose (api, purge, gotenberg, dev-only postgres)
-│   └── docker-compose.prod.yml  Prod overlay (Neon, Cloudflare Tunnel)
+│   ├── docker-compose.yml       Base compose (api, worker, purge, gotenberg, redis, dev-only postgres)
+│   └── docker-compose.prod.yml  Prod overlay (Neon, Redis, Cloudflare Tunnel)
 ├── assets/                 Design assets (logo, SVG graphics)
 ├── content/                SEO/help content — content/{tool-id}/{4 markdown files}
 ├── e2e/                    Playwright specs
@@ -391,12 +417,17 @@ backup strategy, and the complete third-party-service status table — lives in
   admin panel's "Publish" button (or a manual dispatch) triggers.
 - **Backend:** Docker Compose on an Oracle Cloud VM, behind a Cloudflare Tunnel
   (no public inbound port), redeployed via SSH on GitHub Release publish.
-- **Database:** Neon (managed Postgres), with nightly `pg_dump` backups retained
-  7 days in GitHub Actions artifacts, on top of Neon's own point-in-time restore.
+- **Database:** Neon (managed Postgres), run as an expandable pool of independent
+  projects with one active at a time and automatic usage-based failover to a reserve
+  — see [DEVELOPMENT.md § Database Architecture](DEVELOPMENT.md#database-architecture--multi-node-neon-pool).
+  Nightly `pg_dump` backups are retained 7 days in GitHub Actions artifacts, on top of
+  Neon's own point-in-time restore.
 - **CI:** every PR runs Python lint, JS lint, JS unit + E2E tests, and the full
-  pytest suite against a real Postgres service container.
-- **Monitoring:** UptimeRobot (hourly checks on the homepage and `/api/v1/health`),
-  Sentry (separate frontend and backend projects, error tracking only).
+  pytest suite against real Postgres service containers (v16 for the app, plus a
+  pinned v18 service that exercises the real `pg_dump`/`pg_restore` node-sync path).
+- **Monitoring:** UptimeRobot (hourly checks on the homepage, `/api/v1/health`, and
+  `/pool-health` — a separate low-noise signal for "the Neon pool is running low on
+  headroom"), Sentry (separate frontend and backend projects, error tracking only).
 - **Analytics/SEO:** Google Analytics 4 and Google Search Console are live; Bing
   Webmaster Tools is not yet configured; AdSense is built end-to-end but
   deliberately not enabled yet.
@@ -411,7 +442,8 @@ backup strategy, and the complete third-party-service status table — lives in
 | Frontend | Vanilla JS + CSS (no framework), self-hosted libraries |
 | Backend | FastAPI, SQLAlchemy (async), Alembic, Pydantic Settings |
 | Conversion engines | Gotenberg (LibreOffice + Chromium), Ghostscript, pdf2docx |
-| Database | Postgres (Neon in production) |
+| Database | Postgres (Neon in production — an N-node failover pool, not a single instance) |
+| Queue / control state | Redis (rate limits, conversion job queue, Neon node pool state) |
 | Auth | Google OAuth 2.0, DB-backed sessions |
 | Error tracking | Sentry |
 | Hosting | Cloudflare Pages (static) + Oracle Cloud VM (API), Cloudflare Tunnel |
