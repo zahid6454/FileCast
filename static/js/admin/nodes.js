@@ -883,7 +883,7 @@
         String(poolNodes.length),
         'Nodes in pool',
         reserveCount + ' reserve, ' + (active ? 1 : 0) + ' active',
-        null
+        'info'
       ),
       statTile(
         SETTINGS.warmup_threshold_pct + '% / ' + SETTINGS.cutover_threshold_pct + '%',
