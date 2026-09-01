@@ -34,4 +34,4 @@ redis==5.*
 # requires every value to be libsodium sealed-box-encrypted against the repo's
 # public key before the PUT — PyNaCl is what GitHub's own API docs use in
 # their worked example, rather than hand-rolling crypto_box_seal.
-pynacl==1.5.0
+pynacl==1.6.2
