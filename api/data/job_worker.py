@@ -536,20 +536,26 @@ def _dispatch_wake_task(raw_value: str) -> None:
 # --------------------------------------------------------------------------- #
 
 
-async def _poll_one_node_usage(node) -> None:
+async def _poll_one_node_usage(node, quota_seconds: float) -> None:
     try:
-        ratio = await neon_api.get_project_usage(node.neon_project_id)
+        ratio = await neon_api.get_project_usage(node.neon_project_id, quota_seconds)
     except neon_api.NeonApiError:
+        # exc_info=True: the exception's own message is where the actual
+        # reason lives (wrong status, bad shape, a misconfigured quota
+        # setting) — dropping it here left an incident on 2026-09-01 with
+        # no way to tell from these logs alone why usage was still empty
+        # after fixing the shape bug this same message describes.
         logger.warning(
             "Usage poll failed for node %s — keeping last cached value",
             node.node_id,
+            exc_info=True,
             extra={"data": {"event": "usage_poll_failed", "node_id": node.node_id}},
         )
         return
     await set_usage_cache(node.node_id, ratio)
 
 
-async def _poll_all_node_usage() -> None:
+async def _poll_all_node_usage(node_settings: NodeSettings) -> None:
     """§7.3: refresh every node's cached usage_ratio via Neon's
     control-plane API — never the node's own Postgres, so this never wakes
     compute and every node (including reserves) can be polled on the same
@@ -558,6 +564,12 @@ async def _poll_all_node_usage() -> None:
     blip masquerade as a database-down event (that's what the reactive
     trigger's own, separate DB health check is for, §7.4).
 
+    The quota ceiling comes from ``node_settings.monthly_quota_compute_hours``
+    (§8), not from Neon's own response — confirmed live in production that
+    Neon never actually returns a quota field for either of FileCast's real
+    projects (neon_api.get_project_usage's own docstring has the story), so
+    this admin-configurable setting is the only reliable source for it.
+
     Every node is polled CONCURRENTLY, not one at a time — this whole call
     is awaited inline in `_loop()`'s main body (unlike a sync/switch, a
     usage check is cheap enough not to need its own background task), so a
@@ -565,7 +577,10 @@ async def _poll_all_node_usage() -> None:
     stalls this loop's own responsiveness (claiming newly-queued conversion
     jobs) for up to ``NEON_API_TIMEOUT_SECONDS`` *per node* in a degraded-API
     scenario, instead of once total."""
-    await asyncio.gather(*(_poll_one_node_usage(node) for node in await list_nodes()))
+    quota_seconds = node_settings.monthly_quota_compute_hours * 3600
+    await asyncio.gather(
+        *(_poll_one_node_usage(node, quota_seconds) for node in await list_nodes())
+    )
 
 
 def _fire_background(coro) -> None:
@@ -690,7 +705,7 @@ async def usage_poll_cycle() -> NodeSettings:
     redeploy required) can pick up a changed interval starting from the next
     cycle."""
     node_settings = await get_settings()
-    await _poll_all_node_usage()
+    await _poll_all_node_usage(node_settings)
     await _maybe_trigger_proactive_action(node_settings)
     return node_settings
 

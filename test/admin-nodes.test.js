@@ -26,7 +26,8 @@ const SETTINGS = {
   cutover_threshold_pct: 80,
   usage_poll_interval_minutes: 15,
   inactivity_warning_days: 14,
-  reactive_failure_count: 2
+  reactive_failure_count: 2,
+  monthly_quota_compute_hours: 100
 };
 
 const NODES = [
@@ -701,10 +702,11 @@ describe('admin/nodes.js — settings tab', () => {
     expect(body).toContain('Usage check interval');
     expect(body).toContain('Inactivity warning');
     expect(body).toContain('Reactive failure count');
+    expect(body).toContain('Monthly compute quota');
     const numberInputs = Array.from(
       dom.window.document.querySelectorAll('.admin-settingrow input[type="number"]')
     ).map((i) => i.value);
-    expect(numberInputs).toEqual(['70', '80', '15', '14', '2']);
+    expect(numberInputs).toEqual(['70', '80', '15', '14', '2', '100']);
   });
 
   it('dragging the range does not save until the change settles', async () => {

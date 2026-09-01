@@ -807,6 +807,13 @@ class NodeSettings(BaseModel):
     usage_poll_interval_minutes: int = 15
     inactivity_warning_days: int = 14
     reactive_failure_count: int = 2
+    # The usage-ratio denominator (§7.3) — NOT read from Neon's API. Confirmed
+    # live in production (2026-09-01) that Neon only returns a project's
+    # quota field when a custom override has been explicitly configured on
+    # it; neither of FileCast's real projects has one, so this admin setting
+    # is the only reliable source for the ceiling. Default matches Neon's
+    # documented Free plan limit (100 CU-hours/project/month).
+    monthly_quota_compute_hours: int = 100
 
 
 # These are not just initial values — §8 requires them to also be the
@@ -844,13 +851,13 @@ async def get_settings() -> NodeSettings:
 async def update_settings(partial: dict[str, int]) -> NodeSettings:
     """Validate and merge a partial update into the settings hash — each
     admin-edited field takes effect immediately (§7.12/§8), no batch save.
-    Raises ``ValueError`` for a field name that isn't one of the five known
+    Raises ``ValueError`` for a field name that isn't one of the six known
     settings, or ``pydantic.ValidationError`` for an out-of-range/wrong-type
     value on a known one; the caller (a later phase's PUT route) turns
     either into a 4xx.
 
     Writes ONLY the fields named in ``partial`` back to the hash — never the
-    full merged snapshot. §7.12 designs each of the five settings as its
+    full merged snapshot. §7.12 designs each of the six settings as its
     own independently auto-saving control (no batch submit), so two
     concurrent edits to two DIFFERENT fields are a real scenario (two
     browser tabs, or a slow request overlapping a fast one); a full-hash

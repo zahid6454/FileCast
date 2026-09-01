@@ -522,14 +522,14 @@ async def test_poll_all_node_usage_updates_cache_and_survives_a_single_failed_po
     await register_node(_make_node("flaky"))
     await set_usage_cache("flaky", 0.42)  # pre-existing cached value
 
-    async def fake_get_usage(project_id):
+    async def fake_get_usage(project_id, quota_seconds):
         if project_id == "proj-flaky":
             raise neon_api.NeonApiError("Neon API blip")
         return 0.6
 
     monkeypatch.setattr(neon_api, "get_project_usage", fake_get_usage)
 
-    await job_worker._poll_all_node_usage()
+    await job_worker._poll_all_node_usage(await job_worker.get_settings())
 
     healthy_usage = await get_usage_cache("healthy")
     assert healthy_usage.ratio == 0.6
@@ -664,7 +664,7 @@ async def test_usage_poll_cycle_polls_then_evaluates_the_fresh_reading(monkeypat
     await register_node(_make_node("reserve"))
     await set_active_node("active")
 
-    async def fake_get_usage(project_id):
+    async def fake_get_usage(project_id, quota_seconds):
         return 0.9 if project_id == "proj-active" else 0.0
 
     monkeypatch.setattr(neon_api, "get_project_usage", fake_get_usage)
