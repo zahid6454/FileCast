@@ -18,6 +18,7 @@ from data.node_registry import Node, register_node, set_active_node
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.util import greenlet_spawn
 from test_node_sync import _node_sync_postgres_url, two_real_databases  # noqa: F401
 
 
@@ -166,10 +167,10 @@ async def test_get_active_sync_engine_falls_back_when_active_node_record_missing
 # different backend session — SQLAlchemy's "connect" event only fires on the
 # very first physical open, not on every checkout. A real Postgres container
 # (used below) has no pooler in front, so it can't reproduce that specific
-# failure mode; the checkout-healing test simulates it directly instead, by
-# mutating a pooled connection's session state out from under SQLAlchemy
-# between one checkin and the next checkout, the same externally-invisible
-# way a pooler backend swap would.
+# failure mode; the checkout-healing tests (sync and async) simulate it
+# directly instead, by mutating a pooled connection's session state out from
+# under SQLAlchemy between one checkin and the next checkout, the same
+# externally-invisible way a pooler backend swap would.
 #
 # Reuses test_node_sync.py's real-Postgres-18-server harness
 # (TEST_NODE_SYNC_POSTGRES_URL / two_real_databases) rather than the main
@@ -179,7 +180,7 @@ async def test_get_active_sync_engine_falls_back_when_active_node_record_missing
 # already-open pools — corrupting it (or racing its cleanup against pool
 # reuse from unrelated tests) would risk cross-test breakage for no benefit.
 # A throwaway database on the dedicated v18 server isolates the blast radius
-# to just these two tests, same reasoning as
+# to just these tests, same reasoning as
 # test_ensure_search_path_fixes_a_role_with_no_default_schema.
 #
 # two_real_databases is imported, not redefined, so ruff's static analysis
@@ -334,3 +335,72 @@ def test_register_search_path_fix_heals_a_reassigned_pooled_connection_sync(
             assert conn.execute(text("SHOW search_path")).scalar_one() == "public"
     finally:
         engine.dispose()
+
+
+@pytest.mark.skipif(
+    _node_sync_postgres_url() is None,
+    reason="TEST_NODE_SYNC_POSTGRES_URL not set — point it at a real "
+    "Postgres 18 server (see ci.yml's postgres18 service) to run this test "
+    "for real",
+)
+async def test_register_search_path_fix_heals_a_reassigned_pooled_connection_async(
+    two_real_databases,  # noqa: F811 — fixture injection, not a redefinition
+):
+    """Async counterpart of the sync test above, checked separately because
+    the 2026-09-01 recurrence this whole checkout hook exists for actually
+    happened on db.py's ASYNC engine — current_user(), the auth dependency on
+    every authenticated route, per _register_search_path_fix's own docstring
+    — not the sync one. The existing connect-hook async test
+    (test_register_search_path_fix_repairs_a_broken_role_async) can't
+    substitute for this: nothing corrupts that test's connection between
+    checkin and reuse, so it passes identically whether or not the
+    "checkout" hook exists — it doesn't discriminate old vs. new behavior
+    the way this one does (verified: swapping in a connect-only registration
+    standalone makes this exact scenario come back stale, `''` not
+    `public`, the same failure this whole PR fixes).
+
+    Same corruption technique as the sync test, but run through
+    SQLAlchemy's greenlet trampoline: the async DBAPI adapter's sync-looking
+    cursor calls (``AsyncAdapt_psycopg_connection``) bridge to real async I/O
+    via ``await_only()``, which requires an active greenlet context —
+    calling them directly from a plain coroutine raises ``MissingGreenlet``.
+    ``_set_search_path`` gets that context for free since SQLAlchemy already
+    dispatches "connect"/"checkout" listeners from inside one; this test has
+    to open it explicitly with ``greenlet_spawn`` to reach past the pool the
+    same way the sync test's plain function call does."""
+    _, dst_url = two_real_databases
+
+    async_engine = create_async_engine(dst_url, pool_size=1, max_overflow=0)
+    db._register_search_path_fix(async_engine.sync_engine)
+    try:
+        async with async_engine.connect() as conn:
+            result = await conn.execute(text("SHOW search_path"))
+            assert result.scalar_one() == "public"
+            dbapi_connection = (await conn.get_raw_connection()).dbapi_connection
+
+        # Connection is now checked back into the pool (pool_size=1 means the
+        # *same* DBAPI connection object will be handed out next time) but
+        # still open — simulating the pooler having reassigned its backend
+        # session out from under it while idle, same as the sync test above.
+        def _corrupt() -> None:
+            existing_autocommit = dbapi_connection.autocommit
+            dbapi_connection.autocommit = True
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute("SET search_path = ''")
+            finally:
+                cursor.close()
+            dbapi_connection.autocommit = existing_autocommit
+
+        await greenlet_spawn(_corrupt)
+
+        async with async_engine.connect() as conn:
+            reused = (await conn.get_raw_connection()).dbapi_connection
+            assert reused is dbapi_connection, (
+                "test invalid — pool handed out a different physical "
+                "connection, so this isn't exercising the checkout hook"
+            )
+            result = await conn.execute(text("SHOW search_path"))
+            assert result.scalar_one() == "public"
+    finally:
+        await async_engine.dispose()
