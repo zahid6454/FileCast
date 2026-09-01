@@ -6,8 +6,10 @@ resilience when the registry *lookup itself* (not just the active-pointer
 read, which already has its own fallback in node_registry.py) fails, and the
 per-node engine cache actually avoiding a repeated registry read once warm.
 
-Also covers ``_register_search_path_fix`` (PR #153) against a real server —
-see the "search_path connect hook" section below.
+Also covers ``_register_search_path_fix`` (PR #153, extended 2026-09 to also
+hook pool "checkout" — see NEON_FAILOVER_PLAN.md's Phase D write-up, §11)
+against a real server — see the "search_path connect/checkout hooks"
+section below.
 """
 
 import pytest
@@ -158,7 +160,16 @@ async def test_get_active_sync_engine_falls_back_when_active_node_record_missing
 
 
 # --------------------------------------------------------------------------- #
-# _register_search_path_fix — the Phase D rehearsal gap (PR #153).
+# _register_search_path_fix — the Phase D rehearsal gap (PR #153), plus the
+# 2026-09-01 recurrence: PR #153's "connect"-only hook can't detect
+# Neon's pooler silently reassigning an already-open connection to a
+# different backend session — SQLAlchemy's "connect" event only fires on the
+# very first physical open, not on every checkout. A real Postgres container
+# (used below) has no pooler in front, so it can't reproduce that specific
+# failure mode; the checkout-healing test simulates it directly instead, by
+# mutating a pooled connection's session state out from under SQLAlchemy
+# between one checkin and the next checkout, the same externally-invisible
+# way a pooler backend swap would.
 #
 # Reuses test_node_sync.py's real-Postgres-18-server harness
 # (TEST_NODE_SYNC_POSTGRES_URL / two_real_databases) rather than the main
@@ -212,9 +223,11 @@ def test_register_search_path_fix_repairs_a_broken_role_sync(
     search_path can't resolve an unqualified table name. Confirms
     _register_search_path_fix's pool "connect" event forces it back to
     "public" on the very first physical connection this engine ever opens —
-    and that a connection handed back to the pool and checked out again (no
-    new "connect" event) still carries it, since it was set once for that
-    connection's whole lifetime, not re-applied per checkout."""
+    and that a connection handed back to the pool and checked out again
+    still carries it too, now via the "checkout" hook re-asserting it on
+    every reuse (see test_register_search_path_fix_heals_a_reassigned_pooled_connection_sync
+    below for the case this alone doesn't cover: session state changing
+    out from under an already-open connection, no new "connect" event)."""
     _, dst_url = two_real_databases
     _break_search_path(dst_url)
 
@@ -260,3 +273,64 @@ async def test_register_search_path_fix_repairs_a_broken_role_async(
             await conn.commit()
     finally:
         await async_engine.dispose()
+
+
+@pytest.mark.skipif(
+    _node_sync_postgres_url() is None,
+    reason="TEST_NODE_SYNC_POSTGRES_URL not set — point it at a real "
+    "Postgres 18 server (see ci.yml's postgres18 service) to run this test "
+    "for real",
+)
+def test_register_search_path_fix_heals_a_reassigned_pooled_connection_sync(
+    two_real_databases,  # noqa: F811 — fixture injection, not a redefinition
+):
+    """The 2026-09-01 recurrence, reproduced directly: Neon's pooled
+    connection string can silently reassign an already-open, already-fixed
+    connection to a different backend session mid-lifetime (transaction-mode
+    pooling — confirmed in Neon's own docs and empirically in
+    _ensure_search_path()'s docstring). From SQLAlchemy's point of view the
+    DBAPI connection object never closed, so "connect" never fires again —
+    only "checkout" gets a chance to notice and re-fix it.
+
+    A local Postgres container has no pooler in front to actually do this
+    reassignment, so this test fakes the *externally observable effect* of
+    one directly: reach past SQLAlchemy's pool and corrupt a connection's
+    session-level search_path while it's sitting idle in the pool (exactly
+    what a backend swap would leave behind), then check it back out through
+    the engine as ordinary application code would and confirm the checkout
+    hook silently repairs it before any query runs. Without the "checkout"
+    hook (i.e. on PR #153's original connect-only fix) this assertion would
+    fail, since the pool has no reason to open a new physical connection or
+    fire "connect" again for a connection it believes is still healthy."""
+    _, dst_url = two_real_databases
+
+    engine = create_engine(db._sync_url(dst_url), pool_size=1, max_overflow=0)
+    db._register_search_path_fix(engine)
+    try:
+        with engine.connect() as conn:
+            assert conn.execute(text("SHOW search_path")).scalar_one() == "public"
+            dbapi_connection = conn.connection.dbapi_connection
+
+        # Connection is now checked back into the pool (pool_size=1 means the
+        # *same* DBAPI connection object will be handed out next time) but
+        # still open — simulating the pooler having reassigned its backend
+        # session out from under it while idle, the same way an ALTER ROLE
+        # or a prior SET can go stale per _ensure_search_path()'s docstring.
+        existing_autocommit = dbapi_connection.autocommit
+        dbapi_connection.autocommit = True
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("SET search_path = ''")
+        finally:
+            cursor.close()
+        dbapi_connection.autocommit = existing_autocommit
+
+        with engine.connect() as conn:
+            reused = conn.connection.dbapi_connection
+            assert reused is dbapi_connection, (
+                "test invalid — pool handed out a different physical "
+                "connection, so this isn't exercising the checkout hook"
+            )
+            assert conn.execute(text("SHOW search_path")).scalar_one() == "public"
+    finally:
+        engine.dispose()

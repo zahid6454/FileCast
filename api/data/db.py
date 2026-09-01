@@ -98,8 +98,10 @@ CONNECT_TIMEOUT_SECONDS = 5
 
 
 def _register_search_path_fix(engine: Engine) -> None:
-    """Force ``search_path = public`` on every NEW physical connection this
-    engine's pool ever opens (NEON_FAILOVER_PLAN.md §7.2/§7.5/§7.8).
+    """Force ``search_path = public`` on every physical connection this
+    engine's pool ever hands out — both when it's first opened AND every
+    time it's checked out of the pool for reuse (NEON_FAILOVER_PLAN.md
+    §7.2/§7.5/§7.8, Phase D write-up in §11).
 
     Closes the gap the Phase D rehearsal actually hit in production: a Neon
     project created straight from the console (not via ``neonctl init``) can
@@ -111,33 +113,62 @@ def _register_search_path_fix(engine: Engine) -> None:
     via ``get_session()``/``sync_session()``. During the rehearsal's live
     cutover, ``current_user()`` (the auth dependency on every authenticated
     route) 500'd with ``UndefinedTable: relation "users" does not exist`` for
-    ~3.5 minutes after the switch, then self-resolved — this module's engines
-    had already cached a physical connection whose session state predated
-    ``_ensure_search_path()``'s ALTER (Neon's pooler can serve a cached
-    backend connection across an ALTER ROLE the same way it can across a
-    plain SET — see that function's own docstring for the confirmed repro),
-    and every one of the 4 api worker processes keeps its own independent
-    engine/pool, so each had to individually hit and outlive a bad connection.
+    ~3.5 minutes after the switch, then self-resolved.
 
-    A per-connect hook, not a role-level fix repeated here, because this is
-    the one mechanism proven to be immediate regardless of pooler timing: it
-    fires exactly once per physical connection, at the moment SQLAlchemy's
-    pool creates it — before anything else ever uses it — so a stale
-    session-level search_path can never reach a query. This is SQLAlchemy's
-    own documented recipe for setting a Postgres session parameter on
-    connect: toggle ``autocommit`` around the ``SET`` rather than leaving it
-    inside an ordinary (rollback-able) transaction, and restore whatever
-    autocommit value the driver had before — psycopg (sync and, via
-    SQLAlchemy's greenlet-based async adapter, async) both expose
+    **PR #153 originally hooked only the pool's ``"connect"`` event** (fires
+    once, the moment SQLAlchemy's pool physically opens a new DBAPI
+    connection) on the reasoning that this was "immediate regardless of
+    pooler timing." That reasoning had a hole, and it resurfaced for real on
+    2026-09-01: a `current_user()` burst against FileCast-2 — the
+    already-active, already-"fixed" node, untouched by that day's FileCast-3
+    provisioning — threw the identical `UndefinedTable` error 6 times in a
+    ~12s window, then self-resolved with no restart. Neon's pooled
+    connection string runs PgBouncer-style *transaction-mode* pooling: the
+    client-facing connection SQLAlchemy holds onto can be silently
+    reassigned to a different backend Postgres session between transactions
+    (confirmed both empirically — see `_ensure_search_path()`'s own
+    docstring, which caught a *freshly-opened* pooled connection still
+    serving a stale backend seconds after an `ALTER ROLE` had committed via
+    a direct connection — and in Neon's own docs: "the next transaction may
+    land on a different server connection that does not carry the session
+    setting forward"). SQLAlchemy's pool has no way to know this happened —
+    from its point of view the DBAPI connection object never closed, so
+    ``"connect"`` never fires again — which meant a connection that had
+    correctly gotten ``search_path = public`` set hours or days earlier
+    could silently start serving queries against a different backend
+    session with a broken default, with nothing in this module re-asserting
+    it. (PR #153's own test suite never could have caught this: it ran
+    against a plain local Postgres container with no pooler in front, where
+    ``"connect"`` genuinely is 1:1 with a backend session.)
+
+    The fix is the same mechanism applied to the pool's ``"checkout"``
+    event too (fires every time a connection is handed out of the pool for
+    use — including the first time, right after ``"connect"``, so the two
+    together mean "on every physical connect, and immediately before every
+    single use"). This costs one extra trivial round-trip per checkout
+    (typically once per request), which is the correct trade for a class of
+    bug that otherwise reappears nondeterministically on connections that
+    were already believed fixed. Note ``pool_pre_ping=True`` (set on every
+    engine below) does NOT substitute for this: it only runs a liveness
+    ``SELECT 1`` on checkout to decide whether to invalidate-and-reconnect
+    the connection — on the common case where the ping succeeds (the
+    connection IS alive, just possibly against a reassigned backend), it
+    does not touch session state and does not re-fire ``"connect"``.
+
+    Toggle ``autocommit`` around the ``SET`` rather than leaving it inside
+    an ordinary (rollback-able) transaction, and restore whatever autocommit
+    value the driver had before — psycopg (sync and, via SQLAlchemy's
+    greenlet-based async adapter, async) both expose
     ``dbapi_connection.autocommit`` as a plain attribute regardless of which
-    mode constructed the connection.
+    mode constructed the connection. This is SQLAlchemy's own documented
+    recipe for setting a Postgres session parameter on connect, applied here
+    to checkout as well.
 
     Applied to all four engines this module builds (static async, static
     sync, and both per-node async/sync constructors below) — missing any one
     would leave this exact gap open for whichever traffic path uses it."""
 
-    @event.listens_for(engine, "connect")
-    def _set_search_path(dbapi_connection, connection_record) -> None:  # noqa: ARG001
+    def _set_search_path(dbapi_connection) -> None:
         existing_autocommit = dbapi_connection.autocommit
         dbapi_connection.autocommit = True
         cursor = dbapi_connection.cursor()
@@ -146,6 +177,14 @@ def _register_search_path_fix(engine: Engine) -> None:
         finally:
             cursor.close()
         dbapi_connection.autocommit = existing_autocommit
+
+    @event.listens_for(engine, "connect")
+    def _on_connect(dbapi_connection, connection_record) -> None:  # noqa: ARG001
+        _set_search_path(dbapi_connection)
+
+    @event.listens_for(engine, "checkout")
+    def _on_checkout(dbapi_connection, connection_record, connection_proxy) -> None:  # noqa: ARG001
+        _set_search_path(dbapi_connection)
 
 
 # --- Static async engine — the dev/test/CI and pre-Bootstrap fallback ---
