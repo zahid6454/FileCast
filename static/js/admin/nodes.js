@@ -1223,6 +1223,15 @@
       max: 5,
       step: 1,
       unit: 'in a row'
+    },
+    {
+      key: 'monthly_quota_compute_hours',
+      title: 'Monthly compute quota',
+      desc: 'The compute-hour ceiling each node is measured against for usage %. Neon does not report this itself unless a project has a custom quota override, so it has to be set here to match your actual Neon plan (100 on Free).',
+      min: 10,
+      max: 1000,
+      step: 10,
+      unit: 'CU-hrs'
     }
   ];
 

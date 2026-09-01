@@ -93,25 +93,24 @@ async def test_verify_project_visible_raises_on_network_error(monkeypatch):
 # --------------------------------------------------------------------------- #
 
 
-def _usage_body(used: float, quota: float) -> dict:
+def _usage_body(used: float) -> dict:
     # Matches Neon's actual GET /projects/{id} shape: compute_time_seconds
-    # (consumed) sits directly on the project, but its quota ceiling is
-    # nested under settings.quota, not project.quota (confirmed against
-    # Neon's API reference — this used to be wrong here and in neon_api.py
-    # both, which meant every real poll failed silently in production).
-    return {
-        "project": {
-            "compute_time_seconds": used,
-            "settings": {"quota": {"compute_time_seconds": quota}},
-        }
-    }
+    # (consumed) sits directly on the project. The quota ceiling is NOT read
+    # from this response at all — confirmed live in production (2026-09-01)
+    # that Neon only populates project.settings.quota when a project has an
+    # explicit custom quota override configured, which neither of FileCast's
+    # real projects has ever had. quota_seconds is a caller-supplied
+    # argument instead (job_worker.py, sourced from the
+    # monthly_quota_compute_hours admin setting) — see neon_api.py's
+    # get_project_usage() docstring.
+    return {"project": {"compute_time_seconds": used}}
 
 
 async def test_get_project_usage_computes_ratio_from_project_body(monkeypatch):
-    client = FakeClient(status_code=200, body=_usage_body(50, 100))
+    client = FakeClient(status_code=200, body=_usage_body(50))
     monkeypatch.setattr(neon_api, "_make_client", lambda: client)
 
-    ratio = await neon_api.get_project_usage("proj-123")
+    ratio = await neon_api.get_project_usage("proj-123", quota_seconds=100)
 
     assert ratio == 0.5
     assert client.requested_url == f"{neon_api.NEON_API_BASE}/projects/proj-123"
@@ -120,45 +119,47 @@ async def test_get_project_usage_computes_ratio_from_project_body(monkeypatch):
 async def test_get_project_usage_accepts_a_flat_unwrapped_body(monkeypatch):
     # Some Neon API responses may not nest under "project" — _fetch_project's
     # shared parsing falls back to the body itself in that case.
-    body = {
-        "compute_time_seconds": 25,
-        "settings": {"quota": {"compute_time_seconds": 100}},
-    }
+    body = {"compute_time_seconds": 25}
     monkeypatch.setattr(neon_api, "_make_client", lambda: FakeClient(200, body))
 
-    assert await neon_api.get_project_usage("proj-123") == 0.25
+    assert await neon_api.get_project_usage("proj-123", quota_seconds=100) == 0.25
 
 
 async def test_get_project_usage_raises_on_404(monkeypatch):
     monkeypatch.setattr(neon_api, "_make_client", lambda: FakeClient(status_code=404))
 
     with pytest.raises(neon_api.NeonApiError, match="404"):
-        await neon_api.get_project_usage("wrong-id")
+        await neon_api.get_project_usage("wrong-id", quota_seconds=100)
 
 
 async def test_get_project_usage_raises_when_key_unconfigured(monkeypatch):
     monkeypatch.setattr(settings, "neon_api_key", "")
 
     with pytest.raises(neon_api.NeonApiError, match="not configured"):
-        await neon_api.get_project_usage("proj-123")
+        await neon_api.get_project_usage("proj-123", quota_seconds=100)
 
 
-async def test_get_project_usage_raises_on_missing_fields(monkeypatch):
+async def test_get_project_usage_raises_on_missing_compute_time(monkeypatch):
     monkeypatch.setattr(
         neon_api, "_make_client", lambda: FakeClient(200, {"project": {}})
     )
 
     with pytest.raises(neon_api.NeonApiError, match="Unexpected"):
-        await neon_api.get_project_usage("proj-123")
+        await neon_api.get_project_usage("proj-123", quota_seconds=100)
 
 
-async def test_get_project_usage_raises_on_zero_quota(monkeypatch):
+async def test_get_project_usage_raises_on_non_positive_quota(monkeypatch):
+    # A misconfigured monthly_quota_compute_hours setting (0, or negative)
+    # must be rejected rather than raising ZeroDivisionError — the quota no
+    # longer comes from Neon's response (see _usage_body's comment), so this
+    # is now purely a caller/config-side validation, never a Neon API shape
+    # issue.
     monkeypatch.setattr(
-        neon_api, "_make_client", lambda: FakeClient(200, _usage_body(0, 0))
+        neon_api, "_make_client", lambda: FakeClient(200, _usage_body(50))
     )
 
-    with pytest.raises(neon_api.NeonApiError, match="Unexpected"):
-        await neon_api.get_project_usage("proj-123")
+    with pytest.raises(neon_api.NeonApiError, match="quota_seconds"):
+        await neon_api.get_project_usage("proj-123", quota_seconds=0)
 
 
 async def test_get_project_usage_raises_on_non_json_body(monkeypatch):
@@ -173,4 +174,4 @@ async def test_get_project_usage_raises_on_non_json_body(monkeypatch):
     monkeypatch.setattr(neon_api, "_make_client", lambda: NonJsonClient())
 
     with pytest.raises(neon_api.NeonApiError, match="non-JSON"):
-        await neon_api.get_project_usage("proj-123")
+        await neon_api.get_project_usage("proj-123", quota_seconds=100)

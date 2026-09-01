@@ -190,6 +190,7 @@ class UpdateNodeSettingsBody(BaseModel):
     usage_poll_interval_minutes: int | None = None
     inactivity_warning_days: int | None = None
     reactive_failure_count: int | None = None
+    monthly_quota_compute_hours: int | None = None
 
 
 # --------------------------------------------------------------------------- #
