@@ -94,10 +94,15 @@ async def test_verify_project_visible_raises_on_network_error(monkeypatch):
 
 
 def _usage_body(used: float, quota: float) -> dict:
+    # Matches Neon's actual GET /projects/{id} shape: compute_time_seconds
+    # (consumed) sits directly on the project, but its quota ceiling is
+    # nested under settings.quota, not project.quota (confirmed against
+    # Neon's API reference — this used to be wrong here and in neon_api.py
+    # both, which meant every real poll failed silently in production).
     return {
         "project": {
             "compute_time_seconds": used,
-            "quota": {"compute_time_seconds": quota},
+            "settings": {"quota": {"compute_time_seconds": quota}},
         }
     }
 
@@ -115,7 +120,10 @@ async def test_get_project_usage_computes_ratio_from_project_body(monkeypatch):
 async def test_get_project_usage_accepts_a_flat_unwrapped_body(monkeypatch):
     # Some Neon API responses may not nest under "project" — _fetch_project's
     # shared parsing falls back to the body itself in that case.
-    body = {"compute_time_seconds": 25, "quota": {"compute_time_seconds": 100}}
+    body = {
+        "compute_time_seconds": 25,
+        "settings": {"quota": {"compute_time_seconds": 100}},
+    }
     monkeypatch.setattr(neon_api, "_make_client", lambda: FakeClient(200, body))
 
     assert await neon_api.get_project_usage("proj-123") == 0.25

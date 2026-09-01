@@ -80,7 +80,7 @@ async def verify_project_visible(project_id: str) -> None:
 
 async def get_project_usage(project_id: str) -> float:
     """Fetch a project's current-billing-period compute-usage ratio (§7.3):
-    ``compute_time_seconds`` (consumed so far) / ``quota.compute_time_seconds``
+    ``compute_time_seconds`` (consumed so far) / ``settings.quota.compute_time_seconds``
     (the ceiling), both from the same project-detail response
     ``verify_project_visible`` already uses — a control-plane call that
     never connects to the project's own Postgres endpoint or wakes its
@@ -111,7 +111,16 @@ async def get_project_usage(project_id: str) -> float:
 
     project = body.get("project", body) if isinstance(body, dict) else None
     used = project.get("compute_time_seconds") if isinstance(project, dict) else None
-    quota_obj = project.get("quota") if isinstance(project, dict) else None
+    # The quota ceiling lives at project.settings.quota, NOT project.quota —
+    # confirmed against Neon's actual API reference (their ProjectQuota
+    # schema sits under ProjectSettings). Reading it one level too shallow
+    # meant quota_obj was always None against the real API, so every single
+    # poll raised here and usage never populated in production even though
+    # `used` above was being read correctly all along.
+    project_settings = project.get("settings") if isinstance(project, dict) else None
+    quota_obj = (
+        project_settings.get("quota") if isinstance(project_settings, dict) else None
+    )
     quota = (
         quota_obj.get("compute_time_seconds") if isinstance(quota_obj, dict) else None
     )
@@ -123,6 +132,6 @@ async def get_project_usage(project_id: str) -> float:
     ):
         raise NeonApiError(
             f"Unexpected Neon API response shape for project {project_id!r} — "
-            "missing or invalid compute_time_seconds/quota.compute_time_seconds."
+            "missing or invalid compute_time_seconds/settings.quota.compute_time_seconds."
         )
     return used / quota

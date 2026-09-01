@@ -823,11 +823,11 @@ describe('admin/nodes.js — history tab', () => {
     openHistory(c);
     const body = dom.window.document.body;
 
-    const metaLine = body.querySelector('.admin-annc__window');
-    // The inline caption carries only the first line, truncated — never the
+    const reasonLine = body.querySelector('.admin-annc__reason');
+    // The inline reason carries only the first line, truncated — never the
     // embedded newlines/stack frames.
-    expect(metaLine.textContent).toContain("migration against target node 'abc123' failed");
-    expect(metaLine.textContent).not.toContain('sqlalchemy.exc.ProgrammingError');
+    expect(reasonLine.textContent).toContain("migration against target node 'abc123' failed");
+    expect(reasonLine.textContent).not.toContain('sqlalchemy.exc.ProgrammingError');
 
     const details = body.querySelector('.admin-annc__detail');
     expect(details).not.toBeNull();
