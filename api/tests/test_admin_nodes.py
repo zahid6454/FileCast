@@ -17,6 +17,8 @@ from data import node_registry as nr
 from data.config import settings
 from data.node_registry import (
     Node,
+    SwitchHistoryEntry,
+    append_switch_history,
     get_node,
     get_switch_status,
     register_node,
@@ -98,6 +100,7 @@ async def test_every_route_requires_admin(client, user_client):
         ),
         ("get", "/api/v1/admin/nodes/some-run-id/status", None),
         ("get", "/api/v1/admin/nodes", None),
+        ("get", "/api/v1/admin/nodes/history", None),
         ("get", "/api/v1/admin/nodes/settings", None),
         ("put", "/api/v1/admin/nodes/settings", {}),
         ("patch", "/api/v1/admin/nodes/n1", {"display_name": "X"}),
@@ -357,6 +360,70 @@ async def test_status_endpoint_never_exposes_connection_string(admin_client):
     assert "connection_string" not in json.dumps(r.json())
     assert settings.database_url not in json.dumps(r.json())
     assert "ep-reserve-node.neon.tech" not in json.dumps(r.json())
+
+
+# --------------------------------------------------------------------------- #
+# History — §7.12's admin panel History tab (no route existed before this
+# phase; see the docstring on the route itself for why).
+# --------------------------------------------------------------------------- #
+
+
+async def test_list_history_returns_newest_first(admin_client):
+    await append_switch_history(
+        SwitchHistoryEntry(
+            trigger="manual",
+            source_node_id="a",
+            target_node_id="b",
+            outcome="success",
+            detail=None,
+            at="2026-01-01T00:00:00+00:00",
+        )
+    )
+    await append_switch_history(
+        SwitchHistoryEntry(
+            trigger="reactive",
+            source_node_id="b",
+            target_node_id="c",
+            outcome="success",
+            detail="bounded staleness note",
+            at="2026-01-02T00:00:00+00:00",
+        )
+    )
+
+    r = await admin_client.get("/api/v1/admin/nodes/history")
+    assert r.status_code == 200, r.text
+    entries = r.json()["history"]
+    assert len(entries) == 2
+    assert entries[0]["trigger"] == "reactive"
+    assert entries[0]["target_node_id"] == "c"
+    assert entries[1]["trigger"] == "manual"
+
+
+async def test_list_history_never_exposes_connection_string(admin_client):
+    await register_node(_make_active_node("active-node"))
+    await register_node(_make_node("reserve-node"))
+    await set_active_node("active-node")
+    await append_switch_history(
+        SwitchHistoryEntry(
+            trigger="manual",
+            source_node_id="active-node",
+            target_node_id="reserve-node",
+            outcome="success",
+            detail=None,
+            at="2026-01-01T00:00:00+00:00",
+        )
+    )
+
+    r = await admin_client.get("/api/v1/admin/nodes/history")
+    assert r.status_code == 200, r.text
+    assert "connection_string" not in json.dumps(r.json())
+    assert settings.database_url not in json.dumps(r.json())
+
+
+async def test_list_history_empty_when_no_switches_yet(admin_client):
+    r = await admin_client.get("/api/v1/admin/nodes/history")
+    assert r.status_code == 200, r.text
+    assert r.json()["history"] == []
 
 
 # --------------------------------------------------------------------------- #
