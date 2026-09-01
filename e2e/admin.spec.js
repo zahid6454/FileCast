@@ -62,19 +62,19 @@ test.describe('auth gate (D6)', () => {
     await expect(page.locator('.admin-signin__devblock')).toHaveCount(0);
   });
 
-  test('admin → full panel with all seven tabs', async ({ page }) => {
+  test('admin → full panel with all eight tabs', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/');
     await expect(page.locator('.admin-topbar__brand')).toBeVisible();
-    await expect(page.locator('.admin-tabs__link')).toHaveCount(7);
+    await expect(page.locator('.admin-tabs__link')).toHaveCount(8);
   });
 
   test('mid-session 401/403 drops back to the sign-in gate (R8)', async ({ page }) => {
     const state = makeState();
     await installApi(page, state);
     await page.goto('/admin/#tools');
-    await expect(page.locator('.admin-tabs__link')).toHaveCount(7);
+    await expect(page.locator('.admin-tabs__link')).toHaveCount(8);
 
     // Session expires mid-session: /me now 401 and any mutation 403.
     state.me = { status: 401 };
