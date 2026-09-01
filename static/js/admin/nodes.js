@@ -106,7 +106,10 @@
   }
 
   function usagePct(usage) {
-    return usage && typeof usage.ratio === 'number' ? Math.round(usage.ratio * 100) : null;
+    // One decimal, not a whole percent — at low usage (a fraction of a CU-hr
+    // against a 100+ CU-hr quota) rounding to the nearest whole percent
+    // reads as "0%" indistinguishable from "not polling at all".
+    return usage && typeof usage.ratio === 'number' ? Math.round(usage.ratio * 1000) / 10 : null;
   }
 
   // Reads the live warm-up/cutover thresholds from §8's settings, never a
