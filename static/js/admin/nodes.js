@@ -1014,6 +1014,25 @@
     return null;
   }
 
+  // A failure's `detail` is whatever str(exc) produced on the backend
+  // (node_ops.py) — usually a short sentence, but for some failure modes
+  // (a migration subprocess dying mid-run, say) it can be a full multi-line
+  // traceback. Dumping that whole thing into the one-line metadata caption
+  // this was designed for wrecks the list's scannability, so only a short,
+  // single-line summary goes inline; anything actually cut is still fully
+  // available behind a collapsed disclosure, never dropped.
+  var HISTORY_REASON_INLINE_MAX = 140;
+
+  function summarizeReason(text) {
+    var trimmed = text.trim();
+    var firstLine = trimmed.split('\n')[0].trim();
+    var summary =
+      firstLine.length > HISTORY_REASON_INLINE_MAX
+        ? firstLine.slice(0, HISTORY_REASON_INLINE_MAX - 1).trimEnd() + '…'
+        : firstLine;
+    return { summary: summary, truncated: summary !== trimmed };
+  }
+
   function historyCard(entry) {
     var titleRow = h('div', { class: 'admin-annc__msg' }, [
       h('strong', {}, nodeLabel(entry.source_node_id)),
@@ -1023,13 +1042,27 @@
     var metaParts = [];
     if (entry.outcome === 'failure') metaParts.push('Failed');
     metaParts.push(fmtRelative(entry.at) || entry.at);
+
     var reason = historyReasonText(entry);
-    if (reason) metaParts.push(reason);
+    var fullDetail = null;
+    if (reason) {
+      var r = summarizeReason(reason);
+      metaParts.push(r.summary);
+      if (r.truncated) {
+        fullDetail = h('details', { class: 'admin-annc__detail' }, [
+          h('summary', {}, 'Show full error'),
+          h('pre', { class: 'admin-annc__detail-body' }, reason)
+        ]);
+      }
+    }
     var metaLine = h('div', { class: 'admin-annc__window' }, metaParts.join(' · '));
+
+    var mainKids = [titleRow, metaLine];
+    if (fullDetail) mainKids.push(fullDetail);
 
     return h('li', { class: 'admin-annc' }, [
       triggerBadge(entry.trigger),
-      h('div', { class: 'admin-annc__main' }, [titleRow, metaLine])
+      h('div', { class: 'admin-annc__main' }, mainKids)
     ]);
   }
 

@@ -771,6 +771,70 @@ describe('admin/nodes.js — history tab', () => {
     expect(body.textContent).toContain('Node One');
     expect(body.querySelector('.trigger-badge--manual')).not.toBeNull();
   });
+
+  it('shows a short failure reason inline with no expand affordance', async () => {
+    const dom = load(
+      makeFetch({
+        history: [
+          {
+            trigger: 'manual',
+            source_node_id: 'active-1',
+            target_node_id: 'reserve-1',
+            outcome: 'failure',
+            detail: 'Target node is already the active node.',
+            at: '2026-08-30T00:00:00+00:00'
+          }
+        ]
+      })
+    );
+    const c = await renderOverview(dom);
+    openHistory(c);
+    const body = dom.window.document.body;
+    expect(body.textContent).toContain('Target node is already the active node.');
+    expect(body.querySelector('.admin-annc__detail')).toBeNull();
+  });
+
+  // Regression: a failure's raw `detail` can be a full multi-line traceback
+  // (str(exc) on the backend, node_ops.py) — observed for real in production
+  // off a historical migration failure. Dumping that whole thing into the
+  // one-line metadata caption wrecked the list's scannability; only a short
+  // summary belongs inline, with the full text behind a collapsed disclosure.
+  it('truncates a long/multi-line failure detail inline and tucks the full text behind a collapsed disclosure', async () => {
+    const traceback =
+      "migration against target node 'abc123' failed (exit 1): Traceback (most recent call last):\n" +
+      '  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/ddl.py", line 322, in _invoke_with\n' +
+      '    return bind.execute(self)\n' +
+      'sqlalchemy.exc.ProgrammingError: (psycopg.errors.InvalidSchemaName) no schema has been selected to create';
+    const dom = load(
+      makeFetch({
+        history: [
+          {
+            trigger: 'manual',
+            source_node_id: 'active-1',
+            target_node_id: 'reserve-1',
+            outcome: 'failure',
+            detail: traceback,
+            at: '2026-08-30T00:00:00+00:00'
+          }
+        ]
+      })
+    );
+    const c = await renderOverview(dom);
+    openHistory(c);
+    const body = dom.window.document.body;
+
+    const metaLine = body.querySelector('.admin-annc__window');
+    // The inline caption carries only the first line, truncated — never the
+    // embedded newlines/stack frames.
+    expect(metaLine.textContent).toContain("migration against target node 'abc123' failed");
+    expect(metaLine.textContent).not.toContain('sqlalchemy.exc.ProgrammingError');
+
+    const details = body.querySelector('.admin-annc__detail');
+    expect(details).not.toBeNull();
+    expect(details.hasAttribute('open')).toBe(false); // collapsed by default
+    // Nothing is dropped — the full raw text is still there, just tucked away.
+    expect(details.querySelector('.admin-annc__detail-body').textContent).toBe(traceback);
+  });
 });
 
 describe('admin/nodes.js — sub-nav', () => {
