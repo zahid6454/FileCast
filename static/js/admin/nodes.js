@@ -1014,6 +1014,91 @@
     return null;
   }
 
+  // A failure's `detail` is whatever str(exc) produced on the backend
+  // (node_ops.py) — usually a short sentence, but for some failure modes
+  // (a migration subprocess dying mid-run, say) it can be a full multi-line
+  // traceback. Dumping that whole thing into the one-line metadata caption
+  // this was designed for wrecks the list's scannability, so only a short,
+  // single-line summary goes inline; anything actually cut is still fully
+  // available behind a collapsed disclosure, never dropped.
+  var HISTORY_REASON_INLINE_MAX = 140;
+
+  function summarizeReason(text) {
+    var trimmed = text.trim();
+    var firstLine = trimmed.split('\n')[0].trim();
+    var summary =
+      firstLine.length > HISTORY_REASON_INLINE_MAX
+        ? firstLine.slice(0, HISTORY_REASON_INLINE_MAX - 1).trimEnd() + '…'
+        : firstLine;
+    return { summary: summary, truncated: summary !== trimmed };
+  }
+
+  // Native <details> just snaps open/closed with no way to transition height
+  // via CSS alone. Animates `height` via the Web Animations API between the
+  // closed/open extents instead, deferring the native `open` attribute's
+  // removal until a collapse finishes — removing it early would hide the
+  // content via the UA stylesheet before the shrink animation could show
+  // anything. The `.is-open` class drives the arrow (admin.css) instead of
+  // `[open]` for the same reason: it needs to flip the instant a click
+  // happens in both directions, not only once a close animation's `open`
+  // removal lands.
+  function wireAnimatedDetails(details) {
+    var summary = details.querySelector('summary');
+    var content = details.querySelector('.admin-annc__detail-body');
+    var reduceMotion =
+      window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // No animate() support, or the admin asked for less motion — native
+    // instant open/close still works fine, just skip the tween.
+    if (reduceMotion || typeof details.animate !== 'function') return;
+
+    var anim = null;
+    var EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
+
+    summary.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (anim) anim.cancel();
+      if (details.open) collapse();
+      else expand();
+    });
+
+    function collapse() {
+      details.classList.remove('is-open');
+      var startHeight = details.getBoundingClientRect().height;
+      var endHeight = summary.getBoundingClientRect().height;
+      anim = details.animate(
+        { height: [startHeight + 'px', endHeight + 'px'] },
+        { duration: 220, easing: EASE }
+      );
+      anim.onfinish = function () {
+        details.open = false;
+        details.style.height = '';
+        anim = null;
+      };
+    }
+
+    function expand() {
+      // Freeze at the current (closed) height BEFORE flipping `open`, so
+      // revealing the content doesn't jump the layout before the first
+      // animation frame runs.
+      details.style.height = details.getBoundingClientRect().height + 'px';
+      details.open = true;
+      details.classList.add('is-open');
+      requestAnimationFrame(function () {
+        var startHeight = summary.getBoundingClientRect().height;
+        var endHeight =
+          summary.getBoundingClientRect().height + content.getBoundingClientRect().height + 8;
+        anim = details.animate(
+          { height: [startHeight + 'px', endHeight + 'px'] },
+          { duration: 260, easing: EASE }
+        );
+        anim.onfinish = function () {
+          details.style.height = '';
+          anim = null;
+        };
+      });
+    }
+  }
+
   function historyCard(entry) {
     var titleRow = h('div', { class: 'admin-annc__msg' }, [
       h('strong', {}, nodeLabel(entry.source_node_id)),
@@ -1023,13 +1108,28 @@
     var metaParts = [];
     if (entry.outcome === 'failure') metaParts.push('Failed');
     metaParts.push(fmtRelative(entry.at) || entry.at);
+
     var reason = historyReasonText(entry);
-    if (reason) metaParts.push(reason);
+    var fullDetail = null;
+    if (reason) {
+      var r = summarizeReason(reason);
+      metaParts.push(r.summary);
+      if (r.truncated) {
+        fullDetail = h('details', { class: 'admin-annc__detail' }, [
+          h('summary', {}, 'Show full error'),
+          h('pre', { class: 'admin-annc__detail-body' }, reason)
+        ]);
+        wireAnimatedDetails(fullDetail);
+      }
+    }
     var metaLine = h('div', { class: 'admin-annc__window' }, metaParts.join(' · '));
+
+    var mainKids = [titleRow, metaLine];
+    if (fullDetail) mainKids.push(fullDetail);
 
     return h('li', { class: 'admin-annc' }, [
       triggerBadge(entry.trigger),
-      h('div', { class: 'admin-annc__main' }, [titleRow, metaLine])
+      h('div', { class: 'admin-annc__main' }, mainKids)
     ]);
   }
 

@@ -771,6 +771,145 @@ describe('admin/nodes.js — history tab', () => {
     expect(body.textContent).toContain('Node One');
     expect(body.querySelector('.trigger-badge--manual')).not.toBeNull();
   });
+
+  it('shows a short failure reason inline with no expand affordance', async () => {
+    const dom = load(
+      makeFetch({
+        history: [
+          {
+            trigger: 'manual',
+            source_node_id: 'active-1',
+            target_node_id: 'reserve-1',
+            outcome: 'failure',
+            detail: 'Target node is already the active node.',
+            at: '2026-08-30T00:00:00+00:00'
+          }
+        ]
+      })
+    );
+    const c = await renderOverview(dom);
+    openHistory(c);
+    const body = dom.window.document.body;
+    expect(body.textContent).toContain('Target node is already the active node.');
+    expect(body.querySelector('.admin-annc__detail')).toBeNull();
+  });
+
+  // Regression: a failure's raw `detail` can be a full multi-line traceback
+  // (str(exc) on the backend, node_ops.py) — observed for real in production
+  // off a historical migration failure. Dumping that whole thing into the
+  // one-line metadata caption wrecked the list's scannability; only a short
+  // summary belongs inline, with the full text behind a collapsed disclosure.
+  it('truncates a long/multi-line failure detail inline and tucks the full text behind a collapsed disclosure', async () => {
+    const traceback =
+      "migration against target node 'abc123' failed (exit 1): Traceback (most recent call last):\n" +
+      '  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/ddl.py", line 322, in _invoke_with\n' +
+      '    return bind.execute(self)\n' +
+      'sqlalchemy.exc.ProgrammingError: (psycopg.errors.InvalidSchemaName) no schema has been selected to create';
+    const dom = load(
+      makeFetch({
+        history: [
+          {
+            trigger: 'manual',
+            source_node_id: 'active-1',
+            target_node_id: 'reserve-1',
+            outcome: 'failure',
+            detail: traceback,
+            at: '2026-08-30T00:00:00+00:00'
+          }
+        ]
+      })
+    );
+    const c = await renderOverview(dom);
+    openHistory(c);
+    const body = dom.window.document.body;
+
+    const metaLine = body.querySelector('.admin-annc__window');
+    // The inline caption carries only the first line, truncated — never the
+    // embedded newlines/stack frames.
+    expect(metaLine.textContent).toContain("migration against target node 'abc123' failed");
+    expect(metaLine.textContent).not.toContain('sqlalchemy.exc.ProgrammingError');
+
+    const details = body.querySelector('.admin-annc__detail');
+    expect(details).not.toBeNull();
+    expect(details.hasAttribute('open')).toBe(false); // collapsed by default
+    // Nothing is dropped — the full raw text is still there, just tucked away.
+    expect(details.querySelector('.admin-annc__detail-body').textContent).toBe(traceback);
+  });
+
+  // jsdom has no real Element.animate() (confirmed: typeof is 'undefined'),
+  // so wireAnimatedDetails()'s own guard already makes every test above
+  // exercise the plain-native-toggle fallback path. This test stubs
+  // Element.animate() in so the actual animated-tween wiring itself gets
+  // covered too, not just its absence.
+  it('drives the disclosure open/closed via Element.animate(), not the native instant toggle, when it is available', async () => {
+    const longDetail =
+      "migration against target node 'abc123' failed (exit 1): Traceback (most recent call last):\n" +
+      '  File "ddl.py", line 322, in _invoke_with\n' +
+      'sqlalchemy.exc.ProgrammingError: boom';
+    const dom = load(
+      makeFetch({
+        history: [
+          {
+            trigger: 'manual',
+            source_node_id: 'active-1',
+            target_node_id: 'reserve-1',
+            outcome: 'failure',
+            detail: longDetail,
+            at: '2026-08-30T00:00:00+00:00'
+          }
+        ]
+      })
+    );
+
+    const animateCalls = [];
+    dom.window.Element.prototype.animate = function (keyframes, opts) {
+      const fake = { onfinish: null, oncancel: null, cancel: () => {} };
+      animateCalls.push({ keyframes, opts, fake });
+      return fake;
+    };
+    // jsdom's real requestAnimationFrame is backed by a ~16.7ms setInterval
+    // (see jsdom's Window.js), which a fixed-tick flush() can't reliably
+    // outlast on a loaded CI runner — this raced and failed intermittently
+    // in CI (animateCalls still [] when the assertion below ran). Stub it to
+    // fire synchronously: this test cares that expand() eventually calls
+    // animate() with the right arguments, not about real frame timing.
+    dom.window.requestAnimationFrame = function (cb) {
+      cb();
+      return 0;
+    };
+
+    const c = await renderOverview(dom);
+    openHistory(c);
+    const details = dom.window.document.querySelector('.admin-annc__detail');
+    const summary = details.querySelector('summary');
+    expect(details.classList.contains('is-open')).toBe(false);
+
+    summary.click(); // expand()'s rAF-deferred animate() call now runs synchronously
+
+    // `open` and the arrow-driving class flip immediately (synchronous with
+    // the click) even though the tween itself is still mid-flight — a click
+    // must never wait on the animation to register as "expanded".
+    expect(details.open).toBe(true);
+    expect(details.classList.contains('is-open')).toBe(true);
+    expect(animateCalls).toHaveLength(1);
+    expect(animateCalls[0].opts.easing).toBe('cubic-bezier(0.4, 0, 0.2, 1)');
+    expect(animateCalls[0].keyframes.height).toHaveLength(2);
+
+    animateCalls[0].fake.onfinish(); // simulate the expand tween finishing
+    expect(details.style.height).toBe('');
+
+    // Collapse: the class flips immediately, but the native `open` attribute
+    // is deliberately held true until the (mocked) tween actually finishes —
+    // flipping it early would hide the content via the UA stylesheet before
+    // any shrink could be seen.
+    summary.click();
+    expect(details.classList.contains('is-open')).toBe(false);
+    expect(details.open).toBe(true);
+    expect(animateCalls).toHaveLength(2);
+
+    animateCalls[1].fake.onfinish();
+    expect(details.open).toBe(false);
+  });
 });
 
 describe('admin/nodes.js — sub-nav', () => {
