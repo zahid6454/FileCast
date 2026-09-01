@@ -1,7 +1,7 @@
 fastapi==0.141.1
 uvicorn[standard]==0.52.4
 # Transitive via Authlib/pdfminer.six — pinned explicitly (CVE fix, PYSEC-2026-3552).
-cryptography==50.0.0
+cryptography==50.0.1
 httpx==0.28.1
 python-multipart==0.0.32
 pdf2docx==0.5.13
