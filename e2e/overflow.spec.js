@@ -19,13 +19,19 @@ const WIDTHS = [320, 375, 480, 768, 1024, 1200, 1440];
 // uuid-generator covers the text-input template's other input_kind (a
 // number field + quick-pick preset chips instead of a textarea) — a flex
 // row of chips is exactly the kind of control this file exists to catch
-// overflowing at 320px.
+// overflowing at 320px. pdf-protect covers the content-block redesign's
+// plain-markdown-table shape (table-scroll wrapping a multi-column table
+// that isn't blockified into stacked cards below 600px, unlike .icon-table)
+// — a real bug here (the wrapper's overflow-x reset applying to every
+// table, not just icon-table) silently clipped these tables' right-hand
+// columns at 320/375px until it was caught and fixed.
 const PAGES = [
   '/',
   '/convert/image-compress/',
   '/convert/bulk-image-compress/',
   '/convert/json-to-yaml/',
-  '/convert/uuid-generator/'
+  '/convert/uuid-generator/',
+  '/convert/pdf-protect/'
 ];
 
 async function unreachableOverflow(page) {
