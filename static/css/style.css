@@ -2738,6 +2738,15 @@ table.kv-table tr.group-title th .eyebrow {
 .tool-options__row--range .tool-options__label { min-width: 80px; }
 .tool-options__input {
   flex: 1;
+  /* Same reasoning as .tool-options__slider and the --select fix below: a
+     flex item's default min-width:auto floors a text/password <input> at
+     its UA intrinsic width (~size=20, ~170-200px) regardless of the
+     `flex: 1` shrink factor, which overflowed a 320-375px viewport once
+     the --text/--password row itself was already correctly full-width.
+     select.tool-options__input overrides this back up to 160px on
+     purpose (a real floor so its widest option stays legible); every
+     other input type genuinely has nothing that needs a floor. */
+  min-width: 0;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
