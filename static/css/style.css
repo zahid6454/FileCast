@@ -2802,6 +2802,17 @@ select.tool-options__input {
 .tool-options__row--number .tool-options__input { flex: 0 0 auto; width: 96px; }
 @media (max-width: 480px) {
   .tool-options__row--number { flex: 1 1 100%; }
+  /* --select never got a row rule at all (only --range/--number/--text/
+     --password did), so at a narrow viewport it rendered at its own
+     unconstrained intrinsic width — label + the select's 160px floor —
+     which is wider than a 320-375px viewport and got silently clipped by
+     the site's `html { overflow-x: clip }` instead of wrapping. Scoped to
+     this breakpoint (not unconditional like --text/--password) so two
+     selects that fit side by side on a wider screen — e.g. Page Numbers'
+     Position next to its Format select — keep doing that; only below
+     480px does each select claim its own full-width row, matching
+     --number's identical reasoning just above. */
+  .tool-options__row--select { flex: 1 1 100%; min-width: 0; }
 }
 /* Same reasoning as --range above: a text option (watermark text, a page-range
    string) needs room to actually show what's typed, not the ~half-row a
