@@ -23,12 +23,20 @@ const WIDTHS = [320, 375, 480, 768, 1024, 1200, 1440];
 // (.tool-options__row--select) — it never got a row rule at all until a
 // real bug was found where it rendered at its own unconstrained intrinsic
 // width (label + the select's 160px floor) and was silently clipped below
-// ~445px viewport width. pdf-protect covers the content-block redesign's
-// plain-markdown-table shape (table-scroll wrapping a multi-column table
-// that isn't blockified into stacked cards below 600px, unlike .icon-table)
-// — a real bug here (the wrapper's overflow-x reset applying to every
-// table, not just icon-table) silently clipped these tables' right-hand
-// columns at 320/375px until it was caught and fixed.
+// ~445px viewport width. pdf-protect used to cover the content-block
+// redesign's plain-markdown-table shape (table-scroll wrapping a
+// multi-column table that isn't blockified into stacked cards below
+// 600px, unlike .icon-table) — a real bug here (the wrapper's overflow-x
+// reset applying to every table, not just icon-table) silently clipped
+// these tables' right-hand columns at 320/375px until it was caught and
+// fixed. As of the tool-page content-consistency pass, every comparison
+// table site-wide (pdf-protect included) was converted to .icon-table, so
+// that plain-table shape no longer exists anywhere in content/ — the
+// `:has(table.icon-table)` CSS guard for it (static/css/style.css) stays
+// as a defensive rule in case a plain table is reintroduced later, but
+// nothing currently exercises it. pdf-protect stays in this list because
+// it's still useful coverage for a *wide* (4-column) .icon-table, a shape
+// none of the other pages here have.
 const PAGES = [
   '/',
   '/convert/image-compress/',
