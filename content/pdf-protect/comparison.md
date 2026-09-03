@@ -2,6 +2,8 @@
 
 There's more than one way to keep a PDF's contents from spreading further than intended. Here's how a password requirement compares to the alternatives.
 
+<div class="table-scroll" markdown="1">
+
 | Consideration | Password Protection | Watermarking | Sharing Link Controls |
 |---|---|---|---|
 | Blocks opening the file at all | Yes | No | Depends on the platform |
@@ -10,19 +12,33 @@ There's more than one way to keep a PDF's contents from spreading further than i
 | Deters casual redistribution | Yes | Yes, visibly | No |
 | Setup needed | None — just this tool | None — just this tool | Depends on the sharing platform |
 
+</div>
+
 "Blocks opening the file at all" means no reader will display the content without the password — it doesn't mean the password can't eventually be recovered by someone running dedicated cracking software against it. See "How Strong Is This Protection?" on this tool's page for what that means in practice.
 
-### Use Password Protection When
-
-- The file must not be casually openable, wherever it ends up
-- You're sending it somewhere you don't fully control, like email or a personal drive
-- "Don't open unless you're supposed to" needs to be enforced by the file itself, not just asked for
-- You want protection that travels with the file itself, not tied to a link or platform
-
-### Consider a Different Approach When
-
-- You want the content visible but marked as a draft or confidential — watermarking fits better
-- You need to revoke access after sharing — a password can't be taken back once someone has it, so a sharing-link platform with revocable access suits that case better
-- The recipient needs to edit the file collaboratively — a shared, permission-controlled document works better than a password-locked static PDF
-- The document has a real regulatory or compliance requirement behind it — confirm what encryption standard is actually required rather than assuming this covers it
-
+<div class="panel-grid">
+  <div class="panel panel--accent">
+    <div class="panel__head">
+      <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span>
+      <h3>Use Password Protection When</h3>
+    </div>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The file must not be casually openable, wherever it ends up</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You're sending it somewhere you don't fully control, like email or a personal drive</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>"Don't open unless you're supposed to" needs to be enforced by the file itself, not just asked for</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You want protection that travels with the file itself, not tied to a link or platform</li>
+    </ul>
+  </div>
+  <div class="panel panel--neutral">
+    <div class="panel__head">
+      <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg></span>
+      <h3>Consider a Different Approach When</h3>
+    </div>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You want the content visible but marked as a draft or confidential — watermarking fits better</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to revoke access after sharing — a password can't be taken back once someone has it, so a sharing-link platform with revocable access suits that case better</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The recipient needs to edit the file collaboratively — a shared, permission-controlled document works better than a password-locked static PDF</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The document has a real regulatory or compliance requirement behind it — confirm what encryption standard is actually required rather than assuming this covers it</li>
+    </ul>
+  </div>
+</div>

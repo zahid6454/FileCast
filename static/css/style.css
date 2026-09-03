@@ -996,7 +996,17 @@ img { max-width: 100%; display: block; }
    was sizing columns off whichever row happened to run the algorithm
    first and left neighboring rows wrapping unpredictably. */
 .content-block .table-scroll { overflow-x: auto; margin: var(--space-3) 0; }
-.content-block .table-scroll table.icon-table { display: table; table-layout: fixed; overflow-x: visible; margin: 0; }
+/* Applies to both the hand-written icon-table AND a plain markdown reference
+   table wrapped in .table-scroll (e.g. a 4-column compression-levels table) —
+   `display: block` on a bare markdown <table> (the base .content-block table
+   rule above) makes the *outer* box 100% wide, but a table-row-group child
+   under a display:block parent gets wrapped in an anonymous table box with no
+   author-specified width, so it shrink-to-fits instead of filling the
+   container. Restoring `display: table` here means the <table> element
+   itself is the table box again, so its own `width: 100%` (below) actually
+   applies. */
+.content-block .table-scroll table { display: table; overflow-x: visible; width: 100%; margin: 0; }
+.content-block .table-scroll table.icon-table { table-layout: fixed; }
 /* Position-based, not named per-tool — every tool's comparison table has
    the same shape (a feature column, then two format columns), just with
    different header text, so a plain <col><col><col> picks these up with
