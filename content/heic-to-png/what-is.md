@@ -8,6 +8,28 @@ Apple adopted HEIC because it saves significant storage space on devices. The fo
 
 PNG is a lossless format supported by virtually every device, app, and image editor. Unlike converting to JPG, converting HEIC to PNG doesn't throw away any visible detail — and it fully preserves any transparency your HEIC photo carries, which JPG cannot.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-minimize"></use></svg></span>
+    <span class="stat-tile__label">~50% smaller</span>
+    <span class="stat-tile__sub">HEIC vs. JPG at similar quality</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+    <span class="stat-tile__label">Lossless PNG</span>
+    <span class="stat-tile__sub">No detail lost in conversion</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sun"></use></svg></span>
+    <span class="stat-tile__label">Live Photos &amp; depth</span>
+    <span class="stat-tile__sub">Features JPG can't store</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This converter runs entirely in your browser. When you drop a HEIC file onto the page, it is decoded and re-encoded as a PNG image — all in your device's memory. Your photo is never uploaded to any server.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This converter runs <strong>entirely in your browser</strong>. When you drop a HEIC file onto the page, it is decoded and re-encoded as a PNG image — all in your device's memory. Your photo is never uploaded to any server.</p>
+</div>

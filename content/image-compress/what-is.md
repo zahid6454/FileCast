@@ -12,6 +12,32 @@ Large image files slow down websites, fill up cloud storage, and make email atta
 
 This tool accepts JPG, PNG, and WebP images. You control the output quality with a slider ranging from 10% to 100%, letting you find the perfect balance between file size and visual quality for each image.
 
+<div class="badge-row">
+  <span class="badge">JPG</span><span class="badge">PNG</span><span class="badge">WebP</span>
+</div>
+
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-minimize"></use></svg></span>
+    <span class="stat-tile__label">50-80% smaller</span>
+    <span class="stat-tile__sub">Typical size reduction</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg></span>
+    <span class="stat-tile__label">10-100% quality</span>
+    <span class="stat-tile__sub">Adjustable compression slider</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
+    <span class="stat-tile__label">3 formats</span>
+    <span class="stat-tile__sub">JPG, PNG, WebP</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This compressor runs entirely in your browser. When you select an image, your device processes the compression locally — your file is never uploaded to any server. Adjust the quality slider to preview different compression levels, then download the result. The original file on your device remains untouched.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This compressor runs <strong>entirely in your browser</strong>. When you select an image, your device processes the compression locally — your file is never uploaded to any server. Adjust the quality slider to preview different compression levels, then download the result. The original file on your device remains untouched.</p>
+</div>

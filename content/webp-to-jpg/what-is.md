@@ -14,8 +14,29 @@ Even though WebP works great on the web, it doesn't work everywhere else. Many c
 - Social media platforms and online forms sometimes reject WebP uploads
 - Email attachments in WebP may not preview correctly for the person receiving them
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+    <span class="stat-tile__label">Opens everywhere</span>
+    <span class="stat-tile__sub">Every device, app, platform</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-x"></use></svg></span>
+    <span class="stat-tile__label">Often rejected</span>
+    <span class="stat-tile__sub">By printers, forms, old apps</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-zap"></use></svg></span>
+    <span class="stat-tile__label">Instant conversion</span>
+    <span class="stat-tile__sub">Right in your browser</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This converter turns your WebP images into JPG right inside your browser. Your files never leave your computer — there's no uploading to a server, no waiting, and no privacy concerns. Just drop your file in, and get a JPG back instantly.
-
-JPG is the most widely supported image format in the world. Once your image is converted, it will open on virtually any device, app, or platform without issues.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This converter turns your WebP images into JPG <strong>right inside your browser</strong>. Your files never leave your computer — there's no uploading to a server, no waiting, and no privacy concerns. Just drop your file in, and get a JPG back instantly.</p>
+  <p>JPG is the most widely supported image format in the world. Once your image is converted, it will open on virtually any device, app, or platform without issues.</p>
+</div>

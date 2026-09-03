@@ -10,6 +10,28 @@ WebP is a modern image format that produces significantly smaller files than PNG
 
 All major browsers — Chrome, Firefox, Safari, Edge, and Opera — support WebP on both desktop and mobile.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-minimize"></use></svg></span>
+    <span class="stat-tile__label">25-35% smaller</span>
+    <span class="stat-tile__sub">Than PNG, similar quality</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
+    <span class="stat-tile__label">Transparency kept</span>
+    <span class="stat-tile__sub">Same as PNG</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+    <span class="stat-tile__label">Every modern browser</span>
+    <span class="stat-tile__sub">Chrome, Firefox, Safari, Edge</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This converter turns your PNG files into WebP right inside your browser. Your images never leave your device — nothing gets uploaded to a server. Just drop your file in and download the smaller WebP version in seconds.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This converter turns your PNG files into WebP <strong>right inside your browser</strong>. Your images never leave your device — nothing gets uploaded to a server. Just drop your file in and download the smaller WebP version in seconds.</p>
+</div>

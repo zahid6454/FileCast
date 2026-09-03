@@ -12,6 +12,32 @@ Sharing a photo with its metadata intact can unintentionally reveal your locatio
 
 This tool accepts JPG, PNG, and WebP images. It removes EXIF, IPTC, and XMP metadata (camera info, GPS location, timestamps, author fields, and similar hidden text data) while keeping the color profile intact.
 
+<div class="badge-row">
+  <span class="badge">JPG</span><span class="badge">PNG</span><span class="badge">WebP</span>
+</div>
+
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+    <span class="stat-tile__label">GPS, camera &amp; time</span>
+    <span class="stat-tile__sub">Removed automatically</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg></span>
+    <span class="stat-tile__label">Zero quality loss</span>
+    <span class="stat-tile__sub">Pixels untouched</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
+    <span class="stat-tile__label">3 formats</span>
+    <span class="stat-tile__sub">JPG, PNG, WebP</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This tool works directly on the file's bytes rather than re-encoding the image through a canvas. It locates and removes only the metadata segments in the file — the compressed image data itself is copied through untouched, so there's no quality loss and no recompression, unlike tools that strip metadata as a side effect of resaving the image. Everything happens locally in your browser; your photo is never uploaded to any server.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This tool works directly on the file's bytes rather than re-encoding the image through a canvas. It locates and removes only the metadata segments in the file — the compressed image data itself is copied through untouched, so there's no quality loss and no recompression, unlike tools that strip metadata as a side effect of resaving the image. <strong>Everything happens locally in your browser</strong>; your photo is never uploaded to any server.</p>
+</div>

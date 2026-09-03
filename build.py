@@ -120,7 +120,7 @@ def render_markdown(md_path: Path) -> str:
     if not md_path.exists():
         return ""
     text = md_path.read_text(encoding="utf-8")
-    return markdown.markdown(text, extensions=["tables", "fenced_code"])
+    return markdown.markdown(text, extensions=["tables", "fenced_code", "md_in_html"])
 
 
 def parse_faq_pairs(md_path: Path) -> list[dict]:

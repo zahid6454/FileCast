@@ -10,6 +10,28 @@ PNG is an image format built for quality and flexibility. Unlike JPG, PNG uses l
 
 This makes PNG the go-to choice for logos, icons, graphics, screenshots, and any image where sharpness and transparency matter.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+    <span class="stat-tile__label">Lossless PNG</span>
+    <span class="stat-tile__sub">No quality loss, ever</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
+    <span class="stat-tile__label">Transparency support</span>
+    <span class="stat-tile__sub">JPG has none</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg></span>
+    <span class="stat-tile__label">Pixel-perfect</span>
+    <span class="stat-tile__sub">Crisp edges &amp; text</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This converter turns your JPG images into PNG right inside your browser. Your files never leave your device — there is no uploading to a server, no waiting in a queue, and no risk to your privacy. Just drop your image in, and the conversion happens instantly on your own computer.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This converter turns your JPG images into PNG <strong>right inside your browser</strong>. Your files never leave your device — there is no uploading to a server, no waiting in a queue, and no risk to your privacy. Just drop your image in, and the conversion happens instantly on your own computer.</p>
+</div>

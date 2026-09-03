@@ -907,6 +907,275 @@ img { max-width: 100%; display: block; }
   .content-block th, .content-block td { padding: var(--space-2) var(--space-1); }
 }
 
+/* --- Content Block sub-patterns (stat strip, badges, callout, icon table,
+   two-column panels) — layered on top of the plain markdown output above
+   to make long-form SEO copy scannable without changing a single word of
+   it. Palette is deliberately restrained to two colors: --color-primary is
+   the only accent (icons, table header tint, the "recommended" panel), and
+   --color-success is reserved for the one genuine trust signal per card
+   (local/private processing) — everything else stays neutral so this
+   doesn't turn into a rainbow of category colors. */
+.content-block .eyebrow {
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+/* Stat strip: 2-3 facts already stated in the surrounding prose, surfaced
+   for scanning. auto-fit wraps on narrow viewports instead of squeezing. */
+.content-block .stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-4);
+}
+.content-block .stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+.content-block .stat-tile__icon {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+  color: var(--color-primary-hover);
+}
+.content-block .stat-tile__icon svg { width: 15px; height: 15px; }
+.content-block .stat-tile__label { font-weight: var(--weight-semibold); color: var(--color-text); font-size: var(--text-sm); }
+.content-block .stat-tile__sub { font-size: var(--text-xs); color: var(--color-text-muted); }
+
+/* Badge row: plain data tags (file formats etc.) carry no semantic weight,
+   so they stay neutral rather than borrowing the brand color. */
+.content-block .badge-row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0 var(--space-3); }
+.content-block .badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+/* Callout: reserved for one genuine trust signal per card. */
+.content-block .callout {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  background: var(--color-success-subtle);
+  border: 1px solid var(--color-success-light);
+  border-left: 3px solid var(--color-success);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-top: var(--space-3);
+}
+.content-block .callout svg { color: var(--color-success); flex-shrink: 0; width: 18px; height: 18px; margin-top: 2px; }
+.content-block .callout p { margin: 0; }
+.content-block .callout p + p { margin-top: var(--space-2); }
+.content-block .callout strong { color: var(--color-text); }
+
+/* Icon table: unlike the plain markdown tables above (which have no markup
+   hook, hence the display:block scroll-container trick), this one is
+   hand-written HTML, so it gets a real .table-scroll wrapper + fixed
+   column widths (via <colgroup>) instead. table-layout: fixed makes every
+   cell in a column wrap against the *same* width, so a row's height is
+   determined by its own content only — not by an auto-layout pass that
+   was sizing columns off whichever row happened to run the algorithm
+   first and left neighboring rows wrapping unpredictably. */
+.content-block .table-scroll { overflow-x: auto; margin: var(--space-3) 0; }
+.content-block .table-scroll table.icon-table { display: table; table-layout: fixed; overflow-x: visible; margin: 0; }
+/* Position-based, not named per-tool — every tool's comparison table has
+   the same shape (a feature column, then two format columns), just with
+   different header text, so a plain <col><col><col> picks these up with
+   no per-tool class names to keep in sync. */
+.content-block table.icon-table col:nth-child(1) { width: 20%; }
+.content-block table.icon-table col:nth-child(2) { width: 39%; }
+.content-block table.icon-table col:nth-child(3) { width: 41%; }
+.content-block table.icon-table th { background: var(--color-primary-subtle); color: var(--color-primary-hover); }
+.content-block table.icon-table td { background: var(--color-bg-raised); }
+/* Fixed columns at this container width can't keep every phrase on one
+   line (the two longest run ~46-49 characters, wider than a 720px table
+   split three ways) — so instead of chasing exact percentages forever,
+   every row gets the same minimum height, sized for 2 lines. A row whose
+   text fits on one line just centers inside it, so the whole table stays
+   level regardless of which cell's wording happens to wrap. */
+.content-block table.icon-table td, .content-block table.icon-table th { min-height: 58px; vertical-align: middle; }
+/* The icon+label live in a span *inside* the cell, not on the <td> itself —
+   display:flex directly on a table-cell fights the browser's table layout
+   algorithm (the cell stops behaving like a normal table-cell for sizing
+   purposes), which was the actual source of the unpredictable row heights.
+   A plain table-cell with a flex child inside it doesn't have that problem. */
+/* No white-space:nowrap here on purpose: at viewports just above the
+   600px stacked-card breakpoint (a tablet or a split-screen window), the
+   20%-wide feature column is narrower than "HTTP requests" needs, and
+   forcing it onto one line would just overflow into the neighboring cell —
+   the exact collision the mobile fix exists to avoid, at a different
+   width. Left to wrap normally, the uniform min-height above absorbs it. */
+.content-block table.icon-table .feature-cell { font-weight: var(--weight-semibold); color: var(--color-text); }
+.content-block table.icon-table .feature-cell__inner { display: flex; align-items: flex-start; gap: var(--space-2); }
+.content-block table.icon-table .feature-cell svg { color: var(--color-text-light); flex-shrink: 0; width: 15px; height: 15px; }
+
+/* Below ~600px, three real columns don't fit even with fixed widths (a
+   nowrap feature label plus two sentence-length values has nowhere left to
+   go) — this is the standard "stacked card" pattern for 3-6 column
+   comparison tables: each <tr> becomes a card, its first cell becomes the
+   card's title, the rest become labeled value pairs via data-label +
+   ::before (thead stays in the DOM, visually hidden, so screen readers
+   still get real column headers — sighted mobile users get the same
+   labels printed inline on each value instead). Selectors here repeat
+   `.table-scroll table.icon-table` (rather than just `table.icon-table`)
+   to match the specificity of the desktop rule above; a lower-specificity
+   selector would lose to it even inside this media query.
+
+   `th` must be blockified alongside `td` — an e2e overflow check caught a
+   real bug where it wasn't: a `<th>` left at `display: table-cell` inside
+   a `<tr>` that's already `display: block` has no table-row ancestor to
+   size against, so the browser generates an anonymous table wrapper and
+   lays it out at its natural (unclipped) content width — invisible since
+   it's inside the 1px sr-only thead, but genuinely 300+px wide, and it
+   reported that real width via getBoundingClientRect(), well past the
+   320px viewport. Same family of bug as the earlier display:flex-on-<td>
+   issue: a table-context element with a mismatched effective display type
+   stops participating in its ancestor's layout algorithm in browser-
+   specific ways. */
+@media (max-width: 600px) {
+  .content-block .table-scroll { overflow-x: visible; }
+  .content-block .table-scroll table.icon-table { display: block; }
+  .content-block table.icon-table tbody,
+  .content-block table.icon-table tr,
+  .content-block table.icon-table td,
+  .content-block table.icon-table th { display: block; width: 100%; }
+  .content-block table.icon-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .content-block table.icon-table tr {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-3);
+    overflow: hidden;
+  }
+  .content-block table.icon-table tr:last-child { margin-bottom: 0; }
+  .content-block table.icon-table td,
+  .content-block table.icon-table th {
+    border: none;
+    border-bottom: 1px solid var(--color-border-light);
+    padding: var(--space-3) var(--space-4);
+    min-height: 0;
+  }
+  .content-block table.icon-table td:last-child { border-bottom: none; }
+  .content-block table.icon-table .feature-cell { background: var(--color-primary-subtle); }
+  .content-block table.icon-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-1);
+  }
+}
+
+/* Two-column panels: replace a pair of adjacent h3+ul blocks with parallel
+   cards. Both stay white (full-tint fills read muddy against body text) —
+   only the "recommended" panel gets a colored top edge and icon, echoing
+   the callout's left-border treatment instead of a solid fill. */
+.content-block .panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-2); }
+@media (max-width: 540px) { .content-block .panel-grid { grid-template-columns: 1fr; } }
+.content-block .panel { background: var(--color-bg-raised); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); }
+.content-block .panel--accent { border-top: 3px solid var(--color-primary); }
+.content-block .panel__head { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.content-block .panel__icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); flex-shrink: 0; }
+.content-block .panel__icon svg { width: 15px; height: 15px; }
+.content-block .panel--neutral .panel__icon { background: var(--color-border); color: var(--color-text-secondary); }
+.content-block .panel--accent .panel__icon { background: var(--color-primary-light); color: var(--color-primary-hover); }
+.content-block .panel h3 { margin: 0; font-size: var(--text-sm); }
+.content-block .panel p { font-size: var(--text-sm); color: var(--color-text-secondary); margin: 0 0 var(--space-2); }
+.content-block .panel ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.content-block .panel li { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; font-size: var(--text-sm); }
+.content-block .panel li svg { flex-shrink: 0; margin-top: 3px; width: 13px; height: 13px; }
+.content-block .panel--neutral li svg { color: var(--color-text-light); }
+.content-block .panel--accent li svg { color: var(--color-primary); }
+
+/* Scenario list: turns a run of adjacent h3+p "use case" sections (When to
+   Use pages) into icon-led rows instead of stacked bare headings. One
+   accent color (brand) on every icon chip, a hairline between rows instead
+   of a card per item — deliberately quieter than the stat strip above it,
+   since a whole card's worth of these would be the "rainbow of tints" the
+   restrained palette is avoiding. */
+.content-block .scenario-list { margin-top: var(--space-2); }
+.content-block .scenario { display: flex; gap: var(--space-3); padding: var(--space-3) 0; border-top: 1px solid var(--color-border-light); }
+.content-block .scenario:first-child { border-top: none; padding-top: 0; }
+.content-block .scenario__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+  color: var(--color-primary-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.content-block .scenario__icon svg { width: 16px; height: 16px; }
+.content-block .scenario__body h3 { margin: 0 0 var(--space-1); }
+.content-block .scenario__body p { margin: 0; }
+
+/* FAQ: a small "Q" marker per question (CSS-only — the FAQPage schema is
+   parsed from the raw markdown lines by build.py's parse_faq_pairs, so the
+   .md source itself stays plain text with no markup added around it).
+   The badge is generated ::before content inside a flex h3, not an
+   absolutely-positioned overlay — flex's align-items centers it against
+   the actual text line box instead of guessing a pixel offset that only
+   matches one font size/line-height. */
+.content-block--faq h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+}
+.content-block--faq h3:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+.content-block--faq h3::before {
+  content: "Q";
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+  color: var(--color-primary-hover);
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.content-block--faq h3 + p { padding-left: calc(var(--space-6) + 6px); }
+
 /* --- Related Tools --- */
 .related-tools { margin: var(--space-8) 0; }
 .related-tools__title { font-size: var(--text-xl); font-weight: var(--weight-bold); margin-bottom: var(--space-4); }
