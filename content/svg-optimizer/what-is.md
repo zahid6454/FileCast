@@ -12,6 +12,28 @@ A cleaner SVG loads faster, is easier to read if you ever open it in a code edit
 
 XML comments, `<metadata>` blocks entirely (they're never rendered), `<title>` and `<desc>` elements only when they're empty (non-empty ones are kept, since they matter for accessibility), editor-specific attributes and elements (Inkscape's and Sodipodi's own namespaced fields), and insignificant whitespace between tags. Whitespace inside `<text>`, `<style>`, and `<script>` elements — where it can affect what's rendered — is always preserved.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-minimize"></use></svg></span>
+    <span class="stat-tile__label">Smaller file</span>
+    <span class="stat-tile__sub">Editor cruft stripped</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+    <span class="stat-tile__label">Zero visual change</span>
+    <span class="stat-tile__sub">Pixel-identical rendering</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-edit"></use></svg></span>
+    <span class="stat-tile__label">Geometry untouched</span>
+    <span class="stat-tile__sub">Paths &amp; shapes never modified</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This tool runs entirely in your browser, parsing the SVG's XML structure and removing only the cruft described above — it never touches the actual path data, shapes, or styling. Your file is never uploaded to any server.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This tool runs <strong>entirely in your browser</strong>, parsing the SVG's XML structure and removing only the cruft described above — it never touches the actual path data, shapes, or styling. Your file is never uploaded to any server.</p>
+</div>

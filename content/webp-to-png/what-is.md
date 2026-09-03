@@ -10,8 +10,29 @@ PNG is one of the most widely supported image formats available. Nearly every de
 
 PNG preserves full image quality — nothing is lost or degraded when you save an image as a PNG. It also fully supports transparency, so if your image has a see-through background or semi-transparent layers, PNG keeps them intact.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+    <span class="stat-tile__label">Opens everywhere</span>
+    <span class="stat-tile__sub">Every device, app, and OS</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
+    <span class="stat-tile__label">Full transparency</span>
+    <span class="stat-tile__sub">Preserved exactly</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg></span>
+    <span class="stat-tile__label">Zero quality loss</span>
+    <span class="stat-tile__sub">Nothing degraded</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This converter turns your WebP images into PNG files directly inside your browser. Your images are never uploaded to a server. The entire conversion happens on your device, which means your files stay private and the process is fast regardless of your internet connection.
-
-Just drop in a WebP file and get a high-quality PNG back in seconds.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This converter turns your WebP images into PNG files <strong>directly inside your browser</strong>. Your images are never uploaded to a server. The entire conversion happens on your device, which means your files stay private and the process is fast regardless of your internet connection.</p>
+  <p>Just drop in a WebP file and get a high-quality PNG back in seconds.</p>
+</div>

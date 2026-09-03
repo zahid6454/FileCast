@@ -10,6 +10,28 @@ JPG is the most widely accepted image format on the planet. Nearly every website
 
 Converting from PNG to JPG makes sense when you don't need transparency and want a smaller, more compatible file. Social media platforms, online forms, and photo printing services all work best with JPG.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-minimize"></use></svg></span>
+    <span class="stat-tile__label">Much smaller</span>
+    <span class="stat-tile__sub">Often several times smaller than PNG</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+    <span class="stat-tile__label">Works everywhere</span>
+    <span class="stat-tile__sub">Every device, app, and platform</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-zap"></use></svg></span>
+    <span class="stat-tile__label">Under 1 second</span>
+    <span class="stat-tile__sub">Even for large files</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This converter runs entirely in your browser. When you drop a PNG file onto the page, your device processes the image and produces a JPG version — all locally, in your device's memory. Your image is never uploaded to any server. The conversion typically takes under a second, even for large files, and you can download the result immediately.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This converter runs <strong>entirely in your browser</strong>. When you drop a PNG file onto the page, your device processes the image and produces a JPG version — all locally, in your device's memory. Your image is never uploaded to any server. The conversion typically takes under a second, even for large files, and you can download the result immediately.</p>
+</div>

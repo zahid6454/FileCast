@@ -12,6 +12,28 @@ Cropping cuts away parts of the image to change its shape, which means you lose 
 
 This tool lets you enter a width, a height, or both. When you set only one dimension, the other adjusts automatically to maintain the image's original proportions. This prevents the image from looking stretched or squished. If you set both dimensions, the image will scale to fit those exact measurements.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg></span>
+    <span class="stat-tile__label">Any dimensions</span>
+    <span class="stat-tile__sub">Set width, height, or both</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg></span>
+    <span class="stat-tile__label">Proportional scaling</span>
+    <span class="stat-tile__sub">Keeps aspect ratio locked</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
+    <span class="stat-tile__label">3 formats</span>
+    <span class="stat-tile__sub">JPG, PNG, WebP</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This resizer runs entirely in your browser. When you select an image, your device processes the resize locally — your file is never uploaded to any server. Enter your target dimensions, and the resized image is ready to download in seconds. The tool accepts JPG, PNG, and WebP formats.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This resizer runs <strong>entirely in your browser</strong>. When you select an image, your device processes the resize locally — your file is never uploaded to any server. Enter your target dimensions, and the resized image is ready to download in seconds. The tool accepts JPG, PNG, and WebP formats.</p>
+</div>

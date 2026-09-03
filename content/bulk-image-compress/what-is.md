@@ -12,6 +12,32 @@ Compressing images one at a time is fine for an occasional photo, but it becomes
 
 This tool accepts up to 10 images per session, with each file capped at 10 MB. Supported formats include JPG, PNG, and WebP. Files are processed one after another in sequence, so you can watch each result appear as it completes.
 
+<div class="badge-row">
+  <span class="badge">JPG</span><span class="badge">PNG</span><span class="badge">WebP</span>
+</div>
+
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-zap"></use></svg></span>
+    <span class="stat-tile__label">Up to 10 images</span>
+    <span class="stat-tile__sub">Processed per session</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg></span>
+    <span class="stat-tile__label">10 MB per file</span>
+    <span class="stat-tile__sub">Maximum file size</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
+    <span class="stat-tile__label">3 formats</span>
+    <span class="stat-tile__sub">JPG, PNG, WebP</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This bulk compressor runs entirely in your browser. When you select your images, your device processes each file locally — nothing is uploaded to any server. Your images remain private throughout the entire process. Set your preferred quality level, let the tool work through the batch, then download your compressed files.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This bulk compressor runs <strong>entirely in your browser</strong>. When you select your images, your device processes each file locally — nothing is uploaded to any server. Your images remain private throughout the entire process. Set your preferred quality level, let the tool work through the batch, then download your compressed files.</p>
+</div>

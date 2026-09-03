@@ -10,6 +10,28 @@ The tradeoff? TIFF files are big. A single photo can easily be 30 MB or more —
 
 PNG is a lossless format too, so converting from TIFF to PNG doesn't throw away any visible detail. But PNG is far more widely supported — every browser, app, and operating system can open it, unlike TIFF. PNG also supports transparency, which many TIFF files carry as an alpha channel, and this tool preserves it fully.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg></span>
+    <span class="stat-tile__label">30 MB+ typical</span>
+    <span class="stat-tile__sub">TIFF file size</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+    <span class="stat-tile__label">Lossless &amp; universal</span>
+    <span class="stat-tile__sub">No detail lost, opens everywhere</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
+    <span class="stat-tile__label">Transparency preserved</span>
+    <span class="stat-tile__sub">Alpha channel kept intact</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This converter turns your TIFF files into PNG right inside your browser. Your images never leave your device — nothing gets uploaded to a server. Just drop in your TIFF and download the PNG. It's fast, private, and free.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This converter turns your TIFF files into PNG <strong>right inside your browser</strong>. Your images never leave your device — nothing gets uploaded to a server. Just drop in your TIFF and download the PNG. It's fast, private, and free.</p>
+</div>

@@ -10,6 +10,28 @@ The tradeoff? TIFF files are big. A single photo can easily be 30 MB or more —
 
 JPG is the opposite. It works everywhere — phones, browsers, social media, email, you name it. JPG files are dramatically smaller, usually just a fraction of the original TIFF size. The picture still looks great for everyday use, even though some behind-the-scenes detail gets trimmed to save space.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg></span>
+    <span class="stat-tile__label">30 MB+ typical</span>
+    <span class="stat-tile__sub">TIFF file size</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-minimize"></use></svg></span>
+    <span class="stat-tile__label">A fraction of the size</span>
+    <span class="stat-tile__sub">As JPG</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+    <span class="stat-tile__label">Works everywhere</span>
+    <span class="stat-tile__sub">Phones, browsers, apps</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This converter turns your TIFF files into JPG right inside your browser. Your images never leave your device — nothing gets uploaded to a server. Just drop in your TIFF and download the JPG. It's fast, private, and free.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This converter turns your TIFF files into JPG <strong>right inside your browser</strong>. Your images never leave your device — nothing gets uploaded to a server. Just drop in your TIFF and download the JPG. It's fast, private, and free.</p>
+</div>
