@@ -10,6 +10,32 @@ Images are great for viewing, but they lack the structure of a document. You can
 
 PDFs are also the expected format for many submissions. Insurance claims, school assignments, and business reports typically require PDF uploads, not a zip folder full of images.
 
+<div class="badge-row">
+  <span class="badge">JPG</span><span class="badge">PNG</span><span class="badge">WebP</span>
+</div>
+
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-file-plus"></use></svg></span>
+    <span class="stat-tile__label">One combined PDF</span>
+    <span class="stat-tile__sub">Instead of loose image files</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg></span>
+    <span class="stat-tile__label">You set the order</span>
+    <span class="stat-tile__sub">Arrange pages before converting</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span>
+    <span class="stat-tile__label">Runs in your browser</span>
+    <span class="stat-tile__sub">Files never uploaded</span>
+  </div>
+</div>
+
 ### How This Tool Works
 
-This tool runs entirely in your browser. When you add your images, your device assembles them into a PDF document — all locally, in your device's memory. Your files are never uploaded to any server. Arrange the images in the order you want, and the finished PDF is ready to download in seconds.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This tool runs <strong>entirely in your browser</strong>. When you add your images, your device assembles them into a PDF document — all locally, in your device's memory. Your files are never uploaded to any server. Arrange the images in the order you want, and the finished PDF is ready to download in seconds.</p>
+</div>

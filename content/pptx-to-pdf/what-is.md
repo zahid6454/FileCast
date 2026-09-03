@@ -6,10 +6,32 @@ PPTX is the default file format for Microsoft PowerPoint presentations. It store
 
 Presentations are built to be shown on screen, but they're also frequently shared as standalone documents — handouts, reference materials, or records of what was presented. PDF converts each slide into a fixed-layout page that looks the same on any device without requiring PowerPoint. It also strips out animations and transitions, producing a clean, static document suitable for reading and printing.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg></span>
+    <span class="stat-tile__label">Fixed layout</span>
+    <span class="stat-tile__sub">Looks identical everywhere</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-x"></use></svg></span>
+    <span class="stat-tile__label">Animations stripped</span>
+    <span class="stat-tile__sub">Clean, static pages</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span>
+    <span class="stat-tile__label">Encrypted &amp; deleted</span>
+    <span class="stat-tile__sub">Never stored on our server</span>
+  </div>
+</div>
+
 ### Who Needs This Conversion?
 
 Speakers sharing their slides after a talk, students distributing study materials, sales teams sending decks to prospects, and managers distributing meeting summaries. Anyone who wants the recipient to see the slides without needing PowerPoint installed.
 
 ### How This Tool Works
 
-Upload your PPTX file and this tool converts each slide into a page in a PDF document. Your file is encrypted during transfer, converted on our server, and deleted immediately after — we never store your presentations.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>Upload your PPTX file and this tool converts each slide into a page in a PDF document. Your file is <strong>encrypted during transfer, converted on our server, and deleted immediately after</strong> — we never store your presentations.</p>
+</div>

@@ -4,6 +4,25 @@ Markdown to PDF conversion takes a `.md` file — written with headings, bold an
 
 Markdown itself is just plain text with a few punctuation-based conventions (`#` for a heading, `**` for bold, `-` for a list item). On its own it doesn't look like a finished document until something renders it — this tool does that rendering and produces a PDF as the result.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg></span>
+    <span class="stat-tile__label">Fully rendered</span>
+    <span class="stat-tile__sub">Marks become real formatting</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
+    <span class="stat-tile__label">Paginated output</span>
+    <span class="stat-tile__sub">Ready to print or archive</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span>
+    <span class="stat-tile__label">Runs in your browser</span>
+    <span class="stat-tile__sub">Files never uploaded</span>
+  </div>
+</div>
+
 ### Why Convert Markdown to PDF?
 
 A raw `.md` file shows its formatting marks — asterisks, pound signs, backticks — to anyone who opens it without a Markdown-aware viewer. A PDF renders those marks into actual bold text, real headings, and proper bullet points, so it reads correctly for absolutely anyone who opens it.
@@ -12,4 +31,7 @@ PDF is also the format most non-technical recipients and formal submissions expe
 
 ### How This Tool Works
 
-This tool runs entirely in your browser. When you add your `.md` file, your device parses the Markdown, lays out headings, bold and italic text, lists, code blocks, and horizontal rules onto paginated PDF pages, and assembles the result — all locally, in your device's memory. Your file is never uploaded to any server.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This tool runs <strong>entirely in your browser</strong>. When you add your <code>.md</code> file, your device parses the Markdown, lays out headings, bold and italic text, lists, code blocks, and horizontal rules onto paginated PDF pages, and assembles the result — all locally, in your device's memory. Your file is never uploaded to any server.</p>
+</div>

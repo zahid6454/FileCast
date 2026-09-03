@@ -23,14 +23,20 @@ const WIDTHS = [320, 375, 480, 768, 1024, 1200, 1440];
 // (.tool-options__row--select) — it never got a row rule at all until a
 // real bug was found where it rendered at its own unconstrained intrinsic
 // width (label + the select's 160px floor) and was silently clipped below
-// ~445px viewport width.
+// ~445px viewport width. pdf-protect covers the content-block redesign's
+// plain-markdown-table shape (table-scroll wrapping a multi-column table
+// that isn't blockified into stacked cards below 600px, unlike .icon-table)
+// — a real bug here (the wrapper's overflow-x reset applying to every
+// table, not just icon-table) silently clipped these tables' right-hand
+// columns at 320/375px until it was caught and fixed.
 const PAGES = [
   '/',
   '/convert/image-compress/',
   '/convert/bulk-image-compress/',
   '/convert/json-to-yaml/',
   '/convert/uuid-generator/',
-  '/convert/pdf-compress/'
+  '/convert/pdf-compress/',
+  '/convert/pdf-protect/'
 ];
 
 async function unreachableOverflow(page) {
