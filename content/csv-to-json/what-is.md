@@ -40,5 +40,5 @@ If your workflow involves any of these scenarios, converting from CSV to JSON re
 
 <div class="callout">
   <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
-  <p>This tool converts your CSV data into clean, well-structured JSON <strong>entirely inside your browser</strong>. Your file never leaves your device — there is no upload to a remote server, no cloud processing, and no waiting for a response. Paste your CSV content or load a file, and the conversion happens instantly on your machine, ready to copy, download, or drop into whatever project you're working on.</p>
+  <p>This tool converts your CSV data into clean, well-structured JSON <strong>entirely inside your browser</strong>. Your file never leaves your device — there is no upload to a remote server, no cloud processing, and no waiting for a response. Paste your CSV content or load a file, and the conversion happens instantly on your machine. The result is ready to copy, download, or drop into whatever project you are working on.</p>
 </div>

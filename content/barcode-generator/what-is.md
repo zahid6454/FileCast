@@ -32,5 +32,5 @@ A barcode encodes text — a product SKU, a serial number, a tracking code — a
 
 <div class="callout">
   <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
-  <p>This tool runs <strong>entirely in your browser</strong>. Type the text you want to encode and click Generate — the barcode is built locally as a scalable SVG image, with the original text printed underneath for a human to read alongside the scan. Nothing is uploaded — your data never leaves your device.</p>
+  <p>Type the text you want to encode and click Generate. The barcode is built <strong>entirely in your browser</strong> as a scalable SVG image, with the original text printed underneath for a human to read alongside the scan. Nothing is uploaded — your data never leaves your device.</p>
 </div>
