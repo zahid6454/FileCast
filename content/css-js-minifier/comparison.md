@@ -2,6 +2,8 @@
 
 Not all "minifiers" do the same amount of work. This tool does the safe half of that job — the half that's impossible to get wrong.
 
+<div class="table-scroll">
+
 | Technique | What It Does | Risk | This Tool |
 |---|---|---|---|
 | Strip comments | Removes `//`, `/* */` | None, if string/regex-aware | ✅ Yes |
@@ -9,6 +11,8 @@ Not all "minifiers" do the same amount of work. This tool does the safe half of 
 | Rename variables | Shortens `myLongVariableName` to `a` | Can break code that references names by string (reflection, some frameworks) | ❌ No |
 | Dead code elimination | Removes unreachable code | Requires full static analysis to be safe | ❌ No |
 | Operator-spacing removal | Removes spaces around `+`, `-` etc. | Can silently change meaning (`a + +b` → `a++b`) | ❌ No |
+
+</div>
 
 ### When This Level Is Enough
 

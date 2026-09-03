@@ -4,6 +4,25 @@ CSV (Comma-Separated Values) is plain text — rows and columns separated by com
 
 Converting CSV to XLSX produces a genuine Excel workbook: a single sheet with your data laid out in real spreadsheet cells, each one correctly typed as text or a number. It opens directly in Excel with no import dialog, no delimiter guessing, and no "which encoding is this?" prompt.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-zap"></use></svg></span>
+    <span class="stat-tile__label">Opens with no prompt</span>
+    <span class="stat-tile__sub">Skips Excel's Text Import Wizard</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg></span>
+    <span class="stat-tile__label">Real cell types</span>
+    <span class="stat-tile__sub">Numbers stay numbers, not text</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span>
+    <span class="stat-tile__label">Leading zeros preserved</span>
+    <span class="stat-tile__sub">ZIP codes stay intact</span>
+  </div>
+</div>
+
 ### Why Convert to XLSX Instead of Just Renaming a CSV?
 
 - Renaming `data.csv` to `data.xlsx` doesn't work — Excel will refuse to open it, or open it and show garbled contents, because the underlying file format is completely different.
@@ -13,4 +32,7 @@ Converting CSV to XLSX produces a genuine Excel workbook: a single sheet with yo
 
 ### How This Tool Works
 
-Paste your CSV data and the conversion happens instantly in your browser, building a real `.xlsx` file byte-for-byte. Nothing is uploaded — your data never leaves your device, and the file is ready to open in Excel, Google Sheets, or LibreOffice Calc as soon as it downloads.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>Paste your CSV data and the conversion happens instantly <strong>in your browser</strong>, building a real <code>.xlsx</code> file byte-for-byte. Nothing is uploaded — your data never leaves your device, and the file is ready to open in Excel, Google Sheets, or LibreOffice Calc as soon as it downloads.</p>
+</div>

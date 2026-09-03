@@ -16,6 +16,25 @@ Here is a quick example of what JSON looks like:
 
 Because JSON can nest data many levels deep, it works well for complex structures. However, that same nesting can make it difficult to browse, sort, or analyze the data in a spreadsheet.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-zap"></use></svg></span>
+    <span class="stat-tile__label">Instant, in your browser</span>
+    <span class="stat-tile__sub">No upload, no server round-trip</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg></span>
+    <span class="stat-tile__label">Keys become columns</span>
+    <span class="stat-tile__sub">Each record becomes a row</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
+    <span class="stat-tile__label">Opens in any spreadsheet</span>
+    <span class="stat-tile__sub">Excel, Google Sheets, LibreOffice</span>
+  </div>
+</div>
+
 ### Why Convert to CSV?
 
 CSV (Comma-Separated Values) is the universal format for tabular data. When you convert JSON to CSV, each key becomes a column header and each record becomes a row. This makes the data easy to open in Excel, Google Sheets, or any spreadsheet application.
@@ -29,4 +48,7 @@ Common reasons to convert include:
 
 ### How This Tool Works
 
-This tool converts your JSON to CSV entirely inside your browser. Your data never leaves your device — there is no upload to any server. Simply paste or load your JSON, and the conversion happens instantly on your machine. Once the CSV is ready, you can download it or copy it to your clipboard right away.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>This tool converts your JSON to CSV <strong>entirely inside your browser</strong>. Your data never leaves your device — there is no upload to any server. Simply paste or load your JSON, and the conversion happens instantly on your machine. Once the CSV is ready, you can download it or copy it to your clipboard right away.</p>
+</div>

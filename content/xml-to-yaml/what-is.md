@@ -4,6 +4,25 @@ XML (eXtensible Markup Language) structures data with opening and closing tags �
 
 Converting XML to YAML preserves the same nested structure — elements become keys, attributes become `@`-prefixed keys, repeated sibling elements become lists — but strips away the tag markup in favor of clean, indented text.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-zap"></use></svg></span>
+    <span class="stat-tile__label">Instant, in your browser</span>
+    <span class="stat-tile__sub">No upload, no server round-trip</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg></span>
+    <span class="stat-tile__label">Attributes preserved</span>
+    <span class="stat-tile__sub">Kept as @-prefixed keys</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-edit"></use></svg></span>
+    <span class="stat-tile__label">Comments supported</span>
+    <span class="stat-tile__sub">Native # syntax in the output format</span>
+  </div>
+</div>
+
 ### Why Convert to YAML?
 
 - Modern configuration formats (Docker Compose, Kubernetes, GitHub Actions, Ansible) are YAML-first, not XML.
@@ -13,4 +32,7 @@ Converting XML to YAML preserves the same nested structure — elements become k
 
 ### How This Tool Works
 
-Paste your XML and the conversion happens instantly in your browser. Each element becomes a YAML key, attributes are preserved with an `@` prefix, and repeated elements become a YAML list. Nothing is uploaded — your data never leaves your device.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>Paste your XML and the conversion happens instantly <strong>in your browser</strong>. Each element becomes a YAML key, attributes are preserved with an <code>@</code> prefix, and repeated elements become a YAML list. Nothing is uploaded — your data never leaves your device.</p>
+</div>

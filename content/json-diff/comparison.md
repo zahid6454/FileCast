@@ -1,12 +1,18 @@
 ## Structural Diff vs. Text Diff
 
-| Feature | Text Diff | JSON Diff (this tool) |
-|---|---|---|
-| Compares | Lines of text | Data — keys, values, array positions |
-| Key order | Any reordering shows as changed | Ignored — `{"a":1,"b":2}` equals `{"b":2,"a":1}` |
-| Whitespace/indentation | Any formatting change shows as changed | Ignored entirely |
-| Output | Line-by-line additions/removals | Field-by-field additions/removals/changes, with the exact path |
-| Best for | Source code, plain text | JSON data, API responses, config snapshots |
+<div class="table-scroll">
+<table class="icon-table">
+<colgroup><col><col><col></colgroup>
+<thead><tr><th>Feature</th><th>Text Diff</th><th>JSON Diff (this tool)</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-search"></use></svg>Compares</span></td><td data-label="Text Diff">Lines of text</td><td data-label="JSON Diff (this tool)">Data — keys, values, array positions</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg>Key order</span></td><td data-label="Text Diff">Any reordering shows as changed</td><td data-label="JSON Diff (this tool)">Ignored — <code>{"a":1,"b":2}</code> equals <code>{"b":2,"a":1}</code></td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-edit"></use></svg>Whitespace/indentation</span></td><td data-label="Text Diff">Any formatting change shows as changed</td><td data-label="JSON Diff (this tool)">Ignored entirely</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-code"></use></svg>Output</span></td><td data-label="Text Diff">Line-by-line additions/removals</td><td data-label="JSON Diff (this tool)">Field-by-field additions/removals/changes, with the exact path</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg>Best for</span></td><td data-label="Text Diff">Source code, plain text</td><td data-label="JSON Diff (this tool)">JSON data, API responses, config snapshots</td></tr>
+</tbody>
+</table>
+</div>
 
 ### Reading the Output
 

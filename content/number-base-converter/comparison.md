@@ -1,11 +1,15 @@
 ## Binary vs. Decimal vs. Hex vs. Octal
 
+<div class="table-scroll">
+
 | Base | Radix | Digits Used | Example (255) | Common Use |
 |---|---|---|---|---|
 | Binary | 2 | 0-1 | `11111111` | What hardware actually stores |
 | Octal | 8 | 0-7 | `377` | Unix file permissions (`chmod`) |
 | Decimal | 10 | 0-9 | `255` | Everyday human arithmetic |
 | Hexadecimal | 16 | 0-9, A-F | `FF` | Color codes, memory addresses, byte values |
+
+</div>
 
 ### Use Binary When
 

@@ -4,6 +4,25 @@ CSV (Comma-Separated Values) stores tabular data as flat rows and columns — si
 
 Converting CSV to XML turns each row of your spreadsheet into a `<row>` element, with each column's value wrapped in a tag named after its header. The result is well-formed XML you can feed straight into a system that expects it.
 
+<div class="eyebrow">At a Glance</div>
+<div class="stat-strip">
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-code"></use></svg></span>
+    <span class="stat-tile__label">Well-formed XML</span>
+    <span class="stat-tile__sub">Ready for enterprise systems</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg></span>
+    <span class="stat-tile__label">Header row aware</span>
+    <span class="stat-tile__sub">Column names become tag names</span>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-zap"></use></svg></span>
+    <span class="stat-tile__label">Instant, in your browser</span>
+    <span class="stat-tile__sub">No upload, no server round-trip</span>
+  </div>
+</div>
+
 ### Why Convert to XML?
 
 - Many enterprise systems (ERPs, SOAP APIs, older government and healthcare platforms) accept XML but not CSV or JSON.
@@ -13,4 +32,7 @@ Converting CSV to XML turns each row of your spreadsheet into a `<row>` element,
 
 ### How This Tool Works
 
-Paste your CSV data and the conversion happens instantly in your browser. The first row is treated as headers; each subsequent row becomes a `<row>` element with one child tag per column. Nothing is uploaded — your data never leaves your device.
+<div class="callout">
+  <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
+  <p>Paste your CSV data and the conversion happens instantly <strong>in your browser</strong>. The first row is treated as headers; each subsequent row becomes a <code>&lt;row&gt;</code> element with one child tag per column. Nothing is uploaded — your data never leaves your device.</p>
+</div>
