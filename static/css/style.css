@@ -1038,13 +1038,26 @@ img { max-width: 100%; display: block; }
    labels printed inline on each value instead). Selectors here repeat
    `.table-scroll table.icon-table` (rather than just `table.icon-table`)
    to match the specificity of the desktop rule above; a lower-specificity
-   selector would lose to it even inside this media query. */
+   selector would lose to it even inside this media query.
+
+   `th` must be blockified alongside `td` — an e2e overflow check caught a
+   real bug where it wasn't: a `<th>` left at `display: table-cell` inside
+   a `<tr>` that's already `display: block` has no table-row ancestor to
+   size against, so the browser generates an anonymous table wrapper and
+   lays it out at its natural (unclipped) content width — invisible since
+   it's inside the 1px sr-only thead, but genuinely 300+px wide, and it
+   reported that real width via getBoundingClientRect(), well past the
+   320px viewport. Same family of bug as the earlier display:flex-on-<td>
+   issue: a table-context element with a mismatched effective display type
+   stops participating in its ancestor's layout algorithm in browser-
+   specific ways. */
 @media (max-width: 600px) {
   .content-block .table-scroll { overflow-x: visible; }
   .content-block .table-scroll table.icon-table { display: block; }
   .content-block table.icon-table tbody,
   .content-block table.icon-table tr,
-  .content-block table.icon-table td { display: block; width: 100%; }
+  .content-block table.icon-table td,
+  .content-block table.icon-table th { display: block; width: 100%; }
   .content-block table.icon-table thead {
     position: absolute;
     width: 1px;
@@ -1063,7 +1076,8 @@ img { max-width: 100%; display: block; }
     overflow: hidden;
   }
   .content-block table.icon-table tr:last-child { margin-bottom: 0; }
-  .content-block table.icon-table td {
+  .content-block table.icon-table td,
+  .content-block table.icon-table th {
     border: none;
     border-bottom: 1px solid var(--color-border-light);
     padding: var(--space-3) var(--space-4);
