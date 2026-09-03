@@ -17,7 +17,7 @@ Feeding paper into a scanner out of order, or scanning both sides of a double-si
 
 ### Restructuring a Merged Document
 
-Combining files with [PDF Merge](/convert/pdf-merge) stacks pages in the order the source files were added, which isn't always the order the final document needs. Reordering afterward lets you fix the structure — moving an appendix to the end, or a summary to the front — without redoing the merge.
+Combining files with [PDF Merge](/convert/pdf-merge/) stacks pages in the order the source files were added, which isn't always the order the final document needs. Reordering afterward lets you fix the structure — moving an appendix to the end, or a summary to the front — without redoing the merge.
 
 </div>
 </div>
@@ -37,7 +37,7 @@ A document assembled piece by piece sometimes ends up with its table of contents
 
 ### Preparing a Custom Reading Order for a Presentation Packet
 
-When combining several documents into one packet for a meeting, the most logical reading order for attendees isn't always the order the files were originally in. Reordering lets you sequence the packet the way you actually want it presented. Assigning the finished packet a reference ID with our [UUID Generator](/convert/uuid-generator) can help keep track of different versions as you refine the order.
+When combining several documents into one packet for a meeting, the most logical reading order for attendees isn't always the order the files were originally in. Reordering lets you sequence the packet the way you actually want it presented. Assigning the finished packet a reference ID with our [UUID Generator](/convert/uuid-generator/) can help keep track of different versions as you refine the order.
 
 </div>
 </div>

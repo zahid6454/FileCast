@@ -22,13 +22,21 @@
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-code"></use></svg></span>
       <h3>Keep XLSX When</h3>
     </div>
-    <p>Stay in XLSX while you're actively working with the data — calculating, sorting, filtering, creating charts, or collaborating with others. The spreadsheet format is purpose-built for data manipulation and loses all of that functionality when converted to PDF.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You're actively working with the data — calculating, sorting, filtering, or building charts</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You're collaborating with others who need to edit the numbers too</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The spreadsheet isn't final — PDF loses all formula and editing functionality</li>
+    </ul>
   </div>
   <div class="panel panel--accent">
     <div class="panel__head">
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
       <h3>Convert to PDF When</h3>
     </div>
-    <p>Switch to PDF when the spreadsheet is ready to share as a final report. Financial statements, budget summaries, data exports for clients, and print-ready tables all benefit from PDF's fixed layout. It's especially important when the recipient shouldn't modify the numbers.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The spreadsheet is ready to share as a final report — a financial statement, budget summary, or client data export</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need a print-ready table with a fixed layout, not something that shifts by screen size</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The recipient shouldn't be able to modify the numbers</li>
+    </ul>
   </div>
 </div>

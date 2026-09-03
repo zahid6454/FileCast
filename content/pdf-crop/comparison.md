@@ -2,15 +2,17 @@
 
 Trimming margins from a PDF can be done a few different ways depending on what's actually available to you.
 
-<div class="table-scroll" markdown="1">
-
-| Consideration | This Tool | Re-Export from Source | Print-to-Fit |
-|---|---|---|---|
-| Works when you only have the PDF | Yes | No — requires the original file | Yes, but only affects the printed copy |
-| Changes the file itself | Yes, permanently | Yes, permanently | No — the PDF file is unchanged |
-| Precision over the trimmed amount | Yes — drag the crop box against a live preview | Depends on the software | Limited, driver-dependent |
-| Speed | Seconds | Requires reopening and re-exporting | Set per print job, not saved |
-
+<div class="table-scroll">
+<table class="icon-table">
+<colgroup><col><col><col><col></colgroup>
+<thead><tr><th>Consideration</th><th>This Tool</th><th>Re-Export from Source</th><th>Print-to-Fit</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg>Works when you only have the PDF</span></td><td data-label="This Tool">Yes</td><td data-label="Re-Export from Source">No — requires the original file</td><td data-label="Print-to-Fit">Yes, but only affects the printed copy</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-edit"></use></svg>Changes the file itself</span></td><td data-label="This Tool">Yes, permanently</td><td data-label="Re-Export from Source">Yes, permanently</td><td data-label="Print-to-Fit">No — the PDF file is unchanged</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg>Precision over the trimmed amount</span></td><td data-label="This Tool">Yes — drag the crop box against a live preview</td><td data-label="Re-Export from Source">Depends on the software</td><td data-label="Print-to-Fit">Limited, driver-dependent</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-clock"></use></svg>Speed</span></td><td data-label="This Tool">Seconds</td><td data-label="Re-Export from Source">Requires reopening and re-exporting</td><td data-label="Print-to-Fit">Set per print job, not saved</td></tr>
+</tbody>
+</table>
 </div>
 
 <div class="panel-grid">

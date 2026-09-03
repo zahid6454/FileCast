@@ -27,7 +27,7 @@ Offer letters, contracts, and performance reviews contain details that should st
 
 ### Distributing Confidential Reports
 
-Internal reports, board materials, and strategy documents sometimes need to reach a specific group of people without spreading further. Password protection means the file only opens for those who were given the password directly. If you also want to verify a shared copy hasn't been altered afterward, our [Hash Generator](/convert/hash-generator) produces a checksum you can compare against the original.
+Internal reports, board materials, and strategy documents sometimes need to reach a specific group of people without spreading further. Password protection means the file only opens for those who were given the password directly. If you also want to verify a shared copy hasn't been altered afterward, our [Hash Generator](/convert/hash-generator/) produces a checksum you can compare against the original.
 
 </div>
 </div>

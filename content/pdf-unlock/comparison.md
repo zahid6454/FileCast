@@ -2,16 +2,18 @@
 
 If a PDF is password-protected, there are a few different paths depending on what you actually have available.
 
-<div class="table-scroll" markdown="1">
-
-| Situation | This Tool | Ask the Sender | Password Recovery Software |
-|---|---|---|---|
-| You know the password | Works instantly | Unnecessary | Unnecessary |
-| The PDF only restricts printing/editing, no open password | Works instantly, no password needed | Unnecessary | Unnecessary |
-| You don't know the password | Can't help | The reliable option | Slow, not guaranteed, often flagged as risky software |
-| Speed | Seconds | Depends on the sender | Minutes to hours, if it works at all |
-| Cost | Free | Free | Often paid |
-
+<div class="table-scroll">
+<table class="icon-table">
+<colgroup><col><col><col><col></colgroup>
+<thead><tr><th>Situation</th><th>This Tool</th><th>Ask the Sender</th><th>Password Recovery Software</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-no-lock"></use></svg>You know the password</span></td><td data-label="This Tool">Works instantly</td><td data-label="Ask the Sender">Unnecessary</td><td data-label="Password Recovery Software">Unnecessary</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg>The PDF only restricts printing/editing, no open password</span></td><td data-label="This Tool">Works instantly, no password needed</td><td data-label="Ask the Sender">Unnecessary</td><td data-label="Password Recovery Software">Unnecessary</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-x"></use></svg>You don't know the password</span></td><td data-label="This Tool">Can't help</td><td data-label="Ask the Sender">The reliable option</td><td data-label="Password Recovery Software">Slow, not guaranteed, often flagged as risky software</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-clock"></use></svg>Speed</span></td><td data-label="This Tool">Seconds</td><td data-label="Ask the Sender">Depends on the sender</td><td data-label="Password Recovery Software">Minutes to hours, if it works at all</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-infinity"></use></svg>Cost</span></td><td data-label="This Tool">Free</td><td data-label="Ask the Sender">Free</td><td data-label="Password Recovery Software">Often paid</td></tr>
+</tbody>
+</table>
 </div>
 
 <div class="panel-grid">

@@ -2,16 +2,18 @@
 
 Whether to flatten a completed form depends on what happens to it next.
 
-<div class="table-scroll" markdown="1">
-
-| Consideration | Flattened PDF | Fillable Form (Unflattened) |
-|---|---|---|
-| Filled-in answers can be edited later | No | Yes |
-| Renders identically in every viewer | Yes | Depends on the viewer's form support |
-| Suitable for final, submitted records | Yes | Risky — values could still change |
-| Can still be filled out further | No | Yes |
-| File size | Often slightly smaller | Slightly larger, due to form field data |
-
+<div class="table-scroll">
+<table class="icon-table">
+<colgroup><col><col><col></colgroup>
+<thead><tr><th>Consideration</th><th>Flattened PDF</th><th>Fillable Form (Unflattened)</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-edit"></use></svg>Filled-in answers can be edited later</span></td><td data-label="Flattened PDF">No</td><td data-label="Fillable Form (Unflattened)">Yes</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg>Renders identically in every viewer</span></td><td data-label="Flattened PDF">Yes</td><td data-label="Fillable Form (Unflattened)">Depends on the viewer's form support</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Suitable for final, submitted records</span></td><td data-label="Flattened PDF">Yes</td><td data-label="Fillable Form (Unflattened)">Risky — values could still change</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg>Can still be filled out further</span></td><td data-label="Flattened PDF">No</td><td data-label="Fillable Form (Unflattened)">Yes</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg>File size</span></td><td data-label="Flattened PDF">Often slightly smaller</td><td data-label="Fillable Form (Unflattened)">Slightly larger, due to form field data</td></tr>
+</tbody>
+</table>
 </div>
 
 <div class="panel-grid">

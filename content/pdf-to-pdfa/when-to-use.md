@@ -27,7 +27,7 @@ Internal archives that don't require formal certification, but still want docume
 
 ### Building a Reference Archive with Traceable IDs
 
-When tagging documents for long-term storage, it often helps to assign each one a unique reference ID for your own indexing, independent of the file's metadata. Our [UUID Generator](/convert/uuid-generator) can generate one for each document as you build out an archive.
+When tagging documents for long-term storage, it often helps to assign each one a unique reference ID for your own indexing, independent of the file's metadata. Our [UUID Generator](/convert/uuid-generator/) can generate one for each document as you build out an archive.
 
 </div>
 </div>

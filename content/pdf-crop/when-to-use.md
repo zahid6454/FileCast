@@ -27,7 +27,7 @@ Presentation slides exported to PDF are usually sized for a screen, with content
 
 ### Embedding a PDF Page as an Image Elsewhere
 
-When a PDF page is going to be screenshotted or converted into an image for a document, website, or presentation, extra white space around the content just wastes room. Cropping first means the eventual image is tighter around what actually matters. If you need to embed that trimmed page directly as inline image data — in an email template or a CMS field, for example — our [Base64 Encode/Decode](/convert/base64-encode-decode) tool can convert the exported image into a data URL.
+When a PDF page is going to be screenshotted or converted into an image for a document, website, or presentation, extra white space around the content just wastes room. Cropping first means the eventual image is tighter around what actually matters. If you need to embed that trimmed page directly as inline image data — in an email template or a CMS field, for example — our [Base64 Encode/Decode](/convert/base64-encode-decode/) tool can convert the exported image into a data URL.
 
 </div>
 </div>

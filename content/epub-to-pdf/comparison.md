@@ -21,13 +21,21 @@
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg></span>
       <h3>Keep EPUB When</h3>
     </div>
-    <p>Stay with EPUB when the whole point is comfortable reading on a phone, tablet, or e-reader — the reflowable text and adjustable font size are exactly what makes EPUB good at that job.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You're reading on a phone, tablet, or e-reader</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You want the text to reflow to fit the screen</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You want to adjust the font size to your own preference</li>
+    </ul>
   </div>
   <div class="panel panel--accent">
     <div class="panel__head">
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
       <h3>Convert to PDF When</h3>
     </div>
-    <p>Switch to PDF when you need to print it, cite a specific page, annotate it in a PDF-only tool, or send it to someone whose device or software doesn't support EPUB at all.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to print it</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to cite or reference a specific, stable page number</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to annotate it in a PDF-only tool, or send it to someone whose device doesn't support EPUB</li>
+    </ul>
   </div>
 </div>

@@ -1,14 +1,16 @@
 ## Binary vs. Decimal vs. Hex vs. Octal
 
 <div class="table-scroll">
-
-| Base | Radix | Digits Used | Example (255) | Common Use |
-|---|---|---|---|---|
-| Binary | 2 | 0-1 | `11111111` | What hardware actually stores |
-| Octal | 8 | 0-7 | `377` | Unix file permissions (`chmod`) |
-| Decimal | 10 | 0-9 | `255` | Everyday human arithmetic |
-| Hexadecimal | 16 | 0-9, A-F | `FF` | Color codes, memory addresses, byte values |
-
+<table class="icon-table">
+<colgroup><col><col><col><col><col></colgroup>
+<thead><tr><th>Base</th><th>Radix</th><th>Digits Used</th><th>Example (255)</th><th>Common Use</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-code"></use></svg>Binary</span></td><td data-label="Radix">2</td><td data-label="Digits Used">0-1</td><td data-label="Example (255)"><code>11111111</code></td><td data-label="Common Use">What hardware actually stores</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg>Octal</span></td><td data-label="Radix">8</td><td data-label="Digits Used">0-7</td><td data-label="Example (255)"><code>377</code></td><td data-label="Common Use">Unix file permissions (<code>chmod</code>)</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-user"></use></svg>Decimal</span></td><td data-label="Radix">10</td><td data-label="Digits Used">0-9</td><td data-label="Example (255)"><code>255</code></td><td data-label="Common Use">Everyday human arithmetic</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg>Hexadecimal</span></td><td data-label="Radix">16</td><td data-label="Digits Used">0-9, A-F</td><td data-label="Example (255)"><code>FF</code></td><td data-label="Common Use">Color codes, memory addresses, byte values</td></tr>
+</tbody>
+</table>
 </div>
 
 ### Use Binary When

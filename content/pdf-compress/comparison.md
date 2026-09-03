@@ -1,14 +1,16 @@
 ## Compression Levels — When to Use Each
 
-<div class="table-scroll" markdown="1">
-
-| Level | Image DPI | Best For | Typical Reduction |
-|---|---|---|---|
-| Maximum (Screen) | 72 dpi | Email, web viewing, quick sharing | 60-90% smaller |
-| Balanced (Ebook) | 150 dpi | General sharing, digital reading | 40-70% smaller |
-| Moderate (Printer) | 300 dpi | Office printing, reports | 20-40% smaller |
-| Minimal (Prepress) | 300 dpi | Professional printing, high quality | 10-20% smaller |
-
+<div class="table-scroll">
+<table class="icon-table">
+<colgroup><col><col><col><col></colgroup>
+<thead><tr><th>Level</th><th>Image DPI</th><th>Best For</th><th>Typical Reduction</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-minimize"></use></svg>Maximum (Screen)</span></td><td data-label="Image DPI">72 dpi</td><td data-label="Best For">Email, web viewing, quick sharing</td><td data-label="Typical Reduction">60-90% smaller</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg>Balanced (Ebook)</span></td><td data-label="Image DPI">150 dpi</td><td data-label="Best For">General sharing, digital reading</td><td data-label="Typical Reduction">40-70% smaller</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-printer"></use></svg>Moderate (Printer)</span></td><td data-label="Image DPI">300 dpi</td><td data-label="Best For">Office printing, reports</td><td data-label="Typical Reduction">20-40% smaller</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg>Minimal (Prepress)</span></td><td data-label="Image DPI">300 dpi</td><td data-label="Best For">Professional printing, high quality</td><td data-label="Typical Reduction">10-20% smaller</td></tr>
+</tbody>
+</table>
 </div>
 
 <div class="panel-grid">

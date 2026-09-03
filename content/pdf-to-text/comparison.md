@@ -21,13 +21,21 @@
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
       <h3>Keep PDF When</h3>
     </div>
-    <p>Stay with PDF when the layout matters — contracts, invoices, forms, anything with tables, images, or a fixed page design that needs to look the same everywhere it's opened.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The layout matters — contracts, invoices, or forms with a fixed page design</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The document has tables or images that need to stay intact</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>It needs to look the same everywhere it's opened</li>
+    </ul>
   </div>
   <div class="panel panel--accent">
     <div class="panel__head">
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-code"></use></svg></span>
       <h3>Convert to Text When</h3>
     </div>
-    <p>Switch to plain text when you need to search, copy, or process the words themselves without the formatting — feeding a document into a script, checking it into version control, pasting it into an email, or running it through a word count or spell checker.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to search, copy, or process just the words, without the formatting</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You're feeding the document into a script or checking it into version control</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You're running it through a word count, spell checker, or similar plain-text tool</li>
+    </ul>
   </div>
 </div>

@@ -22,13 +22,20 @@
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
       <h3>Keep PDF When</h3>
     </div>
-    <p>Stay with PDF when the document is final and shouldn't be edited — contracts for signing, published reports, archived records, or anything where layout consistency matters more than editability.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The document is final and shouldn't be edited — a contract for signing, a published report, an archived record</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Layout consistency matters more than editability</li>
+    </ul>
   </div>
   <div class="panel panel--accent">
     <div class="panel__head">
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-edit"></use></svg></span>
       <h3>Convert to DOCX When</h3>
     </div>
-    <p>Switch to DOCX when you need to make changes. Updating outdated information, extracting content for a new document, reformatting a report, or editing text that someone sent as a locked PDF — all of these are faster with a Word document than retyping from scratch.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to make changes — update outdated information or reformat a report</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You want to extract content into a new document</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Someone sent you a locked PDF and it's faster to edit as Word than retype from scratch</li>
+    </ul>
   </div>
 </div>

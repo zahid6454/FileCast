@@ -2,16 +2,18 @@
 
 Combining PDFs into one file isn't always necessary. Sometimes keeping documents apart makes more sense. Here's how to decide.
 
-<div class="table-scroll" markdown="1">
-
-| Consideration | Separate Files | Merged File |
-|---|---|---|
-| Submission requirements | Portal accepts multiple uploads | Portal accepts only one file |
-| Sharing ease | Recipient can pick what to read | Recipient gets everything in one place |
-| File updates | Easy to swap out one document | Must re-merge if one part changes |
-| Organization | Folders keep things grouped | Single file is self-contained |
-| Page count | Short, unrelated documents | Related documents that belong together |
-
+<div class="table-scroll">
+<table class="icon-table">
+<colgroup><col><col><col></colgroup>
+<thead><tr><th>Consideration</th><th>Separate Files</th><th>Merged File</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg>Submission requirements</span></td><td data-label="Separate Files">Portal accepts multiple uploads</td><td data-label="Merged File">Portal accepts only one file</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-mail"></use></svg>Sharing ease</span></td><td data-label="Separate Files">Recipient can pick what to read</td><td data-label="Merged File">Recipient gets everything in one place</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>File updates</span></td><td data-label="Separate Files">Easy to swap out one document</td><td data-label="Merged File">Must re-merge if one part changes</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg>Organization</span></td><td data-label="Separate Files">Folders keep things grouped</td><td data-label="Merged File">Single file is self-contained</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-file-plus"></use></svg>Page count</span></td><td data-label="Separate Files">Short, unrelated documents</td><td data-label="Merged File">Related documents that belong together</td></tr>
+</tbody>
+</table>
 </div>
 
 <div class="panel-grid">

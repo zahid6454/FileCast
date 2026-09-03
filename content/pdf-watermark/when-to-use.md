@@ -37,7 +37,7 @@ Documents meant for a specific audience benefit from a visible reminder of that 
 
 ### Branding Marketing or Promotional PDFs
 
-Adding your company name or a promotional line as a subtle watermark across a shared PDF — a media kit, a portfolio, a lookbook — keeps your branding visible even after the file is downloaded and shared independently. Pairing it with a scannable link, like a [QR Code Generator](/convert/qr-code-generator) pointing to your site, gives recipients an easy way to find you.
+Adding your company name or a promotional line as a subtle watermark across a shared PDF — a media kit, a portfolio, a lookbook — keeps your branding visible even after the file is downloaded and shared independently. Pairing it with a scannable link, like a [QR Code Generator](/convert/qr-code-generator/) pointing to your site, gives recipients an easy way to find you.
 
 </div>
 </div>

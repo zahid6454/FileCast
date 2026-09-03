@@ -2,16 +2,18 @@
 
 Not every large PDF needs to be broken apart. Sometimes the full document is exactly what you need. Here's how to decide.
 
-<div class="table-scroll" markdown="1">
-
-| Consideration | Whole Document | Split Pages |
-|---|---|---|
-| Audience | Everyone needs the full file | Different people need different sections |
-| File size | Manageable for sharing | Too large to email or upload |
-| Privacy | All content is safe to share | Some pages contain sensitive information |
-| Context | Pages depend on each other | Pages stand alone |
-| Storage | One file is easier to track | Smaller files are easier to organize by topic |
-
+<div class="table-scroll">
+<table class="icon-table">
+<colgroup><col><col><col></colgroup>
+<thead><tr><th>Consideration</th><th>Whole Document</th><th>Split Pages</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-user"></use></svg>Audience</span></td><td data-label="Whole Document">Everyone needs the full file</td><td data-label="Split Pages">Different people need different sections</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg>File size</span></td><td data-label="Whole Document">Manageable for sharing</td><td data-label="Split Pages">Too large to email or upload</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Privacy</span></td><td data-label="Whole Document">All content is safe to share</td><td data-label="Split Pages">Some pages contain sensitive information</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg>Context</span></td><td data-label="Whole Document">Pages depend on each other</td><td data-label="Split Pages">Pages stand alone</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-file-plus"></use></svg>Storage</span></td><td data-label="Whole Document">One file is easier to track</td><td data-label="Split Pages">Smaller files are easier to organize by topic</td></tr>
+</tbody>
+</table>
 </div>
 
 <div class="panel-grid">
