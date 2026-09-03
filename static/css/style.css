@@ -1062,7 +1062,15 @@ img { max-width: 100%; display: block; }
    stops participating in its ancestor's layout algorithm in browser-
    specific ways. */
 @media (max-width: 600px) {
-  .content-block .table-scroll { overflow-x: visible; }
+  /* Scoped to :has(table.icon-table) — a plain markdown reference table
+     (table-layout: auto, no stacked-card treatment below) still needs the
+     wrapper's default overflow-x: auto from the base rule above to stay
+     reachable by horizontal scroll at this width. Resetting it to visible
+     unconditionally left those tables silently clipped by the site's
+     `html { overflow-x: clip }` instead of scrollable, since nothing else
+     here shrinks a plain table down to the viewport width the way the
+     icon-table stacked-card rules below do. */
+  .content-block .table-scroll:has(table.icon-table) { overflow-x: visible; }
   .content-block .table-scroll table.icon-table { display: block; }
   .content-block table.icon-table tbody,
   .content-block table.icon-table tr,
