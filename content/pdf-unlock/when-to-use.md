@@ -27,7 +27,7 @@ Tools that merge, split, extract text from, or otherwise process a PDF usually c
 
 ### Consolidating Archived Documents
 
-Old invoices, statements, or records that were individually password-protected years ago can be tedious to work with in bulk. Unlocking them (when you know the passwords) makes it practical to combine, index, or migrate them to a new system. If you're building a reference log while you do this, our [Hash Generator](/convert/hash-generator) can produce a checksum of each file before and after, to confirm nothing changed in the process.
+Old invoices, statements, or records that were individually password-protected years ago can be tedious to work with in bulk. Unlocking them (when you know the passwords) makes it practical to combine, index, or migrate them to a new system. If you're building a reference log while you do this, our [Hash Generator](/convert/hash-generator/) can produce a checksum of each file before and after, to confirm nothing changed in the process.
 
 </div>
 </div>

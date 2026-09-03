@@ -21,13 +21,21 @@
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
       <h3>Keep PDF When</h3>
     </div>
-    <p>Stay with PDF when the exact visual layout matters — print-ready documents, forms, anything with images or precise positioning that needs to look identical everywhere it's opened.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The exact visual layout matters — print-ready documents, forms, or precise positioning</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The document contains images that need to stay part of the file itself</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>It needs to look identical everywhere it's opened, regardless of screen size</li>
+    </ul>
   </div>
   <div class="panel panel--accent">
     <div class="panel__head">
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-code"></use></svg></span>
       <h3>Convert to HTML When</h3>
     </div>
-    <p>Switch to HTML when you want the content to live on the web — publishing it as a page, making it indexable by search engines, letting it reflow naturally on any screen size, or embedding it directly into a site without asking visitors to download and open a separate file.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You want the content to live on the web as a page, indexable by search engines</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need it to reflow naturally to fit any screen size</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You want to embed it directly into a site without asking visitors to download a separate file</li>
+    </ul>
   </div>
 </div>

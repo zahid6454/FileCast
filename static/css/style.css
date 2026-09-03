@@ -1008,12 +1008,13 @@ img { max-width: 100%; display: block; }
 .content-block .table-scroll table { display: table; overflow-x: visible; width: 100%; margin: 0; }
 .content-block .table-scroll table.icon-table { table-layout: fixed; }
 /* Position-based, not named per-tool — every tool's comparison table has
-   the same shape (a feature column, then two format columns), just with
-   different header text, so a plain <col><col><col> picks these up with
-   no per-tool class names to keep in sync. */
-.content-block table.icon-table col:nth-child(1) { width: 20%; }
-.content-block table.icon-table col:nth-child(2) { width: 39%; }
-.content-block table.icon-table col:nth-child(3) { width: 41%; }
+   the same shape (a feature column, then N format columns), just with
+   different header text and column count, so a plain <col> sequence picks
+   this up with no per-tool class names to keep in sync. Only the feature
+   column gets an explicit width; table-layout:fixed distributes the
+   remaining 80% evenly across however many columns follow it, so this
+   works unchanged whether a tool compares 2 formats or 4. */
+.content-block table.icon-table col:first-child { width: 20%; }
 .content-block table.icon-table th { background: var(--color-primary-subtle); color: var(--color-primary-hover); }
 .content-block table.icon-table td { background: var(--color-bg-raised); }
 /* Fixed columns at this container width can't keep every phrase on one

@@ -22,13 +22,21 @@
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
       <h3>Keep PDF When</h3>
     </div>
-    <p>Stay with PDF when you need searchable text, multi-page documents, or print-quality output. PDFs are the right format for contracts, reports, and any document where text needs to remain selectable and the layout must be preserved exactly.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need the text to stay searchable and selectable</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The document has multiple pages that need to stay together as one file</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need print-quality output with the layout preserved exactly, like a contract or report</li>
+    </ul>
   </div>
   <div class="panel panel--accent">
     <div class="panel__head">
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
       <h3>Convert to JPG When</h3>
     </div>
-    <p>Switch to JPG when you need to embed a PDF page in a presentation, post it on social media, send it in a chat message, or use it as a thumbnail. JPG is also the better choice when you need the smallest possible file size and pixel-perfect text quality isn't critical.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to embed a PDF page in a presentation, social post, or chat message</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need a thumbnail image rather than a document</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You want the smallest possible file size and pixel-perfect text isn't critical</li>
+    </ul>
   </div>
 </div>

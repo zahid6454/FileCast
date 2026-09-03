@@ -22,13 +22,21 @@
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-edit"></use></svg></span>
       <h3>Keep PPTX When</h3>
     </div>
-    <p>Stay in PPTX while you're building and rehearsing the presentation. The format supports animations, transitions, speaker notes, and embedded video — all features that disappear in PDF. Keep the PPTX for future editing, updating with new data, or reusing slides in other decks.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You're still building or rehearsing the presentation</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need animations, transitions, speaker notes, or embedded video — all of which disappear in PDF</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You expect to keep editing the slides, update them with new data, or reuse them in other decks</li>
+    </ul>
   </div>
   <div class="panel panel--accent">
     <div class="panel__head">
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
       <h3>Convert to PDF When</h3>
     </div>
-    <p>Switch to PDF when you're distributing the slides as a reference document. Post-presentation handouts, conference proceedings, training materials for offline reading, and portfolio pieces all work better as PDFs. The recipient doesn't need PowerPoint, and the slides look exactly as designed.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You're distributing the slides as a reference document — handouts, conference proceedings, or training materials for offline reading</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The recipient shouldn't need PowerPoint or a compatible app to open it</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The slides need to look exactly as designed, with no risk of layout shifting on another device</li>
+    </ul>
   </div>
 </div>

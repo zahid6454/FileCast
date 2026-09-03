@@ -22,4 +22,4 @@ No. Adding a password only affects whether the file can be opened, not what's in
 
 ### Can I remove the password later if I need to?
 
-Yes, as long as you know the password. Our [PDF Unlock](/convert/pdf-unlock) tool removes a password from a PDF you have the right to open, restoring normal access.
+Yes, as long as you know the password. Our [PDF Unlock](/convert/pdf-unlock/) tool removes a password from a PDF you have the right to open, restoring normal access.

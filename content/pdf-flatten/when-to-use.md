@@ -7,7 +7,7 @@
 
 ### Finalizing a Completed Form
 
-Once someone has filled out a form — an application, a consent form, an intake sheet — flattening locks in their answers before the file is filed or forwarded, preventing any accidental or intentional edits afterward. If you want a timestamped reference for exactly when it was finalized, our [Unix Timestamp Converter](/convert/unix-timestamp-converter) can generate one to include in your own records alongside the file.
+Once someone has filled out a form — an application, a consent form, an intake sheet — flattening locks in their answers before the file is filed or forwarded, preventing any accidental or intentional edits afterward. If you want a timestamped reference for exactly when it was finalized, our [Unix Timestamp Converter](/convert/unix-timestamp-converter/) can generate one to include in your own records alongside the file.
 
 </div>
 </div>

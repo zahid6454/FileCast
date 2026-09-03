@@ -21,13 +21,20 @@
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
       <h3>Keep PDF When</h3>
     </div>
-    <p>Stay with PDF when the document is a finished record — an invoice you've already sent, a statement for your files, a report meant to be read, not recalculated.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The document is a finished record — an invoice you've already sent, a statement for your files</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>It's meant to be read, not recalculated</li>
+    </ul>
   </div>
   <div class="panel panel--accent">
     <div class="panel__head">
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-code"></use></svg></span>
       <h3>Convert to XLSX When</h3>
     </div>
-    <p>Switch to XLSX when you need to work with the numbers: rebuilding a budget from a bank statement, combining several invoices into one running total, or sorting and filtering a report someone only sent you as a PDF.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to work with the numbers — rebuilding a budget from a bank statement, for example</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You're combining several invoices into one running total</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to sort or filter a report someone only sent you as a PDF</li>
+    </ul>
   </div>
 </div>

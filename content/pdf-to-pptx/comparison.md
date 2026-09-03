@@ -22,13 +22,20 @@
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg></span>
       <h3>Keep PDF When</h3>
     </div>
-    <p>Stay with PDF when you're distributing a finished document for reading — a report, a handout, an archived record where layout consistency matters more than reorderability.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You're distributing a finished document for reading — a report, a handout, an archived record</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Layout consistency matters more than being able to reorder or reuse the content</li>
+    </ul>
   </div>
   <div class="panel panel--accent">
     <div class="panel__head">
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
       <h3>Convert to PPTX When</h3>
     </div>
-    <p>Switch to PPTX when you need to present the content, reorder pages into a different sequence, or drop a few pages from an existing PDF into a larger deck you're building.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to present the content, not just distribute it for reading</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need to reorder the pages into a different sequence</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You want to drop a few pages from an existing PDF into a larger deck you're building</li>
+    </ul>
   </div>
 </div>

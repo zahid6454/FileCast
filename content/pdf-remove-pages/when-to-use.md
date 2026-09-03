@@ -27,7 +27,7 @@ A document that's been revised over time sometimes carries an old cover page, a 
 
 ### Preparing an External-Safe Version of an Internal Document
 
-Internal reports sometimes include pages meant only for internal review — notes, drafts of a section, internal commentary — that shouldn't go out with the external version. Removing those pages before sending keeps the rest of the document intact. Once the redacted copy is finalized, our [Hash Generator](/convert/hash-generator) can produce a checksum so you can confirm later that the external copy you shared hasn't been altered.
+Internal reports sometimes include pages meant only for internal review — notes, drafts of a section, internal commentary — that shouldn't go out with the external version. Removing those pages before sending keeps the rest of the document intact. Once the redacted copy is finalized, our [Hash Generator](/convert/hash-generator/) can produce a checksum so you can confirm later that the external copy you shared hasn't been altered.
 
 </div>
 </div>
@@ -47,7 +47,7 @@ Not every recipient needs every section of a lengthy document. Removing the sect
 
 ### Cleaning Up a Merged PDF
 
-When combining files with [PDF Merge](/convert/pdf-merge), the result sometimes includes pages you didn't actually want in the final combined document — a title page from one of the source files, for example. Removing those afterward finishes the cleanup.
+When combining files with [PDF Merge](/convert/pdf-merge/), the result sometimes includes pages you didn't actually want in the final combined document — a title page from one of the source files, for example. Removing those afterward finishes the cleanup.
 
 </div>
 </div>

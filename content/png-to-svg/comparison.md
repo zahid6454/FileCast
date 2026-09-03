@@ -21,13 +21,20 @@
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg></span>
       <h3>Keep PNG When</h3>
     </div>
-    <p>Stay with PNG for photos, screenshots, and any image with fine gradients, textures, or thousands of subtle colors — the pixel grid is exactly what makes those look right.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>The image is a photo, screenshot, or has fine gradients and textures</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>It uses thousands of subtle colors that a pixel grid renders best</li>
+    </ul>
   </div>
   <div class="panel panel--accent">
     <div class="panel__head">
       <span class="panel__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
       <h3>Convert to SVG When</h3>
     </div>
-    <p>Switch to SVG when you have a logo, icon, or flat-color graphic that only exists as a PNG and you need it to scale cleanly — on a website, in print at any size, or editable shape-by-shape in a vector editor.</p>
+    <ul>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You have a logo, icon, or flat-color graphic that only exists as a PNG</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You need it to scale cleanly on a website or in print at any size</li>
+      <li><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>You want it editable shape-by-shape in a vector editor</li>
+    </ul>
   </div>
 </div>

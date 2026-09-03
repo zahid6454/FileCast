@@ -27,7 +27,7 @@ Legal and contractual documents often bundle exhibits or appendices with the mai
 
 ### Building a Reference Packet from Multiple Places in a Document
 
-If the pages you need are scattered — a summary on page 2, a table on page 15, a conclusion on page 40 — extraction lets you pull all three into a single new file in whatever order makes sense for the reference packet. Before sharing that packet externally, our [Hash Generator](/convert/hash-generator) can produce a checksum so recipients can confirm they received exactly the file you sent.
+If the pages you need are scattered — a summary on page 2, a table on page 15, a conclusion on page 40 — extraction lets you pull all three into a single new file in whatever order makes sense for the reference packet. Before sharing that packet externally, our [Hash Generator](/convert/hash-generator/) can produce a checksum so recipients can confirm they received exactly the file you sent.
 
 </div>
 </div>

@@ -2,16 +2,18 @@
 
 There's more than one way to keep a PDF's contents from spreading further than intended. Here's how a password requirement compares to the alternatives.
 
-<div class="table-scroll" markdown="1">
-
-| Consideration | Password Protection | Watermarking | Sharing Link Controls |
-|---|---|---|---|
-| Blocks opening the file at all | Yes | No | Depends on the platform |
-| Works once the file is downloaded | Yes | Yes | No — controls stop once downloaded |
-| Requires the recipient to do anything | Enter a password | Nothing | Sign in, if required |
-| Deters casual redistribution | Yes | Yes, visibly | No |
-| Setup needed | None — just this tool | None — just this tool | Depends on the sharing platform |
-
+<div class="table-scroll">
+<table class="icon-table">
+<colgroup><col><col><col><col></colgroup>
+<thead><tr><th>Consideration</th><th>Password Protection</th><th>Watermarking</th><th>Sharing Link Controls</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-no-lock"></use></svg>Blocks opening the file at all</span></td><td data-label="Password Protection">Yes</td><td data-label="Watermarking">No</td><td data-label="Sharing Link Controls">Depends on the platform</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg>Works once the file is downloaded</span></td><td data-label="Password Protection">Yes</td><td data-label="Watermarking">Yes</td><td data-label="Sharing Link Controls">No — controls stop once downloaded</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-user"></use></svg>Requires the recipient to do anything</span></td><td data-label="Password Protection">Enter a password</td><td data-label="Watermarking">Nothing</td><td data-label="Sharing Link Controls">Sign in, if required</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Deters casual redistribution</span></td><td data-label="Password Protection">Yes</td><td data-label="Watermarking">Yes, visibly</td><td data-label="Sharing Link Controls">No</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg>Setup needed</span></td><td data-label="Password Protection">None — just this tool</td><td data-label="Watermarking">None — just this tool</td><td data-label="Sharing Link Controls">Depends on the sharing platform</td></tr>
+</tbody>
+</table>
 </div>
 
 "Blocks opening the file at all" means no reader will display the content without the password — it doesn't mean the password can't eventually be recovered by someone running dedicated cracking software against it. See "How Strong Is This Protection?" on this tool's page for what that means in practice.

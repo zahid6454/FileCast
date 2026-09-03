@@ -2,16 +2,18 @@
 
 Sometimes a misoriented page is best fixed by rotating the existing PDF. Other times, re-scanning the original is the better call. Here's how to decide.
 
-<div class="table-scroll" markdown="1">
-
-| Consideration | Re-scan | Rotate |
-|---|---|---|
-| Original paper available | Yes | Not needed |
-| Time required | Minutes per page | Seconds per page |
-| Equipment needed | Scanner or phone camera | Just this tool |
-| Content quality | New capture, may vary | Preserved exactly |
-| Alignment consistency | May shift between scans | Stays uniform |
-
+<div class="table-scroll">
+<table class="icon-table">
+<colgroup><col><col><col></colgroup>
+<thead><tr><th>Consideration</th><th>Re-scan</th><th>Rotate</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-photo"></use></svg>Original paper available</span></td><td data-label="Re-scan">Yes</td><td data-label="Rotate">Not needed</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-clock"></use></svg>Time required</span></td><td data-label="Re-scan">Minutes per page</td><td data-label="Rotate">Seconds per page</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-zap"></use></svg>Equipment needed</span></td><td data-label="Re-scan">Scanner or phone camera</td><td data-label="Rotate">Just this tool</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-target"></use></svg>Content quality</span></td><td data-label="Re-scan">New capture, may vary</td><td data-label="Rotate">Preserved exactly</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg>Alignment consistency</span></td><td data-label="Re-scan">May shift between scans</td><td data-label="Rotate">Stays uniform</td></tr>
+</tbody>
+</table>
 </div>
 
 <div class="panel-grid">

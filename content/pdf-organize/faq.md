@@ -10,7 +10,7 @@ List every page number, separated by commas, in the order you want them to appea
 
 ### Do I have to list every page?
 
-Yes. The new order needs to include every page in the document exactly once — this tool reorders pages, it doesn't drop any. If you also want to remove some pages, use [PDF Remove Pages](/convert/pdf-remove-pages) or [PDF Extract Pages](/convert/pdf-extract-pages) instead.
+Yes. The new order needs to include every page in the document exactly once — this tool reorders pages, it doesn't drop any. If you also want to remove some pages, use [PDF Remove Pages](/convert/pdf-remove-pages/) or [PDF Extract Pages](/convert/pdf-extract-pages/) instead.
 
 ### What happens if I list a page twice or leave one out?
 

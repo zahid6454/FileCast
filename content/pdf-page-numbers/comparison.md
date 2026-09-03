@@ -2,16 +2,18 @@
 
 Page numbers can be added either in the source document before exporting to PDF, or directly onto an existing PDF. Here's how the two compare.
 
-<div class="table-scroll" markdown="1">
-
-| Consideration | This Tool | Original Document (Word, Google Docs, etc.) |
-|---|---|---|
-| Works when you only have the PDF | Yes | No — requires the source file |
-| Works on PDFs assembled from multiple sources | Yes, numbers the whole thing consistently | Only if each source is renumbered individually first |
-| Speed | Seconds | Requires reopening and re-exporting the source |
-| Custom start number and format | Yes | Depends on the software |
-| Keeps existing page numbers from the source, if any | No — adds a new set on top | Yes, if already numbered correctly |
-
+<div class="table-scroll">
+<table class="icon-table">
+<colgroup><col><col><col></colgroup>
+<thead><tr><th>Consideration</th><th>This Tool</th><th>Original Document (Word, Google Docs, etc.)</th></tr></thead>
+<tbody>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-page"></use></svg>Works when you only have the PDF</span></td><td data-label="This Tool">Yes</td><td data-label="Original Document (Word, Google Docs, etc.)">No — requires the source file</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-file-plus"></use></svg>Works on PDFs assembled from multiple sources</span></td><td data-label="This Tool">Yes, numbers the whole thing consistently</td><td data-label="Original Document (Word, Google Docs, etc.)">Only if each source is renumbered individually first</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-clock"></use></svg>Speed</span></td><td data-label="This Tool">Seconds</td><td data-label="Original Document (Word, Google Docs, etc.)">Requires reopening and re-exporting the source</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg>Custom start number and format</span></td><td data-label="This Tool">Yes</td><td data-label="Original Document (Word, Google Docs, etc.)">Depends on the software</td></tr>
+<tr><td class="feature-cell"><span class="feature-cell__inner"><svg aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Keeps existing page numbers from the source, if any</span></td><td data-label="This Tool">No — adds a new set on top</td><td data-label="Original Document (Word, Google Docs, etc.)">Yes, if already numbered correctly</td></tr>
+</tbody>
+</table>
 </div>
 
 <div class="panel-grid">
