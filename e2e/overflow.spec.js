@@ -19,13 +19,18 @@ const WIDTHS = [320, 375, 480, 768, 1024, 1200, 1440];
 // uuid-generator covers the text-input template's other input_kind (a
 // number field + quick-pick preset chips instead of a textarea) — a flex
 // row of chips is exactly the kind of control this file exists to catch
-// overflowing at 320px.
+// overflowing at 320px. pdf-compress covers the select-type option row
+// (.tool-options__row--select) — it never got a row rule at all until a
+// real bug was found where it rendered at its own unconstrained intrinsic
+// width (label + the select's 160px floor) and was silently clipped below
+// ~445px viewport width.
 const PAGES = [
   '/',
   '/convert/image-compress/',
   '/convert/bulk-image-compress/',
   '/convert/json-to-yaml/',
-  '/convert/uuid-generator/'
+  '/convert/uuid-generator/',
+  '/convert/pdf-compress/'
 ];
 
 async function unreachableOverflow(page) {
