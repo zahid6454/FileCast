@@ -1,21 +1,54 @@
 ## Common Scenarios for Converting Unix Timestamps
 
+<div class="scenario-list" markdown="1">
+<div class="scenario" markdown="1">
+<div class="scenario__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-search"></use></svg></div>
+<div class="scenario__body" markdown="1">
+
 ### Debugging an API Response or Database Row
 
 APIs and databases commonly store `created_at` or `updated_at` fields as raw Unix timestamps. Pasting one here instantly tells you what date and time it actually represents, without writing a script.
+
+</div>
+</div>
+<div class="scenario" markdown="1">
+<div class="scenario__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-code"></use></svg></div>
+<div class="scenario__body" markdown="1">
 
 ### Reading a JWT's Expiration Claim
 
 JSON Web Tokens encode `exp` (expiration) and `iat` (issued-at) as Unix timestamps. After decoding a token with our [JWT Decoder](/convert/jwt-decoder/), paste those numeric claim values here to see the actual expiration date.
 
+</div>
+</div>
+<div class="scenario" markdown="1">
+<div class="scenario__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-file-plus"></use></svg></div>
+<div class="scenario__body" markdown="1">
+
 ### Naming or Sorting Exported Files by Date
 
 When batch-exporting files — for example, a set of documents converted with our [DOCX to PDF](/convert/docx-to-pdf/) tool — naming each one with a timestamp keeps them sortable and avoids collisions. Converting a timestamp back to a readable date confirms the naming is correct.
+
+</div>
+</div>
+<div class="scenario" markdown="1">
+<div class="scenario__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg></div>
+<div class="scenario__body" markdown="1">
 
 ### Checking Log Timestamps Across Time Zones
 
 Server logs often record events in Unix time or UTC. Converting to your local time zone here makes it easy to line up a logged event with when it actually happened for you.
 
+</div>
+</div>
+<div class="scenario" markdown="1">
+<div class="scenario__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></div>
+<div class="scenario__body" markdown="1">
+
 ### Verifying a Cache or Token Expiration Time
 
 If a cache entry or session token expires at a given timestamp, converting it to a readable date confirms exactly when that will happen, without doing the math by hand.
+
+</div>
+</div>
+</div>
