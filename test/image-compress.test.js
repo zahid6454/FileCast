@@ -10,6 +10,7 @@ describe('image-compress.js — window.convertFile', () => {
     const dom = toolPageWithQualitySlider('60');
     const compressed = { type: 'image/jpeg' };
     dom.window.imageCompression = vi.fn().mockResolvedValue(compressed);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-compress.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -32,6 +33,7 @@ describe('image-compress.js — window.convertFile', () => {
   it('keeps PNG as the output type (never forces JPEG on a PNG input)', async () => {
     const dom = toolPageWithQualitySlider('75');
     dom.window.imageCompression = vi.fn().mockResolvedValue({ type: 'image/png' });
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-compress.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'graphic.png', { type: 'image/png' });
@@ -43,6 +45,7 @@ describe('image-compress.js — window.convertFile', () => {
   it('raises the size budget to 10MB at quality 90+ and lowers it to 2MB below 50', async () => {
     const highDom = toolPageWithQualitySlider('95');
     highDom.window.imageCompression = vi.fn().mockResolvedValue({ type: 'image/jpeg' });
+    evalScript(highDom, 'fc-util.js');
     evalScript(highDom, 'converters/image-compress.js');
     await highDom.window.convertFile(
       new highDom.window.File([new Uint8Array(10)], 'a.jpg', { type: 'image/jpeg' })
@@ -51,6 +54,7 @@ describe('image-compress.js — window.convertFile', () => {
 
     const lowDom = toolPageWithQualitySlider('20');
     lowDom.window.imageCompression = vi.fn().mockResolvedValue({ type: 'image/jpeg' });
+    evalScript(lowDom, 'fc-util.js');
     evalScript(lowDom, 'converters/image-compress.js');
     await lowDom.window.convertFile(
       new lowDom.window.File([new Uint8Array(10)], 'a.jpg', { type: 'image/jpeg' })
@@ -61,6 +65,7 @@ describe('image-compress.js — window.convertFile', () => {
   it('defaults to quality 75 when the slider is missing', async () => {
     const dom = createDom();
     dom.window.imageCompression = vi.fn().mockResolvedValue({ type: 'image/jpeg' });
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-compress.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });

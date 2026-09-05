@@ -109,4 +109,82 @@
     if (!base) base = originalName;
     return base + outputExt;
   };
+
+  // On Android, <input accept="image/*"> opens the OS Photo Picker, which
+  // hands back a File backed by a short-lived content:// reference instead
+  // of a plain local file. Reading that reference has been observed to fail
+  // — net::ERR_UPLOAD_FILE_CHANGED — intermittently: the same file, same
+  // code, succeeding or failing across separate picks with nothing else
+  // different. Root-caused live (remote debugging a real device against
+  // this exact file): shared.js's own thumbnail preview AND the active
+  // converter's decode were both independently calling
+  // URL.createObjectURL(file) on the SAME original File — two separate
+  // reads of a reference that appears to only reliably support one. Fixing
+  // either side alone still left the other racing it.
+  //
+  // FC.materializeFile is the single point every consumer (shared.js's
+  // thumbnail, plus each converter's own preview/convert code) must go
+  // through instead of touching the original File directly. Keyed by the
+  // File object itself, so no matter how many separate listeners ask for
+  // it, file.arrayBuffer() — which reads bytes directly rather than routing
+  // through a blob: network fetch — runs exactly once; every caller shares
+  // that one in-flight/resolved promise and gets back a plain in-memory
+  // File, fully decoupled from the original picker reference from then on.
+  var materializeCache = typeof WeakMap === 'function' ? new WeakMap() : null;
+  var MATERIALIZE_TIMEOUT_MS = 6000;
+  var MATERIALIZE_RETRIES = 2; // transient permission-grant flakiness, not a bad file — worth a couple of quick retries
+
+  function materializeOnce(file) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        reject(new Error('Timed out reading file.'));
+      }, MATERIALIZE_TIMEOUT_MS);
+
+      file.arrayBuffer().then(
+        function (buf) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(new File([buf], file.name, { type: file.type, lastModified: file.lastModified }));
+        },
+        function (err) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          reject(err);
+        }
+      );
+    });
+  }
+
+  function materializeWithRetry(file, attemptsLeft) {
+    if (attemptsLeft === undefined) attemptsLeft = MATERIALIZE_RETRIES;
+    return materializeOnce(file).catch(function (err) {
+      if (attemptsLeft <= 0) return Promise.reject(err);
+      return new Promise(function (resolve) {
+        setTimeout(resolve, 500);
+      }).then(function () {
+        return materializeWithRetry(file, attemptsLeft - 1);
+      });
+    });
+  }
+
+  FC.materializeFile = function (file) {
+    if (!materializeCache) return materializeWithRetry(file);
+    var cached = materializeCache.get(file);
+    if (!cached) {
+      cached = materializeWithRetry(file);
+      materializeCache.set(file, cached);
+      // A failed attempt must not poison the cache forever — a later retry
+      // (e.g. the user re-triggers Convert) should get a fresh attempt, not
+      // an already-rejected promise replayed indefinitely.
+      cached.catch(function () {
+        if (materializeCache.get(file) === cached) materializeCache.delete(file);
+      });
+    }
+    return cached;
+  };
 })();
