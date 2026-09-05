@@ -99,6 +99,7 @@
       if (newState !== 'converting') els.progressLabel.textContent = '';
     }
     els.result.classList.toggle('hidden', newState !== 'complete');
+    if (els.fileRemoveBtn) els.fileRemoveBtn.classList.toggle('hidden', newState !== 'selected');
     els.errorMsg.classList.add('hidden');
     // Re-shown by startConversion() itself (only when the converter supports
     // it) the moment 'converting' starts — every other state hides it.
@@ -452,22 +453,37 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Reset ("Convert Another")
+  // Reset ("Convert Another" / clearing the selected file pre-conversion)
   // ---------------------------------------------------------------------------
-  function resetUI() {
+  function resetSelection() {
     currentFile = null;
-    convertedBlob = null;
-    convertedFilename = '';
-
     els.fileInput.value = '';
-    els.progressFill.style.width = '0%';
-    els.progress.classList.remove('progress--indeterminate');
     els.filePreview.classList.add('hidden');
     els.filePreview.src = '';
-
     setState('empty');
+  }
+
+  function resetUI() {
+    convertedBlob = null;
+    convertedFilename = '';
+    els.progressFill.style.width = '0%';
+    els.progress.classList.remove('progress--indeterminate');
+
+    resetSelection();
 
     trackEvent('convert_another', {
+      tool_id: window.TOOL_CONFIG.id
+    });
+  }
+
+  // The file-info card's × — only wired up while state is 'selected' (setState
+  // hides the button otherwise), so there's no currentFile/convertedBlob
+  // conflict with an in-flight conversion or a completed one ("Convert
+  // Another" already owns clearing those).
+  function clearSelectedFile() {
+    if (state !== 'selected') return;
+    resetSelection();
+    trackEvent('file_cleared', {
       tool_id: window.TOOL_CONFIG.id
     });
   }
@@ -829,6 +845,7 @@
     els.filePreview = document.getElementById('file-preview');
     els.fileName = document.getElementById('file-name');
     els.fileSize = document.getElementById('file-size');
+    els.fileRemoveBtn = document.getElementById('file-remove-btn');
     els.convertBtn = document.getElementById('convert-btn');
     els.progress = document.getElementById('progress');
     els.progressFill = document.getElementById('progress-fill');
@@ -848,6 +865,7 @@
     els.downloadBtn.addEventListener('click', downloadFile);
     els.resetBtn.addEventListener('click', resetUI);
     if (els.cancelBtn) els.cancelBtn.addEventListener('click', onCancelClick);
+    if (els.fileRemoveBtn) els.fileRemoveBtn.addEventListener('click', clearSelectedFile);
 
     // Fire tool_view event
     trackEvent('tool_view', {

@@ -1332,6 +1332,27 @@ img { max-width: 100%; display: block; }
   white-space: nowrap;
 }
 .file-info__size { color: var(--color-text-muted); }
+/* Sized above the site's other icon-only "remove" controls (file-list__remove,
+   announcement-bar__dismiss, ~24px effective) since a miss-tap here silently
+   drops the user's selection rather than just re-showing a dismissed banner. */
+.file-info__remove {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--color-text-light);
+  cursor: pointer;
+  padding: 0;
+}
+.file-info__remove svg { width: 16px; height: 16px; }
+.file-info__remove:hover { color: var(--color-error); }
+.file-info__remove:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
 
 /* --- Image Preview Thumbnail --- */
 .file-preview {
