@@ -754,6 +754,10 @@
   display: inline-block; /* fill is a <span> on the Nodes tab (nodes.js) — an
     inline element ignores the JS-set width/height, rendering the bar as
     always empty regardless of usage %. */
+  vertical-align: top; /* without this, default baseline alignment pushes the
+    whole fill box below .admin-meter's clipped 8px window (its line box is
+    taller than 8px), so overflow:hidden clips 100% of it away regardless of
+    width — the bar looks empty at every usage %, not just low ones. */
   height: 100%;
   background: var(--color-success);
 }
