@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{{ site.name }} — {{ site.tagline }}{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}{{ site.description }}{% endblock %}">
+  {# AdSense site-ownership verification. Gated on the publisher id alone (NOT
+     adsense_live / adsense.enabled) — Google's verification crawler checks the
+     homepage, which never carries the ad-serving script (that's scoped to tool
+     pages only, see the adsense_live block further down). This has to render
+     site-wide as soon as a publisher id is saved, even before ads go live. #}
+  {% if adsense.publisher_id %}
+  <meta name="google-adsense-account" content="{{ adsense.publisher_id }}">
+  {% endif %}
   <link rel="canonical" href="{% block canonical %}{{ site.base_url }}/{% endblock %}">
 
   {# Open Graph #}
