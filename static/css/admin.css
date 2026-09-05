@@ -1529,8 +1529,13 @@
   max-width: 360px;
 }
 .admin-errpagesize {
-  width: auto;
   flex-shrink: 0;
+}
+/* Pushed to the far right of the toolbar row (same trick as
+   .admin-msgcounts) — the pager reads better lined up with the page-size
+   control than stranded on its own row under the list. */
+.admin-errpager {
+  margin-left: auto;
 }
 .admin-errlist {
   list-style: none;

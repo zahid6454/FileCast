@@ -84,6 +84,19 @@ function findButton(root, text) {
   return Array.from(root.querySelectorAll('button')).find((b) => b.textContent === text);
 }
 
+// The page-size control is a custom toggle+menu dropdown (admin-dropdown),
+// not a native <select> — mirrors messages.js's status-filter selectFilter()
+// test helper. Opening it is a real click on the toggle, and picking an
+// option is a click on that option's own button, scoped to
+// .admin-dropdown__item so it never matches the toggle itself.
+function selectPageSize(root, size) {
+  root.querySelector('.admin-errpagesize .admin-dropdown__toggle').click();
+  const item = Array.from(root.querySelectorAll('.admin-errpagesize .admin-dropdown__item')).find(
+    (b) => b.textContent === size + ' per page'
+  );
+  item.click();
+}
+
 describe('admin/errors.js', () => {
   it('registers on ADMIN.tabs with a render function', () => {
     const dom = load(stateRoute({ errors: [] }));
@@ -182,14 +195,57 @@ describe('admin/errors.js', () => {
     await flush();
     expect(calls[calls.length - 1]).toContain('offset=25');
 
-    const pageSize = c.querySelector('.admin-errpagesize');
-    pageSize.value = '100';
-    pageSize.dispatchEvent(new dom.window.Event('change'));
+    selectPageSize(c, 100);
     await flush();
 
     expect(calls[calls.length - 1]).toContain('limit=100');
     expect(calls[calls.length - 1]).toContain('offset=0');
     expect(c.querySelector('.admin-pager')).toBeNull(); // 30 fits on one 100-sized page
+    expect(c.querySelector('.admin-errpagesize__label').textContent).toBe('100 per page');
+  });
+
+  it('opens and closes the page-size dropdown on toggle click, tracking aria-expanded', async () => {
+    const dom = load(stateRoute({ errors: [err(1)] }));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.errors.render(c);
+    await flush();
+
+    const wrap = c.querySelector('.admin-errpagesize');
+    const toggle = wrap.querySelector('.admin-dropdown__toggle');
+    expect(wrap.classList.contains('admin-dropdown--open')).toBe(false);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    toggle.click();
+    expect(wrap.classList.contains('admin-dropdown--open')).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+
+    toggle.click();
+    expect(wrap.classList.contains('admin-dropdown--open')).toBe(false);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('closes the page-size dropdown on an outside click and Escape', async () => {
+    const dom = load(stateRoute({ errors: [err(1)] }));
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.errors.render(c);
+    await flush();
+
+    const wrap = c.querySelector('.admin-errpagesize');
+    const toggle = wrap.querySelector('.admin-dropdown__toggle');
+    const search = c.querySelector('.admin-errsearch');
+    const isOpen = () => wrap.classList.contains('admin-dropdown--open');
+
+    toggle.click();
+    expect(isOpen()).toBe(true);
+    search.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    expect(isOpen()).toBe(false);
+
+    toggle.click();
+    expect(isOpen()).toBe(true);
+    dom.window.document.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+    expect(isOpen()).toBe(false);
   });
 
   it('preserves typed search text across pagination and requests the right offset', async () => {
