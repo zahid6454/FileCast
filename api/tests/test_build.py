@@ -1301,7 +1301,7 @@ def test_generate_headers_worker_src(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.generate_headers({})
     csp = _csp_line(tmp_path)
-    assert "worker-src 'self';" in csp
+    assert "worker-src 'self' blob:;" in csp
 
 
 def test_full_build_404_links_all_categories(tmp_path, monkeypatch):
