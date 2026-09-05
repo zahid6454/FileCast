@@ -30,6 +30,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = createDom();
     mockImageLoad(dom.window, { width: 500, height: 400 });
     const { canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -43,6 +44,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = createDom();
     mockImageLoad(dom.window, { shouldError: true });
     mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -53,6 +55,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -69,6 +72,7 @@ describe('image-cropper.js — window.convertFile', () => {
 
   it('does not build a crop overlay for a non-image file', async () => {
     const dom = toolPage();
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File(['not an image'], 'notes.txt', { type: 'text/plain' });
@@ -82,6 +86,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -109,6 +114,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -134,6 +140,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     const { canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -156,8 +163,8 @@ describe('image-cropper.js — window.convertFile', () => {
     mockCanvas(dom.window);
 
     // A custom Image mock that never auto-fires onload — this test fires the
-    // two pending loads manually, out of pick order, to reproduce image A
-    // (picked first) resolving AFTER image B (picked second).
+    // pending loads manually to reproduce image A's decode (started first)
+    // resolving AFTER image B (picked second) has already taken over.
     const pending = [];
     dom.window.Image = function () {
       const img = { onload: null, onerror: null, naturalWidth: 0, naturalHeight: 0 };
@@ -171,13 +178,23 @@ describe('image-cropper.js — window.convertFile', () => {
       });
       return img;
     };
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const fileA = new dom.window.File([new Uint8Array(10)], 'slow.jpg', { type: 'image/jpeg' });
     const fileB = new dom.window.File([new Uint8Array(10)], 'fast.jpg', { type: 'image/jpeg' });
 
+    // A's materialize (file.arrayBuffer()) must resolve, and its Image must
+    // start decoding, BEFORE B is picked — otherwise the pendingFile guard
+    // now in materialize's own .then() (not just the Image's onload) rejects
+    // A before an Image for it is ever created, and this test would exercise
+    // nothing.
     selectFile(dom, fileA); // starts loading A
-    selectFile(dom, fileB); // starts loading B before A resolves
+    await flush();
+    expect(pending.length).toBe(1);
+
+    selectFile(dom, fileB); // starts loading B while A's decode is still pending
+    await flush();
     expect(pending.length).toBe(2);
 
     // B (picked second) resolves first...
@@ -202,6 +219,7 @@ describe('image-cropper.js — window.convertFile', () => {
     dom.window.TOOL_CONFIG = { id: 'image-cropper' };
     mockImageLoad(dom.window, { width: 200, height: 200 });
     mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'graphic.png', { type: 'image/png' });
@@ -214,6 +232,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -230,6 +249,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -255,6 +275,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -280,6 +301,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -318,6 +340,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -365,6 +388,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     const { ctx, canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -413,6 +437,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     const { canvasSizes } = mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
@@ -463,6 +488,7 @@ describe('image-cropper.js — window.convertFile', () => {
     const dom = toolPage();
     mockImageLoad(dom.window, { width: 400, height: 300 });
     mockCanvas(dom.window);
+    evalScript(dom, 'fc-util.js');
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
