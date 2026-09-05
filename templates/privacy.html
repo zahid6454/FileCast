@@ -72,7 +72,7 @@
     <ul>
       <li><strong>What we collect:</strong> your name and email from Google, only when you choose to sign in.</li>
       <li><strong>What we store:</strong> your conversion history (tool used, file size, date &mdash; <strong>not</strong> file content or filenames), your favorites, and your preferences.</li>
-      <li><strong>What we DON'T store:</strong> your files, file content, file names, file metadata, or IP addresses. (A rating-dedup hash is computed transiently server-side and never persisted &mdash; see below.)</li>
+      <li><strong>What we DON'T store:</strong> your files, file content, file names, file metadata, or IP addresses. (A rating-dedup hash &mdash; derived from your IP with a daily-rotating salt, not your IP itself &mdash; is stored alongside your vote to prevent duplicate voting; see below.)</li>
       <li><strong>How long:</strong> history is kept for 30 days, then automatically deleted; the rest of your account data is kept until you delete your account.</li>
       <li><strong>Who can access it:</strong> only you. We don't share, sell, or use your data for advertising.</li>
       <li><strong>Email:</strong> used only for optional "new tools" updates if you opt in &mdash; no marketing, no third parties.</li>
@@ -85,7 +85,7 @@
     <h2>Data We Collect From Everyone (No Account Needed)</h2>
     <ul>
       <li>Anonymous conversion counters (no personal data).</li>
-      <li>Anonymous ratings (yes/no, deduplicated via a transient server-side IP hash &mdash; no personal data stored).</li>
+      <li>Anonymous ratings (yes/no, deduplicated via a daily-rotating IP hash stored with the vote &mdash; not your IP address, and not personally identifying).</li>
       <li>Optional written feedback if you tell us what went wrong after a "No" rating (the text you type, your browser's user-agent string, and the tool and time &mdash; not linked to any account, vote, or IP address). Please don't include personal information in it; we can't act on anything typed there as a support request or data request &mdash; use the <a href="/contact/">contact form</a> for that.</li>
       <li>Contact-page messages (subject, message body, your browser's user-agent string, and &mdash; only if you choose to provide one &mdash; a reply email; linked to your account if you're signed in when you send it). Kept so we can read and respond, not auto-deleted like the data below.</li>
       <li>Client-side error logs (tool name, error type, browser &mdash; no personal data).</li>
