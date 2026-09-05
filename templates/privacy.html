@@ -72,7 +72,7 @@
     <ul>
       <li><strong>What we collect:</strong> your name and email from Google, only when you choose to sign in.</li>
       <li><strong>What we store:</strong> your conversion history (tool used, file size, date &mdash; <strong>not</strong> file content or filenames), your favorites, and your preferences.</li>
-      <li><strong>What we DON'T store:</strong> your files, file content, file names, file metadata, or IP addresses. (A rating-dedup hash is computed transiently server-side and never persisted &mdash; see below.)</li>
+      <li><strong>What we DON'T store:</strong> your files, file content, file names, file metadata, or IP addresses. (A rating-dedup hash &mdash; derived from your IP with a daily-rotating salt, not your IP itself &mdash; is stored alongside your vote to prevent duplicate voting; see below.)</li>
       <li><strong>How long:</strong> history is kept for 30 days, then automatically deleted; the rest of your account data is kept until you delete your account.</li>
       <li><strong>Who can access it:</strong> only you. We don't share, sell, or use your data for advertising.</li>
       <li><strong>Email:</strong> used only for optional "new tools" updates if you opt in &mdash; no marketing, no third parties.</li>
