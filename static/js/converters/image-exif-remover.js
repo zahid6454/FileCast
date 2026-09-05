@@ -9,24 +9,28 @@
   // only as a side effect while also re-compressing the pixels.
 
   window.convertFile = function (file) {
-    return file.arrayBuffer().then(function (buffer) {
-      var bytes = new Uint8Array(buffer);
-      var config = window.TOOL_CONFIG;
+    return window.FC.materializeFile(file)
+      .then(function (safeFile) {
+        return safeFile.arrayBuffer();
+      })
+      .then(function (buffer) {
+        var bytes = new Uint8Array(buffer);
+        var config = window.TOOL_CONFIG;
 
-      if (isJpeg(bytes)) {
-        if (config) config.output_extension = '.jpg';
-        return new Blob(stripJpegMetadata(buffer), { type: 'image/jpeg' });
-      }
-      if (isPng(bytes)) {
-        if (config) config.output_extension = '.png';
-        return new Blob(stripPngMetadata(buffer), { type: 'image/png' });
-      }
-      if (isWebp(bytes)) {
-        if (config) config.output_extension = '.webp';
-        return new Blob(stripWebpMetadata(buffer), { type: 'image/webp' });
-      }
-      throw new Error('Unsupported image format. This tool accepts JPG, PNG, and WebP files.');
-    });
+        if (isJpeg(bytes)) {
+          if (config) config.output_extension = '.jpg';
+          return new Blob(stripJpegMetadata(buffer), { type: 'image/jpeg' });
+        }
+        if (isPng(bytes)) {
+          if (config) config.output_extension = '.png';
+          return new Blob(stripPngMetadata(buffer), { type: 'image/png' });
+        }
+        if (isWebp(bytes)) {
+          if (config) config.output_extension = '.webp';
+          return new Blob(stripWebpMetadata(buffer), { type: 'image/webp' });
+        }
+        throw new Error('Unsupported image format. This tool accepts JPG, PNG, and WebP files.');
+      });
   };
 
   function isJpeg(bytes) {

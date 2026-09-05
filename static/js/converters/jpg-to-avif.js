@@ -68,30 +68,32 @@
   };
 
   function loadImageData(file) {
-    return new Promise(function (resolve, reject) {
-      var img = new Image();
-      img.onload = function () {
-        var canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        var imageData;
-        try {
-          imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        } catch (err) {
+    return window.FC.materializeFile(file).then(function (safeFile) {
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.onload = function () {
+          var canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          var imageData;
+          try {
+            imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          } catch (err) {
+            URL.revokeObjectURL(img.src);
+            reject(new Error('Failed to read image data'));
+            return;
+          }
           URL.revokeObjectURL(img.src);
-          reject(new Error('Failed to read image data'));
-          return;
-        }
-        URL.revokeObjectURL(img.src);
-        resolve(imageData);
-      };
-      img.onerror = function () {
-        URL.revokeObjectURL(img.src);
-        reject(new Error('Failed to load image'));
-      };
-      img.src = URL.createObjectURL(file);
+          resolve(imageData);
+        };
+        img.onerror = function () {
+          URL.revokeObjectURL(img.src);
+          reject(new Error('Failed to load image'));
+        };
+        img.src = URL.createObjectURL(safeFile);
+      });
     });
   }
 })();

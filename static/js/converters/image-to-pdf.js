@@ -38,24 +38,30 @@
   function embedImage(pdfDoc, file) {
     var ext = file.name.split('.').pop().toLowerCase();
 
-    if (ext === 'png') {
-      return file.arrayBuffer().then(function (bytes) {
-        return pdfDoc.embedPng(new Uint8Array(bytes));
-      });
-    }
+    // materializeFile's own file.arrayBuffer() read (with retry/timeout) is
+    // what makes this reliable on Android — reading the original picked
+    // File's bytes here directly hit the same flaky content:// reference as
+    // the canvas path below (see fc-util.js).
+    return window.FC.materializeFile(file).then(function (safeFile) {
+      if (ext === 'png') {
+        return safeFile.arrayBuffer().then(function (bytes) {
+          return pdfDoc.embedPng(new Uint8Array(bytes));
+        });
+      }
 
-    if (ext === 'jpg' || ext === 'jpeg') {
-      return file.arrayBuffer().then(function (bytes) {
-        return pdfDoc.embedJpg(new Uint8Array(bytes));
-      });
-    }
+      if (ext === 'jpg' || ext === 'jpeg') {
+        return safeFile.arrayBuffer().then(function (bytes) {
+          return pdfDoc.embedJpg(new Uint8Array(bytes));
+        });
+      }
 
-    return convertToJpgBytes(file).then(function (jpgBytes) {
-      return pdfDoc.embedJpg(jpgBytes);
+      return convertToJpgBytes(safeFile, file.name).then(function (jpgBytes) {
+        return pdfDoc.embedJpg(jpgBytes);
+      });
     });
   }
 
-  function convertToJpgBytes(file) {
+  function convertToJpgBytes(safeFile, originalName) {
     return new Promise(function (resolve, reject) {
       var img = new Image();
       img.onload = function () {
@@ -83,9 +89,9 @@
       };
       img.onerror = function () {
         URL.revokeObjectURL(img.src);
-        reject(new Error('Failed to load image: ' + file.name));
+        reject(new Error('Failed to load image: ' + originalName));
       };
-      img.src = URL.createObjectURL(file);
+      img.src = URL.createObjectURL(safeFile);
     });
   }
 })();
