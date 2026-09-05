@@ -45,6 +45,34 @@
   // (or a rapid double-click) and clobbering newer state with stale rows.
   var REQUEST_SEQ = 0;
 
+  // Closes the page-size dropdown if it's open. Reads live off CONTAINER
+  // (module-level, always the current tab render) rather than a captured
+  // node — the module-level click/keydown listeners below are registered
+  // once at script load and must keep working across every renderShell()
+  // rebuild (mirrors messages.js's closeFilterMenu).
+  function closePageSizeMenu(focusToggle) {
+    if (!CONTAINER) return;
+    var wrap = CONTAINER.querySelector('.admin-errpagesize');
+    if (!wrap || !wrap.classList.contains('admin-dropdown--open')) return;
+    wrap.classList.remove('admin-dropdown--open');
+    var toggle = wrap.querySelector('.admin-dropdown__toggle');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', 'false');
+      if (focusToggle) toggle.focus();
+    }
+  }
+
+  // Registered once (not per renderShell) — renderShell() reruns on every
+  // tab re-entry with a fresh CONTAINER, so listeners bound inside it would
+  // pile up across re-entries. These check CONTAINER live instead of
+  // capturing a node, so they keep working after any number of rebuilds.
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.admin-errpagesize')) closePageSizeMenu(false);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closePageSizeMenu(true);
+  });
+
   function labelFor(toolId) {
     if (ADMIN.catalog && typeof ADMIN.catalog.label === 'function') {
       return ADMIN.catalog.label(toolId);
@@ -147,6 +175,12 @@
     var countEl = CONTAINER.querySelector('.admin-errcount');
     var searchInput = CONTAINER.querySelector('.admin-errsearch');
     if (!list) return;
+    // Undo showListLoading()'s disable — a fresh fetch has landed, the
+    // page-size dropdown is interactive again. The pager below gets fresh
+    // (enabled-by-default) buttons rebuilt from scratch, so it needs no
+    // equivalent reset here.
+    var pageSizeToggleEl = CONTAINER.querySelector('.admin-errpagesize .admin-dropdown__toggle');
+    if (pageSizeToggleEl) pageSizeToggleEl.disabled = false;
     dom.clear(list);
     var q = ((searchInput && searchInput.value) || '').trim().toLowerCase();
     var shown = ERRORS.filter(function (e) {
@@ -178,6 +212,10 @@
     var pagerHost = CONTAINER.querySelector('.admin-errpager');
     if (pagerHost) {
       dom.clear(pagerHost);
+      // Only takes up row space (via its margin-left:auto, see admin.css)
+      // once it actually has content — an empty pager host on a single-page
+      // result must not eat toolbar width that the search/count could use.
+      pagerHost.hidden = !(PAGE > 0 || HAS_MORE);
       if (PAGE > 0 || HAS_MORE) {
         var pageCount = Math.max(1, Math.ceil(TOTAL / LIMIT));
         var prev = h(
@@ -243,31 +281,103 @@
       renderList();
     });
 
-    var pageSize = h(
-      'select',
-      { class: 'admin-input admin-errpagesize', 'aria-label': 'Errors per page' },
-      PAGE_SIZES.map(function (size) {
-        var opt = h('option', { value: String(size) }, size + ' per page');
-        if (size === LIMIT) opt.setAttribute('selected', '');
-        return opt;
-      })
+    var pageSizeToggle = h(
+      'button',
+      {
+        type: 'button',
+        class: 'admin-dropdown__toggle',
+        'aria-haspopup': 'listbox',
+        'aria-expanded': 'false'
+      },
+      [h('span', { class: 'admin-errpagesize__label' }, LIMIT + ' per page'), dom.caretIcon()]
     );
-    pageSize.addEventListener('change', function () {
-      LIMIT = Number(pageSize.value) || 25;
-      PAGE = 0;
-      loadErrors();
+    var pageSizeLabelEl = pageSizeToggle.querySelector('.admin-errpagesize__label');
+
+    var pageSizeItems = PAGE_SIZES.map(function (size) {
+      var item = h(
+        'button',
+        {
+          type: 'button',
+          class: 'admin-dropdown__item',
+          role: 'option',
+          'aria-selected': size === LIMIT ? 'true' : 'false'
+        },
+        size + ' per page'
+      );
+      item.addEventListener('click', function () {
+        closePageSizeMenu(true);
+        if (size === LIMIT) return;
+        LIMIT = size;
+        PAGE = 0;
+        pageSizeLabelEl.textContent = size + ' per page';
+        pageSizeItems.forEach(function (other) {
+          other.setAttribute('aria-selected', other === item ? 'true' : 'false');
+        });
+        loadErrors();
+      });
+      return item;
+    });
+    pageSizeItems.forEach(function (item, idx) {
+      item.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          (pageSizeItems[idx + 1] || pageSizeItems[0]).focus();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          (pageSizeItems[idx - 1] || pageSizeItems[pageSizeItems.length - 1]).focus();
+        }
+      });
+    });
+
+    var pageSizeMenu = h(
+      'div',
+      { class: 'admin-dropdown__menu', role: 'listbox', 'aria-label': 'Errors per page' },
+      pageSizeItems
+    );
+
+    var pageSizeWrap = h('div', { class: 'admin-errpagesize admin-dropdown' }, [
+      pageSizeToggle,
+      pageSizeMenu
+    ]);
+    function openPageSizeMenu() {
+      pageSizeWrap.classList.add('admin-dropdown--open');
+      pageSizeToggle.setAttribute('aria-expanded', 'true');
+      var current = pageSizeMenu.querySelector('[aria-selected="true"]') || pageSizeItems[0];
+      if (current) current.focus();
+    }
+    pageSizeToggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = !pageSizeWrap.classList.contains('admin-dropdown--open');
+      closePageSizeMenu(false);
+      if (open) openPageSizeMenu();
+    });
+    // ArrowDown/Up while the closed toggle has focus opens straight to the
+    // first/last option — the native <select> this replaced supported the
+    // same shortcut, so keyboard users lose nothing by the switch.
+    pageSizeToggle.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        openPageSizeMenu();
+      }
+    });
+    // A native <select>'s open list captures Tab itself; this hand-built menu
+    // doesn't, so without an explicit close-on-blur, tabbing out of it (as
+    // opposed to clicking away or hitting Escape) would leave it visually
+    // open while focus has already moved elsewhere on the page.
+    pageSizeWrap.addEventListener('focusout', function (e) {
+      if (!pageSizeWrap.contains(e.relatedTarget)) closePageSizeMenu(false);
     });
 
     CONTAINER.appendChild(
       h('div', { class: 'admin-toolbar' }, [
         search,
-        pageSize,
-        h('span', { class: 'admin-errcount admin-muted' }, '')
+        pageSizeWrap,
+        h('span', { class: 'admin-errcount admin-muted' }, ''),
+        h('div', { class: 'admin-errpager', hidden: true })
       ])
     );
 
     CONTAINER.appendChild(h('ul', { class: 'admin-errlist' }));
-    CONTAINER.appendChild(h('div', { class: 'admin-errpager' }));
     SHELL_BUILT = true;
     renderList();
   }
@@ -282,8 +392,9 @@
       dom.clear(list);
       list.appendChild(h('li', { class: 'admin-loading' }, 'Loading…'));
     }
-    var pageSizeEl = CONTAINER.querySelector('.admin-errpagesize');
-    if (pageSizeEl) pageSizeEl.disabled = true;
+    closePageSizeMenu(false);
+    var pageSizeToggleEl = CONTAINER.querySelector('.admin-errpagesize .admin-dropdown__toggle');
+    if (pageSizeToggleEl) pageSizeToggleEl.disabled = true;
     var pagerHost = CONTAINER.querySelector('.admin-errpager');
     if (pagerHost) {
       Array.prototype.forEach.call(pagerHost.querySelectorAll('button'), function (b) {

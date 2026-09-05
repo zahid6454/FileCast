@@ -296,32 +296,6 @@
     }
   }
 
-  // Same chevron-down glyph as the site nav's category dropdown
-  // (.nav-dropdown__caret in base.html) — an inline currentColor SVG, not a
-  // background-image, so it follows dark mode via admin.css's token-only rule
-  // instead of needing its own light/dark variants.
-  function caretIcon() {
-    return dom.svg(
-      'svg',
-      {
-        class: 'admin-dropdown__caret',
-        'aria-hidden': 'true',
-        focusable: 'false',
-        viewBox: '0 0 24 24'
-      },
-      [
-        dom.svg('path', {
-          d: 'M6 9l6 6 6-6',
-          fill: 'none',
-          stroke: 'currentColor',
-          'stroke-width': '2',
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round'
-        })
-      ]
-    );
-  }
-
   function renderShell() {
     dom.clear(CONTAINER);
     SHELL_BUILT = false;
@@ -358,7 +332,7 @@
         'aria-haspopup': 'listbox',
         'aria-expanded': 'false'
       },
-      [h('span', { class: 'admin-msgfilter__label' }, filterLabel(STATUS_FILTER)), caretIcon()]
+      [h('span', { class: 'admin-msgfilter__label' }, filterLabel(STATUS_FILTER)), dom.caretIcon()]
     );
     var filterLabelEl = filterToggle.querySelector('.admin-msgfilter__label');
 

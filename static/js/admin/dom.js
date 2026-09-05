@@ -112,6 +112,34 @@
     return node;
   }
 
+  // Same chevron-down glyph as the site nav's category dropdown
+  // (.nav-dropdown__caret in base.html) — an inline currentColor SVG, not a
+  // background-image, so it follows dark mode via admin.css's token-only rule
+  // instead of needing its own light/dark variants. Shared by every
+  // .admin-dropdown toggle (messages.js's status filter, errors.js's
+  // page-size control) — previously copy-pasted per module.
+  function caretIcon() {
+    return svg(
+      'svg',
+      {
+        class: 'admin-dropdown__caret',
+        'aria-hidden': 'true',
+        focusable: 'false',
+        viewBox: '0 0 24 24'
+      },
+      [
+        svg('path', {
+          d: 'M6 9l6 6 6-6',
+          fill: 'none',
+          stroke: 'currentColor',
+          'stroke-width': '2',
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round'
+        })
+      ]
+    );
+  }
+
   // A bare text node (for readability at call sites).
   function text(value) {
     return document.createTextNode(value === undefined ? '' : String(value));
@@ -160,6 +188,7 @@
   ADMIN.dom = {
     h: h,
     svg: svg,
+    caretIcon: caretIcon,
     text: text,
     clear: clear,
     append: append,
