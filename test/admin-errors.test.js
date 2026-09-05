@@ -224,7 +224,7 @@ describe('admin/errors.js', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('closes the page-size dropdown on an outside click and Escape', async () => {
+  it('closes the page-size dropdown on an outside click, Escape, and focus leaving it', async () => {
     const dom = load(stateRoute({ errors: [err(1)] }));
     const c = dom.window.document.getElementById('c');
     dom.window.ADMIN.tabs.errors.render(c);
@@ -245,6 +245,13 @@ describe('admin/errors.js', () => {
     dom.window.document.dispatchEvent(
       new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
     );
+    expect(isOpen()).toBe(false);
+
+    // Tab-away: focus lands outside the dropdown without any click at all —
+    // the click-outside listener alone would miss this.
+    toggle.click();
+    expect(isOpen()).toBe(true);
+    search.focus();
     expect(isOpen()).toBe(false);
   });
 
