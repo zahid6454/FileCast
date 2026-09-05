@@ -117,16 +117,33 @@ async def conversions_series(
 
 @router.get("/errors")
 async def recent_errors(
-    limit: int = 50,
+    limit: int = 25,
+    offset: int = 0,
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
     limit = max(1, min(limit, 500))
-    rows = (
-        (await db.execute(select(Error).order_by(Error.created_at.desc()).limit(limit)))
-        .scalars()
-        .all()
+    offset = max(0, offset)
+    # id as a tiebreaker: created_at is a server_default now(), which two
+    # errors reported in quick succession can land on the same microsecond,
+    # otherwise leaving ties in an arbitrary (and test-flaky) DB-chosen order.
+    stmt = (
+        select(Error, func.count().over().label("total"))
+        .order_by(Error.created_at.desc(), Error.id.desc())
+        .offset(offset)
+        .limit(limit + 1)
     )
+    result = list(await db.execute(stmt))
+    if result:
+        total = result[0].total
+    else:
+        # offset landed past the end (e.g. the retention sweep in tasks.py
+        # aged out rows out from under a page an admin was already viewing) —
+        # the window-count query returns nothing, so total needs its own query.
+        total = (await db.execute(select(func.count()).select_from(Error))).scalar_one()
+    rows = [r[0] for r in result]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
     return {
         "errors": [
             {
@@ -138,5 +155,7 @@ async def recent_errors(
                 "created_at": e.created_at.isoformat() if e.created_at else None,
             }
             for e in rows
-        ]
+        ],
+        "total": total,
+        "has_more": has_more,
     }
