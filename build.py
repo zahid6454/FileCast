@@ -2245,8 +2245,14 @@ def generate_headers(site_config: dict):
         # default-src fallback chain (P3 §25's sw.js registration) — CSP3
         # browser support for that fallback isn't universal, and script-src
         # above can grow third-party hosts (Sentry/GTM/AdSense) that have no
-        # business being an allowed worker source. 'self' only, always.
-        f"worker-src 'self'; "
+        # business being an allowed worker source. 'self' plus blob: (not
+        # third-party hosts): browser-image-compression (image-compress,
+        # bulk-image-compress) spins up its worker via
+        # `new Worker(URL.createObjectURL(new Blob([...])))`, a same-origin
+        # blob: script that 'self' alone does not match — confirmed live
+        # blocking that worker and silently forcing every compression onto
+        # the main thread instead.
+        f"worker-src 'self' blob:; "
         # No <base> tag anywhere in the codebase; pins it to 'self' regardless
         # so an injected one can never retarget every relative URL on the page
         # (script/link/form srcs included) to an attacker's origin.
