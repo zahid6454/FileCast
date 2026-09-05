@@ -20,9 +20,14 @@
   var imgEl = null;
   var statusEl = null;
 
-  var session = null; // { file }
+  var session = null; // { file, safeFile }
   var debounceTimer = null;
   var estimateToken = 0; // guards a slow estimate from an earlier slider position overwriting a newer one
+
+  // Reading a picked File exactly once, shared with shared.js's own
+  // thumbnail preview, avoids two independent readers racing the same
+  // Android Photo Picker content:// reference — see fc-util.js.
+  var materialize = window.FC.materializeFile;
 
   function ensureUI() {
     if (container) return;
@@ -97,13 +102,14 @@
   }
 
   function runEstimate() {
-    if (!session || typeof imageCompression !== 'function') return;
+    if (!session || !session.safeFile || typeof imageCompression !== 'function') return;
     var file = session.file;
+    var safeFile = session.safeFile;
     var quality = currentQuality();
     var outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
     var token = ++estimateToken;
 
-    imageCompression(file, buildOptions(quality, outputType))
+    imageCompression(safeFile, buildOptions(quality, outputType))
       .then(function (compressed) {
         if (token !== estimateToken || !session || session.file !== file) return; // superseded
 
@@ -180,15 +186,31 @@
     if (!container) return; // page markup doesn't have #file-info — nothing to attach to
 
     revokePreviewUrl(); // an earlier file's still-showing preview URL, if any
-    session = { file: file };
-    imgEl.src = URL.createObjectURL(file); // show the original immediately while the first estimate runs
-    if (statusEl) statusEl.textContent = 'Estimating…';
+    imgEl.src = '';
+    session = { file: file, safeFile: null };
+    if (statusEl) statusEl.textContent = 'Loading…';
     showUI();
-    scheduleEstimate();
+
+    materialize(file).then(
+      function (safeFile) {
+        if (!session || session.file !== file) return; // superseded by a later pick
+        session.safeFile = safeFile;
+        imgEl.src = URL.createObjectURL(safeFile); // show the original once it's safely in memory
+        if (statusEl) statusEl.textContent = 'Estimating…';
+        scheduleEstimate();
+      },
+      function () {
+        if (!session || session.file !== file) return;
+        if (statusEl) statusEl.textContent = 'Preview unavailable for this file.';
+      }
+    );
   }
 
   // ---------------------------------------------------------------------
-  // Conversion — unchanged.
+  // Conversion — reuses the live-preview's already-materialized copy when
+  // this is the same file (avoiding a 3rd read of the phone's photo picker
+  // on top of the preview's 1st read); materializes fresh otherwise (no
+  // live preview ran, e.g. js_libs hadn't loaded yet when the file was picked).
   // ---------------------------------------------------------------------
   window.convertFile = function (file) {
     var quality = currentQuality();
@@ -202,8 +224,15 @@
       else config.output_extension = '.jpg';
     }
 
-    return imageCompression(file, options).then(function (compressedFile) {
-      return new Blob([compressedFile], { type: compressedFile.type });
+    var ready =
+      session && session.file === file && session.safeFile
+        ? Promise.resolve(session.safeFile)
+        : materialize(file);
+
+    return ready.then(function (safeFile) {
+      return imageCompression(safeFile, options).then(function (compressedFile) {
+        return new Blob([compressedFile], { type: compressedFile.type });
+      });
     });
   };
 })();

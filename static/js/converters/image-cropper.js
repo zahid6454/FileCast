@@ -194,25 +194,49 @@
   // file-name/size display (updated synchronously per pick) still shows B.
   var pendingFile = null;
 
+  // Reading a picked File exactly once, shared with shared.js's own
+  // thumbnail preview, avoids two independent readers racing the same
+  // Android Photo Picker content:// reference — see fc-util.js.
+  var materialize = window.FC.materializeFile;
+
+  function showLoadError() {
+    var errorEl = document.getElementById('error-msg');
+    if (errorEl) {
+      errorEl.textContent = 'Failed to load image.';
+      errorEl.classList.remove('hidden');
+    }
+  }
+
   function loadImageForCrop(file) {
     if (!file.type || file.type.indexOf('image/') !== 0) {
       hideCropUI();
       return;
     }
     pendingFile = file;
-    var img = new Image();
-    var url = URL.createObjectURL(file);
-    img.onload = function () {
-      URL.revokeObjectURL(url);
-      if (pendingFile !== file) return; // superseded by a later selection
-      buildSession(file, img);
-    };
-    img.onerror = function () {
-      URL.revokeObjectURL(url);
-      if (pendingFile !== file) return;
-      hideCropUI();
-    };
-    img.src = url;
+    materialize(file).then(
+      function (safeFile) {
+        if (pendingFile !== file) return; // superseded by a later selection
+        var img = new Image();
+        var url = URL.createObjectURL(safeFile);
+        img.onload = function () {
+          URL.revokeObjectURL(url);
+          if (pendingFile !== file) return;
+          buildSession(file, img);
+        };
+        img.onerror = function () {
+          URL.revokeObjectURL(url);
+          if (pendingFile !== file) return;
+          hideCropUI();
+          showLoadError();
+        };
+        img.src = url;
+      },
+      function () {
+        if (pendingFile !== file) return;
+        hideCropUI();
+        showLoadError();
+      }
+    );
   }
 
   function buildSession(file, img) {
@@ -712,20 +736,27 @@
     // called directly, or the crop UI never attached (e.g. this page markup
     // has no #file-info). Fall back to a fresh centered 80% crop so the
     // tool still produces a sensible result on its own.
-    return new Promise(function (resolve, reject) {
-      var img = new Image();
-      var url = URL.createObjectURL(file);
-      img.onload = function () {
-        URL.revokeObjectURL(url);
-        var rect = defaultRect(img.naturalWidth, img.naturalHeight);
-        cropImage(file, img, rect, 1, 1).then(resolve, reject);
-      };
-      img.onerror = function () {
-        URL.revokeObjectURL(url);
-        reject(new Error('Failed to load image.'));
-      };
-      img.src = url;
-    });
+    return materialize(file).then(
+      function (safeFile) {
+        return new Promise(function (resolve, reject) {
+          var img = new Image();
+          var url = URL.createObjectURL(safeFile);
+          img.onload = function () {
+            URL.revokeObjectURL(url);
+            var rect = defaultRect(img.naturalWidth, img.naturalHeight);
+            cropImage(file, img, rect, 1, 1).then(resolve, reject);
+          };
+          img.onerror = function () {
+            URL.revokeObjectURL(url);
+            reject(new Error('Failed to load image.'));
+          };
+          img.src = url;
+        });
+      },
+      function () {
+        return Promise.reject(new Error('Failed to load image.'));
+      }
+    );
   };
 
   function cropImage(file, img, rect, scaleX, scaleY) {

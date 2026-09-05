@@ -133,19 +133,32 @@
     els.fileName.textContent = file.name;
     els.fileSize.textContent = formatBytes(file.size);
 
-    // Image thumbnail preview (only for formats the browser can render)
+    // Image thumbnail preview (only for formats the browser can render).
+    // Goes through FC.materializeFile rather than URL.createObjectURL(file)
+    // directly — reading the original File here AND separately in the
+    // active converter is what was racing against Android's Photo Picker
+    // content:// reference (see fc-util.js). Every caller shares one read.
     var preview = els.filePreview;
     if (file.type && file.type.startsWith('image/') && !file.type.match(/heic|heif/i)) {
-      var url = URL.createObjectURL(file);
-      preview.onload = function () {
-        URL.revokeObjectURL(url);
-      };
-      preview.onerror = function () {
-        URL.revokeObjectURL(url);
-        preview.classList.add('hidden');
-      };
-      preview.src = url;
-      preview.classList.remove('hidden');
+      FC.materializeFile(file).then(
+        function (safeFile) {
+          if (currentFile !== file) return; // superseded by a later selection
+          var url = URL.createObjectURL(safeFile);
+          preview.onload = function () {
+            URL.revokeObjectURL(url);
+          };
+          preview.onerror = function () {
+            URL.revokeObjectURL(url);
+            preview.classList.add('hidden');
+          };
+          preview.src = url;
+          preview.classList.remove('hidden');
+        },
+        function () {
+          if (currentFile !== file) return;
+          preview.classList.add('hidden');
+        }
+      );
     } else {
       preview.classList.add('hidden');
     }
