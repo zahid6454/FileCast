@@ -1204,6 +1204,20 @@ def test_generate_robots_excludes_admin_account(tmp_path, monkeypatch):
     assert "Disallow: /offline.html" in robots
 
 
+def test_generate_ads_txt_skipped_without_publisher_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_ads_txt({"adsense": {"publisher_id": ""}})
+    build.generate_ads_txt({})
+    assert not (tmp_path / "ads.txt").exists()
+
+
+def test_generate_ads_txt_authorizes_publisher_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_ads_txt({"adsense": {"publisher_id": "ca-pub-1234567890123456"}})
+    ads_txt = (tmp_path / "ads.txt").read_text(encoding="utf-8")
+    assert ads_txt == "google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0\n"
+
+
 def test_generate_llms_txt_lists_tools_by_category(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     config = {"site": {"base_url": "https://filecast.org", "name": "FileCast"}}
