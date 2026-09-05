@@ -280,7 +280,17 @@ export async function installApi(page, state) {
     // --- stats ---
     if (path.endsWith('/stats/dashboard')) return json(state.dashboard);
     if (path.endsWith('/stats/conversions')) return json({ days: 30, series: state.series });
-    if (path.endsWith('/stats/errors')) return json({ errors: state.errors });
+    if (path.endsWith('/stats/errors')) {
+      const params = new URL(req.url()).searchParams;
+      const limit = Number(params.get('limit')) || 25;
+      const offset = Number(params.get('offset')) || 0;
+      const page = state.errors.slice(offset, offset + limit);
+      return json({
+        errors: page,
+        total: state.errors.length,
+        has_more: offset + limit < state.errors.length
+      });
+    }
 
     // --- messages (contact-page inbox) ---
     if (path.endsWith('/admin/messages/counts') && method === 'GET') {

@@ -134,7 +134,13 @@ async def recent_errors(
         .limit(limit + 1)
     )
     result = list(await db.execute(stmt))
-    total = result[0].total if result else 0
+    if result:
+        total = result[0].total
+    else:
+        # offset landed past the end (e.g. the retention sweep in tasks.py
+        # aged out rows out from under a page an admin was already viewing) —
+        # the window-count query returns nothing, so total needs its own query.
+        total = (await db.execute(select(func.count()).select_from(Error))).scalar_one()
     rows = [r[0] for r in result]
     has_more = len(rows) > limit
     rows = rows[:limit]
