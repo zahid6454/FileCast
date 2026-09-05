@@ -118,6 +118,20 @@
 
   // Server upload as the conversion function
   window.convertFile = function (file) {
+    // On Android, an image-accepting tool (e.g. png-to-svg) can pick up a
+    // File backed by a flaky Photo Picker content:// reference — the exact
+    // condition net::ERR_UPLOAD_FILE_CHANGED is named for, thrown by the
+    // browser's own upload machinery when formData.append('file', file)
+    // below actually starts streaming it. Materializing first (see
+    // fc-util.js) replaces file with a plain in-memory copy before the XHR
+    // ever touches the original reference.
+    return window.FC.materializeFile(file).then(function (safeFile) {
+      file = safeFile;
+      return uploadFile(file);
+    });
+  };
+
+  function uploadFile(file) {
     return new Promise(function (resolve, reject) {
       var activeXhr = null; // whatever request (upload/poll/download) is in flight
       var pollTimer = null; // pending setTimeout for the next poll tick
@@ -350,5 +364,5 @@
 
       xhr.send(formData);
     });
-  };
+  }
 })();
