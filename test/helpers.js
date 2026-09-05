@@ -22,7 +22,24 @@ export function createDom(bodyHtml = '', { url = 'http://localhost/' } = {}) {
   polyfillObjectURL(dom.window);
   polyfillTextCodec(dom.window);
   polyfillSubtleCrypto(dom.window);
+  polyfillFC(dom.window);
   return dom;
+}
+
+// This harness evaluates each converter file in isolation (evalScript below),
+// never loading fc-util.js first the way base.html does in production — so
+// window.FC.materializeFile (the single-read-per-File helper added for the
+// Android Photo Picker bug, see fc-util.js) would be undefined here. A
+// converter test exercises the converter's own logic, not fc-util.js's
+// retry/timeout behavior, so this stand-in just resolves with the same file
+// unchanged — equivalent to a materialize that always succeeds immediately.
+function polyfillFC(win) {
+  win.FC = win.FC || {};
+  if (typeof win.FC.materializeFile !== 'function') {
+    win.FC.materializeFile = function (file) {
+      return Promise.resolve(file);
+    };
+  }
 }
 
 // This jsdom version doesn't expose TextEncoder/TextDecoder on the window at

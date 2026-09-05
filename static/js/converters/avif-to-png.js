@@ -18,41 +18,45 @@
       );
     }
 
-    return file.arrayBuffer().then(function (buffer) {
-      return new Promise(function (resolve, reject) {
-        var worker = new Worker(
-          config.avif_worker_src +
-            '?declib=' +
-            encodeURIComponent(config.avif_dec_lib_src) +
-            '&decwasm=' +
-            encodeURIComponent(config.avif_dec_wasm_src)
-        );
-        activeWorker = worker;
+    return window.FC.materializeFile(file)
+      .then(function (safeFile) {
+        return safeFile.arrayBuffer();
+      })
+      .then(function (buffer) {
+        return new Promise(function (resolve, reject) {
+          var worker = new Worker(
+            config.avif_worker_src +
+              '?declib=' +
+              encodeURIComponent(config.avif_dec_lib_src) +
+              '&decwasm=' +
+              encodeURIComponent(config.avif_dec_wasm_src)
+          );
+          activeWorker = worker;
 
-        worker.onmessage = function (e) {
-          activeWorker = null;
-          worker.terminate();
-          var data = e.data || {};
-          if (!data.ok) {
-            reject(new Error(data.error || 'Could not decode this AVIF file.'));
-            return;
-          }
-          try {
-            resolve(rgbaToPngBlob(data.rgba, data.width, data.height));
-          } catch (err) {
-            reject(err);
-          }
-        };
+          worker.onmessage = function (e) {
+            activeWorker = null;
+            worker.terminate();
+            var data = e.data || {};
+            if (!data.ok) {
+              reject(new Error(data.error || 'Could not decode this AVIF file.'));
+              return;
+            }
+            try {
+              resolve(rgbaToPngBlob(data.rgba, data.width, data.height));
+            } catch (err) {
+              reject(err);
+            }
+          };
 
-        worker.onerror = function (err) {
-          activeWorker = null;
-          worker.terminate();
-          reject(new Error((err && err.message) || 'Could not decode this AVIF file.'));
-        };
+          worker.onerror = function (err) {
+            activeWorker = null;
+            worker.terminate();
+            reject(new Error((err && err.message) || 'Could not decode this AVIF file.'));
+          };
 
-        worker.postMessage({ type: 'decode', buffer: buffer }, [buffer]);
+          worker.postMessage({ type: 'decode', buffer: buffer }, [buffer]);
+        });
       });
-    });
   };
 
   // PNG supports alpha, so the decoded RGBA is painted straight through —

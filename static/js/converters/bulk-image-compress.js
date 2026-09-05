@@ -147,7 +147,10 @@
       var entry = rowCache.get(file);
       var outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
 
-      imageCompression(file, buildOptions(quality, outputType))
+      window.FC.materializeFile(file)
+        .then(function (safeFile) {
+          return imageCompression(safeFile, buildOptions(quality, outputType));
+        })
         .then(function (compressed) {
           if (token !== estimateToken || !entry) return;
           var savings = file.size > 0 ? Math.round((1 - compressed.size / file.size) * 100) : 0;
@@ -180,8 +183,12 @@
     var outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
     var options = buildOptions(quality, outputType);
 
-    return imageCompression(file, options).then(function (compressedFile) {
-      return new Blob([compressedFile], { type: compressedFile.type });
-    });
+    return window.FC.materializeFile(file)
+      .then(function (safeFile) {
+        return imageCompression(safeFile, options);
+      })
+      .then(function (compressedFile) {
+        return new Blob([compressedFile], { type: compressedFile.type });
+      });
   };
 })();

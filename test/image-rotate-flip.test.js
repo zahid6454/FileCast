@@ -267,8 +267,22 @@ describe('image-rotate-flip.js — live preview', () => {
     const fileA = new dom.window.File([new Uint8Array(10)], 'slow.jpg', { type: 'image/jpeg' });
     const fileB = new dom.window.File([new Uint8Array(10)], 'fast.jpg', { type: 'image/jpeg' });
 
-    selectFile(dom, fileA); // starts loading A
-    selectFile(dom, fileB); // starts loading B before A resolves
+    // Each pick now goes through FC.materializeFile first — a real read in
+    // production, but the test harness's stand-in resolves immediately. If
+    // both picks happened back-to-back with no gap, A's pendingFile check
+    // would already see itself superseded the moment its materialize()
+    // resolves, and it would never even reach new Image() — a real,
+    // strictly-better behavior (no wasted decode for a pick that's already
+    // stale), but not what this test is exercising. Awaiting flush() between
+    // the two picks instead lets A's Image get created first, so the guard
+    // this test targets — a slower DECODE (img.onload), not a slower
+    // materialize — is the one actually being exercised below.
+    selectFile(dom, fileA); // starts materializing + decoding A
+    await flush();
+    expect(pending.length).toBe(1);
+
+    selectFile(dom, fileB); // starts loading B before A's decode resolves
+    await flush();
     expect(pending.length).toBe(2);
 
     // B (picked second) resolves first...

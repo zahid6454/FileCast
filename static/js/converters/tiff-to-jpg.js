@@ -18,37 +18,41 @@
       );
     }
 
-    return file.arrayBuffer().then(function (buffer) {
-      return new Promise(function (resolve, reject) {
-        var worker = new Worker(
-          config.tiff_worker_src + '?lib=' + encodeURIComponent(config.utif_src)
-        );
-        activeWorker = worker;
+    return window.FC.materializeFile(file)
+      .then(function (safeFile) {
+        return safeFile.arrayBuffer();
+      })
+      .then(function (buffer) {
+        return new Promise(function (resolve, reject) {
+          var worker = new Worker(
+            config.tiff_worker_src + '?lib=' + encodeURIComponent(config.utif_src)
+          );
+          activeWorker = worker;
 
-        worker.onmessage = function (e) {
-          activeWorker = null;
-          worker.terminate();
-          var data = e.data || {};
-          if (!data.ok) {
-            reject(new Error(data.error || 'Failed to decode TIFF file.'));
-            return;
-          }
-          try {
-            resolve(rgbaToJpegBlob(data.rgba, data.width, data.height));
-          } catch (err) {
-            reject(err);
-          }
-        };
+          worker.onmessage = function (e) {
+            activeWorker = null;
+            worker.terminate();
+            var data = e.data || {};
+            if (!data.ok) {
+              reject(new Error(data.error || 'Failed to decode TIFF file.'));
+              return;
+            }
+            try {
+              resolve(rgbaToJpegBlob(data.rgba, data.width, data.height));
+            } catch (err) {
+              reject(err);
+            }
+          };
 
-        worker.onerror = function (err) {
-          activeWorker = null;
-          worker.terminate();
-          reject(new Error((err && err.message) || 'Failed to decode TIFF file.'));
-        };
+          worker.onerror = function (err) {
+            activeWorker = null;
+            worker.terminate();
+            reject(new Error((err && err.message) || 'Failed to decode TIFF file.'));
+          };
 
-        worker.postMessage(buffer, [buffer]);
+          worker.postMessage(buffer, [buffer]);
+        });
       });
-    });
   };
 
   // Compositing + JPEG encoding are fast relative to the decode, so this stays

@@ -4,36 +4,38 @@
   var ICON_SIZES = [16, 32, 48, 256];
 
   window.convertFile = function (file) {
-    return new Promise(function (resolve, reject) {
-      var img = new Image();
-      img.onload = function () {
-        var width = img.naturalWidth;
-        var height = img.naturalHeight;
-        if (!width || !height) {
-          URL.revokeObjectURL(img.src);
-          reject(new Error('Failed to read PNG dimensions.'));
-          return;
-        }
+    return window.FC.materializeFile(file).then(function (safeFile) {
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.onload = function () {
+          var width = img.naturalWidth;
+          var height = img.naturalHeight;
+          if (!width || !height) {
+            URL.revokeObjectURL(img.src);
+            reject(new Error('Failed to read PNG dimensions.'));
+            return;
+          }
 
-        Promise.all(
-          ICON_SIZES.map(function (size) {
-            return renderPngAtSize(img, size);
-          })
-        )
-          .then(function (buffers) {
-            URL.revokeObjectURL(img.src);
-            resolve(buildIco(buffers, ICON_SIZES));
-          })
-          .catch(function (err) {
-            URL.revokeObjectURL(img.src);
-            reject(err);
-          });
-      };
-      img.onerror = function () {
-        URL.revokeObjectURL(img.src);
-        reject(new Error('Failed to load image'));
-      };
-      img.src = URL.createObjectURL(file);
+          Promise.all(
+            ICON_SIZES.map(function (size) {
+              return renderPngAtSize(img, size);
+            })
+          )
+            .then(function (buffers) {
+              URL.revokeObjectURL(img.src);
+              resolve(buildIco(buffers, ICON_SIZES));
+            })
+            .catch(function (err) {
+              URL.revokeObjectURL(img.src);
+              reject(err);
+            });
+        };
+        img.onerror = function () {
+          URL.revokeObjectURL(img.src);
+          reject(new Error('Failed to load image'));
+        };
+        img.src = URL.createObjectURL(safeFile);
+      });
     });
   };
 

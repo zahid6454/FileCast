@@ -10,7 +10,10 @@
         files.forEach(function (file) {
           chain = chain
             .then(function () {
-              return file.arrayBuffer();
+              return window.FC.materializeFile(file);
+            })
+            .then(function (safeFile) {
+              return safeFile.arrayBuffer();
             })
             .then(function (bytes) {
               return pdfDoc.embedPng(new Uint8Array(bytes));
