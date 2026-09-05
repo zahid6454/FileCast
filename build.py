@@ -2076,6 +2076,30 @@ def generate_service_worker(build_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Step 16d: Generate ads.txt (IAB authorized-sellers file)
+# ---------------------------------------------------------------------------
+
+
+def generate_ads_txt(site_config: dict):
+    """Write dist/ads.txt, declaring this domain authorizes its own AdSense
+    publisher id to sell inventory here directly. Gated on publisher_id alone
+    (NOT adsense_live/adsense.enabled) — same rationale as base.html's
+    google-adsense-account meta tag: advertisers/Google check this file
+    independent of whether a unit is actually live yet, and a stale or
+    missing file is itself a signal worth avoiding. `f08c47fec0942fa0` is
+    Google's own fixed IAB certification-authority id, not a FileCast value.
+    """
+    publisher_id = (site_config.get("adsense", {}) or {}).get("publisher_id")
+    if not publisher_id:
+        return
+    pub = publisher_id.removeprefix("ca-")
+    (DIST / "ads.txt").write_text(
+        f"google.com, {pub}, DIRECT, f08c47fec0942fa0\n", encoding="utf-8"
+    )
+    print("  [ok] ads.txt")
+
+
+# ---------------------------------------------------------------------------
 # Step 17: Generate _headers (Cloudflare Pages)
 # ---------------------------------------------------------------------------
 
@@ -2620,12 +2644,13 @@ def build():
     # 15-19. Generate support files
     print(
         "[11/11] Generating sitemap, robots.txt, llms.txt, manifest.json, "
-        "sw.js, _headers, _redirects"
+        "sw.js, ads.txt, _headers, _redirects"
     )
     generate_sitemap(site_config, tools, categories_with_tools)
     generate_robots(site_config)
     generate_llms_txt(site_config, tools, categories_with_tools)
     generate_manifest(site_config)
+    generate_ads_txt(site_config)
     # Second-resolution, not date.today() — CACHE_VERSION must actually change
     # on every build (see generate_service_worker()'s docstring), and two
     # deploys on the same calendar day would otherwise produce byte-identical
