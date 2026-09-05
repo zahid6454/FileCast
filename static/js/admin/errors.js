@@ -73,33 +73,6 @@
     if (e.key === 'Escape') closePageSizeMenu(true);
   });
 
-  // Same chevron-down glyph as the site nav's category dropdown
-  // (.nav-dropdown__caret in base.html) and messages.js's status filter — an
-  // inline currentColor SVG, not a background-image, so it follows dark mode
-  // via admin.css's token-only rule instead of needing its own light/dark
-  // variants.
-  function caretIcon() {
-    return dom.svg(
-      'svg',
-      {
-        class: 'admin-dropdown__caret',
-        'aria-hidden': 'true',
-        focusable: 'false',
-        viewBox: '0 0 24 24'
-      },
-      [
-        dom.svg('path', {
-          d: 'M6 9l6 6 6-6',
-          fill: 'none',
-          stroke: 'currentColor',
-          'stroke-width': '2',
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round'
-        })
-      ]
-    );
-  }
-
   function labelFor(toolId) {
     if (ADMIN.catalog && typeof ADMIN.catalog.label === 'function') {
       return ADMIN.catalog.label(toolId);
@@ -316,7 +289,7 @@
         'aria-haspopup': 'listbox',
         'aria-expanded': 'false'
       },
-      [h('span', { class: 'admin-errpagesize__label' }, LIMIT + ' per page'), caretIcon()]
+      [h('span', { class: 'admin-errpagesize__label' }, LIMIT + ' per page'), dom.caretIcon()]
     );
     var pageSizeLabelEl = pageSizeToggle.querySelector('.admin-errpagesize__label');
 
