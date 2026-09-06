@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import breadcrumb_jsonld %}
 
 {% block title %}Contact — {{ site.name }}{% endblock %}
 {% block meta_description %}Get in touch with questions, feedback, or bug reports.{% endblock %}
@@ -6,6 +7,10 @@
 {% block og_title %}Contact — {{ site.name }}{% endblock %}
 {% block og_description %}Get in touch with questions, feedback, or bug reports.{% endblock %}
 {% block og_url %}{{ site.base_url }}/contact/{% endblock %}
+
+{% block structured_data %}
+{{ breadcrumb_jsonld(none, "Contact") }}
+{% endblock %}
 
 {% block content %}
 

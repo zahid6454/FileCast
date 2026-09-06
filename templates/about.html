@@ -2,7 +2,7 @@
 {# Reuse the shipped Local/Cloud pill rather than hand-writing badge markup, so
    this page can't drift from the tool cards again (the old hand-written
    `.badge--server` had no CSS rule and rendered as the green .badge). #}
-{% from "_macros.html" import processing_pill %}
+{% from "_macros.html" import processing_pill, breadcrumb_jsonld %}
 
 {% block title %}About — {{ site.name }}{% endblock %}
 {% block meta_description %}What this free file conversion service is, how it works, and why it exists.{% endblock %}
@@ -10,6 +10,10 @@
 {% block og_title %}About — {{ site.name }}{% endblock %}
 {% block og_description %}What this free file conversion service is, how it works, and why it exists.{% endblock %}
 {% block og_url %}{{ site.base_url }}/about/{% endblock %}
+
+{% block structured_data %}
+{{ breadcrumb_jsonld(none, "About") }}
+{% endblock %}
 
 {% block content %}
 

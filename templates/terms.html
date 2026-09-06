@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import breadcrumb_jsonld %}
 
 {% block title %}Terms of Service — {{ site.name }}{% endblock %}
 {% block meta_description %}Terms of Service for using this free file conversion service.{% endblock %}
@@ -6,6 +7,10 @@
 {% block og_title %}Terms of Service — {{ site.name }}{% endblock %}
 {% block og_description %}Terms of Service for using this free file conversion service.{% endblock %}
 {% block og_url %}{{ site.base_url }}/terms/{% endblock %}
+
+{% block structured_data %}
+{{ breadcrumb_jsonld(none, "Terms of Service") }}
+{% endblock %}
 
 {% block content %}
 

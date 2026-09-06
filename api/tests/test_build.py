@@ -2408,12 +2408,17 @@ def _ldjson_blocks(html: str) -> list[dict]:
 
 def test_breadcrumb_jsonld_present_across_page_kinds(built):
     """Every page kind that renders a visual breadcrumb gets a matching
-    BreadcrumbList block: all three tool ui_type templates, plus category."""
+    BreadcrumbList block: all three tool ui_type templates, plus category and
+    the static info pages (P1-2 — these had a visual breadcrumb but no
+    matching JSON-LD until now)."""
     pages = {
         "tool-standard": built / "convert" / "pdf-to-jpg" / "index.html",
         "tool-text-input": built / "convert" / "csv-to-json" / "index.html",
         "tool-multi-file": built / "convert" / "pdf-merge" / "index.html",
         "category": built / "document-conversion" / "index.html",
+        "about": built / "about" / "index.html",
+        "contact": built / "contact" / "index.html",
+        "terms": built / "terms" / "index.html",
     }
     for label, path in pages.items():
         html = path.read_text(encoding="utf-8")
