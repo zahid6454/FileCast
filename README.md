@@ -266,7 +266,11 @@ FileCast has a real backend behind the "convert files" surface:
 2. **Hardened Containerization:** Gotenberg runs with `no-new-privileges`, dropped
    capabilities, tmpfs scratch space, and a memory cap.
 3. **No Storage:** Uploaded files are read into a capped in-memory buffer, converted,
-   streamed back to the client, and discarded — nothing is written to disk or a DB.
+   streamed back to the client, and discarded — never written to a database. Two
+   tools (PDF Compress, PDF→DOCX) need an actual file path for their underlying
+   libraries (Ghostscript, pdf2docx), so they briefly write to a temp file that's
+   deleted in a `finally` block immediately after conversion; every other
+   conversion path never touches disk at all.
 4. **Rate Limiting:** Per-IP, per-endpoint limits (e.g. 20/hour on the ten conversion
    endpoints, tighter still on auth endpoints) return `429` on abuse.
 5. **No Public Ingress:** The API server has no public inbound port at all — it's
