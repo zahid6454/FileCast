@@ -253,7 +253,7 @@ FileCast has a real backend behind the "convert files" surface:
 2. **Memory Isolation:** Files live only in the active tab's RAM; download Blob URLs
    are explicitly revoked after use. Several PDF tools run inside a dedicated Web
    Worker to keep the main thread responsive on large files.
-3. **Self-Hosted Dependencies:** Every library (`pdf-lib`, `pdf.js`, `heic2any`, ...)
+3. **Self-Hosted Dependencies:** Every library (`pdf-lib`, `pdf.js`, `libheif-js`, ...)
    is hosted under `static/lib/` with build-time Subresource Integrity (SRI) hashes.
    No third-party script CDN is used anywhere.
 4. **Security Headers:** CSP, HSTS (`max-age=31536000; includeSubDomains; preload`),

@@ -10,7 +10,9 @@ output_format: WebP
 accept_extensions: [.heic, .heif]
 output_extension: .webp
 js_module: converters/heic-to-webp.js
-js_libs: [heic2any.min.js]
+# HEIC decode runs inside a dedicated Worker via libheif-js compiled to
+# WebAssembly — see static/js/workers/heic-worker.js.
+worker_libs: [libheif.js]
 max_file_size: 20MB
 bulk_support: false
 ui_type: standard
