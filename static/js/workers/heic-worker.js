@@ -1,7 +1,12 @@
 'use strict';
 
-// Dedicated worker for HEIC/HEIF decode via libheif-js (catdad-experiments)
-// instead of heic2any. Root cause of Sentry #7717636872: heic2any's vendored
+// Dedicated worker for HEIC/HEIF decode via libheif-js 1.23.2
+// (github.com/catdad-experiments/libheif-js) instead of heic2any. Pinning the
+// version here since static/lib/ has no manifest/lockfile of its own — this
+// PR exists because heic2any's staleness (last published March 2023) went
+// unnoticed for years; leaving this replacement equally untraceable would
+// repeat that exact blind spot. Check for a newer release when touching this
+// file. Root cause of Sentry #7717636872: heic2any's vendored
 // bundle (last published March 2023) builds its Embind error classes via
 // `new Function(...)` at WASM module-init time — this repo's CSP never
 // grants 'unsafe-eval' (only 'wasm-unsafe-eval', which covers compiling
@@ -35,8 +40,8 @@ self.onmessage = function (e) {
     var mod = libheif(
       wasmUrl
         ? {
-            locateFile: function () {
-              return wasmUrl;
+            locateFile: function (path) {
+              return /\.wasm$/.test(path) && wasmUrl ? wasmUrl : path;
             }
           }
         : {}
@@ -48,6 +53,11 @@ self.onmessage = function (e) {
         if (!images || images.length === 0) {
           throw new Error('Could not read HEIC file. The file may be corrupted.');
         }
+        // A multi-image HEIC (burst-mode photos, live-photo pairs) decodes to
+        // more than one entry here — only the first is ever converted. Not a
+        // new limitation: heic2any's own converters made the identical choice
+        // (`Array.isArray(result) ? result[0] : result`) before this file
+        // existed, so this preserves prior behavior rather than changing it.
         var image = images[0];
         var width = image.get_width();
         var height = image.get_height();

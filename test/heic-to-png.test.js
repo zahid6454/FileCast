@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDom, evalScript, mockCanvas } from './helpers.js';
+import { createDom, evalScript, flush, mockCanvas } from './helpers.js';
 
 class FakeHeicWorker {
   postMessage() {
@@ -71,5 +71,30 @@ describe('heic-to-png.js — window.convertFile', () => {
 
     const file = new dom.window.File([new Uint8Array(10)], 'bad.heic', { type: 'image/heic' });
     await expect(dom.window.convertFile(file)).rejects.toThrow(/could not decode this heic file/i);
+  });
+
+  it('cancelConversion terminates the active worker', async () => {
+    const dom = createDom();
+    let terminated = false;
+    class TrackedWorker extends FakeHeicWorker {
+      terminate() {
+        terminated = true;
+      }
+    }
+    dom.window.Worker = TrackedWorker;
+    dom.window.TOOL_CONFIG = {
+      heic_worker_src: '/x.js',
+      libheif_src: '/y.js',
+      libheif_wasm_src: '/y.wasm'
+    };
+    mockCanvas(dom.window);
+    evalScript(dom, 'converters/heic-to-png.js');
+
+    const file = new dom.window.File([new Uint8Array(10)], 'photo.heic', { type: 'image/heic' });
+    dom.window.convertFile(file);
+    await flush();
+    dom.window.cancelConversion();
+
+    expect(terminated).toBe(true);
   });
 });
