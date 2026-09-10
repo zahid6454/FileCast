@@ -42,7 +42,12 @@ self.onmessage = function (e) {
   var textB = data.textB || '';
   try {
     if (typeof self.convertText !== 'function') {
-      throw new Error('Converter not loaded.');
+      // Not a plain Error: importScripts() above silently failing (bad
+      // hashed URL, CSP block, CDN hiccup) is an infra/deploy problem, not a
+      // user-input rejection — must not classify as validation_error.
+      var notLoaded = new Error('Converter not loaded.');
+      notLoaded.name = 'ConverterLoadError';
+      throw notLoaded;
     }
     var result = self.convertText(textA, textB);
     self.postMessage({ ok: true, result: result });

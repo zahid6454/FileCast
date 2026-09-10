@@ -54,7 +54,12 @@ self.onmessage = function (e) {
   var text = (e.data && e.data.text) || '';
   try {
     if (typeof self.convertText !== 'function') {
-      throw new Error('Converter not loaded.');
+      // Not a plain Error: importScripts() above silently failing (bad
+      // hashed URL, CSP block, CDN hiccup) is an infra/deploy problem, not a
+      // user-input rejection — must not classify as validation_error.
+      var notLoaded = new Error('Converter not loaded.');
+      notLoaded.name = 'ConverterLoadError';
+      throw notLoaded;
     }
     // Wrapped in Promise.resolve() rather than assumed synchronous — Hash
     // Generator's SHA-256 support (crypto.subtle.digest) is inherently
