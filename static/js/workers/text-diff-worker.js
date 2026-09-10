@@ -29,6 +29,10 @@ self.onmessage = function (e) {
     var result = self.convertText(textA, textB);
     self.postMessage({ ok: true, result: result });
   } catch (err) {
-    self.postMessage({ ok: false, error: (err && err.message) || 'Comparison failed.' });
+    self.postMessage({
+      ok: false,
+      error: (err && err.message) || 'Comparison failed.',
+      errorName: err && err.name
+    });
   }
 };

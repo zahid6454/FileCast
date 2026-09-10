@@ -272,9 +272,10 @@
         .catch(function (err) {
           if (cancelledThisRun) return;
           var msg = err.message || 'Processing failed. One or more files may be corrupted.';
+          var errorType = FC.errorTypeFromName(err.name);
           setState('selected');
           showError(msg);
-          trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
+          trackEvent('conversion_failed', { tool_id: config.id, error_type: errorType });
           postConversion(
             {
               tool_id: config.id,
@@ -286,7 +287,7 @@
           );
           reportError({
             tool_id: config.id,
-            error_type: 'conversion_error',
+            error_type: errorType,
             error_message: msg,
             browser: navigator.userAgent
           });
@@ -337,7 +338,7 @@
           updateFileItem(idx, 'file-list__item--error', 'Failed');
           reportError({
             tool_id: config.id,
-            error_type: 'conversion_error',
+            error_type: FC.errorTypeFromName(err.name),
             error_message: msg,
             browser: navigator.userAgent
           });

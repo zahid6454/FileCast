@@ -32,3 +32,23 @@ describe('fc-util.js — FC.setSentryContext', () => {
     expect(() => dom.window.FC.setSentryContext({ tool_id: 'x' })).not.toThrow();
   });
 });
+
+// FC.errorTypeFromName — converters throw a plain `new Error(...)` for
+// expected input-validation rejections; any other error name (TypeError,
+// SyntaxError, ...) is an unanticipated crash. Lets the admin errors feed
+// tell the two apart.
+describe('fc-util.js — FC.errorTypeFromName', () => {
+  it('classifies a plain Error as validation_error', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    expect(dom.window.FC.errorTypeFromName('Error')).toBe('validation_error');
+  });
+
+  it('classifies TypeError/SyntaxError/undefined as conversion_error', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    expect(dom.window.FC.errorTypeFromName('TypeError')).toBe('conversion_error');
+    expect(dom.window.FC.errorTypeFromName('SyntaxError')).toBe('conversion_error');
+    expect(dom.window.FC.errorTypeFromName(undefined)).toBe('conversion_error');
+  });
+});

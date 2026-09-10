@@ -73,6 +73,16 @@
   // already renders error_message/error_type/browser safely but had no
   // client caller until now. Call alongside postConversion(..., false) at
   // every conversion-failure site.
+  // Client-side converters throw a plain `new Error('...')` for expected
+  // input-validation rejections (bad CSV, invalid JSON, etc.) — every other
+  // JS error name (TypeError, SyntaxError from a native JSON.parse, ...) is
+  // an unanticipated crash. Distinguishing the two here means the admin
+  // "Recent errors" feed can tell "user gave bad input" apart from "the
+  // converter broke" without adding an error taxonomy to every converter file.
+  FC.errorTypeFromName = function (name) {
+    return name === 'Error' ? 'validation_error' : 'conversion_error';
+  };
+
   FC.reportError = function (payload) {
     var apiBase = window.FILECAST && window.FILECAST.apiBase;
     if (!apiBase) return;

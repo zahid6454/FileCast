@@ -122,10 +122,11 @@
     els.progress.classList.add('progress--indeterminate');
     els.progressFill.style.width = '';
 
-    function onFailure(message) {
+    function onFailure(message, errorName) {
       var msg = message || 'Comparison failed. Please check your input and try again.';
+      var errorType = FC.errorTypeFromName(errorName);
       showError(msg);
-      trackEvent('conversion_failed', { tool_id: config.id, error_type: 'conversion_error' });
+      trackEvent('conversion_failed', { tool_id: config.id, error_type: errorType });
       postConversion(
         {
           tool_id: config.id,
@@ -137,7 +138,7 @@
       );
       reportError({
         tool_id: config.id,
-        error_type: 'conversion_error',
+        error_type: errorType,
         error_message: msg,
         browser: navigator.userAgent
       });
@@ -152,7 +153,7 @@
       worker.terminate();
       var data = e.data || {};
       if (!data.ok) {
-        onFailure(data.error);
+        onFailure(data.error, data.errorName);
         return;
       }
       var durationMs = Date.now() - startTime;

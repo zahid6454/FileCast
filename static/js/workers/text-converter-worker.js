@@ -48,10 +48,18 @@ self.onmessage = function (e) {
         self.postMessage({ ok: true, result: result });
       },
       function (err) {
-        self.postMessage({ ok: false, error: (err && err.message) || 'Conversion failed.' });
+        self.postMessage({
+          ok: false,
+          error: (err && err.message) || 'Conversion failed.',
+          errorName: err && err.name
+        });
       }
     );
   } catch (err) {
-    self.postMessage({ ok: false, error: (err && err.message) || 'Conversion failed.' });
+    self.postMessage({
+      ok: false,
+      error: (err && err.message) || 'Conversion failed.',
+      errorName: err && err.name
+    });
   }
 };
