@@ -14,7 +14,10 @@
     var config = window.TOOL_CONFIG || {};
     if (!config.pdf_lib_worker_src || !config.pdf_lib_src) {
       return Promise.reject(
-        new Error('Flatten is unavailable right now. Please refresh the page.')
+        window.FC.errorFromType(
+          'Flatten is unavailable right now. Please refresh the page.',
+          'conversion_error'
+        )
       );
     }
 
@@ -32,14 +35,24 @@
           if (data.ok) {
             resolve(new Blob([data.result.bytes], { type: 'application/pdf' }));
           } else {
-            reject(new Error(data.error || 'This PDF could not be flattened.'));
+            reject(
+              window.FC.errorFromType(
+                data.error || 'This PDF could not be flattened.',
+                data.errorType
+              )
+            );
           }
         };
 
         worker.onerror = function (err) {
           activeWorker = null;
           worker.terminate();
-          reject(new Error((err && err.message) || 'This PDF could not be flattened.'));
+          reject(
+            window.FC.errorFromType(
+              (err && err.message) || 'This PDF could not be flattened.',
+              'conversion_error'
+            )
+          );
         };
 
         worker.postMessage({ op: 'flatten', file: bytes }, [bytes]);

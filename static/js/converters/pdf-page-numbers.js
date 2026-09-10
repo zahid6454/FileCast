@@ -33,7 +33,10 @@
     var config = window.TOOL_CONFIG || {};
     if (!config.pdf_lib_worker_src || !config.pdf_lib_src) {
       return Promise.reject(
-        new Error('Page Numbers is unavailable right now. Please refresh the page.')
+        window.FC.errorFromType(
+          'Page Numbers is unavailable right now. Please refresh the page.',
+          'conversion_error'
+        )
       );
     }
 
@@ -51,14 +54,24 @@
           if (data.ok) {
             resolve(new Blob([data.result.bytes], { type: 'application/pdf' }));
           } else {
-            reject(new Error(data.error || 'Page numbers could not be added to this PDF.'));
+            reject(
+              window.FC.errorFromType(
+                data.error || 'Page numbers could not be added to this PDF.',
+                data.errorType
+              )
+            );
           }
         };
 
         worker.onerror = function (err) {
           activeWorker = null;
           worker.terminate();
-          reject(new Error((err && err.message) || 'Page numbers could not be added to this PDF.'));
+          reject(
+            window.FC.errorFromType(
+              (err && err.message) || 'Page numbers could not be added to this PDF.',
+              'conversion_error'
+            )
+          );
         };
 
         worker.postMessage(

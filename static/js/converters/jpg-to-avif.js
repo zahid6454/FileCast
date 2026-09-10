@@ -14,7 +14,10 @@
     var config = window.TOOL_CONFIG || {};
     if (!config.avif_worker_src || !config.avif_enc_lib_src || !config.avif_enc_wasm_src) {
       return Promise.reject(
-        new Error('Conversion is unavailable right now. Please refresh the page.')
+        window.FC.errorFromType(
+          'Conversion is unavailable right now. Please refresh the page.',
+          'conversion_error'
+        )
       );
     }
 
@@ -38,7 +41,12 @@
           worker.terminate();
           var data = e.data || {};
           if (!data.ok) {
-            reject(new Error(data.error || 'Could not encode this image as AVIF.'));
+            reject(
+              window.FC.errorFromType(
+                data.error || 'Could not encode this image as AVIF.',
+                data.errorType
+              )
+            );
             return;
           }
           resolve(new Blob([data.avif], { type: 'image/avif' }));
@@ -47,7 +55,12 @@
         worker.onerror = function (err) {
           activeWorker = null;
           worker.terminate();
-          reject(new Error((err && err.message) || 'Could not encode this image as AVIF.'));
+          reject(
+            window.FC.errorFromType(
+              (err && err.message) || 'Could not encode this image as AVIF.',
+              'conversion_error'
+            )
+          );
         };
 
         // Canvas ImageData is always 4 channels (RGBA) — the encoder always

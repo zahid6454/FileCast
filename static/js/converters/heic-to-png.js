@@ -14,7 +14,10 @@
     var config = window.TOOL_CONFIG || {};
     if (!config.heic_worker_src || !config.libheif_src || !config.libheif_wasm_src) {
       return Promise.reject(
-        new Error('Conversion is unavailable right now. Please refresh the page.')
+        window.FC.errorFromType(
+          'Conversion is unavailable right now. Please refresh the page.',
+          'conversion_error'
+        )
       );
     }
 
@@ -38,7 +41,12 @@
             worker.terminate();
             var data = e.data || {};
             if (!data.ok) {
-              reject(new Error(data.error || 'Could not decode this HEIC file.'));
+              reject(
+                window.FC.errorFromType(
+                  data.error || 'Could not decode this HEIC file.',
+                  data.errorType
+                )
+              );
               return;
             }
             try {
@@ -51,7 +59,12 @@
           worker.onerror = function (err) {
             activeWorker = null;
             worker.terminate();
-            reject(new Error((err && err.message) || 'Could not decode this HEIC file.'));
+            reject(
+              window.FC.errorFromType(
+                (err && err.message) || 'Could not decode this HEIC file.',
+                'conversion_error'
+              )
+            );
           };
 
           worker.postMessage(buffer, [buffer]);

@@ -18,22 +18,20 @@ if (converterUrl) {
   importScripts(converterUrl);
 }
 
-// Mirrors fc-util.js's FC.errorMessage/FC.errorTypeFromError — duplicated
-// rather than imported since this worker's script URL is hashed by the
-// build's asset pipeline, so there is no stable path to importScripts() it
-// from here. A converter throws a plain Error for an expected
-// input-validation rejection (or, in one edge case elsewhere in this
-// codebase, a bare descriptive string); anything else is an unanticipated
-// crash.
+// Mirrors fc-util.js's FC.classifyError — duplicated rather than imported
+// since this worker's script URL is hashed by the build's asset pipeline, so
+// there is no stable path to importScripts() it from here. A converter
+// throws a plain Error for an expected input-validation rejection (or, in
+// one edge case elsewhere in this codebase, a bare descriptive string);
+// anything else is an unanticipated crash.
 function errorPayload(err, fallback) {
+  var isValidation = typeof err === 'string' || (err && err.name === 'Error');
   var message = typeof err === 'string' && err ? err : (err && err.message) || fallback;
-  var errorType =
-    typeof err === 'string'
-      ? 'validation_error'
-      : err && err.name === 'Error'
-        ? 'validation_error'
-        : 'conversion_error';
-  return { ok: false, error: message, errorType: errorType };
+  return {
+    ok: false,
+    error: message,
+    errorType: isValidation ? 'validation_error' : 'conversion_error'
+  };
 }
 
 self.onmessage = function (e) {

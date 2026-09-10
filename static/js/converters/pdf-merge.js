@@ -28,7 +28,12 @@
   function runWorker(config, message, transferables) {
     return new Promise(function (resolve, reject) {
       if (!config.pdf_lib_worker_src || !config.pdf_lib_src) {
-        reject(new Error('Merge is unavailable right now. Please refresh the page.'));
+        reject(
+          window.FC.errorFromType(
+            'Merge is unavailable right now. Please refresh the page.',
+            'conversion_error'
+          )
+        );
         return;
       }
       var worker = new Worker(
@@ -40,12 +45,14 @@
         worker.terminate();
         var data = e.data || {};
         if (data.ok) resolve(data.result);
-        else reject(new Error(data.error || 'Merge failed.'));
+        else reject(window.FC.errorFromType(data.error || 'Merge failed.', data.errorType));
       };
       worker.onerror = function (err) {
         activeWorker = null;
         worker.terminate();
-        reject(new Error((err && err.message) || 'Merge failed.'));
+        reject(
+          window.FC.errorFromType((err && err.message) || 'Merge failed.', 'conversion_error')
+        );
       };
       worker.postMessage(message, transferables || []);
     });

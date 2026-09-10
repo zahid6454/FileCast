@@ -271,8 +271,12 @@
         })
         .catch(function (err) {
           if (cancelledThisRun) return;
-          var msg = FC.errorMessage(err, 'Processing failed. One or more files may be corrupted.');
-          var errorType = FC.errorTypeFromError(err);
+          var classified = FC.classifyError(
+            err,
+            'Processing failed. One or more files may be corrupted.'
+          );
+          var msg = classified.message;
+          var errorType = classified.errorType;
           setState('selected');
           showError(msg);
           trackEvent('conversion_failed', { tool_id: config.id, error_type: errorType });
@@ -333,12 +337,13 @@
           processNext();
         })
         .catch(function (err) {
-          var msg = FC.errorMessage(err, 'Failed');
+          var classified = FC.classifyError(err, 'Failed');
+          var msg = classified.message;
           results.push({ success: false, error: msg, originalName: file.name });
           updateFileItem(idx, 'file-list__item--error', 'Failed');
           reportError({
             tool_id: config.id,
-            error_type: FC.errorTypeFromError(err),
+            error_type: classified.errorType,
             error_message: msg,
             browser: navigator.userAgent
           });

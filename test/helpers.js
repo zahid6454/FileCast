@@ -40,6 +40,19 @@ function polyfillFC(win) {
       return Promise.resolve(file);
     };
   }
+  // Real implementation lives in fc-util.js (FC.errorFromType) — reconstructs
+  // a rejected Promise's Error from a worker's {error, errorType} reply, or
+  // from a converter's own "config not wired up" pre-flight guard. A
+  // converter test asserts on the message text (.rejects.toThrow(/.../)), so
+  // this stand-in only needs to preserve that; the errorType→name tagging
+  // itself is exercised directly by fc-util.test.js.
+  if (typeof win.FC.errorFromType !== 'function') {
+    win.FC.errorFromType = function (message, errorType) {
+      var err = new win.Error(message);
+      if (errorType !== 'validation_error') err.name = 'WorkerConversionError';
+      return err;
+    };
+  }
 }
 
 // This jsdom version doesn't expose TextEncoder/TextDecoder on the window at

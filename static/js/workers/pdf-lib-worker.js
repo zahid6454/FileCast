@@ -1849,6 +1849,22 @@ function markdownToPdf(text, options) {
     });
 }
 
+// Mirrors fc-util.js's FC.classifyError — duplicated rather than imported
+// since this worker's script URL is hashed by the build's asset pipeline, so
+// there is no stable path to importScripts() it from here. A converter
+// throws a plain Error for an expected input-validation rejection (or, in
+// one edge case elsewhere in this codebase, a bare descriptive string);
+// anything else is an unanticipated crash.
+function errorPayload(err, fallback) {
+  var isValidation = typeof err === 'string' || (err && err.name === 'Error');
+  var message = typeof err === 'string' && err ? err : (err && err.message) || fallback;
+  return {
+    ok: false,
+    error: message,
+    errorType: isValidation ? 'validation_error' : 'conversion_error'
+  };
+}
+
 self.onmessage = function (e) {
   var msg = e.data || {};
   var result;
@@ -1892,10 +1908,15 @@ self.onmessage = function (e) {
     } else if (msg.op === 'markdownToPdf') {
       result = markdownToPdf(msg.text, { pageSize: msg.pageSize });
     } else {
-      throw new Error('Unknown worker operation: ' + msg.op);
+      // Not a plain Error: a request for an op this worker doesn't
+      // implement is a caller/deploy bug, not a user-input rejection — must
+      // not classify as validation_error.
+      var unknownOp = new Error('Unknown worker operation: ' + msg.op);
+      unknownOp.name = 'UnknownWorkerOpError';
+      throw unknownOp;
     }
   } catch (err) {
-    self.postMessage({ ok: false, error: (err && err.message) || 'Worker error' });
+    self.postMessage(errorPayload(err, 'Worker error'));
     return;
   }
 
@@ -1904,6 +1925,6 @@ self.onmessage = function (e) {
       self.postMessage({ ok: true, result: payload });
     })
     .catch(function (err) {
-      self.postMessage({ ok: false, error: (err && err.message) || 'Worker error' });
+      self.postMessage(errorPayload(err, 'Worker error'));
     });
 };

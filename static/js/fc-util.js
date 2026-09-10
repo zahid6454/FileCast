@@ -69,19 +69,33 @@
   // throwing a plain `new Error('...')` (or, in one bundled vendor decoder
   // inside pdf-lib, a bare descriptive string — `throw "The input is not a
   // PNG file!"`, not an Error at all) — any other error name (TypeError, a
-  // DOMException, ...) is an unanticipated crash. Classifying/extracting the
+  // DOMException, a worker-boundary error re-tagged by FC.errorFromType
+  // below, ...) is an unanticipated crash. Classifying/extracting the
   // message here, from the raw thrown value, means the admin "Recent errors"
   // feed (below) can tell "user gave bad input" apart from "the converter
   // broke", and a bare-string throw's real message isn't silently swallowed
   // by a generic fallback (`err.message` is undefined on a string).
-  FC.errorMessage = function (err, fallback) {
-    if (typeof err === 'string' && err) return err;
-    return (err && err.message) || fallback;
+  FC.classifyError = function (err, fallback) {
+    var isValidation = typeof err === 'string' || (err && err.name === 'Error');
+    var message = typeof err === 'string' && err ? err : (err && err.message) || fallback;
+    return { message: message, errorType: isValidation ? 'validation_error' : 'conversion_error' };
   };
 
-  FC.errorTypeFromError = function (err) {
-    if (typeof err === 'string') return 'validation_error';
-    return err && err.name === 'Error' ? 'validation_error' : 'conversion_error';
+  // The reverse direction: a worker posts `{error, errorType}` across the
+  // postMessage boundary (plain data, no live Error object survives that
+  // trip) — the ~25 worker-based converters (pdf-split.js, heic-to-jpg.js,
+  // ...) reconstruct a real Error to reject their Promise with, same as
+  // before this existed. A bare `new Error(msg)` always has `.name ===
+  // 'Error'`, which FC.classifyError above would read back as
+  // validation_error regardless of what the worker actually said — so this
+  // re-tags it (any errorType other than 'validation_error' becomes a
+  // non-'Error' name) rather than losing the worker's own classification.
+  // Also used directly by a converter's own pre-flight "config not wired up"
+  // guard (an infra problem, not user input), passing 'conversion_error'.
+  FC.errorFromType = function (message, errorType) {
+    var err = new Error(message);
+    if (errorType !== 'validation_error') err.name = 'WorkerConversionError';
+    return err;
   };
 
   // Fire-and-forget failure-detail reporting (POST /api/v1/errors) — public,
