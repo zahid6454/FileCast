@@ -14,7 +14,10 @@
     var config = window.TOOL_CONFIG || {};
     if (!config.tiff_worker_src || !config.utif_src) {
       return Promise.reject(
-        new Error('Conversion is unavailable right now. Please refresh the page.')
+        window.FC.errorFromType(
+          'Conversion is unavailable right now. Please refresh the page.',
+          'conversion_error'
+        )
       );
     }
 
@@ -34,7 +37,9 @@
             worker.terminate();
             var data = e.data || {};
             if (!data.ok) {
-              reject(new Error(data.error || 'Failed to decode TIFF file.'));
+              reject(
+                window.FC.errorFromType(data.error || 'Failed to decode TIFF file.', data.errorType)
+              );
               return;
             }
             try {
@@ -47,7 +52,12 @@
           worker.onerror = function (err) {
             activeWorker = null;
             worker.terminate();
-            reject(new Error((err && err.message) || 'Failed to decode TIFF file.'));
+            reject(
+              window.FC.errorFromType(
+                (err && err.message) || 'Failed to decode TIFF file.',
+                'conversion_error'
+              )
+            );
           };
 
           worker.postMessage(buffer, [buffer]);

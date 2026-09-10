@@ -35,7 +35,12 @@
 
     var config = window.TOOL_CONFIG || {};
     if (!config.pdf_lib_worker_src || !config.pdf_lib_src) {
-      return Promise.reject(new Error('Remove is unavailable right now. Please refresh the page.'));
+      return Promise.reject(
+        window.FC.errorFromType(
+          'Remove is unavailable right now. Please refresh the page.',
+          'conversion_error'
+        )
+      );
     }
 
     return file.arrayBuffer().then(function (bytes) {
@@ -52,14 +57,24 @@
           if (data.ok) {
             resolve(new Blob([data.result.bytes], { type: 'application/pdf' }));
           } else {
-            reject(new Error(data.error || 'Those pages could not be removed.'));
+            reject(
+              window.FC.errorFromType(
+                data.error || 'Those pages could not be removed.',
+                data.errorType
+              )
+            );
           }
         };
 
         worker.onerror = function (err) {
           activeWorker = null;
           worker.terminate();
-          reject(new Error((err && err.message) || 'Those pages could not be removed.'));
+          reject(
+            window.FC.errorFromType(
+              (err && err.message) || 'Those pages could not be removed.',
+              'conversion_error'
+            )
+          );
         };
 
         worker.postMessage({ op: 'removePages', file: bytes, pages: pages }, [bytes]);

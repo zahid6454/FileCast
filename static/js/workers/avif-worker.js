@@ -41,7 +41,14 @@ var libLoaded = { decode: false, encode: false };
 function ensureLib(kind) {
   if (libLoaded[kind]) return;
   var lib = params && params.get(kind === 'decode' ? 'declib' : 'enclib');
-  if (!lib) throw new Error('AVIF ' + kind + ' library URL is missing.');
+  if (!lib) {
+    // Not a plain Error: a missing decoder/encoder URL is a bad hashed asset
+    // URL or CDN hiccup, not a user-input rejection — must not classify as
+    // validation_error.
+    var noLib = new Error('AVIF ' + kind + ' library URL is missing.');
+    noLib.name = 'DecoderLoadError';
+    throw noLib;
+  }
   importScripts(lib);
   libLoaded[kind] = true;
 }
@@ -111,6 +118,22 @@ function runEncode(rgba, width, height, quality) {
   });
 }
 
+// Mirrors fc-util.js's FC.classifyError — duplicated rather than imported
+// since this worker's script URL is hashed by the build's asset pipeline, so
+// there is no stable path to importScripts() it from here. A converter
+// throws a plain Error for an expected input-validation rejection (or, in
+// one edge case elsewhere in this codebase, a bare descriptive string);
+// anything else is an unanticipated crash.
+function errorPayload(err, fallback) {
+  var isValidation = typeof err === 'string' || (err && err.name === 'Error');
+  var message = typeof err === 'string' && err ? err : (err && err.message) || fallback;
+  return {
+    ok: false,
+    error: message,
+    errorType: isValidation ? 'validation_error' : 'conversion_error'
+  };
+}
+
 self.onmessage = function (e) {
   var data = e.data || {};
   var task;
@@ -119,7 +142,11 @@ self.onmessage = function (e) {
   } else if (data.type === 'encode') {
     task = runEncode(data.rgba, data.width, data.height, data.quality);
   } else {
-    task = Promise.reject(new Error('Unknown AVIF worker task.'));
+    // Not a plain Error: an unrecognized task type is a caller/deploy bug,
+    // not a user-input rejection — must not classify as validation_error.
+    var unknownTask = new Error('Unknown AVIF worker task.');
+    unknownTask.name = 'UnknownWorkerOpError';
+    task = Promise.reject(unknownTask);
   }
 
   task
@@ -128,6 +155,6 @@ self.onmessage = function (e) {
       self.postMessage(msg, transfer);
     })
     .catch(function (err) {
-      self.postMessage({ ok: false, error: (err && err.message) || 'AVIF conversion failed.' });
+      self.postMessage(errorPayload(err, 'AVIF conversion failed.'));
     });
 };

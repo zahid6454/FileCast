@@ -36,7 +36,12 @@
   window.convertFile = function (file) {
     var config = window.TOOL_CONFIG || {};
     if (!config.pdf_lib_worker_src || !config.pdf_lib_src) {
-      return Promise.reject(new Error('Split is unavailable right now. Please refresh the page.'));
+      return Promise.reject(
+        window.FC.errorFromType(
+          'Split is unavailable right now. Please refresh the page.',
+          'conversion_error'
+        )
+      );
     }
 
     return file.arrayBuffer().then(function (bytes) {
@@ -51,7 +56,9 @@
           worker.terminate();
           var data = e.data || {};
           if (!data.ok) {
-            reject(new Error(data.error || 'This PDF could not be split.'));
+            reject(
+              window.FC.errorFromType(data.error || 'This PDF could not be split.', data.errorType)
+            );
             return;
           }
           var blobs = data.result.parts.map(function (part) {
@@ -68,7 +75,12 @@
         worker.onerror = function (err) {
           activeWorker = null;
           worker.terminate();
-          reject(new Error((err && err.message) || 'This PDF could not be split.'));
+          reject(
+            window.FC.errorFromType(
+              (err && err.message) || 'This PDF could not be split.',
+              'conversion_error'
+            )
+          );
         };
 
         worker.postMessage({ op: 'split', file: bytes, groups: currentGroups }, [bytes]);
