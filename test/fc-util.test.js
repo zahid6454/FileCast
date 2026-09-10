@@ -33,22 +33,58 @@ describe('fc-util.js — FC.setSentryContext', () => {
   });
 });
 
-// FC.errorTypeFromName — converters throw a plain `new Error(...)` for
-// expected input-validation rejections; any other error name (TypeError,
-// SyntaxError, ...) is an unanticipated crash. Lets the admin errors feed
-// tell the two apart.
-describe('fc-util.js — FC.errorTypeFromName', () => {
+// FC.errorTypeFromError / FC.errorMessage — converters throw a plain
+// `new Error(...)` for expected input-validation rejections (or, in one
+// vendored pdf-lib decoder, a bare descriptive string); any other error
+// shape (TypeError, DOMException, ...) is an unanticipated crash. Lets the
+// admin errors feed tell the two apart, and stops a bare-string throw's
+// real message from being silently swallowed by a generic fallback.
+describe('fc-util.js — FC.errorTypeFromError', () => {
   it('classifies a plain Error as validation_error', () => {
     const dom = createDom();
     evalScript(dom, 'fc-util.js');
-    expect(dom.window.FC.errorTypeFromName('Error')).toBe('validation_error');
+    expect(dom.window.FC.errorTypeFromError(new Error('bad input'))).toBe('validation_error');
   });
 
-  it('classifies TypeError/SyntaxError/undefined as conversion_error', () => {
+  it('classifies a bare string throw as validation_error', () => {
     const dom = createDom();
     evalScript(dom, 'fc-util.js');
-    expect(dom.window.FC.errorTypeFromName('TypeError')).toBe('conversion_error');
-    expect(dom.window.FC.errorTypeFromName('SyntaxError')).toBe('conversion_error');
-    expect(dom.window.FC.errorTypeFromName(undefined)).toBe('conversion_error');
+    expect(dom.window.FC.errorTypeFromError('The input is not a PNG file!')).toBe(
+      'validation_error'
+    );
+  });
+
+  it('classifies TypeError/DOMException-like/undefined as conversion_error', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    expect(dom.window.FC.errorTypeFromError(new TypeError('boom'))).toBe('conversion_error');
+    expect(dom.window.FC.errorTypeFromError({ name: 'NotSupportedError' })).toBe(
+      'conversion_error'
+    );
+    expect(dom.window.FC.errorTypeFromError(undefined)).toBe('conversion_error');
+  });
+});
+
+describe('fc-util.js — FC.errorMessage', () => {
+  it('extracts .message from an Error', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    expect(dom.window.FC.errorMessage(new Error('bad CSV'), 'fallback')).toBe('bad CSV');
+  });
+
+  it('returns a bare string throw as-is', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    expect(dom.window.FC.errorMessage('The input is not a PNG file!', 'fallback')).toBe(
+      'The input is not a PNG file!'
+    );
+  });
+
+  it('falls back for an empty string, a message-less error, or a missing error', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    expect(dom.window.FC.errorMessage('', 'fallback')).toBe('fallback');
+    expect(dom.window.FC.errorMessage({}, 'fallback')).toBe('fallback');
+    expect(dom.window.FC.errorMessage(undefined, 'fallback')).toBe('fallback');
   });
 });

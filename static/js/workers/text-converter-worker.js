@@ -32,6 +32,24 @@ if (converterUrl) {
   importScripts(converterUrl);
 }
 
+// Mirrors fc-util.js's FC.errorMessage/FC.errorTypeFromError — duplicated
+// rather than imported since this worker's script URL is hashed by the
+// build's asset pipeline (see templates/base.html's assets.get()), so there
+// is no stable path to importScripts() it from here. A converter throws a
+// plain Error for an expected input-validation rejection (or, in one edge
+// case elsewhere in this codebase, a bare descriptive string); anything else
+// is an unanticipated crash.
+function errorPayload(err, fallback) {
+  var message = typeof err === 'string' && err ? err : (err && err.message) || fallback;
+  var errorType =
+    typeof err === 'string'
+      ? 'validation_error'
+      : err && err.name === 'Error'
+        ? 'validation_error'
+        : 'conversion_error';
+  return { ok: false, error: message, errorType: errorType };
+}
+
 self.onmessage = function (e) {
   var text = (e.data && e.data.text) || '';
   try {
@@ -48,18 +66,10 @@ self.onmessage = function (e) {
         self.postMessage({ ok: true, result: result });
       },
       function (err) {
-        self.postMessage({
-          ok: false,
-          error: (err && err.message) || 'Conversion failed.',
-          errorName: err && err.name
-        });
+        self.postMessage(errorPayload(err, 'Conversion failed.'));
       }
     );
   } catch (err) {
-    self.postMessage({
-      ok: false,
-      error: (err && err.message) || 'Conversion failed.',
-      errorName: err && err.name
-    });
+    self.postMessage(errorPayload(err, 'Conversion failed.'));
   }
 };

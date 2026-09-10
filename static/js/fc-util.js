@@ -65,6 +65,25 @@
       });
   };
 
+  // Client-side converters signal an expected input-validation rejection by
+  // throwing a plain `new Error('...')` (or, in one bundled vendor decoder
+  // inside pdf-lib, a bare descriptive string — `throw "The input is not a
+  // PNG file!"`, not an Error at all) — any other error name (TypeError, a
+  // DOMException, ...) is an unanticipated crash. Classifying/extracting the
+  // message here, from the raw thrown value, means the admin "Recent errors"
+  // feed (below) can tell "user gave bad input" apart from "the converter
+  // broke", and a bare-string throw's real message isn't silently swallowed
+  // by a generic fallback (`err.message` is undefined on a string).
+  FC.errorMessage = function (err, fallback) {
+    if (typeof err === 'string' && err) return err;
+    return (err && err.message) || fallback;
+  };
+
+  FC.errorTypeFromError = function (err) {
+    if (typeof err === 'string') return 'validation_error';
+    return err && err.name === 'Error' ? 'validation_error' : 'conversion_error';
+  };
+
   // Fire-and-forget failure-detail reporting (POST /api/v1/errors) — public,
   // anonymous, rate-limited server-side. The admin panel's "Failures" stat
   // card (fed by postConversion above) only ever sees a bare per-tool-per-
@@ -73,16 +92,6 @@
   // already renders error_message/error_type/browser safely but had no
   // client caller until now. Call alongside postConversion(..., false) at
   // every conversion-failure site.
-  // Client-side converters throw a plain `new Error('...')` for expected
-  // input-validation rejections (bad CSV, invalid JSON, etc.) — every other
-  // JS error name (TypeError, SyntaxError from a native JSON.parse, ...) is
-  // an unanticipated crash. Distinguishing the two here means the admin
-  // "Recent errors" feed can tell "user gave bad input" apart from "the
-  // converter broke" without adding an error taxonomy to every converter file.
-  FC.errorTypeFromName = function (name) {
-    return name === 'Error' ? 'validation_error' : 'conversion_error';
-  };
-
   FC.reportError = function (payload) {
     var apiBase = window.FILECAST && window.FILECAST.apiBase;
     if (!apiBase) return;

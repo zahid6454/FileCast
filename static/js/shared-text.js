@@ -148,9 +148,9 @@
     els.progress.classList.add('progress--indeterminate');
     els.progressFill.style.width = '';
 
-    function onFailure(message, errorName) {
+    function onFailure(message, errorType) {
       var msg = message || 'Conversion failed. Please check your input and try again.';
-      var errorType = FC.errorTypeFromName(errorName);
+      errorType = errorType || 'conversion_error';
       showError(msg);
       trackEvent('conversion_failed', { tool_id: config.id, error_type: errorType });
       postConversion(
@@ -185,7 +185,7 @@
       worker.terminate();
       var data = e.data || {};
       if (!data.ok) {
-        onFailure(data.error, data.errorName);
+        onFailure(data.error, data.errorType);
         return;
       }
       var durationMs = Date.now() - startTime;

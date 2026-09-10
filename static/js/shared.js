@@ -365,8 +365,8 @@
       })
       .catch(function (err) {
         if (cancelledThisRun) return;
-        var msg = err && err.message ? err.message : 'Conversion failed. Please try again.';
-        var errorType = FC.errorTypeFromName(err && err.name);
+        var msg = FC.errorMessage(err, 'Conversion failed. Please try again.');
+        var errorType = FC.errorTypeFromError(err);
         showError(msg);
         trackEvent('conversion_failed', {
           tool_id: config.id,
