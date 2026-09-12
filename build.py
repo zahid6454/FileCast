@@ -1146,32 +1146,37 @@ def load_alternatives(tools: list[dict]):
 # ---------------------------------------------------------------------------
 
 
-def resolve_related_tools(tools: list[dict]):
-    """Filter out related_tools IDs that don't exist in the tool set.
+# Shared by resolve_related_tools() and resolve_blog_related_tools() below —
+# both filter an id list down to lightweight tool copies (avoids circular
+# references when templates serialize tool data to JSON).
+RELATED_FIELDS = (
+    "id",
+    "name",
+    "slug",
+    "meta",
+    "category",
+    "type",
+    "input_format",
+    "output_format",
+)
 
-    Stores lightweight copies (id, name, slug, meta, category, type) to avoid
-    circular references when templates serialize tool data to JSON.
-    """
+
+def _resolve_ids(ids, tool_map: dict) -> list[dict]:
+    """Filter `ids` down to the ones present in `tool_map`, as RELATED_FIELDS-only copies."""
+    return [
+        {k: tool_map[tid][k] for k in RELATED_FIELDS if k in tool_map[tid]}
+        for tid in ids
+        if tid in tool_map
+    ]
+
+
+def resolve_related_tools(tools: list[dict]):
+    """Filter out related_tools IDs that don't exist in the tool set."""
     tool_map = {t["id"]: t for t in tools}
-    RELATED_FIELDS = (
-        "id",
-        "name",
-        "slug",
-        "meta",
-        "category",
-        "type",
-        "input_format",
-        "output_format",
-    )
     for tool in tools:
-        raw = tool.get("related_tools", []) or []
-        resolved = []
-        for tid in raw:
-            if tid in tool_map:
-                resolved.append(
-                    {k: tool_map[tid][k] for k in RELATED_FIELDS if k in tool_map[tid]}
-                )
-        tool["related_tools_resolved"] = resolved
+        tool["related_tools_resolved"] = _resolve_ids(
+            tool.get("related_tools", []) or [], tool_map
+        )
 
         reverse_id = tool.get("reverse_tool")
         if reverse_id and reverse_id in tool_map:
@@ -1201,23 +1206,10 @@ def resolve_blog_related_tools(posts: list[dict], tools: list[dict]):
     This builds the lookup map from the real `tools` list instead.
     """
     tool_map = {t["id"]: t for t in tools}
-    RELATED_FIELDS = (
-        "id",
-        "name",
-        "slug",
-        "meta",
-        "category",
-        "type",
-        "input_format",
-        "output_format",
-    )
     for post in posts:
-        raw = post.get("related_tools", []) or []
-        post["related_tools_resolved"] = [
-            {k: tool_map[tid][k] for k in RELATED_FIELDS if k in tool_map[tid]}
-            for tid in raw
-            if tid in tool_map
-        ]
+        post["related_tools_resolved"] = _resolve_ids(
+            post.get("related_tools", []) or [], tool_map
+        )
 
 
 # ---------------------------------------------------------------------------
