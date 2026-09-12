@@ -595,8 +595,24 @@ def load_blog_posts() -> list[dict]:
             continue
         body_path = post.get("content", {}).get("body", "")
         post["body_html"] = render_markdown(ROOT / body_path) if body_path else ""
+        # YAML parses an unquoted ISO date (2026-09-12) as a real date.date,
+        # but a post that omits `date` falls back to "" (a str) below — mixing
+        # the two types in the same sort crashes with TypeError. Stringifying
+        # here (str(date) round-trips to the same "YYYY-MM-DD") keeps every
+        # post's sort key the same type regardless of what the YAML produced.
+        post["date"] = str(post.get("date", ""))
+        # StrictUndefined (create_jinja_env()) makes a missing key fail the
+        # whole build the moment a template references it — even inside an
+        # `{% if %}` — not just render this one post blank. These three are
+        # the only optional fields blog-index.html/blog-post.html read via
+        # plain dot notation, so default them here (once) rather than
+        # guarding every read site (same reasoning as tool_card's `.get()`
+        # guard on `tagline` in _macros.html).
+        post.setdefault("dek", "")
+        post.setdefault("tag", "")
+        post.setdefault("read_minutes", None)
         posts.append(post)
-    posts.sort(key=lambda p: p.get("date", ""), reverse=True)
+    posts.sort(key=lambda p: p["date"], reverse=True)
     return posts
 
 
@@ -1805,8 +1821,9 @@ def generate_sitemap(
     site_config: dict,
     tools: list[dict],
     categories_with_tools: dict,
-    blog_posts: list[dict],
+    blog_posts: list[dict] | None = None,
 ):
+    blog_posts = blog_posts or []
     base = (
         site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
     )
@@ -1956,8 +1973,9 @@ def generate_llms_txt(
     site_config: dict,
     tools: list[dict],
     categories_with_tools: dict,
-    blog_posts: list[dict],
+    blog_posts: list[dict] | None = None,
 ):
+    blog_posts = blog_posts or []
     base = (
         site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
     )
