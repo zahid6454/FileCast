@@ -1,0 +1,14 @@
+enabled: true
+id: browser-conversion-privacy
+slug: /blog/why-browser-based-conversion-is-more-private
+title: "Why Converting Files in Your Browser Is More Private Than Uploading Them"
+dek: "\"We delete your file after 24 hours\" and \"we never received your file\" sound similar. They aren't."
+tag: Privacy
+date: 2026-09-12
+read_minutes: 5
+meta:
+  title: "Why Browser-Based File Conversion Is More Private | FileCast Blog"
+  description: "\"Deleted after 24 hours\" and \"never uploaded\" are not the same privacy guarantee. What actually happens to your file with each approach, and how to tell which one a tool uses."
+content:
+  body: "content/blog/browser-conversion-privacy/body.md"
+related_tools: [png-to-jpg, pdf-merge, image-compress]

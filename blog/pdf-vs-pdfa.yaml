@@ -1,0 +1,14 @@
+enabled: true
+id: pdf-vs-pdfa
+slug: /blog/pdf-vs-pdfa
+title: "PDF vs PDF/A: What's Actually Different (and When It Matters)"
+dek: "Every PDF/A is a PDF. Not every PDF is a PDF/A — and the difference is not cosmetic."
+tag: Documents
+date: 2026-09-12
+read_minutes: 6
+meta:
+  title: "PDF vs PDF/A: What's Actually Different | FileCast Blog"
+  description: "PDF and PDF/A look identical on screen but solve different problems. What PDF/A actually requires, who genuinely needs it, and how to add it to an existing PDF."
+content:
+  body: "content/blog/pdf-vs-pdfa/body.md"
+related_tools: [pdf-to-pdfa]

@@ -48,6 +48,7 @@ ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "dist"
 TEMPLATES_DIR = ROOT / "templates"
 TOOLS_DIR = ROOT / "tools"
+BLOG_DIR = ROOT / "blog"
 STATIC_DIR = ROOT / "static"
 ASSETS_DIR = ROOT / "assets"
 
@@ -565,6 +566,38 @@ def load_tools() -> list[dict]:
         tool["max_file_size_bytes"] = parse_file_size(tool.get("max_file_size", "20MB"))
         tools.append(tool)
     return tools
+
+
+def load_blog_posts() -> list[dict]:
+    """Load blog/*.yaml the same way load_tools() loads tools/*.yaml, then
+    render each post's body markdown (content.body) via render_markdown() —
+    the same function tool content uses, no new markdown handling needed.
+
+    Newest-first by `date`, since that's the one field a blog index actually
+    needs ordered (tools have no equivalent — they're ranked by sort_order,
+    which posts don't have).
+    """
+    posts = []
+    if not BLOG_DIR.exists():
+        return posts
+    for yaml_path in sorted(BLOG_DIR.glob("*.yaml")):
+        with open(yaml_path, encoding="utf-8") as f:
+            post = yaml.safe_load(f)
+        if not isinstance(post, dict):
+            print(f"  [warn] Skipping invalid blog post file: {yaml_path.name}")
+            continue
+        missing = [k for k in ("id", "slug", "title") if not post.get(k)]
+        if missing:
+            print(f"  [warn] Skipping blog post missing {missing}: {yaml_path.name}")
+            continue
+        if not post.get("enabled", True):
+            print(f"  [skip] {post['id']} (disabled)")
+            continue
+        body_path = post.get("content", {}).get("body", "")
+        post["body_html"] = render_markdown(ROOT / body_path) if body_path else ""
+        posts.append(post)
+    posts.sort(key=lambda p: p.get("date", ""), reverse=True)
+    return posts
 
 
 # ---------------------------------------------------------------------------
@@ -1142,6 +1175,35 @@ def resolve_related_tools(tools: list[dict]):
             tool["reverse_tool_resolved"] = None
 
 
+def resolve_blog_related_tools(posts: list[dict], tools: list[dict]):
+    """Resolve each blog post's related_tools IDs against the site's tools.
+
+    Deliberately NOT resolve_related_tools(posts) — that function builds its
+    lookup map from the same list it's called on (`tool_map = {t["id"]: t for
+    t in tools}`), so passing it the blog list alone would map post IDs, not
+    tool IDs, and every related_tools lookup would silently come back empty.
+    This builds the lookup map from the real `tools` list instead.
+    """
+    tool_map = {t["id"]: t for t in tools}
+    RELATED_FIELDS = (
+        "id",
+        "name",
+        "slug",
+        "meta",
+        "category",
+        "type",
+        "input_format",
+        "output_format",
+    )
+    for post in posts:
+        raw = post.get("related_tools", []) or []
+        post["related_tools_resolved"] = [
+            {k: tool_map[tid][k] for k in RELATED_FIELDS if k in tool_map[tid]}
+            for tid in raw
+            if tid in tool_map
+        ]
+
+
 # ---------------------------------------------------------------------------
 # Emit dist/tool-data.json for the homepage/404 client search (ledger P8)
 # ---------------------------------------------------------------------------
@@ -1548,8 +1610,21 @@ def render_page(
 
 
 def render_all_pages(
-    env: jinja2.Environment, tools: list[dict], categories_with_tools: dict
+    env: jinja2.Environment,
+    tools: list[dict],
+    categories_with_tools: dict,
+    blog_posts: list[dict],
 ):
+    # Homepage FAQ (Step 1, AdSense content-gap plan) — same render_markdown/
+    # parse_faq_pairs pair load_tool_content() uses per tool, just called
+    # directly here since the homepage has no per-tool content dict to hang
+    # it off of. Always computed and always passed below (never conditionally
+    # omitted): StrictUndefined (create_jinja_env()) fails the whole build if
+    # a referenced template variable is missing, even inside an `{% if %}`.
+    faq_path = ROOT / "content/home/faq.md"
+    faq_html = render_markdown(faq_path)
+    faq_structured_data = parse_faq_pairs(faq_path)
+
     # Homepage
     if render_page(
         env,
@@ -1557,6 +1632,8 @@ def render_all_pages(
         DIST / "index.html",
         categories=categories_with_tools,
         tools=tools,
+        faq_html=faq_html,
+        faq_structured_data=faq_structured_data,
     ):
         print("  [ok] index.html")
 
@@ -1583,6 +1660,19 @@ def render_all_pages(
         slug = cat_data["slug"]
         out_path = DIST / slug / "index.html"
         if render_page(env, "category.html", out_path, category=cat_data):
+            print(f"  [ok] {slug}/index.html")
+
+    # Blog index
+    if render_page(
+        env, "blog-index.html", DIST / "blog" / "index.html", posts=blog_posts
+    ):
+        print("  [ok] blog/index.html")
+
+    # Blog posts
+    for post in blog_posts:
+        slug = post.get("slug", f"/blog/{post['id']}").strip("/")
+        out_path = DIST / slug / "index.html"
+        if render_page(env, "blog-post.html", out_path, post=post):
             print(f"  [ok] {slug}/index.html")
 
     # Privacy page
@@ -1711,7 +1801,12 @@ def _parse_previous_lastmods(xml_text: str | None) -> dict:
     return result
 
 
-def generate_sitemap(site_config: dict, tools: list[dict], categories_with_tools: dict):
+def generate_sitemap(
+    site_config: dict,
+    tools: list[dict],
+    categories_with_tools: dict,
+    blog_posts: list[dict],
+):
     base = (
         site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
     )
@@ -1743,6 +1838,26 @@ def generate_sitemap(site_config: dict, tools: list[dict], categories_with_tools
                 "changefreq": "weekly",
             }
         )
+
+    if blog_posts:
+        urls.append(
+            {
+                "loc": f"{base}/blog/",
+                "segment": "blog",
+                "priority": "0.6",
+                "changefreq": "weekly",
+            }
+        )
+        for post in blog_posts:
+            slug = post.get("slug", f"/blog/{post['id']}").strip("/")
+            urls.append(
+                {
+                    "loc": f"{base}/{slug}/",
+                    "segment": slug,
+                    "priority": "0.7",
+                    "changefreq": "monthly",
+                }
+            )
 
     # (segment, priority, changefreq) — info pages monthly, legal pages yearly
     # (O2 report §13 #25).
@@ -1838,7 +1953,10 @@ def generate_robots(site_config: dict):
 
 
 def generate_llms_txt(
-    site_config: dict, tools: list[dict], categories_with_tools: dict
+    site_config: dict,
+    tools: list[dict],
+    categories_with_tools: dict,
+    blog_posts: list[dict],
 ):
     base = (
         site_config.get("site", {}).get("base_url", "https://filecast.org").rstrip("/")
@@ -1862,6 +1980,15 @@ def generate_llms_txt(
             slug = tool.get("slug", f"/convert/{tool['id']}").strip("/")
             desc = tool.get("tagline") or tool.get("meta", {}).get("description", "")
             lines.append(f"- [{tool['name']}]({base}/{slug}/): {desc}")
+
+    if blog_posts:
+        lines.append("")
+        lines.append("## Blog")
+        lines.append("")
+        for post in blog_posts:
+            slug = post.get("slug", f"/blog/{post['id']}").strip("/")
+            desc = post.get("dek") or post.get("meta", {}).get("description", "")
+            lines.append(f"- [{post['title']}]({base}/{slug}/): {desc}")
 
     lines.append("")
     lines.append("## Optional")
@@ -2559,21 +2686,21 @@ def build():
     print("FileCast build starting...\n")
 
     # 1. Clean
-    print("[1/11] Cleaning dist/")
+    print("[1/12] Cleaning dist/")
     clean_dist()
 
     # 2. Load config, then overlay the admin Site Settings (graceful fallback to
     # YAML). Merged HERE — before create_jinja_env() and generate_headers() — so
     # the templates and the CSP read one merged dict and never disagree about
     # which integrations are on (P10; all-or-nothing overlay).
-    print("[2/11] Loading site-config.yaml")
+    print("[2/12] Loading site-config.yaml")
     site_config = load_site_config()
     site_config = apply_site_settings(site_config, fetch_site_settings())
 
     # 3-4. Load tools, then overlay DB state (graceful fallback to YAML) and
     # apply the global sort_order upstream of all rendering (P9/D1). Disabled
     # tools are dropped BEFORE resolve_related_tools() so no dangling links remain.
-    print("[3/11] Discovering tools")
+    print("[3/12] Discovering tools")
     tools = load_tools()
     tools = apply_tool_overrides(tools, fetch_tool_overrides())  # may DROP disabled
     tools = sort_tools(tools)
@@ -2583,8 +2710,15 @@ def build():
     tools = apply_rating_aggregates(tools, fetch_rating_aggregates())
     print(f"       Found {len(tools)} tool(s)")
 
+    # Blog posts (AdSense content-gap plan, Step 2) — a separate content type
+    # from tools, loaded the same way, so it gets its own numbered step rather
+    # than being folded silently into "Discovering tools" above.
+    print("[4/12] Discovering blog posts")
+    blog_posts = load_blog_posts()
+    print(f"       Found {len(blog_posts)} blog post(s)")
+
     # 5. Group by category
-    print("[4/11] Grouping tools by category")
+    print("[5/12] Grouping tools by category")
     categories = site_config.get("categories", [])
     categories_with_tools = group_tools_by_category(tools, categories)
     attach_homepage_tools(categories_with_tools)
@@ -2593,16 +2727,17 @@ def build():
     print(f"       Active categories: {active_cats if active_cats else '(none yet)'}")
 
     # 6. Load content
-    print("[5/11] Loading content markdown")
+    print("[6/12] Loading content markdown")
     load_tool_content(tools)
     load_alternatives(tools)
 
     # 7. Resolve related tools
-    print("[6/11] Resolving related tools")
+    print("[7/12] Resolving related tools")
     resolve_related_tools(tools)
+    resolve_blog_related_tools(blog_posts, tools)
 
     # 8-12. Process assets
-    print("[7/11] Processing static assets")
+    print("[8/12] Processing static assets")
     asset_map = process_assets()
     for key, info in asset_map.items():
         print(f"       {key} → {info['path']}")
@@ -2613,11 +2748,11 @@ def build():
 
     # Open Graph / Twitter share images (P1 §7) — one per tool/category id,
     # one for the homepage, one shared default for every other page.
-    print("[8/11] Generating Open Graph images")
+    print("[9/12] Generating Open Graph images")
     generate_og_images(tools, categories_with_tools, site_config)
 
     # 13. Jinja2 environment
-    print("[9/11] Setting up Jinja2")
+    print("[10/12] Setting up Jinja2")
     env = create_jinja_env(site_config, asset_map, categories_with_tools)
 
     # Footer "Popular Tools" row (O2 report §5.7/§13 #18). Computed from the
@@ -2638,17 +2773,17 @@ def build():
     }
 
     # 14. Render pages
-    print("[10/11] Rendering pages")
-    render_all_pages(env, tools, categories_with_tools)
+    print("[11/12] Rendering pages")
+    render_all_pages(env, tools, categories_with_tools, blog_posts)
 
     # 15-19. Generate support files
     print(
-        "[11/11] Generating sitemap, robots.txt, llms.txt, manifest.json, "
+        "[12/12] Generating sitemap, robots.txt, llms.txt, manifest.json, "
         "sw.js, ads.txt, _headers, _redirects"
     )
-    generate_sitemap(site_config, tools, categories_with_tools)
+    generate_sitemap(site_config, tools, categories_with_tools, blog_posts)
     generate_robots(site_config)
-    generate_llms_txt(site_config, tools, categories_with_tools)
+    generate_llms_txt(site_config, tools, categories_with_tools, blog_posts)
     generate_manifest(site_config)
     generate_ads_txt(site_config)
     # Second-resolution, not date.today() — CACHE_VERSION must actually change

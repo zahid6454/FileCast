@@ -33,6 +33,19 @@
   "description": "{{ site.description }}"
 }
 </script>
+{# FAQPage (AdSense content-gap plan, Step 1) — mirrors tool.html:42-47.
+   Google restricted FAQPage rich results to government/health sites in
+   August 2023, so this produces no search rich-result benefit; kept for
+   consistency with every tool page, which all emit this block already. #}
+{% if faq_structured_data %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": {{ faq_structured_data|tojson }}
+}
+</script>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -323,5 +336,27 @@
     </div>
   </div>
 </section>
+
+{# ===== FAQ + trust strip (AdSense content-gap plan, Step 1) — same
+   content-block/content-block--faq markup and CSS classes tool.html's FAQ
+   uses (static Q&A blocks, no JS accordion — matches the rest of the site). #}
+{% if faq_html %}
+<section class="section" id="faq">
+  <div class="container container--narrow">
+    <h2 class="section__title"><span class="text-brand-blue">Frequently</span> <span class="text-brand-green">Asked Questions</span></h2>
+    <div class="section__divider"></div>
+    <div class="content-block content-block--faq">
+      {{ faq_html|safe }}
+    </div>
+    <div class="content-block">
+      <div class="badge-row">
+        <span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Runs in your browser</span>
+        <span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Files never uploaded</span>
+        <span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-no-lock"></use></svg>No sign-up required</span>
+      </div>
+    </div>
+  </div>
+</section>
+{% endif %}
 
 {% endblock %}

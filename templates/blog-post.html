@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumb_jsonld %}
+
+{% block title %}{{ post.meta.title }}{% endblock %}
+{% block meta_description %}{{ post.meta.description }}{% endblock %}
+{% block canonical %}{{ site.base_url }}{{ post.slug }}/{% endblock %}
+{% block og_title %}{{ post.meta.title }}{% endblock %}
+{% block og_description %}{{ post.meta.description }}{% endblock %}
+{% block og_url %}{{ site.base_url }}{{ post.slug }}/{% endblock %}
+{% block og_image_alt %}{{ post.title }} — {{ site.name }}{% endblock %}
+
+{% block structured_data %}
+{{ breadcrumb_jsonld({'name': 'Blog', 'slug': 'blog'}, post.title) }}
+{% endblock %}
+
+{% block content %}
+<div class="container container--narrow page">
+
+  <nav class="breadcrumb">
+    <a href="/">Home</a><span>&gt;</span>
+    <a href="/blog/">Blog</a><span>&gt;</span>
+    <span class="breadcrumb__current">{{ post.title }}</span>
+  </nav>
+
+  <h1 class="page__title">{{ post.title }}</h1>
+  {% if post.dek %}
+  <p class="page__tagline">{{ post.dek }}</p>
+  {% endif %}
+  <p class="page__tagline">{{ post.tag }}{% if post.tag and post.read_minutes %} &middot; {% endif %}{% if post.read_minutes %}{{ post.read_minutes }} min read{% endif %}</p>
+
+  <div class="content-block">
+    {{ post.body_html|safe }}
+  </div>
+
+  {% if post.related_tools_resolved %}
+  <div class="related-tools">
+    <h2 class="related-tools__title">Related Tools</h2>
+    <div class="card-grid">
+      {% for related in post.related_tools_resolved %}
+      <a class="card card--centered{% if related.type == 'server-side' %} card--server{% endif %}"
+         href="{{ related.slug }}/"
+         data-source="{{ post.id }}"
+         data-target="{{ related.id }}">
+        {{ related.name }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
