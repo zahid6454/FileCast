@@ -108,35 +108,41 @@
 
     actionsEl.innerHTML = '';
 
-    blobs.forEach(function (item) {
-      var btn = document.createElement('button');
-      btn.className = 'btn btn--success';
-      btn.textContent = item.label;
-      btn.addEventListener('click', function () {
-        var url = URL.createObjectURL(item.blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = baseName + '-page' + item.pageNum + '.pdf';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+    function downloadItem(item) {
+      var url = URL.createObjectURL(item.blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = baseName + '-page' + item.pageNum + '.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+      }, 1000);
+    }
+
+    var downloadAllBtn = document.createElement('button');
+    downloadAllBtn.className = 'btn btn--success';
+    downloadAllBtn.textContent = 'Download Splits (' + blobs.length + ')';
+    downloadAllBtn.addEventListener('click', function () {
+      // ponytail: sequential a.click() downloads, not a zip — browsers may
+      // prompt to allow multiple downloads past ~5-10 files. Add JSZip if
+      // that becomes a real complaint.
+      downloadAllBtn.disabled = true;
+      blobs.forEach(function (item, i) {
         setTimeout(function () {
-          URL.revokeObjectURL(url);
-        }, 1000);
+          downloadItem(item);
+        }, i * 300);
       });
-      actionsEl.appendChild(btn);
     });
+    actionsEl.appendChild(downloadAllBtn);
 
     if (resetBtn) actionsEl.appendChild(resetBtn);
 
     var infoEl = document.getElementById('result-info');
     if (infoEl) {
       infoEl.textContent =
-        'Split into ' +
-        blobs.length +
-        ' file' +
-        (blobs.length === 1 ? '' : 's') +
-        '. Click each button to download.';
+        'Split into ' + blobs.length + ' file' + (blobs.length === 1 ? '' : 's') + '.';
     }
   }
 })();
