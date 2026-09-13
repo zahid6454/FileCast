@@ -20,6 +20,11 @@ lib64/
 # (the Python `lib/` pattern above would otherwise silently exclude them, so a
 # clean checkout/deploy would ship without pdf/heic/tiff libraries).
 !static/lib/
+# ...same for the demo-recorder scripts' own shared helpers - the Python
+# `lib/` pattern above was also silently excluding scripts/lib/, which would
+# have shipped record_demo_text.js/record_demo_pdf_split.js/
+# record_demo_image_resize.js broken for anyone who clones fresh.
+!scripts/lib/
 parts/
 sdist/
 var/
@@ -243,3 +248,6 @@ node_modules/
 
 # scripts/record_demo.js output (scratch tooling, not a build artifact)
 /scratch-demo-videos/
+
+# general scratch dir for temp/intermediate work, never a build artifact
+/scratch-pad/
