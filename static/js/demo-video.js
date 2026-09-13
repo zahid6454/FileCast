@@ -85,10 +85,28 @@
     });
   }
   if (fullscreenBtn) {
+    function setFullscreenIcon(isFullscreen) {
+      var use = fullscreenBtn.querySelector('use');
+      var label = isFullscreen ? 'Exit full screen' : 'Full screen';
+      if (use) use.setAttribute('href', '#icon-' + (isFullscreen ? 'minimize' : 'maximize'));
+      fullscreenBtn.setAttribute('aria-label', label);
+      fullscreenBtn.setAttribute('title', label);
+    }
+    // Driven by fullscreenchange, not set inline in the click handler below —
+    // exiting via Esc (or the browser's own UI) never runs our click handler
+    // at all, so that's the only reliable place to catch every way fullscreen
+    // state can change and keep the icon/label honest.
+    function onFullscreenChange() {
+      var current = document.fullscreenElement || document.webkitFullscreenElement;
+      setFullscreenIcon(current === videoWrap);
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
     fullscreenBtn.addEventListener('click', function () {
       // Toggle: a second click while already fullscreen must exit, not call
       // requestFullscreen() again (a no-op that leaves it stuck fullscreen —
-      // the button otherwise only ever has an "enter" branch).
+      // the button otherwise only ever had an "enter" branch).
       var current = document.fullscreenElement || document.webkitFullscreenElement;
       if (current) {
         if (document.exitFullscreen) document.exitFullscreen().catch(function () {});

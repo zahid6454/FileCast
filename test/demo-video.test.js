@@ -233,6 +233,38 @@ describe('demo-video.js (homepage lazy-loaded demo panel)', () => {
     expect(requestFullscreen).toHaveBeenCalledTimes(1); // must not be called again
   });
 
+  it('updates its own icon/label on fullscreenchange, including exits the click handler never sees (Esc)', () => {
+    const dom = createDom(panelHtml());
+    mockIntersectionObserver(dom.window);
+    mockMatchMedia(dom.window, true);
+    mockVideoPlayback(dom.window);
+    mockFullscreen(dom.window, 'requestFullscreen');
+    mockExitFullscreen(dom.window);
+
+    evalScript(dom, 'demo-video.js');
+
+    const wrap = dom.window.document.querySelector('.demo-panel__video-wrap');
+    const fullscreenBtn = dom.window.document.querySelector('[data-action="fullscreen"]');
+    expect(fullscreenBtn.getAttribute('aria-label')).toBe('Full screen');
+    expect(fullscreenBtn.querySelector('use').getAttribute('href')).toBe('#icon-maximize');
+
+    // Entering: the click handler itself never touches the icon — only the
+    // fullscreenchange listener does — so fire it by hand, same as a real
+    // browser would once requestFullscreen() actually takes effect.
+    dom.window.document.__fullscreenElement = wrap;
+    dom.window.document.dispatchEvent(new dom.window.Event('fullscreenchange'));
+    expect(fullscreenBtn.getAttribute('aria-label')).toBe('Exit full screen');
+    expect(fullscreenBtn.querySelector('use').getAttribute('href')).toBe('#icon-minimize');
+
+    // Exiting via Esc bypasses our click handler entirely (the browser
+    // handles Esc itself) — only fullscreenchange firing on its own proves
+    // the icon still reverts.
+    dom.window.document.__fullscreenElement = null;
+    dom.window.document.dispatchEvent(new dom.window.Event('fullscreenchange'));
+    expect(fullscreenBtn.getAttribute('aria-label')).toBe('Full screen');
+    expect(fullscreenBtn.querySelector('use').getAttribute('href')).toBe('#icon-maximize');
+  });
+
   it('fullscreen button loads the video first if it was never scrolled into view', () => {
     const dom = createDom(panelHtml());
     dom.window.IntersectionObserver = function () {
