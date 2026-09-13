@@ -33,6 +33,12 @@
   // visitors who've set that OS-level flag, not everyone.
   var controls = document.querySelector('.demo-panel__controls');
   if (!controls) return;
+  // Fullscreen target is the wrap (video + controls), not the bare video —
+  // requestFullscreen() only carries the target element's own subtree into
+  // fullscreen, and .demo-panel__controls is a sibling of <video>, not a
+  // descendant. Fullscreening the video alone would strand the viewer with
+  // no play/pause/rewind/exit UI at all once in fullscreen.
+  var videoWrap = video.closest('.demo-panel__video-wrap') || video.parentElement;
 
   var playBtn = controls.querySelector('[data-action="toggle"]');
   var backBtn = controls.querySelector('[data-action="back"]');
@@ -80,8 +86,14 @@
   }
   if (fullscreenBtn) {
     fullscreenBtn.addEventListener('click', function () {
-      if (video.requestFullscreen) video.requestFullscreen();
-      else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); // iOS Safari
+      ensureLoaded();
+      if (videoWrap.requestFullscreen) {
+        videoWrap.requestFullscreen().catch(function () {});
+      } else if (videoWrap.webkitRequestFullscreen) {
+        videoWrap.webkitRequestFullscreen(); // older prefixed Safari/Chrome
+      } else if (video.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen(); // iOS Safari: video-only native fullscreen, no wrap support
+      }
     });
   }
 })();

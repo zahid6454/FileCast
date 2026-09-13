@@ -17,19 +17,34 @@ import { createDom, evalScript } from './helpers.js';
 
 function panelHtml() {
   return `
-    <video class="demo-panel__video" muted playsinline preload="none" data-src="/videos/docx-to-pdf-demo.mp4"></video>
-    <div class="demo-panel__controls">
-      <button type="button" data-action="back" aria-label="Rewind 5 seconds">
-        <svg><use href="#icon-rewind-5"></use></svg>
-      </button>
-      <button type="button" data-action="toggle" aria-label="Play">
-        <svg><use href="#icon-play"></use></svg>
-      </button>
-      <button type="button" data-action="forward" aria-label="Forward 5 seconds">
-        <svg><use href="#icon-forward-5"></use></svg>
-      </button>
+    <div class="demo-panel__video-wrap">
+      <video class="demo-panel__video" muted playsinline preload="none" data-src="/videos/docx-to-pdf-demo.mp4"></video>
+      <div class="demo-panel__controls">
+        <button type="button" data-action="back" aria-label="Rewind 5 seconds">
+          <svg><use href="#icon-rewind-5"></use></svg>
+        </button>
+        <button type="button" data-action="toggle" aria-label="Play">
+          <svg><use href="#icon-play"></use></svg>
+        </button>
+        <button type="button" data-action="forward" aria-label="Forward 5 seconds">
+          <svg><use href="#icon-forward-5"></use></svg>
+        </button>
+        <button type="button" data-action="fullscreen" aria-label="Full screen">
+          <svg><use href="#icon-maximize"></use></svg>
+        </button>
+      </div>
     </div>
   `;
+}
+
+// jsdom implements neither requestFullscreen nor webkitRequestFullscreen on
+// any element — stand in for whichever one is under test.
+function mockFullscreen(win, prop) {
+  var fn = vi.fn(function () {
+    return prop === 'requestFullscreen' ? Promise.resolve() : undefined;
+  });
+  win.Element.prototype[prop] = fn;
+  return fn;
 }
 
 // Fires "intersecting" synchronously on observe() — stands in for "the panel
@@ -156,5 +171,54 @@ describe('demo-video.js (homepage lazy-loaded demo panel)', () => {
 
     backBtn.click();
     expect(video.currentTime).toBe(5);
+  });
+
+  it('fullscreen button fullscreens the video-wrap (not the bare video), so the controls stay in the fullscreened subtree', () => {
+    const dom = createDom(panelHtml());
+    mockIntersectionObserver(dom.window);
+    mockMatchMedia(dom.window, true);
+    mockVideoPlayback(dom.window);
+    const requestFullscreen = mockFullscreen(dom.window, 'requestFullscreen');
+
+    evalScript(dom, 'demo-video.js');
+
+    const wrap = dom.window.document.querySelector('.demo-panel__video-wrap');
+    const fullscreenBtn = dom.window.document.querySelector('[data-action="fullscreen"]');
+    fullscreenBtn.click();
+
+    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    expect(requestFullscreen.mock.instances[0]).toBe(wrap);
+  });
+
+  it('fullscreen button loads the video first if it was never scrolled into view', () => {
+    const dom = createDom(panelHtml());
+    dom.window.IntersectionObserver = function () {
+      this.observe = function () {};
+      this.disconnect = vi.fn();
+    };
+    mockMatchMedia(dom.window, false);
+    mockVideoPlayback(dom.window);
+    mockFullscreen(dom.window, 'requestFullscreen');
+
+    evalScript(dom, 'demo-video.js');
+
+    const video = dom.window.document.querySelector('.demo-panel__video');
+    expect(video.src).toBe('');
+
+    dom.window.document.querySelector('[data-action="fullscreen"]').click();
+    expect(video.src).toContain('/videos/docx-to-pdf-demo.mp4');
+  });
+
+  it('falls back to prefixed webkitRequestFullscreen when requestFullscreen is unavailable', () => {
+    const dom = createDom(panelHtml());
+    mockIntersectionObserver(dom.window);
+    mockMatchMedia(dom.window, true);
+    mockVideoPlayback(dom.window);
+    const webkitRequestFullscreen = mockFullscreen(dom.window, 'webkitRequestFullscreen');
+
+    evalScript(dom, 'demo-video.js');
+
+    dom.window.document.querySelector('[data-action="fullscreen"]').click();
+    expect(webkitRequestFullscreen).toHaveBeenCalledTimes(1);
   });
 });

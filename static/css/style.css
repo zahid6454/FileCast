@@ -4144,16 +4144,29 @@ select.tool-options__input {
 #faq .section__title::after {
   content: "";
   display: block;
-  width: 120%;
-  margin-left: -10%;
+  /* 120% of the title's own box, but never wider than the viewport actually
+     has room for. width:fit-content on the title (above) only shrinks to
+     the real text width when that text fits on one line — once it wraps
+     (e.g. "Frequently Asked Questions" at 320px), fit-content falls back to
+     the FULL available container width, and a naive 120% of that blew past
+     the page edge (confirmed via e2e/smoke.spec.js's 320px-widths sweep:
+     6px of real horizontal overflow). calc(100vw - 2 * var(--space-4))
+     mirrors .container's own side gutters, so this can never exceed the
+     page's actual safe width regardless of whether the title above it
+     wrapped. left:50%+translateX (not a matching negative margin) keeps it
+     centered under the title either way, since which branch of min() wins
+     doesn't have to be tracked by a second, separately-computed value. */
+  width: min(120%, calc(100vw - 2 * var(--space-4)));
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
   height: 2px;
   margin-top: var(--space-3);
   /* Solid two-tone bar, no transparent fade stop — the base divider's
      gradient ends in "transparent" for a full-width bar fading into the
      page edge; on a short bar exactly matching the title's width, that
      fade would land mid-title-width and read as lopsided rather than a
-     clean underline. 120%/-10% keeps it centered but a bit wider than the
-     text itself, rather than clipped exactly to it. */
+     clean underline. */
   background: linear-gradient(90deg, var(--brand-blue), var(--brand-green));
 }
 
@@ -4194,6 +4207,11 @@ select.tool-options__input {
      it, since the caption/steps below reflow too. */
   aspect-ratio: 1.6;
 }
+/* Fullscreen target (demo-video.js requestFullscreen()s this wrap, not the
+   bare video, so the controls overlay stays reachable) — the fixed 1.6
+   aspect-ratio would otherwise fight the UA's own fullscreen sizing. */
+.demo-panel__video-wrap:fullscreen,
+.demo-panel__video-wrap:-webkit-full-screen { aspect-ratio: auto; }
 .demo-panel__video { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* Real, focusable buttons (not the video's native controls — a
    scrubber/volume are meaningless for a silent decorative loop) giving
