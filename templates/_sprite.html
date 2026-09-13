@@ -22,6 +22,32 @@
   <symbol id="icon-arrow-convert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M5 12h14"/><path d="M12 5l7 7-7 7"/>
   </symbol>
+  {# Demo-panel video controls (Implementation Validation follow-up, WCAG 2.2.2
+     Pause/Stop/Hide) — outline-only like every other symbol here, matching
+     Feather Icons' own path data (this sprite already borrows several paths
+     from Feather verbatim, e.g. icon-check/icon-x/icon-download above). #}
+  <symbol id="icon-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="5 3 19 12 5 21 5 3"/>
+  </symbol>
+  <symbol id="icon-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+  </symbol>
+  {# Two earlier attempts here: a hand-drawn circular-arrow-plus-"5" didn't
+     survive a real screenshot at actual button size (32px circle, 16px
+     icon) — the numeral was illegible and the arc direction read as
+     ambiguous. Plain double-chevrons fixed legibility but dropped the "5"
+     entirely. This is Tabler Icons' actual rewind-backward-5/
+     rewind-forward-5 (verbatim path data, MIT licensed,
+     github.com/tabler/tabler-icons) — same fill/stroke/viewBox convention
+     as every other symbol in this sprite (unlike Material Symbols' version
+     of the same concept, which is a filled glyph and would have been the
+     only filled icon among ~40 outline ones here). #}
+  <symbol id="icon-rewind-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 18a6 6 0 1 0 0 -12h-11"/><path d="M7 9l-3 -3l3 -3"/><path d="M8 20h2a1 1 0 0 0 1 -1v-1a1 1 0 0 0 -1 -1h-2v-3h3"/>
+  </symbol>
+  <symbol id="icon-forward-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 18a6 6 0 1 1 0 -12h11"/><path d="M13 20h2a1 1 0 0 0 1 -1v-1a1 1 0 0 0 -1 -1h-2v-3h3"/><path d="M17 9l3 -3l-3 -3"/>
+  </symbol>
   <symbol id="icon-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M9 18l6-6-6-6"/>
   </symbol>

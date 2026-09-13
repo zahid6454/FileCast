@@ -15,6 +15,8 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+import yaml
+from markupsafe import escape
 
 # build.py lives at the repo root (api/tests/test_build.py → parents[2]).
 ROOT = Path(__file__).resolve().parents[2]
@@ -1123,6 +1125,15 @@ def test_generate_headers_fonts_cache_rule(tmp_path, monkeypatch):
     assert "Cache-Control: public, max-age=31536000, immutable" in fonts_block
 
 
+def test_generate_headers_videos_cache_rule(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
+    text = (tmp_path / "_headers").read_text(encoding="utf-8")
+    assert "/videos/*" in text
+    videos_block = text.split("/videos/*")[1].split("\n\n")[0]
+    assert "Cache-Control: public, max-age=86400" in videos_block
+
+
 def test_process_assets_hashes_font_and_rewrites_css(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     asset_map = build.process_assets()
@@ -1135,6 +1146,16 @@ def test_process_assets_hashes_font_and_rewrites_css(tmp_path, monkeypatch):
     css_text = (tmp_path / css_entry["path"]).read_text(encoding="utf-8")
     assert "/fonts/inter-latin.woff2" not in css_text  # placeholder must be rewritten
     assert font_entry["path"] in css_text
+
+
+def test_process_assets_copies_demo_video(tmp_path, monkeypatch):
+    # Guards against process_assets() silently dropping the homepage demo
+    # video — it has no catch-all "copy everything else" step, so a new
+    # static file type needs its own explicit copy block or it never reaches
+    # dist/ and the <video> tag 404s.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.process_assets()
+    assert (tmp_path / "videos" / "docx-to-pdf-demo.mp4").exists()
 
 
 def test_generate_headers_without_api_base_url_emits_no_empty_token(
@@ -2711,3 +2732,133 @@ def test_alternatives_retemplated_groups_substitute_source():
         html = tool["alternatives_html"]
         assert f"Convert {source} to" in html, group
         assert html.count(source) >= 2, group  # heading AND sentence both substitute it
+
+
+# --------------------------------------------------------------------------- #
+# load_blog_posts / resolve_blog_related_tools (AdSense content-gap plan)
+# --------------------------------------------------------------------------- #
+
+
+def _write_post(blog_dir, filename, **fields):
+    base = {"enabled": True, "id": "post", "slug": "/blog/post", "title": "A Post"}
+    base.update(fields)
+    (blog_dir / filename).write_text(yaml.dump(base), encoding="utf-8")
+
+
+def test_load_blog_posts_skips_disabled_and_invalid(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "BLOG_DIR", tmp_path)
+    _write_post(tmp_path, "a.yaml", id="a", slug="/blog/a")
+    _write_post(tmp_path, "b.yaml", id="b", slug="/blog/b", enabled=False)
+    _write_post(tmp_path, "c.yaml", id="c", title="")  # missing required title
+    posts = build.load_blog_posts()
+    assert [p["id"] for p in posts] == ["a"]
+
+
+def test_load_blog_posts_missing_dir_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "BLOG_DIR", tmp_path / "does-not-exist")
+    assert build.load_blog_posts() == []
+
+
+def test_load_blog_posts_defaults_optional_fields(tmp_path, monkeypatch):
+    # Regression guard: blog-index.html/blog-post.html read `dek`/`tag`/
+    # `read_minutes` via plain dot notation, which is StrictUndefined-unsafe
+    # for a key that's genuinely absent from the dict (as opposed to present
+    # with a falsy value) — a future post omitting one of these must not take
+    # the whole site's build down with it.
+    monkeypatch.setattr(build, "BLOG_DIR", tmp_path)
+    _write_post(tmp_path, "minimal.yaml")  # no dek/tag/read_minutes/date
+    post = build.load_blog_posts()[0]
+    assert post["dek"] == ""
+    assert post["tag"] == ""
+    assert post["read_minutes"] is None
+    assert post["date"] == ""  # normalized, never a raw missing key
+
+
+def test_load_blog_posts_normalizes_date_type_for_sorting(tmp_path, monkeypatch):
+    # PyYAML parses an unquoted ISO date (2026-09-12) as datetime.date, not a
+    # str. Sorting a mix of that and the "" fallback for a dateless post used
+    # to raise TypeError ('<' not supported between date and str) — confirmed
+    # by reproducing it directly against datetime.date/str before this fix.
+    monkeypatch.setattr(build, "BLOG_DIR", tmp_path)
+    _write_post(
+        tmp_path, "dated.yaml", id="dated", slug="/blog/dated", date="2026-01-01"
+    )
+    _write_post(tmp_path, "dateless.yaml", id="dateless", slug="/blog/dateless")
+    posts = build.load_blog_posts()  # must not raise
+    assert [p["id"] for p in posts] == ["dated", "dateless"]  # newest (real date) first
+    assert all(isinstance(p["date"], str) for p in posts)
+
+
+def test_load_blog_posts_sorts_newest_first():
+    # Exercises the real blog/*.yaml on disk (same posture as load_tools()
+    # tests, which read the real tools/*.yaml) — pins that ordering is by
+    # date, not glob/filename order.
+    posts = build.load_blog_posts()
+    dates = [p["date"] for p in posts]
+    assert dates == sorted(dates, reverse=True)
+
+
+def test_resolve_blog_related_tools_maps_against_real_tools_not_posts():
+    # The bug this function exists to avoid: resolve_related_tools(posts)
+    # would build its lookup map FROM the post list itself (tool_map =
+    # {t["id"]: t for t in tools}), so a post's related_tools IDs (real tool
+    # IDs) would never match any key in that map and every post would
+    # silently resolve to an empty list. Constructing a fake "tool" whose id
+    # collides with a post's own id proves the map comes from `tools`, not
+    # `posts` — if it came from `posts`, this fake same-id tool would never
+    # be consulted and the lookup would still incorrectly succeed via the
+    # post map for the wrong reason.
+    posts = [{"id": "my-post", "related_tools": ["png-to-jpg"]}]
+    tools = [
+        {"id": "png-to-jpg", "name": "PNG to JPG", "slug": "/convert/png-to-jpg"},
+        {"id": "my-post", "name": "Not The Post", "slug": "/convert/my-post"},
+    ]
+    build.resolve_blog_related_tools(posts, tools)
+    assert [t["id"] for t in posts[0]["related_tools_resolved"]] == ["png-to-jpg"]
+
+
+def test_resolve_blog_related_tools_drops_unknown_ids():
+    posts = [{"id": "p", "related_tools": ["does-not-exist"]}]
+    build.resolve_blog_related_tools(posts, tools=[])
+    assert posts[0]["related_tools_resolved"] == []
+
+
+def test_generate_sitemap_and_llms_txt_tolerate_missing_blog_posts_arg(
+    tmp_path, monkeypatch
+):
+    # Both signatures grew a blog_posts parameter; every pre-existing call
+    # site in this file (and any external caller) invokes them with the old
+    # 3-arg shape. Must not raise, and must simply omit blog URLs/section.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    config = {"site": {"base_url": "https://filecast.org"}}
+    build.generate_sitemap(config, [], {})  # no TypeError
+    build.generate_llms_txt(config, [], {})  # no TypeError
+    assert "/blog/" not in (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert "## Blog" not in (tmp_path / "llms.txt").read_text(encoding="utf-8")
+
+
+def test_full_build_renders_blog_index_and_posts(built):
+    index = (built / "blog" / "index.html").read_text(encoding="utf-8")
+    assert "Blog" in index
+    for post in build.load_blog_posts():
+        slug = post["slug"].strip("/")
+        page = (built / slug / "index.html").read_text(encoding="utf-8")
+        # Jinja autoescapes the title (e.g. an apostrophe becomes &#39;), so
+        # compare against the same escaping rather than the raw YAML string.
+        assert str(escape(post["title"])) in page
+    sitemap = (built / "sitemap.xml").read_text(encoding="utf-8")
+    assert "https://filecast.org/blog/" in sitemap
+    llms = (built / "llms.txt").read_text(encoding="utf-8")
+    assert "## Blog" in llms
+
+
+def test_homepage_faq_structured_data_matches_visible_questions(built):
+    home = (built / "index.html").read_text(encoding="utf-8")
+    match = re.search(
+        r'"@type": "FAQPage",\s*"mainEntity": (\[.*?\])\s*\}\s*</script>', home, re.S
+    )
+    assert match, "FAQPage JSON-LD not found on homepage"
+    questions = json.loads(match.group(1))
+    assert len(questions) >= 1
+    for q in questions:
+        assert f"<h3>{q['name']}</h3>" in home

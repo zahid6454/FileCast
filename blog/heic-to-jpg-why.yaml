@@ -1,0 +1,14 @@
+enabled: true
+id: heic-to-jpg-why
+slug: /blog/heic-to-jpg-why-iphone-photos-need-converting
+title: "HEIC to JPG: Why iPhone Photos Need Converting At All"
+dek: "Your iPhone isn't creating a broken file. It's using a format most of the world outside Apple's ecosystem still can't open."
+tag: Images
+date: 2026-09-12
+read_minutes: 5
+meta:
+  title: "HEIC to JPG: Why iPhone Photos Need Converting | FileCast Blog"
+  description: "Why iPhones save photos as HEIC instead of JPG, what you actually gain and lose in the format, and when you genuinely need to convert."
+content:
+  body: "content/blog/heic-to-jpg-why/body.md"
+related_tools: [heic-to-jpg, heic-to-png, heic-to-webp]
