@@ -1522,6 +1522,13 @@ def process_assets() -> dict:
         img_dst = DIST / "images"
         shutil.copytree(img_src, img_dst, dirs_exist_ok=True)
 
+    # --- Videos (homepage demo panel) — unhashed, copied verbatim like
+    # images/ above. Without this block the file never reaches dist/ at all
+    # and the <video> tag 404s (process_assets() has no catch-all copy step).
+    videos_src = STATIC_DIR / "videos"
+    if videos_src.exists():
+        shutil.copytree(videos_src, DIST / "videos", dirs_exist_ok=True)
+
     # --- Favicon to root ---
     favicon_src = ASSETS_DIR / "favicon.svg"
     if favicon_src.exists():
@@ -1629,6 +1636,13 @@ def render_all_pages(
     # it off of. Always computed and always passed below (never conditionally
     # omitted): StrictUndefined (create_jinja_env()) fails the whole build if
     # a referenced template variable is missing, even inside an `{% if %}`.
+    # content/home/faq.md's LAST question must stay "What do the green and
+    # blue badges mean?" — home.html hardcodes a badge legend immediately
+    # after the rendered FAQ HTML, written to visually read as that answer's
+    # continuation. Reordering the questions would detach it. (Not noted as
+    # an HTML comment inside faq.md itself: parse_faq_pairs() below is a
+    # naive line collector that would fold a comment line into whichever
+    # question's answer precedes it, corrupting that question's JSON-LD text.)
     faq_path = ROOT / "content/home/faq.md"
     faq_html = render_markdown(faq_path)
     faq_structured_data = parse_faq_pairs(faq_path)
@@ -2087,7 +2101,7 @@ var OFFLINE_URL = '/offline.html';
 // immutable (build.py/process_assets), so there is never a staleness
 // question — once cached, it's cached for good under THIS cache name, and
 // CACHE_VERSION rotating on the next deploy is what retires it.
-var STATIC_PREFIXES = ['/css/', '/js/', '/lib/', '/fonts/', '/images/'];
+var STATIC_PREFIXES = ['/css/', '/js/', '/lib/', '/fonts/', '/images/', '/videos/'];
 
 self.addEventListener('install', function (event) {
   event.waitUntil(
@@ -2472,6 +2486,11 @@ def generate_headers(site_config: dict):
         "  Cache-Control: public, max-age=31536000, immutable",
         "",
         "/images/*",
+        "  Cache-Control: public, max-age=86400",
+        "",
+        # Homepage demo video — unhashed (copied verbatim, not through
+        # process_assets()'s hash+SRI path), same treatment as /images/*.
+        "/videos/*",
         "  Cache-Control: public, max-age=86400",
         "",
         # write_tool_data() emits this straight to dist/ unhashed (never through

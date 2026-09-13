@@ -1125,6 +1125,15 @@ def test_generate_headers_fonts_cache_rule(tmp_path, monkeypatch):
     assert "Cache-Control: public, max-age=31536000, immutable" in fonts_block
 
 
+def test_generate_headers_videos_cache_rule(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.generate_headers({"api": {"base_url": "https://api.filecast.org"}})
+    text = (tmp_path / "_headers").read_text(encoding="utf-8")
+    assert "/videos/*" in text
+    videos_block = text.split("/videos/*")[1].split("\n\n")[0]
+    assert "Cache-Control: public, max-age=86400" in videos_block
+
+
 def test_process_assets_hashes_font_and_rewrites_css(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "DIST", tmp_path)
     asset_map = build.process_assets()
@@ -1137,6 +1146,16 @@ def test_process_assets_hashes_font_and_rewrites_css(tmp_path, monkeypatch):
     css_text = (tmp_path / css_entry["path"]).read_text(encoding="utf-8")
     assert "/fonts/inter-latin.woff2" not in css_text  # placeholder must be rewritten
     assert font_entry["path"] in css_text
+
+
+def test_process_assets_copies_demo_video(tmp_path, monkeypatch):
+    # Guards against process_assets() silently dropping the homepage demo
+    # video — it has no catch-all "copy everything else" step, so a new
+    # static file type needs its own explicit copy block or it never reaches
+    # dist/ and the <video> tag 404s.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.process_assets()
+    assert (tmp_path / "videos" / "docx-to-pdf-demo.mp4").exists()
 
 
 def test_generate_headers_without_api_base_url_emits_no_empty_token(

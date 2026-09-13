@@ -17,3 +17,7 @@ Yes, and it's listed directly above the upload box on each tool's page — most 
 ### What happens to my file after I convert it?
 
 It depends on the tool's processing mode. For the browser-based ("Local") tools — most of them — nothing happens to your file anywhere else, because it was never sent anywhere: it exists only in your browser's memory for the length of the conversion and is gone once you close or navigate away from the tab. For the small number of server-based ("Cloud") tools, the uploaded file is converted and then deleted from our server immediately — there's no multi-day retention window, just an upload, a conversion, and a deletion.
+
+### What do the green and blue badges mean?
+
+Every tool page carries one of two badges near the top, showing how that tool actually processes your file. Green ("Local") means the conversion runs entirely in your browser — your file is never uploaded anywhere. Blue ("Cloud") means the file is uploaded to our server for processing, then deleted immediately afterward.

@@ -313,33 +313,78 @@
   </div>
 </section>
 
-{# ===== Why FileCast? (dark band, continuous with footer; P15 honest framing) ===== #}
-<section class="section--dark why-filecast">
-  <div class="container">
-    <h2 class="why-filecast__title">Why FileCast?</h2>
-    <div class="why-filecast__grid">
-      <div class="why-filecast__col">
-        <svg class="why-filecast__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
-        <div class="why-filecast__col-title">Your Files Stay Private</div>
-        <p class="why-filecast__col-text">Most tools run entirely in your browser — nothing is uploaded. The few server-side tools convert and delete your file immediately.</p>
-      </div>
-      <div class="why-filecast__col">
-        <svg class="why-filecast__icon" aria-hidden="true" focusable="false"><use href="#icon-no-lock"></use></svg>
-        <div class="why-filecast__col-title">No Sign-up Required</div>
-        <p class="why-filecast__col-text">Use any tool instantly. No account, no email, no password.</p>
-      </div>
-      <div class="why-filecast__col">
-        <svg class="why-filecast__icon" aria-hidden="true" focusable="false"><use href="#icon-infinity"></use></svg>
-        <div class="why-filecast__col-title">No Limits</div>
-        <p class="why-filecast__col-text">No daily caps, no file-count limits, no paywalls.</p>
+{# ===== See It In Action (homepage demo video panel) =====
+   Structure matches the approved reference build exactly (badge, video,
+   caption and the steps strip all live inside ONE frame-inner card, not
+   scattered outside it) — narrow container matching the FAQ card below so
+   both cards' edges line up. Video ships with no src/autoplay in the
+   markup — static/js/demo-video.js sets the real src and calls .play()
+   once the panel scrolls into view, so a below-the-fold ~570KB clip never
+   competes with initial page load.
+   The <video> itself stays aria-hidden (decorative — caption + step labels
+   already carry the same info as text), but it autoplays and loops well
+   past 5 seconds, which WCAG 2.2.2 (Pause, Stop, Hide) requires a real
+   mechanism to stop — prefers-reduced-motion (handled in demo-video.js)
+   only covers visitors with that OS-level flag set, not everyone. The
+   3-button bar overlays the video itself (revealed on hover/focus, like any
+   ordinary video player), not the video's native controls (which would add
+   an irrelevant scrubber/volume for a silent decorative loop). #}
+<section class="section" id="demo">
+  <div class="container container--narrow">
+    <h2 class="section__title"><span class="text-brand-blue">See It</span> <span class="text-brand-green">In Action</span></h2>
+    <div class="section__divider"></div>
+    <p class="demo-panel__lead">A real conversion, start to finish &mdash; watch exactly what happens to your file.</p>
+    <div class="demo-panel__frame">
+      <div class="demo-panel__frame-inner">
+        <div class="demo-panel__badge-row">
+          <span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg>Cloud</span>
+        </div>
+        <div class="demo-panel__video-wrap">
+          <video class="demo-panel__video" aria-hidden="true" muted playsinline preload="none" data-src="/videos/docx-to-pdf-demo.mp4"></video>
+          <div class="demo-panel__controls" role="group" aria-label="Demo video controls">
+            <button type="button" class="demo-panel__ctrl" data-action="back" aria-label="Rewind 5 seconds" title="Rewind 5 seconds">
+              <svg aria-hidden="true" focusable="false"><use href="#icon-rewind-5"></use></svg>
+            </button>
+            <button type="button" class="demo-panel__ctrl demo-panel__ctrl--play" data-action="toggle" aria-label="Play" title="Play">
+              <svg aria-hidden="true" focusable="false"><use href="#icon-play"></use></svg>
+            </button>
+            <button type="button" class="demo-panel__ctrl" data-action="forward" aria-label="Forward 5 seconds" title="Forward 5 seconds">
+              <svg aria-hidden="true" focusable="false"><use href="#icon-forward-5"></use></svg>
+            </button>
+            <button type="button" class="demo-panel__ctrl demo-panel__ctrl--fullscreen" data-action="fullscreen" aria-label="Full screen" title="Full screen">
+              <svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg>
+            </button>
+          </div>
+        </div>
+        <p class="demo-panel__caption"><strong>DOCX &rarr; PDF</strong> &mdash; securely uploaded, converted, deleted immediately</p>
+        <div class="demo-panel__steps">
+          <div class="demo-panel__step">
+            <span class="demo-panel__step-icon"><svg aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg></span>
+            <span class="demo-panel__step-label">Upload</span>
+          </div>
+          <span class="demo-panel__step-arrow"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
+          <div class="demo-panel__step">
+            <span class="demo-panel__step-icon demo-panel__step-icon--convert"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
+            <span class="demo-panel__step-label">Convert</span>
+          </div>
+          <span class="demo-panel__step-arrow"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
+          <div class="demo-panel__step">
+            <span class="demo-panel__step-icon"><svg aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg></span>
+            <span class="demo-panel__step-label">Download</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-{# ===== FAQ + trust strip (AdSense content-gap plan, Step 1) — same
-   content-block/content-block--faq markup and CSS classes tool.html's FAQ
-   uses (static Q&A blocks, no JS accordion — matches the rest of the site). #}
+{# ===== FAQ (AdSense content-gap plan, Step 1) — same content-block/
+   content-block--faq markup and CSS classes tool.html's FAQ uses (static
+   Q&A blocks, no JS accordion — matches the rest of the site). The 6th
+   question ("What do the green and blue badges mean?") is content/home/
+   faq.md's hardcoded LAST entry — the badge legend right below is written
+   to read as that answer's continuation, so it must stay last (see the
+   matching comment in build.py's render_all_pages()). #}
 {% if faq_html %}
 <section class="section" id="faq">
   <div class="container container--narrow">
@@ -347,16 +392,27 @@
     <div class="section__divider"></div>
     <div class="content-block content-block--faq">
       {{ faq_html|safe }}
-    </div>
-    <div class="content-block">
-      <div class="badge-row">
-        <span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Runs in your browser</span>
-        <span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Files never uploaded</span>
-        <span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-no-lock"></use></svg>No sign-up required</span>
+      <div class="faq-badge-group">
+        <div class="faq-badge-row">
+          <span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Runs in your browser</span>
+          <span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Files never uploaded</span>
+        </div>
+        <div class="faq-badge-row">
+          <span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg>Uploaded to server</span>
+          <span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Encrypted in transit</span>
+          <span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-x"></use></svg>Deleted after converting</span>
+        </div>
       </div>
     </div>
   </div>
 </section>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+{% set demo_video_js = assets.get('js/demo-video.js') %}
+{% if demo_video_js %}
+<script src="/{{ demo_video_js.path }}" integrity="{{ demo_video_js.sri }}" crossorigin="anonymous" defer></script>
+{% endif %}
 {% endblock %}
