@@ -129,9 +129,12 @@
       // prompt to allow multiple downloads past ~5-10 files. Add JSZip if
       // that becomes a real complaint.
       downloadAllBtn.disabled = true;
+      var remaining = blobs.length;
       blobs.forEach(function (item, i) {
         setTimeout(function () {
           downloadItem(item);
+          remaining--;
+          if (remaining === 0) downloadAllBtn.disabled = false;
         }, i * 300);
       });
     });

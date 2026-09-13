@@ -137,8 +137,10 @@ describe('pdf-split.js — Convert Another button', () => {
     );
     expect(dom.window.document.getElementById('result').classList.contains('hidden')).toBe(true);
   });
+});
 
-  it('renders a single "Download All Splits" button instead of one per part', async () => {
+describe('pdf-split.js — Download Splits button', () => {
+  it('renders a single "Download Splits" button instead of one per part', async () => {
     const { dom } = await setupSplitToolPage();
     const file = new dom.window.File([new Uint8Array(1024)], 'input.pdf', {
       type: 'application/pdf'
@@ -155,7 +157,7 @@ describe('pdf-split.js — Convert Another button', () => {
     expect(labels).toEqual(['Download Splits (2)']);
   });
 
-  it('downloads every part exactly once when clicked, and ignores a re-click while pending', async () => {
+  it('downloads every part exactly once per click, ignores a re-click while pending, and re-enables once done', async () => {
     const { dom } = await setupSplitToolPage();
     const file = new dom.window.File([new Uint8Array(1024)], 'input.pdf', {
       type: 'application/pdf'
@@ -176,6 +178,7 @@ describe('pdf-split.js — Convert Another button', () => {
     const downloadAllBtn = dom.window.document.querySelector('.result__actions .btn--success');
     downloadAllBtn.click();
     downloadAllBtn.click(); // re-click while downloads are still pending — must be a no-op
+    expect(downloadAllBtn.disabled).toBe(true);
 
     // Real waits, not flush()'s 0ms ticks: pdf-split.js staggers each part's
     // download by i * 300ms (real setTimeout in the jsdom window realm,
@@ -184,7 +187,10 @@ describe('pdf-split.js — Convert Another button', () => {
     await new Promise((r) => setTimeout(r, 700));
 
     expect(clicks).toEqual(['input-page1.pdf', 'input-page2.pdf']);
-    expect(downloadAllBtn.disabled).toBe(true);
+    // Re-enabled once every staggered download has fired, so a user whose
+    // browser blocked/skipped a download (multi-download prompt) can retry
+    // by clicking again instead of being stuck with a dead button.
+    expect(downloadAllBtn.disabled).toBe(false);
   });
 });
 
