@@ -137,8 +137,10 @@ describe('pdf-split.js — Convert Another button', () => {
     );
     expect(dom.window.document.getElementById('result').classList.contains('hidden')).toBe(true);
   });
+});
 
-  it("renders each part's label as the download button text", async () => {
+describe('pdf-split.js — Download Splits button', () => {
+  it('renders a single "Download Splits" button instead of one per part', async () => {
     const { dom } = await setupSplitToolPage();
     const file = new dom.window.File([new Uint8Array(1024)], 'input.pdf', {
       type: 'application/pdf'
@@ -152,7 +154,43 @@ describe('pdf-split.js — Convert Another button', () => {
     const labels = Array.from(
       dom.window.document.querySelectorAll('.result__actions .btn--success')
     ).map((b) => b.textContent);
-    expect(labels).toEqual(['Page 1', 'Page 2']);
+    expect(labels).toEqual(['Download Splits (2)']);
+  });
+
+  it('downloads every part exactly once per click, ignores a re-click while pending, and re-enables once done', async () => {
+    const { dom } = await setupSplitToolPage();
+    const file = new dom.window.File([new Uint8Array(1024)], 'input.pdf', {
+      type: 'application/pdf'
+    });
+
+    selectFile(dom, file);
+    dom.window.document.getElementById('convert-btn').click();
+    await flush();
+    await flush();
+
+    const clicks = [];
+    const origClick = dom.window.HTMLAnchorElement.prototype.click;
+    dom.window.HTMLAnchorElement.prototype.click = function () {
+      clicks.push(this.download);
+      return origClick.call(this);
+    };
+
+    const downloadAllBtn = dom.window.document.querySelector('.result__actions .btn--success');
+    downloadAllBtn.click();
+    downloadAllBtn.click(); // re-click while downloads are still pending — must be a no-op
+    expect(downloadAllBtn.disabled).toBe(true);
+
+    // Real waits, not flush()'s 0ms ticks: pdf-split.js staggers each part's
+    // download by i * 300ms (real setTimeout in the jsdom window realm,
+    // which vi's fake timers don't reach — they only patch the outer Node
+    // realm's globals).
+    await new Promise((r) => setTimeout(r, 700));
+
+    expect(clicks).toEqual(['input-page1.pdf', 'input-page2.pdf']);
+    // Re-enabled once every staggered download has fired, so a user whose
+    // browser blocked/skipped a download (multi-download prompt) can retry
+    // by clicking again instead of being stuck with a dead button.
+    expect(downloadAllBtn.disabled).toBe(false);
   });
 });
 
