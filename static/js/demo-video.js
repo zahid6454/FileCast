@@ -86,6 +86,15 @@
   }
   if (fullscreenBtn) {
     fullscreenBtn.addEventListener('click', function () {
+      // Toggle: a second click while already fullscreen must exit, not call
+      // requestFullscreen() again (a no-op that leaves it stuck fullscreen —
+      // the button otherwise only ever has an "enter" branch).
+      var current = document.fullscreenElement || document.webkitFullscreenElement;
+      if (current) {
+        if (document.exitFullscreen) document.exitFullscreen().catch(function () {});
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        return;
+      }
       ensureLoaded();
       if (videoWrap.requestFullscreen) {
         videoWrap.requestFullscreen().catch(function () {});

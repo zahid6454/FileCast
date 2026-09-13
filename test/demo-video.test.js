@@ -47,6 +47,27 @@ function mockFullscreen(win, prop) {
   return fn;
 }
 
+// jsdom has neither document.exitFullscreen nor a settable
+// fullscreenElement — stands in for both so the toggle-to-exit branch (a
+// second click while already fullscreen) is actually exercised. Real
+// browsers set fullscreenElement themselves once requestFullscreen()
+// resolves; this mock's requestFullscreen (above) doesn't, so a test drives
+// it by hand between the "enter" and "exit" clicks.
+function mockExitFullscreen(win) {
+  var exitFullscreen = vi.fn(function () {
+    win.document.__fullscreenElement = null;
+    return Promise.resolve();
+  });
+  win.document.exitFullscreen = exitFullscreen;
+  Object.defineProperty(win.document, 'fullscreenElement', {
+    configurable: true,
+    get: function () {
+      return win.document.__fullscreenElement || null;
+    }
+  });
+  return exitFullscreen;
+}
+
 // Fires "intersecting" synchronously on observe() — stands in for "the panel
 // is already on-screen," the same simplification shared-page-grid.test.js's
 // mockIntersectionObserver uses.
@@ -188,6 +209,28 @@ describe('demo-video.js (homepage lazy-loaded demo panel)', () => {
 
     expect(requestFullscreen).toHaveBeenCalledTimes(1);
     expect(requestFullscreen.mock.instances[0]).toBe(wrap);
+  });
+
+  it('a second click while already fullscreen exits instead of re-requesting fullscreen', () => {
+    const dom = createDom(panelHtml());
+    mockIntersectionObserver(dom.window);
+    mockMatchMedia(dom.window, true);
+    mockVideoPlayback(dom.window);
+    const requestFullscreen = mockFullscreen(dom.window, 'requestFullscreen');
+    const exitFullscreen = mockExitFullscreen(dom.window);
+
+    evalScript(dom, 'demo-video.js');
+
+    const wrap = dom.window.document.querySelector('.demo-panel__video-wrap');
+    const fullscreenBtn = dom.window.document.querySelector('[data-action="fullscreen"]');
+
+    fullscreenBtn.click();
+    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    dom.window.document.__fullscreenElement = wrap; // simulate the browser having entered fullscreen
+
+    fullscreenBtn.click();
+    expect(exitFullscreen).toHaveBeenCalledTimes(1);
+    expect(requestFullscreen).toHaveBeenCalledTimes(1); // must not be called again
   });
 
   it('fullscreen button loads the video first if it was never scrolled into view', () => {
