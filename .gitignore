@@ -241,5 +241,16 @@ node_modules/
 # macOS filesystem cruft
 .DS_Store
 
-# scripts/record_demo.js output (scratch tooling, not a build artifact)
+# scripts/record_demo*.js output (scratch tooling, not a build artifact)
 /scratch-demo-videos/
+
+# general scratch dir for temp/intermediate work, never a build artifact
+/scratch-pad/
+
+# scripts/ - local-only scratch tooling (demo-recorder scripts and their
+# shared lib/ helper module), not part of the app or CI. Ignoring the
+# whole folder doesn't untrack the handful of real tracked files already
+# committed there (ci-deploy.sh, stress_test.py, category_db_update.sql,
+# make_sample_docx.py, monitor-resources.*) - gitignore only ever hides
+# NEW untracked paths, never files already in the index.
+/scripts/
