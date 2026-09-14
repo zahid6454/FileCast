@@ -1200,6 +1200,31 @@ img { max-width: 100%; display: block; }
 }
 .content-block--faq h3 + p { padding-left: calc(var(--space-6) + 6px); }
 
+/* Homepage FAQ tile grid — scoped to #faq, NOT .content-block--faq itself
+   (every tool page's FAQ uses that same class and keeps the flat stacked
+   list above). build.py's wrap_faq_cards() wraps each home.html question's
+   <h3>/<p> pair in its own .faq-card div; the h3 rules above still apply
+   unchanged since each card has exactly one h3, which is trivially also
+   that card's :first-of-type — the divider/margin those rules skip for the
+   very first question now gets skipped for every question. */
+#faq .content-block--faq {
+  background: none;
+  border: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+@media (max-width: 640px) {
+  #faq .content-block--faq { grid-template-columns: 1fr; }
+}
+.faq-card {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
 /* --- Related Tools --- */
 .related-tools { margin: var(--space-8) 0; }
 .related-tools__title { font-size: var(--text-xl); font-weight: var(--weight-bold); margin-bottom: var(--space-4); }
@@ -4272,10 +4297,6 @@ select.tool-options__input {
   transition: opacity var(--transition-fast);
   pointer-events: none;
 }
-/* position:absolute takes this button out of the centered flex group
-   entirely (rather than margin-left:auto, which would shift the other
-   three off-center to make room) and pins it to the bar's own right edge. */
-.demo-panel__ctrl--fullscreen { position: absolute; right: var(--space-2); bottom: var(--space-2); }
 /* :focus-within (not just :hover) so a keyboard user tabbing to a button
    reveals the bar too — opacity:0 alone (not display:none) keeps the
    buttons reachable by Tab even while visually hidden. */
@@ -4358,8 +4379,11 @@ select.tool-options__input {
    classes, deliberately NOT touching .content-block .badge-row (style.css
    ~961), which 7 tool what-is.md files reuse for left-aligned inline format
    tags; adding justify-content there would recenter all of them. Two rows
-   (not one free-wrapping row) so green/blue group visually. Left-aligned,
-   indented to match the answer paragraph above it — not centered. */
+   (not one free-wrapping row) so green/blue group visually. Nested inside
+   the Q6 .faq-card itself (build.py's FAQ_BADGE_LEGEND_HTML, spliced in by
+   wrap_faq_cards()), so it's indented to align under that card's answer
+   paragraph — reading as its continuation — rather than centered or
+   spanning the grid. */
 .faq-badge-group { padding-left: calc(var(--space-6) + 6px); margin-top: var(--space-2); }
 .faq-badge-row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-2); }
 .faq-badge-row:last-child { margin-bottom: 0; }

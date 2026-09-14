@@ -24,6 +24,7 @@ function slidesJson() {
       name: 'DOCX to PDF Converter',
       cloud: true,
       video: '/videos/docx-to-pdf-demo.mp4',
+      poster: '/videos/docx-to-pdf-demo-poster.jpg',
       caption: 'Securely uploaded, converted, and deleted immediately.',
       firstStep: 'Upload'
     },
@@ -32,6 +33,7 @@ function slidesJson() {
       name: 'CSV to JSON Converter',
       cloud: false,
       video: '/videos/csv-to-json-demo.mp4',
+      poster: '/videos/csv-to-json-demo-poster.jpg',
       caption: 'Processed entirely in your browser — nothing is uploaded.',
       firstStep: 'Select'
     },
@@ -40,6 +42,7 @@ function slidesJson() {
       name: 'HEIC to JPG Converter',
       cloud: false,
       video: '/videos/heic-to-jpg-demo.mp4',
+      poster: '/videos/heic-to-jpg-demo-poster.jpg',
       caption: 'Processed entirely in your browser — nothing is uploaded.',
       firstStep: 'Select'
     }
@@ -52,7 +55,7 @@ function panelHtml({ withData = true } = {}) {
       <p class="demo-panel__title">DOCX to PDF Converter</p>
       <div class="demo-panel__badge-row"><span class="badge--cloud">Cloud</span></div>
       <div class="demo-panel__video-wrap">
-        <video class="demo-panel__video" muted playsinline preload="none" data-src="/videos/docx-to-pdf-demo.mp4"></video>
+        <video class="demo-panel__video" muted playsinline preload="none" poster="/videos/docx-to-pdf-demo-poster.jpg" data-src="/videos/docx-to-pdf-demo.mp4"></video>
         <button type="button" data-action="prev" aria-label="Previous demo"></button>
         <button type="button" data-action="next" aria-label="Next demo"></button>
         <div class="demo-panel__controls">
@@ -342,6 +345,7 @@ describe('demo-video.js (homepage demo carousel)', () => {
 
       const video = dom.window.document.querySelector('.demo-panel__video');
       expect(video.src).toContain('/videos/csv-to-json-demo.mp4');
+      expect(video.poster).toContain('/videos/csv-to-json-demo-poster.jpg');
       expect(video.currentTime).toBe(0);
       // Manual navigation always plays, even under reduced motion — a direct
       // user action, same as the play button ignoring it.

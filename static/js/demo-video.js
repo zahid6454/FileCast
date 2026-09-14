@@ -69,6 +69,7 @@
     if (badgeRow) badgeRow.innerHTML = badgeHtml(s);
     if (caption) caption.textContent = s.caption;
     if (firstStepLabel) firstStepLabel.textContent = s.firstStep;
+    video.poster = s.poster;
     video.dataset.src = s.video;
     loaded = false;
   }

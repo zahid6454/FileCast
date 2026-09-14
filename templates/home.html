@@ -340,7 +340,7 @@
           <p class="demo-panel__title">{{ first.name }}</p>
           <div class="demo-panel__badge-row">{{ processing_pill(first) }}</div>
           <div class="demo-panel__video-wrap">
-            <video class="demo-panel__video" aria-hidden="true" muted playsinline preload="none" data-src="/videos/{{ first.id }}-demo.mp4"></video>
+            <video class="demo-panel__video" aria-hidden="true" muted playsinline preload="none" poster="/videos/{{ first.id }}-demo-poster.jpg" data-src="/videos/{{ first.id }}-demo.mp4"></video>
             {# Prev/next live inside the clipped video box (not straddling the
                card's outer edge) specifically so top:50% centers them on the
                video itself, not on the much taller card. #}
@@ -354,18 +354,18 @@
               <button type="button" class="demo-panel__ctrl" data-action="toggle" aria-label="Play" title="Play">
                 <svg aria-hidden="true" focusable="false"><use href="#icon-play"></use></svg>
               </button>
-              <button type="button" class="demo-panel__ctrl demo-panel__ctrl--fullscreen" data-action="fullscreen" aria-label="Full screen" title="Full screen">
+              <button type="button" class="demo-panel__ctrl" data-action="fullscreen" aria-label="Full screen" title="Full screen">
                 <svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg>
               </button>
             </div>
           </div>
         </div>
         <div class="demo-panel__content" id="demo-info">
-          <p class="demo-panel__caption">{{ 'Securely uploaded, converted, and deleted immediately.' if first.type == 'server-side' else 'Processed entirely in your browser — nothing is uploaded.' }}</p>
+          <p class="demo-panel__caption">{{ 'Securely uploaded, converted, and deleted immediately.' if first.type == 'server-side' else 'Processed entirely in your browser — nothing is uploaded to the server.' }}</p>
           <div class="demo-panel__steps">
             <div class="demo-panel__step">
               <span class="demo-panel__step-icon"><svg aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg></span>
-              <span class="demo-panel__step-label">{{ 'Upload' if first.type == 'server-side' else 'Select' }}</span>
+              <span class="demo-panel__step-label">Upload</span>
             </div>
             <span class="demo-panel__step-arrow"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
             <div class="demo-panel__step">
@@ -391,38 +391,30 @@
       "name": {{ t.name|tojson }},
       "cloud": {{ (t.type == 'server-side')|tojson }},
       "video": {{ ('/videos/' + t.id + '-demo.mp4')|tojson }},
-      "caption": {{ ('Securely uploaded, converted, and deleted immediately.' if t.type == 'server-side' else 'Processed entirely in your browser — nothing is uploaded.')|tojson }},
-      "firstStep": {{ ('Upload' if t.type == 'server-side' else 'Select')|tojson }}
+      "poster": {{ ('/videos/' + t.id + '-demo-poster.jpg')|tojson }},
+      "caption": {{ ('Securely uploaded, converted, and deleted immediately.' if t.type == 'server-side' else 'Processed entirely in your browser — nothing is uploaded to the server.')|tojson }},
+      "firstStep": "Upload"
     }{% if not loop.last %},{% endif %}
     {% endfor -%}
   ]</script>
 </section>
 
-{# ===== FAQ (AdSense content-gap plan, Step 1) — same content-block/
-   content-block--faq markup and CSS classes tool.html's FAQ uses (static
-   Q&A blocks, no JS accordion — matches the rest of the site). The 6th
-   question ("What do the green and blue badges mean?") is content/home/
-   faq.md's hardcoded LAST entry — the badge legend right below is written
-   to read as that answer's continuation, so it must stay last (see the
-   matching comment in build.py's render_all_pages()). #}
+{# ===== FAQ (AdSense content-gap plan, Step 1) — content-block--faq is the
+   same class tool.html's FAQ uses, but faq_html here is pre-wrapped into one
+   <div class="faq-card"> per question (build.py's wrap_faq_cards()), with a
+   badge legend nested inside the LAST card, right after its answer — see
+   FAQ_BADGE_LEGEND_HTML in build.py. The #faq-scoped grid rules in style.css
+   lay this out as tiles instead of the flat stacked list every tool page
+   still gets. content/home/faq.md's 6th question ("What do the green and
+   blue badges mean?") must stay last so the legend reads as its
+   continuation (see the matching comment in build.py's render_all_pages()). #}
 {% if faq_html %}
 <section class="section" id="faq">
-  <div class="container container--narrow">
+  <div class="container">
     <h2 class="section__title"><span class="text-brand-blue">Frequently</span> <span class="text-brand-green">Asked Questions</span></h2>
     <div class="section__divider"></div>
     <div class="content-block content-block--faq">
       {{ faq_html|safe }}
-      <div class="faq-badge-group">
-        <div class="faq-badge-row">
-          <span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Runs in your browser</span>
-          <span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Files never uploaded</span>
-        </div>
-        <div class="faq-badge-row">
-          <span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg>Uploaded to server</span>
-          <span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Encrypted in transit</span>
-          <span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-x"></use></svg>Deleted after converting</span>
-        </div>
-      </div>
     </div>
   </div>
 </section>
