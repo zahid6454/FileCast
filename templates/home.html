@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tool_card, view_all_card %}
+{% from "_macros.html" import tool_card, view_all_card, processing_pill %}
 
 {% block title %}{{ site.name }} — {{ site.tagline }}{% endblock %}
 {% block meta_description %}{{ site.description }}{% endblock %}
@@ -313,22 +313,21 @@
   </div>
 </section>
 
-{# ===== See It In Action (homepage demo video panel) =====
-   Structure matches the approved reference build exactly (badge, video,
-   caption and the steps strip all live inside ONE frame-inner card, not
-   scattered outside it) — narrow container matching the FAQ card below so
-   both cards' edges line up. Video ships with no src/autoplay in the
-   markup — static/js/demo-video.js sets the real src and calls .play()
-   once the panel scrolls into view, so a below-the-fold ~570KB clip never
-   competes with initial page load.
+{# ===== See It In Action (homepage demo video carousel) =====
+   Six per-tool demo clips (build.py's demo_tools, in demo_tool_ids order),
+   one <video> element re-used across all of them rather than six <video>
+   tags — badge/caption/step-label/story-strip all swap in place via
+   static/js/demo-video.js, driven by the JSON data island below. Server-
+   rendered content is demo_tools[0] (docx-to-pdf) only, same lazy-load
+   posture as before: no src/autoplay in the markup, JS sets the real src
+   and calls .play() once the panel scrolls into view, so a below-the-fold
+   clip never competes with initial page load.
    The <video> itself stays aria-hidden (decorative — caption + step labels
-   already carry the same info as text), but it autoplays and loops well
-   past 5 seconds, which WCAG 2.2.2 (Pause, Stop, Hide) requires a real
-   mechanism to stop — prefers-reduced-motion (handled in demo-video.js)
-   only covers visitors with that OS-level flag set, not everyone. The
-   3-button bar overlays the video itself (revealed on hover/focus, like any
-   ordinary video player), not the video's native controls (which would add
-   an irrelevant scrubber/volume for a silent decorative loop). #}
+   already carry the same info as text). Each clip plays once (no loop) and
+   auto-advances to the next tool, which is itself the WCAG 2.2.2 (Pause,
+   Stop, Hide) stop condition for the equivalent single-video autoplay loop
+   this replaced — the 4-button transport bar (rewind/play-pause/forward/
+   fullscreen) is still the explicit pause mechanism regardless. #}
 <section class="section" id="demo">
   <div class="container container--narrow">
     <h2 class="section__title"><span class="text-brand-blue">See It</span> <span class="text-brand-green">In Action</span></h2>
@@ -336,46 +335,86 @@
     <p class="demo-panel__lead">A real conversion, start to finish &mdash; watch exactly what happens to your file.</p>
     <div class="demo-panel__frame">
       <div class="demo-panel__frame-inner">
-        <div class="demo-panel__badge-row">
-          <span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg>Cloud</span>
-        </div>
-        <div class="demo-panel__video-wrap">
-          <video class="demo-panel__video" aria-hidden="true" muted playsinline preload="none" data-src="/videos/docx-to-pdf-demo.mp4"></video>
-          <div class="demo-panel__controls" role="group" aria-label="Demo video controls">
-            <button type="button" class="demo-panel__ctrl" data-action="back" aria-label="Rewind 5 seconds" title="Rewind 5 seconds">
-              <svg aria-hidden="true" focusable="false"><use href="#icon-rewind-5"></use></svg>
+        {% set first = demo_tools[0] %}
+        {# Two separate fading blocks (both share .demo-panel__content, JS
+           toggles both at once) with the story strip sandwiched between them
+           — it's carousel chrome, not slide content, so it stays put and
+           clickable through a switch instead of fading with everything else. #}
+        <div class="demo-panel__content" id="demo-media">
+          <p class="demo-panel__title">{{ first.name }}</p>
+          <div class="demo-panel__badge-row">{{ processing_pill(first) }}</div>
+          <div class="demo-panel__video-wrap">
+            <video class="demo-panel__video" aria-hidden="true" muted playsinline preload="none" data-src="/videos/{{ first.id }}-demo.mp4"></video>
+            {# Prev/next live inside the clipped video box (not straddling the
+               card's outer edge) specifically so top:50% centers them on the
+               video itself, not on the much taller card. #}
+            <button type="button" class="demo-panel__nav demo-panel__nav--prev" data-action="prev" aria-label="Previous demo">
+              <svg aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg>
             </button>
-            <button type="button" class="demo-panel__ctrl" data-action="toggle" aria-label="Play" title="Play">
-              <svg aria-hidden="true" focusable="false"><use href="#icon-play"></use></svg>
+            <button type="button" class="demo-panel__nav demo-panel__nav--next" data-action="next" aria-label="Next demo">
+              <svg aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg>
             </button>
-            <button type="button" class="demo-panel__ctrl" data-action="forward" aria-label="Forward 5 seconds" title="Forward 5 seconds">
-              <svg aria-hidden="true" focusable="false"><use href="#icon-forward-5"></use></svg>
-            </button>
-            <button type="button" class="demo-panel__ctrl demo-panel__ctrl--fullscreen" data-action="fullscreen" aria-label="Full screen" title="Full screen">
-              <svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg>
-            </button>
+            <div class="demo-panel__controls" role="group" aria-label="Demo video controls">
+              <button type="button" class="demo-panel__ctrl" data-action="back" aria-label="Rewind 5 seconds" title="Rewind 5 seconds">
+                <svg aria-hidden="true" focusable="false"><use href="#icon-rewind-5"></use></svg>
+              </button>
+              <button type="button" class="demo-panel__ctrl" data-action="toggle" aria-label="Play" title="Play">
+                <svg aria-hidden="true" focusable="false"><use href="#icon-play"></use></svg>
+              </button>
+              <button type="button" class="demo-panel__ctrl" data-action="forward" aria-label="Forward 5 seconds" title="Forward 5 seconds">
+                <svg aria-hidden="true" focusable="false"><use href="#icon-forward-5"></use></svg>
+              </button>
+              <button type="button" class="demo-panel__ctrl demo-panel__ctrl--fullscreen" data-action="fullscreen" aria-label="Full screen" title="Full screen">
+                <svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg>
+              </button>
+            </div>
           </div>
         </div>
-        <p class="demo-panel__caption"><strong>DOCX &rarr; PDF</strong> &mdash; securely uploaded, converted, deleted immediately</p>
-        <div class="demo-panel__steps">
-          <div class="demo-panel__step">
-            <span class="demo-panel__step-icon"><svg aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg></span>
-            <span class="demo-panel__step-label">Upload</span>
-          </div>
-          <span class="demo-panel__step-arrow"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
-          <div class="demo-panel__step">
-            <span class="demo-panel__step-icon demo-panel__step-icon--convert"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
-            <span class="demo-panel__step-label">Convert</span>
-          </div>
-          <span class="demo-panel__step-arrow"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
-          <div class="demo-panel__step">
-            <span class="demo-panel__step-icon"><svg aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg></span>
-            <span class="demo-panel__step-label">Download</span>
+        {# Clicking the active tool's own segment seeks within its clip
+           (click position -> that fraction of the clip); clicking any other
+           segment jumps straight to that tool — demo-video.js tells them
+           apart at click time via the segment's current .is-active class. #}
+        <div class="demo-panel__story" role="tablist" aria-label="Choose a demo, or seek the one playing">
+          {% for t in demo_tools %}
+          <button type="button" class="demo-panel__story-seg{% if loop.first %} is-active{% endif %}" data-index="{{ loop.index0 }}" role="tab" aria-label="{{ t.name }}"><i></i></button>
+          {% endfor %}
+        </div>
+        <div class="demo-panel__content" id="demo-info">
+          <p class="demo-panel__caption">{{ 'Securely uploaded, converted, and deleted immediately.' if first.type == 'server-side' else 'Processed entirely in your browser — nothing is uploaded.' }}</p>
+          <div class="demo-panel__steps">
+            <div class="demo-panel__step">
+              <span class="demo-panel__step-icon"><svg aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg></span>
+              <span class="demo-panel__step-label">{{ 'Upload' if first.type == 'server-side' else 'Select' }}</span>
+            </div>
+            <span class="demo-panel__step-arrow"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
+            <div class="demo-panel__step">
+              <span class="demo-panel__step-icon demo-panel__step-icon--convert"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
+              <span class="demo-panel__step-label">Convert</span>
+            </div>
+            <span class="demo-panel__step-arrow"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
+            <div class="demo-panel__step">
+              <span class="demo-panel__step-icon"><svg aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg></span>
+              <span class="demo-panel__step-label">Download</span>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
+  {# Consumed by demo-video.js; kept outside .demo-panel__content so a slide
+     switch's opacity transition never touches it. #}
+  <script type="application/json" id="demo-carousel-data">[
+    {% for t in demo_tools -%}
+    {
+      "id": {{ t.id|tojson }},
+      "name": {{ t.name|tojson }},
+      "cloud": {{ (t.type == 'server-side')|tojson }},
+      "video": {{ ('/videos/' + t.id + '-demo.mp4')|tojson }},
+      "caption": {{ ('Securely uploaded, converted, and deleted immediately.' if t.type == 'server-side' else 'Processed entirely in your browser — nothing is uploaded.')|tojson }},
+      "firstStep": {{ ('Upload' if t.type == 'server-side' else 'Select')|tojson }}
+    }{% if not loop.last %},{% endif %}
+    {% endfor -%}
+  ]</script>
 </section>
 
 {# ===== FAQ (AdSense content-gap plan, Step 1) — same content-block/

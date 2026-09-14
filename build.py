@@ -1647,6 +1647,21 @@ def render_all_pages(
     faq_html = render_markdown(faq_path)
     faq_structured_data = parse_faq_pairs(faq_path)
 
+    # "See It In Action" homepage carousel — fixed order, one demo video per
+    # listed id (static/videos/<id>-demo.mp4). Adding a 7th demo is just one
+    # more id here once its clip is recorded; a listed id with no clip yet
+    # would 404, so this only grows in step with static/videos/.
+    demo_tool_ids = [
+        "docx-to-pdf",
+        "csv-to-json",
+        "heic-to-jpg",
+        "image-resize",
+        "pdf-split",
+        "qr-code-generator",
+    ]
+    tools_by_id = {t["id"]: t for t in tools}
+    demo_tools = [tools_by_id[tid] for tid in demo_tool_ids if tid in tools_by_id]
+
     # Homepage
     if render_page(
         env,
@@ -1654,6 +1669,7 @@ def render_all_pages(
         DIST / "index.html",
         categories=categories_with_tools,
         tools=tools,
+        demo_tools=demo_tools,
         faq_html=faq_html,
         faq_structured_data=faq_structured_data,
     ):

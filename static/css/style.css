@@ -4191,7 +4191,50 @@ select.tool-options__input {
   border-radius: calc(var(--radius-xl) - 3px);
   padding: var(--space-3);
 }
+/* Switching tools fades the changing content out/in instead of cutting —
+   skipped under prefers-reduced-motion (demo-video.js toggles this class
+   only when motion is allowed). */
+.demo-panel__content { transition: opacity 0.18s ease; }
+.demo-panel__content.is-switching { opacity: 0; }
+.demo-panel__title { margin: 0 0 var(--space-3); text-align: center; font-size: var(--text-base); font-weight: var(--weight-semibold); color: var(--color-heading); }
 .demo-panel__badge-row { display: flex; justify-content: center; margin-bottom: var(--space-3); }
+/* Prev/next live inside .demo-panel__video-wrap (a sibling of .demo-panel__ctrl
+   below, same frosted-circle styling) rather than straddling the card's own
+   edge — top:50% then centers them on the VIDEO, not on the much taller card
+   (badge/title/caption/steps included), and staying inside the wrap's own
+   overflow:hidden box means they can't get clipped. Unlike .demo-panel__ctrl,
+   always visible rather than hover-revealed — carousel affordances need to
+   be discoverable, not hidden until a visitor happens to hover the clip. */
+.demo-panel__nav {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  color: var(--brand-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.demo-panel__nav:hover { background: rgba(255, 255, 255, 0.97); }
+.demo-panel__nav:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
+.demo-panel__nav svg { display: block; width: 16px; height: 16px; }
+.demo-panel__nav--prev { left: var(--space-2); }
+.demo-panel__nav--prev svg { transform: scaleX(-1); }
+.demo-panel__nav--next { right: var(--space-2); }
+/* Six-segment progress/pagination strip — only the active tool's segment
+   ever shows a fill (its clip's real playback progress via timeupdate), the
+   rest stay flat; clicking one jumps straight to that tool. */
+.demo-panel__story { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+.demo-panel__story-seg { flex: 1; padding: 0; border: none; background: var(--color-border-light); height: 3px; border-radius: 2px; cursor: pointer; overflow: hidden; position: relative; }
+.demo-panel__story-seg > i { position: absolute; inset: 0; width: 0%; display: block; border-radius: 2px; background: var(--brand-blue); }
+.demo-panel__story-seg.is-active > i { background: linear-gradient(90deg, var(--brand-blue), var(--brand-green)); }
 /* position:relative anchors the hover-reveal control bar (below) to the
    video itself, not the page — overlaying the footage the way an ordinary
    video player's controls do, instead of sitting in normal flow beneath it. */
@@ -4271,9 +4314,8 @@ select.tool-options__input {
 .demo-panel__ctrl:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
 .demo-panel__ctrl svg { width: 18px; height: 18px; }
 .demo-panel__caption { display: flex; align-items: center; justify-content: center; padding: var(--space-3) var(--space-2) 0; text-align: center; font-size: var(--text-sm); color: var(--color-text-muted); }
-/* nowrap keeps "DOCX → PDF" from breaking mid-phrase at narrow widths —
-   at 400px it otherwise splits after the arrow, stranding "PDF" alone on
-   the next line. */
+/* nowrap keeps a tool's name from breaking mid-phrase at narrow widths —
+   the dash and privacy blurb after it can still wrap onto their own line. */
 .demo-panel__caption strong { color: var(--color-heading); font-weight: var(--weight-semibold); white-space: nowrap; }
 .demo-panel__steps {
   display: flex;
