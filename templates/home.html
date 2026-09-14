@@ -326,8 +326,8 @@
    already carry the same info as text). Each clip plays once (no loop) and
    auto-advances to the next tool, which is itself the WCAG 2.2.2 (Pause,
    Stop, Hide) stop condition for the equivalent single-video autoplay loop
-   this replaced — the 4-button transport bar (rewind/play-pause/forward/
-   fullscreen) is still the explicit pause mechanism regardless. #}
+   this replaced — the play/pause button is still the explicit pause
+   mechanism regardless. #}
 <section class="section" id="demo">
   <div class="container container--narrow">
     <h2 class="section__title"><span class="text-brand-blue">See It</span> <span class="text-brand-green">In Action</span></h2>
@@ -336,10 +336,6 @@
     <div class="demo-panel__frame">
       <div class="demo-panel__frame-inner">
         {% set first = demo_tools[0] %}
-        {# Two separate fading blocks (both share .demo-panel__content, JS
-           toggles both at once) with the story strip sandwiched between them
-           — it's carousel chrome, not slide content, so it stays put and
-           clickable through a switch instead of fading with everything else. #}
         <div class="demo-panel__content" id="demo-media">
           <p class="demo-panel__title">{{ first.name }}</p>
           <div class="demo-panel__badge-row">{{ processing_pill(first) }}</div>
@@ -355,29 +351,14 @@
               <svg aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg>
             </button>
             <div class="demo-panel__controls" role="group" aria-label="Demo video controls">
-              <button type="button" class="demo-panel__ctrl" data-action="back" aria-label="Rewind 5 seconds" title="Rewind 5 seconds">
-                <svg aria-hidden="true" focusable="false"><use href="#icon-rewind-5"></use></svg>
-              </button>
               <button type="button" class="demo-panel__ctrl" data-action="toggle" aria-label="Play" title="Play">
                 <svg aria-hidden="true" focusable="false"><use href="#icon-play"></use></svg>
-              </button>
-              <button type="button" class="demo-panel__ctrl" data-action="forward" aria-label="Forward 5 seconds" title="Forward 5 seconds">
-                <svg aria-hidden="true" focusable="false"><use href="#icon-forward-5"></use></svg>
               </button>
               <button type="button" class="demo-panel__ctrl demo-panel__ctrl--fullscreen" data-action="fullscreen" aria-label="Full screen" title="Full screen">
                 <svg aria-hidden="true" focusable="false"><use href="#icon-maximize"></use></svg>
               </button>
             </div>
           </div>
-        </div>
-        {# Clicking the active tool's own segment seeks within its clip
-           (click position -> that fraction of the clip); clicking any other
-           segment jumps straight to that tool — demo-video.js tells them
-           apart at click time via the segment's current .is-active class. #}
-        <div class="demo-panel__story" role="tablist" aria-label="Choose a demo, or seek the one playing">
-          {% for t in demo_tools %}
-          <button type="button" class="demo-panel__story-seg{% if loop.first %} is-active{% endif %}" data-index="{{ loop.index0 }}" role="tab" aria-label="{{ t.name }}"><i></i></button>
-          {% endfor %}
         </div>
         <div class="demo-panel__content" id="demo-info">
           <p class="demo-panel__caption">{{ 'Securely uploaded, converted, and deleted immediately.' if first.type == 'server-side' else 'Processed entirely in your browser — nothing is uploaded.' }}</p>

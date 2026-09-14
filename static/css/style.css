@@ -4228,13 +4228,6 @@ select.tool-options__input {
 .demo-panel__nav--prev { left: var(--space-2); }
 .demo-panel__nav--prev svg { transform: scaleX(-1); }
 .demo-panel__nav--next { right: var(--space-2); }
-/* Six-segment progress/pagination strip — only the active tool's segment
-   ever shows a fill (its clip's real playback progress via timeupdate), the
-   rest stay flat; clicking one jumps straight to that tool. */
-.demo-panel__story { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
-.demo-panel__story-seg { flex: 1; padding: 0; border: none; background: var(--color-border-light); height: 3px; border-radius: 2px; cursor: pointer; overflow: hidden; position: relative; }
-.demo-panel__story-seg > i { position: absolute; inset: 0; width: 0%; display: block; border-radius: 2px; background: var(--brand-blue); }
-.demo-panel__story-seg.is-active > i { background: linear-gradient(90deg, var(--brand-blue), var(--brand-green)); }
 /* position:relative anchors the hover-reveal control bar (below) to the
    video itself, not the page — overlaying the footage the way an ordinary
    video player's controls do, instead of sitting in normal flow beneath it. */
