@@ -1695,9 +1695,13 @@ def render_all_pages(
     faq_structured_data = parse_faq_pairs(faq_path)
 
     # "See It In Action" homepage carousel — fixed order, one demo video per
-    # listed id (static/videos/<id>-demo.mp4). Adding a 7th demo is just one
-    # more id here once its clip is recorded; a listed id with no clip yet
-    # would 404, so this only grows in step with static/videos/.
+    # listed id (static/videos/<id>-demo.mp4) plus a poster screenshot of that
+    # tool's live page (static/videos/<id>-demo-poster.jpg — a real capture of
+    # filecast.org/convert/<id>/, not a video frame; see home.html's
+    # #demo-carousel-data). Adding a 7th demo is just one more id here once
+    # both files exist; a listed id missing either would 404 (the video) or
+    # silently show no poster while it loads, so this only grows in step with
+    # static/videos/.
     demo_tool_ids = [
         "docx-to-pdf",
         "csv-to-json",
