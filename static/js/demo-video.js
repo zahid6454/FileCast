@@ -23,6 +23,13 @@
   function ensureLoaded() {
     if (loaded) return;
     loaded = true;
+    // The poster attribute isn't covered by preload="none" — browsers fetch
+    // it eagerly regardless of scroll position, so the initial slide's
+    // poster is deferred here via data-poster instead, applied only if
+    // nothing has already set one (a goTo() before this ever runs — e.g. a
+    // very fast click — already applied the TARGET slide's poster via
+    // applySlide(), which this must not clobber back to slide 0's).
+    if (!video.poster && video.dataset.poster) video.poster = video.dataset.poster;
     video.src = video.dataset.src;
   }
 
@@ -40,24 +47,20 @@
   );
   observer.observe(video);
 
-  // ---- Carousel: badge/caption/step-label swap in place around the one
-  // <video> element above, driven by the JSON data island home.html embeds
-  // (id/name/cloud/video/caption/firstStep per tool, in display order).
+  // ---- Carousel: badge/caption swap in place around the one <video>
+  // element above, driven by the JSON data island home.html embeds
+  // (id/name/badgeHtml/video/poster/caption per tool, in display order).
+  // badgeHtml is processing_pill(t) pre-rendered at build time by the same
+  // macro the server-rendered first slide calls directly (see home.html),
+  // so there's no second copy of that markup to keep in sync here. The
+  // steps row's first label is a static "Upload" in the markup and never
+  // changes per slide, so there's nothing here to keep in sync with it either.
   var contentEls = document.querySelectorAll('.demo-panel__content');
   var titleEl = document.querySelector('.demo-panel__title');
   var badgeRow = document.querySelector('.demo-panel__badge-row');
   var caption = document.querySelector('.demo-panel__caption');
-  var firstStepLabel = document.querySelector('.demo-panel__steps .demo-panel__step-label');
   var prevBtn = document.querySelector('[data-action="prev"]');
   var nextBtn = document.querySelector('[data-action="next"]');
-
-  function badgeHtml(slide) {
-    // Mirrors _macros.html's processing_pill(tool) verbatim — that macro
-    // only runs at build time, so a slide swap re-creates its markup here.
-    return slide.cloud
-      ? '<span class="badge--cloud" title="Secure server processing — your file is deleted immediately." aria-label="Cloud processing: secure server processing, your file is deleted immediately."><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg>Cloud</span>'
-      : '<span class="badge--local" title="Runs entirely in your browser." aria-label="Local processing: runs entirely in your browser."><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Local</span>';
-  }
 
   // Swaps text/badge/step-label and points the video at the new clip —
   // playback itself (ensureLoaded + play) is the caller's job, since an
@@ -66,9 +69,8 @@
   function applySlide(i) {
     var s = slides[i];
     if (titleEl) titleEl.textContent = s.name;
-    if (badgeRow) badgeRow.innerHTML = badgeHtml(s);
+    if (badgeRow) badgeRow.innerHTML = s.badgeHtml;
     if (caption) caption.textContent = s.caption;
-    if (firstStepLabel) firstStepLabel.textContent = s.firstStep;
     video.poster = s.poster;
     video.dataset.src = s.video;
     loaded = false;

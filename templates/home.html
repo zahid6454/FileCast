@@ -316,12 +316,21 @@
 {# ===== See It In Action (homepage demo video carousel) =====
    Six per-tool demo clips (build.py's demo_tools, in demo_tool_ids order),
    one <video> element re-used across all of them rather than six <video>
-   tags — badge/caption/step-label/story-strip all swap in place via
-   static/js/demo-video.js, driven by the JSON data island below. Server-
+   tags — title/badge/caption swap in place via static/js/demo-video.js,
+   driven by the JSON data island below (badgeHtml is processing_pill(t)
+   pre-rendered at build time, same macro the server-rendered first slide
+   below calls directly, so the two can't drift apart; the steps row's
+   "Upload" label is static markup and never changes per slide). Server-
    rendered content is demo_tools[0] (docx-to-pdf) only, same lazy-load
-   posture as before: no src/autoplay in the markup, JS sets the real src
-   and calls .play() once the panel scrolls into view, so a below-the-fold
-   clip never competes with initial page load.
+   posture as before: no
+   src/autoplay in the markup, JS sets the real src and calls .play() once
+   the panel scrolls into view, so a below-the-fold clip never competes
+   with initial page load. poster (a real screenshot of that tool's own
+   page, static/videos/<id>-demo-poster.jpg, not a frame from the video
+   itself) is deferred the same way via data-poster — the poster attribute
+   isn't covered by preload="none" and browsers fetch it eagerly regardless
+   of scroll position, so setting it directly here would silently defeat
+   the whole lazy-load point above.
    The <video> itself stays aria-hidden (decorative — caption + step labels
    already carry the same info as text). Each clip plays once (no loop) and
    auto-advances to the next tool, which is itself the WCAG 2.2.2 (Pause,
@@ -340,7 +349,7 @@
           <p class="demo-panel__title">{{ first.name }}</p>
           <div class="demo-panel__badge-row">{{ processing_pill(first) }}</div>
           <div class="demo-panel__video-wrap">
-            <video class="demo-panel__video" aria-hidden="true" muted playsinline preload="none" poster="/videos/{{ first.id }}-demo-poster.jpg" data-src="/videos/{{ first.id }}-demo.mp4"></video>
+            <video class="demo-panel__video" aria-hidden="true" muted playsinline preload="none" data-poster="/videos/{{ first.id }}-demo-poster.jpg" data-src="/videos/{{ first.id }}-demo.mp4"></video>
             {# Prev/next live inside the clipped video box (not straddling the
                card's outer edge) specifically so top:50% centers them on the
                video itself, not on the much taller card. #}
@@ -389,11 +398,10 @@
     {
       "id": {{ t.id|tojson }},
       "name": {{ t.name|tojson }},
-      "cloud": {{ (t.type == 'server-side')|tojson }},
+      "badgeHtml": {{ processing_pill(t)|tojson }},
       "video": {{ ('/videos/' + t.id + '-demo.mp4')|tojson }},
       "poster": {{ ('/videos/' + t.id + '-demo-poster.jpg')|tojson }},
-      "caption": {{ ('Securely uploaded, converted, and deleted immediately.' if t.type == 'server-side' else 'Processed entirely in your browser — nothing is uploaded to the server.')|tojson }},
-      "firstStep": "Upload"
+      "caption": {{ ('Securely uploaded, converted, and deleted immediately.' if t.type == 'server-side' else 'Processed entirely in your browser — nothing is uploaded to the server.')|tojson }}
     }{% if not loop.last %},{% endif %}
     {% endfor -%}
   ]</script>

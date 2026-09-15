@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDom, evalScript } from './helpers.js';
 
 // demo-video.js drives the homepage "See It In Action" carousel: one <video>
-// element re-used across six tools, badge/caption/step-label swapped in
+// element re-used across six tools, title/badge/caption/poster swapped in
 // place from a JSON data island (home.html's #demo-carousel-data, build.py's
 // demo_tools). No <source> in the initial markup — a data-src the script
 // promotes to the real src once the panel scrolls into view, skipping
@@ -22,29 +22,26 @@ function slidesJson() {
     {
       id: 'docx-to-pdf',
       name: 'DOCX to PDF Converter',
-      cloud: true,
+      badgeHtml: '<span class="badge--cloud">Cloud</span>',
       video: '/videos/docx-to-pdf-demo.mp4',
       poster: '/videos/docx-to-pdf-demo-poster.jpg',
-      caption: 'Securely uploaded, converted, and deleted immediately.',
-      firstStep: 'Upload'
+      caption: 'Securely uploaded, converted, and deleted immediately.'
     },
     {
       id: 'csv-to-json',
       name: 'CSV to JSON Converter',
-      cloud: false,
+      badgeHtml: '<span class="badge--local">Local</span>',
       video: '/videos/csv-to-json-demo.mp4',
       poster: '/videos/csv-to-json-demo-poster.jpg',
-      caption: 'Processed entirely in your browser — nothing is uploaded.',
-      firstStep: 'Select'
+      caption: 'Processed entirely in your browser — nothing is uploaded.'
     },
     {
       id: 'heic-to-jpg',
       name: 'HEIC to JPG Converter',
-      cloud: false,
+      badgeHtml: '<span class="badge--local">Local</span>',
       video: '/videos/heic-to-jpg-demo.mp4',
       poster: '/videos/heic-to-jpg-demo-poster.jpg',
-      caption: 'Processed entirely in your browser — nothing is uploaded.',
-      firstStep: 'Select'
+      caption: 'Processed entirely in your browser — nothing is uploaded.'
     }
   ]);
 }
@@ -55,7 +52,7 @@ function panelHtml({ withData = true } = {}) {
       <p class="demo-panel__title">DOCX to PDF Converter</p>
       <div class="demo-panel__badge-row"><span class="badge--cloud">Cloud</span></div>
       <div class="demo-panel__video-wrap">
-        <video class="demo-panel__video" muted playsinline preload="none" poster="/videos/docx-to-pdf-demo-poster.jpg" data-src="/videos/docx-to-pdf-demo.mp4"></video>
+        <video class="demo-panel__video" muted playsinline preload="none" data-poster="/videos/docx-to-pdf-demo-poster.jpg" data-src="/videos/docx-to-pdf-demo.mp4"></video>
         <button type="button" data-action="prev" aria-label="Previous demo"></button>
         <button type="button" data-action="next" aria-label="Next demo"></button>
         <div class="demo-panel__controls">
@@ -183,8 +180,53 @@ describe('demo-video.js (homepage demo carousel)', () => {
 
     const video = dom.window.document.querySelector('.demo-panel__video');
     expect(video.src).toContain('/videos/docx-to-pdf-demo.mp4');
+    expect(video.poster).toContain('/videos/docx-to-pdf-demo-poster.jpg');
     expect(video.loop).toBe(false);
     expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not set the poster until the panel is actually scrolled into view', () => {
+    // Regression: the poster attribute isn't covered by preload="none" —
+    // browsers fetch it the instant it's set, regardless of scroll position.
+    // Setting it directly in the markup (like data-src's real src) would
+    // silently turn every homepage visit into an eager ~100KB image fetch,
+    // even for a visitor who never scrolls anywhere near the demo panel.
+    const dom = createDom(panelHtml());
+    // Not yet on-screen: observer never fires, so the panel starts unloaded.
+    dom.window.IntersectionObserver = function () {
+      this.observe = function () {};
+      this.disconnect = vi.fn();
+    };
+    mockMatchMedia(dom.window, false);
+    mockVideoPlayback(dom.window);
+
+    evalScript(dom, 'demo-video.js');
+
+    const video = dom.window.document.querySelector('.demo-panel__video');
+    expect(video.poster).toBe('');
+    expect(video.dataset.poster).toContain('/videos/docx-to-pdf-demo-poster.jpg');
+  });
+
+  it("a manual switch before the panel was ever scrolled into view keeps the TARGET slide's poster, not slide 0's", () => {
+    // Regression: ensureLoaded() applies data-poster (slide 0's) whenever it
+    // first runs — including from inside goTo() itself, on a click that
+    // reaches the carousel before the IntersectionObserver ever fired. That
+    // must not clobber the poster goTo() just applied for the slide the
+    // visitor actually navigated to.
+    const dom = createDom(panelHtml());
+    dom.window.IntersectionObserver = function () {
+      this.observe = function () {};
+      this.disconnect = vi.fn();
+    };
+    mockMatchMedia(dom.window, false);
+    mockVideoPlayback(dom.window);
+
+    evalScript(dom, 'demo-video.js');
+    dom.window.document.querySelector('[data-action="next"]').click();
+
+    const video = dom.window.document.querySelector('.demo-panel__video');
+    expect(video.poster).toContain('/videos/csv-to-json-demo-poster.jpg');
+    expect(video.poster).not.toContain('docx-to-pdf');
   });
 
   it('sets the src but skips autoplay under prefers-reduced-motion', async () => {
@@ -332,7 +374,7 @@ describe('demo-video.js (homepage demo carousel)', () => {
   });
 
   describe('carousel: switching tools', () => {
-    it('clicking "next" swaps badge/caption/step-label and restarts playback at the new clip, under reduced motion (synchronous swap)', () => {
+    it('clicking "next" swaps title/badge/caption/poster and restarts playback at the new clip, leaving the static "Upload" step-label alone, under reduced motion (synchronous swap)', () => {
       const dom = createDom(panelHtml());
       mockIntersectionObserver(dom.window);
       mockMatchMedia(dom.window, true);
@@ -357,8 +399,10 @@ describe('demo-video.js (homepage demo carousel)', () => {
       const caption = dom.window.document.querySelector('.demo-panel__caption');
       expect(caption.textContent).toBe('Processed entirely in your browser — nothing is uploaded.');
 
+      // The steps row's first label is static markup, not driven by the
+      // carousel data — it must never change on a slide switch.
       const stepLabel = dom.window.document.querySelector('.demo-panel__step-label');
-      expect(stepLabel.textContent).toBe('Select');
+      expect(stepLabel.textContent).toBe('Upload');
 
       const badge = dom.window.document.querySelector('.demo-panel__badge-row');
       expect(badge.innerHTML).toContain('badge--local');
