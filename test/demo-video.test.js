@@ -1,39 +1,77 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createDom, evalScript } from './helpers.js';
 
-// demo-video.js lazy-loads the homepage "See It In Action" panel: no <source>
-// in the initial markup (build.py/home.html), just a data-src the script
+// demo-video.js drives the homepage "See It In Action" carousel: one <video>
+// element re-used across six tools, title/badge/caption/poster swapped in
+// place from a JSON data island (home.html's #demo-carousel-data, build.py's
+// demo_tools). No <source> in the initial markup — a data-src the script
 // promotes to the real src once the panel scrolls into view, skipping
-// autoplay/loop under prefers-reduced-motion. It also wires up the 3-button
-// control bar (rewind 5s / play-pause / forward 5s) added for WCAG 2.2.2
-// (Pause, Stop, Hide) — a real mechanism to stop the autoplaying, looping,
-// >5s video, independent of prefers-reduced-motion (which only helps
-// visitors who've set that OS-level flag).
+// autoplay under prefers-reduced-motion. It also wires up the play/pause and
+// fullscreen buttons — play/pause is the WCAG 2.2.2 (Pause, Stop, Hide)
+// mechanism to stop the autoplaying video, independent of
+// prefers-reduced-motion (which only helps visitors who've set that OS-level
+// flag).
 //
 // jsdom implements neither IntersectionObserver, window.matchMedia, nor a
 // spec-compliant (Promise-returning, state-tracking) HTMLMediaElement, so
 // all three are stood in for here — same pattern shared-page-grid.test.js
 // uses for the browser APIs jsdom doesn't implement.
 
-function panelHtml() {
+function slidesJson() {
+  return JSON.stringify([
+    {
+      id: 'docx-to-pdf',
+      name: 'DOCX to PDF Converter',
+      badgeHtml: '<span class="badge--cloud">Cloud</span>',
+      video: '/videos/docx-to-pdf-demo.mp4',
+      poster: '/videos/docx-to-pdf-demo-poster.jpg',
+      caption: 'Securely uploaded, converted, and deleted immediately.'
+    },
+    {
+      id: 'csv-to-json',
+      name: 'CSV to JSON Converter',
+      badgeHtml: '<span class="badge--local">Local</span>',
+      video: '/videos/csv-to-json-demo.mp4',
+      poster: '/videos/csv-to-json-demo-poster.jpg',
+      caption: 'Processed entirely in your browser — nothing is uploaded.'
+    },
+    {
+      id: 'heic-to-jpg',
+      name: 'HEIC to JPG Converter',
+      badgeHtml: '<span class="badge--local">Local</span>',
+      video: '/videos/heic-to-jpg-demo.mp4',
+      poster: '/videos/heic-to-jpg-demo-poster.jpg',
+      caption: 'Processed entirely in your browser — nothing is uploaded.'
+    }
+  ]);
+}
+
+function panelHtml({ withData = true } = {}) {
   return `
-    <div class="demo-panel__video-wrap">
-      <video class="demo-panel__video" muted playsinline preload="none" data-src="/videos/docx-to-pdf-demo.mp4"></video>
-      <div class="demo-panel__controls">
-        <button type="button" data-action="back" aria-label="Rewind 5 seconds">
-          <svg><use href="#icon-rewind-5"></use></svg>
-        </button>
-        <button type="button" data-action="toggle" aria-label="Play">
-          <svg><use href="#icon-play"></use></svg>
-        </button>
-        <button type="button" data-action="forward" aria-label="Forward 5 seconds">
-          <svg><use href="#icon-forward-5"></use></svg>
-        </button>
-        <button type="button" data-action="fullscreen" aria-label="Full screen">
-          <svg><use href="#icon-maximize"></use></svg>
-        </button>
+    <div class="demo-panel__content">
+      <p class="demo-panel__title">DOCX to PDF Converter</p>
+      <div class="demo-panel__badge-row"><span class="badge--cloud">Cloud</span></div>
+      <div class="demo-panel__video-wrap">
+        <video class="demo-panel__video" muted playsinline preload="none" data-poster="/videos/docx-to-pdf-demo-poster.jpg" data-src="/videos/docx-to-pdf-demo.mp4"></video>
+        <button type="button" data-action="prev" aria-label="Previous demo"></button>
+        <button type="button" data-action="next" aria-label="Next demo"></button>
+        <div class="demo-panel__controls">
+          <button type="button" data-action="toggle" aria-label="Play">
+            <svg><use href="#icon-play"></use></svg>
+          </button>
+          <button type="button" data-action="fullscreen" aria-label="Full screen">
+            <svg><use href="#icon-maximize"></use></svg>
+          </button>
+        </div>
       </div>
     </div>
+    <div class="demo-panel__content">
+      <p class="demo-panel__caption">Securely uploaded, converted, and deleted immediately.</p>
+      <div class="demo-panel__steps">
+        <div class="demo-panel__step"><span class="demo-panel__step-label">Upload</span></div>
+      </div>
+    </div>
+    ${withData ? `<script type="application/json" id="demo-carousel-data">${slidesJson()}</script>` : ''}
   `;
 }
 
@@ -90,7 +128,7 @@ function mockMatchMedia(win, matches) {
 // fire the 'play'/'pause' events real browsers do — this mock does both, so
 // the source's setPlayIcon() wiring (which listens for those events) is
 // actually exercised.
-function mockVideoPlayback(win) {
+function mockVideoPlayback(win, { duration = 10 } = {}) {
   const play = vi.fn(function () {
     Object.defineProperty(this, 'paused', { value: false, configurable: true });
     this.dispatchEvent(new win.Event('play'));
@@ -102,10 +140,16 @@ function mockVideoPlayback(win) {
   });
   win.HTMLMediaElement.prototype.play = play;
   win.HTMLMediaElement.prototype.pause = pause;
+  Object.defineProperty(win.HTMLMediaElement.prototype, 'duration', {
+    configurable: true,
+    get: function () {
+      return duration;
+    }
+  });
   return { play, pause };
 }
 
-describe('demo-video.js (homepage lazy-loaded demo panel)', () => {
+describe('demo-video.js (homepage demo carousel)', () => {
   it('does nothing if the panel is not on the page', () => {
     const dom = createDom('');
     mockIntersectionObserver(dom.window);
@@ -113,7 +157,20 @@ describe('demo-video.js (homepage lazy-loaded demo panel)', () => {
     expect(() => evalScript(dom, 'demo-video.js')).not.toThrow();
   });
 
-  it('sets the real src and autoplays+loops once visible, motion allowed', async () => {
+  it('does nothing if there is no carousel data', () => {
+    const dom = createDom(panelHtml({ withData: false }));
+    mockIntersectionObserver(dom.window);
+    mockMatchMedia(dom.window, false);
+    const { play } = mockVideoPlayback(dom.window);
+
+    expect(() => evalScript(dom, 'demo-video.js')).not.toThrow();
+
+    const video = dom.window.document.querySelector('.demo-panel__video');
+    expect(video.src).toBe('');
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it('sets the real src and autoplays once visible, motion allowed — no loop, since ending advances instead', async () => {
     const dom = createDom(panelHtml());
     mockIntersectionObserver(dom.window);
     mockMatchMedia(dom.window, false);
@@ -123,11 +180,56 @@ describe('demo-video.js (homepage lazy-loaded demo panel)', () => {
 
     const video = dom.window.document.querySelector('.demo-panel__video');
     expect(video.src).toContain('/videos/docx-to-pdf-demo.mp4');
-    expect(video.loop).toBe(true);
+    expect(video.poster).toContain('/videos/docx-to-pdf-demo-poster.jpg');
+    expect(video.loop).toBe(false);
     expect(play).toHaveBeenCalledTimes(1);
   });
 
-  it('sets the src but skips autoplay/loop under prefers-reduced-motion', async () => {
+  it('does not set the poster until the panel is actually scrolled into view', () => {
+    // Regression: the poster attribute isn't covered by preload="none" —
+    // browsers fetch it the instant it's set, regardless of scroll position.
+    // Setting it directly in the markup (like data-src's real src) would
+    // silently turn every homepage visit into an eager ~100KB image fetch,
+    // even for a visitor who never scrolls anywhere near the demo panel.
+    const dom = createDom(panelHtml());
+    // Not yet on-screen: observer never fires, so the panel starts unloaded.
+    dom.window.IntersectionObserver = function () {
+      this.observe = function () {};
+      this.disconnect = vi.fn();
+    };
+    mockMatchMedia(dom.window, false);
+    mockVideoPlayback(dom.window);
+
+    evalScript(dom, 'demo-video.js');
+
+    const video = dom.window.document.querySelector('.demo-panel__video');
+    expect(video.poster).toBe('');
+    expect(video.dataset.poster).toContain('/videos/docx-to-pdf-demo-poster.jpg');
+  });
+
+  it("a manual switch before the panel was ever scrolled into view keeps the TARGET slide's poster, not slide 0's", () => {
+    // Regression: ensureLoaded() applies data-poster (slide 0's) whenever it
+    // first runs — including from inside goTo() itself, on a click that
+    // reaches the carousel before the IntersectionObserver ever fired. That
+    // must not clobber the poster goTo() just applied for the slide the
+    // visitor actually navigated to.
+    const dom = createDom(panelHtml());
+    dom.window.IntersectionObserver = function () {
+      this.observe = function () {};
+      this.disconnect = vi.fn();
+    };
+    mockMatchMedia(dom.window, false);
+    mockVideoPlayback(dom.window);
+
+    evalScript(dom, 'demo-video.js');
+    dom.window.document.querySelector('[data-action="next"]').click();
+
+    const video = dom.window.document.querySelector('.demo-panel__video');
+    expect(video.poster).toContain('/videos/csv-to-json-demo-poster.jpg');
+    expect(video.poster).not.toContain('docx-to-pdf');
+  });
+
+  it('sets the src but skips autoplay under prefers-reduced-motion', async () => {
     const dom = createDom(panelHtml());
     mockIntersectionObserver(dom.window);
     mockMatchMedia(dom.window, true);
@@ -137,7 +239,6 @@ describe('demo-video.js (homepage lazy-loaded demo panel)', () => {
 
     const video = dom.window.document.querySelector('.demo-panel__video');
     expect(video.src).toContain('/videos/docx-to-pdf-demo.mp4');
-    expect(video.loop).toBe(false);
     expect(play).not.toHaveBeenCalled();
   });
 
@@ -167,31 +268,6 @@ describe('demo-video.js (homepage lazy-loaded demo panel)', () => {
     expect(video.paused).toBe(true);
     expect(playBtn.getAttribute('aria-label')).toBe('Play');
     expect(playBtn.querySelector('use').getAttribute('href')).toBe('#icon-play');
-  });
-
-  it('rewind/forward buttons seek by 5 seconds, clamped at 0', () => {
-    const dom = createDom(panelHtml());
-    mockIntersectionObserver(dom.window);
-    mockMatchMedia(dom.window, true); // reduced motion: starts paused, currentTime 0
-    mockVideoPlayback(dom.window);
-
-    evalScript(dom, 'demo-video.js');
-
-    const video = dom.window.document.querySelector('.demo-panel__video');
-    const backBtn = dom.window.document.querySelector('[data-action="back"]');
-    const forwardBtn = dom.window.document.querySelector('[data-action="forward"]');
-
-    backBtn.click();
-    expect(video.currentTime).toBe(0); // already at 0, must not go negative
-
-    forwardBtn.click();
-    expect(video.currentTime).toBe(5);
-
-    forwardBtn.click();
-    expect(video.currentTime).toBe(10);
-
-    backBtn.click();
-    expect(video.currentTime).toBe(5);
   });
 
   it('fullscreen button fullscreens the video-wrap (not the bare video), so the controls stay in the fullscreened subtree', () => {
@@ -295,5 +371,131 @@ describe('demo-video.js (homepage lazy-loaded demo panel)', () => {
 
     dom.window.document.querySelector('[data-action="fullscreen"]').click();
     expect(webkitRequestFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  describe('carousel: switching tools', () => {
+    it('clicking "next" swaps title/badge/caption/poster and restarts playback at the new clip, leaving the static "Upload" step-label alone, under reduced motion (synchronous swap)', () => {
+      const dom = createDom(panelHtml());
+      mockIntersectionObserver(dom.window);
+      mockMatchMedia(dom.window, true);
+      const { play } = mockVideoPlayback(dom.window);
+
+      evalScript(dom, 'demo-video.js');
+      play.mockClear();
+
+      dom.window.document.querySelector('[data-action="next"]').click();
+
+      const video = dom.window.document.querySelector('.demo-panel__video');
+      expect(video.src).toContain('/videos/csv-to-json-demo.mp4');
+      expect(video.poster).toContain('/videos/csv-to-json-demo-poster.jpg');
+      expect(video.currentTime).toBe(0);
+      // Manual navigation always plays, even under reduced motion — a direct
+      // user action, same as the play button ignoring it.
+      expect(play).toHaveBeenCalledTimes(1);
+
+      const title = dom.window.document.querySelector('.demo-panel__title');
+      expect(title.textContent).toBe('CSV to JSON Converter');
+
+      const caption = dom.window.document.querySelector('.demo-panel__caption');
+      expect(caption.textContent).toBe('Processed entirely in your browser — nothing is uploaded.');
+
+      // The steps row's first label is static markup, not driven by the
+      // carousel data — it must never change on a slide switch.
+      const stepLabel = dom.window.document.querySelector('.demo-panel__step-label');
+      expect(stepLabel.textContent).toBe('Upload');
+
+      const badge = dom.window.document.querySelector('.demo-panel__badge-row');
+      expect(badge.innerHTML).toContain('badge--local');
+    });
+
+    it('wraps prev from the first slide to the last', () => {
+      const dom = createDom(panelHtml());
+      mockIntersectionObserver(dom.window);
+      mockMatchMedia(dom.window, true);
+      mockVideoPlayback(dom.window);
+
+      evalScript(dom, 'demo-video.js');
+      dom.window.document.querySelector('[data-action="prev"]').click();
+
+      const video = dom.window.document.querySelector('.demo-panel__video');
+      expect(video.src).toContain('/videos/heic-to-jpg-demo.mp4');
+    });
+
+    it('jumping "next" repeatedly lands on the right slide each time', () => {
+      const dom = createDom(panelHtml());
+      mockIntersectionObserver(dom.window);
+      mockMatchMedia(dom.window, false);
+      mockVideoPlayback(dom.window);
+
+      evalScript(dom, 'demo-video.js');
+      const nextBtn = dom.window.document.querySelector('[data-action="next"]');
+      const video = dom.window.document.querySelector('.demo-panel__video');
+
+      nextBtn.click(); // slide 0 -> 1
+      nextBtn.click(); // slide 1 -> 2
+
+      expect(video.src).toContain('/videos/heic-to-jpg-demo.mp4');
+    });
+
+    it('under motion allowed, a switch applies immediately and fades .demo-panel__content back in afterward', () => {
+      vi.useFakeTimers();
+      try {
+        const dom = createDom(panelHtml());
+        mockIntersectionObserver(dom.window);
+        mockMatchMedia(dom.window, false);
+        mockVideoPlayback(dom.window);
+
+        evalScript(dom, 'demo-video.js');
+        dom.window.document.querySelector('[data-action="next"]').click();
+
+        const contentEls = dom.window.document.querySelectorAll('.demo-panel__content');
+        const video = dom.window.document.querySelector('.demo-panel__video');
+        // Applies synchronously — no pending/half-switched state to race against.
+        expect(video.src).toContain('/videos/csv-to-json-demo.mp4');
+        contentEls.forEach((el) => {
+          expect(el.classList.contains('is-switching')).toBe(true);
+        });
+
+        vi.advanceTimersByTime(0);
+
+        contentEls.forEach((el) => {
+          expect(el.classList.contains('is-switching')).toBe(false);
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('the video ending auto-advances to the next slide and plays it, motion allowed', () => {
+      const dom = createDom(panelHtml());
+      mockIntersectionObserver(dom.window);
+      mockMatchMedia(dom.window, false);
+      const { play } = mockVideoPlayback(dom.window);
+
+      evalScript(dom, 'demo-video.js'); // scrolled into view: loads + plays slide 0
+      play.mockClear();
+
+      const video = dom.window.document.querySelector('.demo-panel__video');
+      video.dispatchEvent(new dom.window.Event('ended'));
+
+      expect(video.src).toContain('/videos/csv-to-json-demo.mp4');
+      expect(play).toHaveBeenCalledTimes(1);
+    });
+
+    it('under reduced motion, the video ending advances the slide but does not autoplay it', () => {
+      const dom = createDom(panelHtml());
+      mockIntersectionObserver(dom.window);
+      mockMatchMedia(dom.window, true);
+      const { play } = mockVideoPlayback(dom.window);
+
+      evalScript(dom, 'demo-video.js');
+      play.mockClear();
+
+      const video = dom.window.document.querySelector('.demo-panel__video');
+      video.dispatchEvent(new dom.window.Event('ended'));
+
+      expect(video.src).toContain('/videos/csv-to-json-demo.mp4');
+      expect(play).not.toHaveBeenCalled();
+    });
   });
 });

@@ -175,6 +175,48 @@ def parse_faq_pairs(md_path: Path) -> list[dict]:
     return pairs
 
 
+# Homepage FAQ's "what do the badges mean" tile (content/home/faq.md's
+# hardcoded last question) gets this legend nested inside it via
+# wrap_faq_cards()'s extra_last_card_html — see render_all_pages(). Mirrors
+# home.html's other hand-written SVG markup (e.g. demo-video.js's badgeHtml()
+# mirroring _macros.html's processing_pill()): this is presentation the
+# markdown source has no business describing, so it isn't in faq.md itself.
+FAQ_BADGE_LEGEND_HTML = (
+    '<div class="faq-badge-group">'
+    '<div class="faq-badge-row">'
+    '<span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Runs in your browser</span>'
+    '<span class="badge--local"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Files never uploaded</span>'
+    "</div>"
+    '<div class="faq-badge-row">'
+    '<span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-upload-cloud"></use></svg>Uploaded to server</span>'
+    '<span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Encrypted in transit</span>'
+    '<span class="badge--cloud"><svg class="badge__icon" aria-hidden="true" focusable="false"><use href="#icon-x"></use></svg>Deleted after converting</span>'
+    "</div>"
+    "</div>"
+)
+
+
+def wrap_faq_cards(faq_html: str, extra_last_card_html: str = "") -> str:
+    """Wrap each rendered FAQ's <h3>Question</h3><p>Answer</p> block in its own
+    <div class="faq-card"> so CSS can lay the FAQ out as a tile grid instead of
+    one long stack. Splits the already-rendered HTML on each <h3> rather than
+    re-parsing the markdown — Python-Markdown always emits a bare <h3> (no
+    attr_list/toc extension enabled), so the split point is unambiguous.
+
+    extra_last_card_html, if given, is inserted inside the LAST card, right
+    before its closing </div> — the homepage's badge legend belongs inside
+    the "what do the badges mean" tile, not floating below the grid as its
+    own row.
+
+    Only the homepage FAQ uses this (see render_all_pages()) — every tool page
+    keeps content-block--faq's original flat vertical list."""
+    chunks = [c for c in re.split(r"(?=<h3>)", faq_html) if c.strip()]
+    cards = [f'<div class="faq-card">{chunk}</div>' for chunk in chunks]
+    if extra_last_card_html and cards:
+        cards[-1] = cards[-1][: -len("</div>")] + extra_last_card_html + "</div>"
+    return "".join(cards)
+
+
 # ---------------------------------------------------------------------------
 # Step 1: Clean dist/
 # ---------------------------------------------------------------------------
@@ -1636,16 +1678,36 @@ def render_all_pages(
     # it off of. Always computed and always passed below (never conditionally
     # omitted): StrictUndefined (create_jinja_env()) fails the whole build if
     # a referenced template variable is missing, even inside an `{% if %}`.
-    # content/home/faq.md's LAST question must stay "What do the green and
-    # blue badges mean?" — home.html hardcodes a badge legend immediately
-    # after the rendered FAQ HTML, written to visually read as that answer's
-    # continuation. Reordering the questions would detach it. (Not noted as
-    # an HTML comment inside faq.md itself: parse_faq_pairs() below is a
-    # naive line collector that would fold a comment line into whichever
+    # content/home/faq.md's LAST question should stay "What do the green and
+    # blue badges mean?" — FAQ_BADGE_LEGEND_HTML is nested inside that
+    # question's own tile (below), meant to read as its continuation. (Not
+    # noted as an HTML comment inside faq.md itself: parse_faq_pairs() below
+    # is a naive line collector that would fold a comment line into whichever
     # question's answer precedes it, corrupting that question's JSON-LD text.)
+    #
+    # wrap_faq_cards() turns the flat <h3>/<p> stream render_markdown()
+    # produces into one <div class="faq-card"> per question, so CSS can lay
+    # the homepage FAQ out as a 2-column tile grid — see .content-block--faq
+    # in style.css, scoped to #faq so every tool page's FAQ (content-block--faq
+    # too, via load_tool_content()) keeps its original flat list untouched.
     faq_path = ROOT / "content/home/faq.md"
-    faq_html = render_markdown(faq_path)
+    faq_html = wrap_faq_cards(render_markdown(faq_path), FAQ_BADGE_LEGEND_HTML)
     faq_structured_data = parse_faq_pairs(faq_path)
+
+    # "See It In Action" homepage carousel — fixed order, one demo video per
+    # listed id (static/videos/<id>-demo.mp4). Adding a 7th demo is just one
+    # more id here once its clip is recorded; a listed id with no clip yet
+    # would 404, so this only grows in step with static/videos/.
+    demo_tool_ids = [
+        "docx-to-pdf",
+        "csv-to-json",
+        "heic-to-jpg",
+        "image-resize",
+        "pdf-split",
+        "qr-code-generator",
+    ]
+    tools_by_id = {t["id"]: t for t in tools}
+    demo_tools = [tools_by_id[tid] for tid in demo_tool_ids if tid in tools_by_id]
 
     # Homepage
     if render_page(
@@ -1654,6 +1716,7 @@ def render_all_pages(
         DIST / "index.html",
         categories=categories_with_tools,
         tools=tools,
+        demo_tools=demo_tools,
         faq_html=faq_html,
         faq_structured_data=faq_structured_data,
     ):
