@@ -1346,9 +1346,11 @@ img { max-width: 100%; display: block; }
    (A dead pre-Phase-3 assets/style.css used to shadow this one in greps, with a
    near-identical `.ad-slot--rectangle` rule. Deleted in Phase 9 §5.) */
 .ad-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; margin: var(--space-6) 0; }
-.ad-slot--leaderboard { min-height: var(--ad-leaderboard-h); }
-/* in-content sits right below the Download/Convert Another buttons (tool.html
-   etc.) — extra top margin keeps a post-download tap from landing on the ad. */
+/* Both modifiers get extra bottom margin, matching in-content's top margin
+   below: the leaderboard sits right above the "How we handle your files"
+   link (tool.html), and in-content sits right below the Download/Convert
+   Another buttons — same post-tap-lands-on-ad risk on both sides. */
+.ad-slot--leaderboard { min-height: var(--ad-leaderboard-h); margin-bottom: var(--space-12); }
 .ad-slot--in-content { min-height: var(--ad-rectangle-h); margin-top: var(--space-12); }
 .ad-slot__label { font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: var(--space-2); }
 
