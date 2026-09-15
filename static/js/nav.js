@@ -64,6 +64,10 @@
     toggles.forEach(function (toggle) {
       var parent = toggle.closest('.nav-dropdown');
       if (!parent) return;
+      // A toggle with no menu (e.g. the plain Blog link, which only reuses
+      // this class for its color/hover styling) has nothing to expand —
+      // skip binding so it doesn't pick up a stray aria-expanded/open state.
+      if (!parent.querySelector('.nav-dropdown__menu')) return;
       toggle.addEventListener('click', function (e) {
         e.stopPropagation();
         var open = !parent.classList.contains('nav-dropdown--open');
