@@ -704,7 +704,10 @@ def test_built_css_reserves_each_slot_at_its_own_height(tmp_path, monkeypatch):
     assert len(sheets) == 1, sheets
     # process_assets() minifies, so match the minified form.
     css = sheets[0].read_text(encoding="utf-8")
-    assert ".ad-slot--leaderboard{min-height:var(--ad-leaderboard-h)}" in css
+    assert (
+        ".ad-slot--leaderboard{min-height:var(--ad-leaderboard-h);"
+        "margin-bottom:var(--space-12)}" in css
+    )
     assert (
         ".ad-slot--in-content{min-height:var(--ad-rectangle-h);"
         "margin-top:var(--space-12)}" in css
