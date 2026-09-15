@@ -1,0 +1,14 @@
+enabled: true
+id: unix-timestamp-explained
+slug: /blog/unix-timestamps-explained
+title: "Unix Timestamps Explained: Why Computers Store Time as One Giant Number"
+dek: "1970 wasn't chosen for any romantic reason — it's just where the counting started, and everything else follows from that one design decision."
+tag: Developer Tools
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "Unix Timestamps Explained | FileCast Blog"
+  description: "What a Unix timestamp actually counts, why it starts at January 1, 1970, and the seconds-vs-milliseconds mix-up that breaks dates in real code."
+content:
+  body: "content/blog/unix-timestamp-explained/body.md"
+related_tools: [unix-timestamp-converter]

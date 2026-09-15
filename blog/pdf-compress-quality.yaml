@@ -1,0 +1,14 @@
+enabled: true
+id: pdf-compress-quality
+slug: /blog/how-to-compress-pdf-without-losing-quality
+title: "How to Compress a PDF Without Losing Quality"
+dek: "Most of a bloated PDF's size is sitting in its images, not its text — which is exactly where you can win the space back."
+tag: Documents
+date: 2026-09-15
+read_minutes: 5
+meta:
+  title: "How to Compress a PDF Without Losing Quality | FileCast Blog"
+  description: "Why PDFs balloon in size, where that size actually comes from, and how to shrink a PDF for email or upload limits without visibly degrading it."
+content:
+  body: "content/blog/pdf-compress-quality/body.md"
+related_tools: [pdf-compress, pdf-flatten]

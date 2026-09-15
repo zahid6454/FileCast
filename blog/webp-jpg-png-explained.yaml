@@ -1,0 +1,14 @@
+enabled: true
+id: webp-jpg-png-explained
+slug: /blog/webp-vs-jpg-vs-png-which-format-to-use
+title: "WebP vs. JPG vs. PNG: Which Image Format Should You Actually Use"
+dek: "Three formats, three different jobs — picking by habit instead of by what the image actually needs is how sites end up slower than they should be."
+tag: Images
+date: 2026-09-15
+read_minutes: 5
+meta:
+  title: "WebP vs JPG vs PNG: Which to Use | FileCast Blog"
+  description: "The real difference between WebP, JPG, and PNG, why WebP usually wins on the web, and the specific cases where JPG or PNG is still the better choice."
+content:
+  body: "content/blog/webp-jpg-png-explained/body.md"
+related_tools: [webp-to-jpg, jpg-to-webp, png-to-webp]

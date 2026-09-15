@@ -1,0 +1,14 @@
+enabled: true
+id: office-to-pdf-formatting
+slug: /blog/convert-word-powerpoint-excel-to-pdf-without-breaking-formatting
+title: "Converting Word, PowerPoint, and Excel to PDF Without Breaking the Formatting"
+dek: "A PDF is supposed to look the same everywhere. That guarantee only holds if the conversion actually renders the file instead of guessing at it."
+tag: Documents
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "Convert Office Files to PDF Without Breaking Formatting | FileCast Blog"
+  description: "Why a Word, PowerPoint, or Excel file can look different once converted to PDF, what actually causes it, and how to convert without the formatting shifting."
+content:
+  body: "content/blog/office-to-pdf-formatting/body.md"
+related_tools: [docx-to-pdf, pptx-to-pdf, xlsx-to-pdf]

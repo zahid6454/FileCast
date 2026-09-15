@@ -1,0 +1,14 @@
+enabled: true
+id: scanned-pdf-text
+slug: /blog/why-you-cant-copy-text-from-a-scanned-pdf
+title: "Why You Can't Copy Text From a Scanned PDF (and What Actually Fixes It)"
+dek: "Two PDFs can look identical and behave completely differently — one has real text underneath, the other is just a photo of text."
+tag: Documents
+date: 2026-09-15
+read_minutes: 5
+meta:
+  title: "Why You Can't Copy Text From a Scanned PDF | FileCast Blog"
+  description: "The real difference between a text-based PDF and a scanned one, why text extraction works on one and not the other, and where OCR fits in."
+content:
+  body: "content/blog/scanned-pdf-text/body.md"
+related_tools: [pdf-to-text, pdf-to-docx]

@@ -1,0 +1,14 @@
+enabled: true
+id: base64-images-explained
+slug: /blog/base64-images-explained
+title: "Base64 Images Explained: When to Use Them, and When Not To"
+dek: "Embedding an image as text inside your code feels like a hack. Sometimes it's the right call — and sometimes it quietly makes your page slower."
+tag: Developer Tools
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "Base64 Images Explained | FileCast Blog"
+  description: "What a Base64-encoded image actually is, why it inflates file size, and the specific cases where embedding an image as text is the right tradeoff."
+content:
+  body: "content/blog/base64-images-explained/body.md"
+related_tools: [image-to-base64, base64-to-image]

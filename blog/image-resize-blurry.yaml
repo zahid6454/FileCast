@@ -1,0 +1,14 @@
+enabled: true
+id: image-resize-blurry
+slug: /blog/why-resized-images-look-blurry
+title: "Why Your Resized Image Looks Blurry (and How to Avoid It)"
+dek: "Stretching a small image up is a different operation from shrinking a large one down — only one of them can genuinely go wrong."
+tag: Images
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "Why Resized Images Look Blurry | FileCast Blog"
+  description: "Why upscaling an image loses sharpness that downscaling doesn't, what resizing actually does to pixel data, and how to resize without visible quality loss."
+content:
+  body: "content/blog/image-resize-blurry/body.md"
+related_tools: [image-resize, bulk-image-compress]

@@ -1,0 +1,14 @@
+enabled: true
+id: heic-to-jpg-windows
+slug: /blog/heic-to-jpg-on-windows-and-pc
+title: "How to Convert HEIC to JPG on Windows (Without an iPhone Nearby)"
+dek: "Windows can technically open HEIC now — if you install the right paid codec. Converting the file is faster and works everywhere else too."
+tag: Images
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "How to Convert HEIC to JPG on Windows | FileCast Blog"
+  description: "Why Windows can't open HEIC photos out of the box, what the Microsoft Store codec actually fixes (and doesn't), and how to convert HEIC to JPG without installing anything."
+content:
+  body: "content/blog/heic-to-jpg-windows/body.md"
+related_tools: [heic-to-jpg, heic-to-png]

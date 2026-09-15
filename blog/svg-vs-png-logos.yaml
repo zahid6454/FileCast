@@ -1,0 +1,14 @@
+enabled: true
+id: svg-vs-png-logos
+slug: /blog/svg-vs-png-for-logos-and-icons
+title: "SVG vs. PNG for Logos and Icons: Why Vector Wins Until It Doesn't"
+dek: "One of these formats stays perfectly sharp at any size. The other one is what most software still expects you to hand it."
+tag: Images
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "SVG vs PNG for Logos and Icons | FileCast Blog"
+  description: "Why an SVG logo never gets blurry no matter the size, what you lose by using one, and when a PNG export is still the right call."
+content:
+  body: "content/blog/svg-vs-png-logos/body.md"
+related_tools: [svg-to-png, png-to-svg]
