@@ -36,6 +36,13 @@
   {% set main_tools = category.tools|selectattr('subcategory', 'equalto', 'converter')|list %}
   {% set sub_tools = category.tools|selectattr('subcategory', 'equalto', 'utility')|list %}
 
+  {% if main_tools %}
+  <h2 class="category-subhead category-subhead--converters">
+    <span class="category-subhead__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
+    <span class="category-subhead__label">Converters</span>
+    <span class="category-subhead__count">&middot; {{ main_tools|length }} tools</span>
+  </h2>
+  {% endif %}
   <div class="card-grid card-grid--lg card-grid--cols4">
     {% for tool in main_tools %}
     {{ tool_card_lg(tool, category.name|lower) }}
@@ -43,10 +50,23 @@
   </div>
 
   {% if sub_tools %}
-  <div class="section__divider u-mt-8 u-mb-8"></div>
+  <h2 class="category-subhead category-subhead--utilities u-mt-8">
+    <span class="category-subhead__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg></span>
+    <span class="category-subhead__label">Utilities</span>
+    <span class="category-subhead__count">&middot; {{ sub_tools|length }} tools</span>
+  </h2>
   <div class="card-grid card-grid--lg card-grid--cols4">
     {% for tool in sub_tools %}
     {{ tool_card_lg(tool, category.name|lower) }}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if category.long_description %}
+  <div class="privacy-section u-mt-8">
+    <h2>About {{ category.name }}</h2>
+    {% for para in category.long_description %}
+    <p>{{ para }}</p>
     {% endfor %}
   </div>
   {% endif %}

@@ -747,6 +747,7 @@
 
     var cards = document.querySelectorAll('.card[data-name]');
     var noResults = document.getElementById('no-results');
+    var subheads = document.querySelectorAll('.category-subhead');
 
     searchInput.addEventListener('input', function () {
       var query = searchInput.value.toLowerCase().trim();
@@ -754,6 +755,9 @@
       if (!query) {
         cards.forEach(function (card) {
           card.classList.remove('hidden');
+        });
+        subheads.forEach(function (subhead) {
+          subhead.classList.remove('hidden');
         });
         if (noResults) noResults.classList.add('hidden');
         return;
@@ -765,6 +769,15 @@
         var match = name.includes(query);
         card.classList.toggle('hidden', !match);
         if (match) matchCount++;
+      });
+
+      // A subsection header (e.g. "Converters · 18 tools") shows a static,
+      // build-time count — hide it when search has filtered out every card
+      // in its group, so it doesn't float above an empty grid.
+      subheads.forEach(function (subhead) {
+        var grid = subhead.nextElementSibling;
+        var visible = grid ? grid.querySelectorAll('.card[data-name]:not(.hidden)').length : 0;
+        subhead.classList.toggle('hidden', visible === 0);
       });
 
       if (noResults) noResults.classList.toggle('hidden', matchCount > 0);
