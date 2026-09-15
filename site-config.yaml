@@ -48,8 +48,8 @@ categories:
     description: "Convert documents to PDF, merge, split, compress, and transform PDF files. Most tools run in your browser."
     search_placeholder: "Filter tools... (e.g. DOCX, PDF, merge, compress)"
     long_description:
-      - "This category covers two kinds of work: turning Word, PowerPoint, Excel, EPUB, and HTML files into PDF, and reshaping PDFs you already have — merging, splitting, compressing, rotating, cropping, password-protecting, extracting pages, adding page numbers, and more."
-      - "Most of these tools run entirely in your browser. A handful — converting DOCX, PPTX, XLSX, EPUB, or HTML into PDF, and PDF compression — need a real document-rendering engine to reproduce fonts and layout accurately, so those route through our server; the uploaded file is deleted immediately after conversion."
+      - "This category covers three kinds of work: turning Word, PowerPoint, Excel, EPUB, and HTML files into PDF, converting PDF back into editable Word, PowerPoint, or Excel files, and reshaping PDFs you already have — merging, splitting, compressing, rotating, cropping, password-protecting, extracting pages, adding page numbers, and more."
+      - "Most of these tools run entirely in your browser. A handful — converting DOCX, PPTX, XLSX, EPUB, or HTML into PDF, converting PDF into DOCX, PPTX, or XLSX, and PDF compression — need a real document-rendering engine to reproduce fonts and layout accurately, so those route through our server; the uploaded file is deleted immediately after conversion."
 
   - id: image-conversion
     name: Image Conversion

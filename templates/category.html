@@ -36,7 +36,7 @@
   {% set main_tools = category.tools|selectattr('subcategory', 'equalto', 'converter')|list %}
   {% set sub_tools = category.tools|selectattr('subcategory', 'equalto', 'utility')|list %}
 
-  {% if sub_tools %}
+  {% if main_tools %}
   <h2 class="category-subhead category-subhead--converters">
     <span class="category-subhead__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-arrow-convert"></use></svg></span>
     <span class="category-subhead__label">Converters</span>
