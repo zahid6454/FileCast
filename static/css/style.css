@@ -1317,9 +1317,12 @@ img { max-width: 100%; display: block; }
    leaves no gap at all rather than an empty 90/280px box.
    (A dead pre-Phase-3 assets/style.css used to shadow this one in greps, with a
    near-identical `.ad-slot--rectangle` rule. Deleted in Phase 9 §5.) */
-.ad-slot { display: flex; align-items: center; justify-content: center; margin: var(--space-6) 0; }
+.ad-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; margin: var(--space-6) 0; }
 .ad-slot--leaderboard { min-height: var(--ad-leaderboard-h); }
-.ad-slot--in-content { min-height: var(--ad-rectangle-h); }
+/* in-content sits right below the Download/Convert Another buttons (tool.html
+   etc.) — extra top margin keeps a post-download tap from landing on the ad. */
+.ad-slot--in-content { min-height: var(--ad-rectangle-h); margin-top: var(--space-12); }
+.ad-slot__label { font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: var(--space-2); }
 
 /* --- Footer --- */
 .footer {

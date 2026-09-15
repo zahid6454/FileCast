@@ -71,6 +71,7 @@
 {%- if ads.get('enabled') and ads.get('publisher_id') and slot_id -%}
 {%- set name = slot|replace('_', '-') -%}
 <div class="ad-slot ad-slot--{{ name }}" id="ad-{{ name }}">
+  <span class="ad-slot__label">Advertisement</span>
   <ins class="adsbygoogle"
        data-ad-client="{{ ads.get('publisher_id') }}"
        data-ad-slot="{{ slot_id }}"
