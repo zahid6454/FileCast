@@ -2862,3 +2862,33 @@ def test_homepage_faq_structured_data_matches_visible_questions(built):
     assert len(questions) >= 1
     for q in questions:
         assert f"<h3>{q['name']}</h3>" in home
+
+
+# --------------------------------------------------------------------------- #
+# wrap_faq_cards() — pure string function, no DB/build() needed
+# --------------------------------------------------------------------------- #
+
+
+def test_wrap_faq_cards_wraps_each_question_in_its_own_card():
+    faq_html = "<h3>Q1?</h3>\n<p>A1</p>\n<h3>Q2?</h3>\n<p>A2</p>\n"
+    result = build.wrap_faq_cards(faq_html)
+    assert result == (
+        '<div class="faq-card"><h3>Q1?</h3>\n<p>A1</p>\n</div>'
+        '<div class="faq-card"><h3>Q2?</h3>\n<p>A2</p>\n</div>'
+    )
+
+
+def test_wrap_faq_cards_splices_extra_html_inside_the_last_card_only():
+    # The homepage's badge legend belongs inside the "what do the badges
+    # mean" tile, not floating below the grid as its own row — this is the
+    # regression that behavior depends on.
+    faq_html = "<h3>Q1?</h3>\n<p>A1</p>\n<h3>Q2?</h3>\n<p>A2</p>\n"
+    result = build.wrap_faq_cards(faq_html, extra_last_card_html="<div>legend</div>")
+    assert result.count("<div>legend</div>") == 1
+    assert "<p>A1</p>\n</div>" in result  # first card unaffected
+    assert result.endswith("<p>A2</p>\n<div>legend</div></div>")
+
+
+def test_wrap_faq_cards_empty_input_does_not_crash_or_apply_extra_html():
+    assert build.wrap_faq_cards("") == ""
+    assert build.wrap_faq_cards("", extra_last_card_html="<div>legend</div>") == ""
