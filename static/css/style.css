@@ -4282,8 +4282,14 @@ select.tool-options__input {
    bare video, so the controls overlay stays reachable) — the fixed 1.6
    aspect-ratio would otherwise fight the UA's own fullscreen sizing. */
 .demo-panel__video-wrap:fullscreen,
-.demo-panel__video-wrap:-webkit-full-screen { aspect-ratio: auto; }
+.demo-panel__video-wrap:-webkit-full-screen { aspect-ratio: auto; background: #000; }
 .demo-panel__video { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* In fullscreen the wrap takes on the device's real screen shape (e.g. a tall
+   phone screen), which can be wildly different from the video's own 1.6:1 —
+   `cover` would zoom in to fill that shape and crop most of the frame away.
+   `contain` keeps the whole frame visible, letterboxed on the black bg above. */
+.demo-panel__video-wrap:fullscreen .demo-panel__video,
+.demo-panel__video-wrap:-webkit-full-screen .demo-panel__video { object-fit: contain; }
 /* Real, focusable buttons (not the video's native controls — a
    scrubber/volume are meaningless for a silent decorative loop) giving
    WCAG 2.2.2 (Pause, Stop, Hide) a mechanism to stop the autoplaying,
