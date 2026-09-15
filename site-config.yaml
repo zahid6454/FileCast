@@ -47,6 +47,9 @@ categories:
     slug: document-conversion
     description: "Convert documents to PDF, merge, split, compress, and transform PDF files. Most tools run in your browser."
     search_placeholder: "Filter tools... (e.g. DOCX, PDF, merge, compress)"
+    long_description:
+      - "This category covers two kinds of work: turning Word, PowerPoint, Excel, EPUB, and HTML files into PDF, and reshaping PDFs you already have — merging, splitting, compressing, rotating, cropping, password-protecting, extracting pages, adding page numbers, and more."
+      - "Most of these tools run entirely in your browser. A handful — converting DOCX, PPTX, XLSX, EPUB, or HTML into PDF, and PDF compression — need a real document-rendering engine to reproduce fonts and layout accurately, so those route through our server; the uploaded file is deleted immediately after conversion."
 
   - id: image-conversion
     name: Image Conversion
@@ -59,6 +62,9 @@ categories:
     # above; the per-tool Local/Cloud badge carries the exact claim.
     description: "Convert between image formats instantly. Most tools run entirely in your browser — nothing is uploaded."
     search_placeholder: "Filter tools... (e.g. PNG, WebP, TIFF)"
+    long_description:
+      - "Convert between JPG, PNG, WebP, GIF, BMP, TIFF, HEIC, and AVIF, plus resize, crop, rotate, and flip — the everyday image tasks that come up when a phone photo, a scanned file, or a design export isn't in the format you actually need."
+      - "Nearly every tool here decodes and re-encodes the image directly in your browser using the Canvas API, so the file never leaves your device. The one exception is PNG to SVG, which needs a server-side vectorization step to trace bitmap pixels into scalable paths."
 
   - id: developer-tools
     # Renamed from "Data Conversion" (Build Action Plan Phase 0) — the
@@ -84,3 +90,6 @@ categories:
     # in this PR was held to.
     description: "Format, convert, and validate developer data — JSON, XML, YAML, and CSV. Most tools run entirely in your browser."
     search_placeholder: "Filter tools... (e.g. JSON, XML, YAML)"
+    long_description:
+      - "Convert between JSON, XML, YAML, and CSV; format, minify, and validate JSON/XML/HTML; diff two JSON files; and generate or decode the things developers deal with daily — Base64, JWTs, hashes, UUIDs, QR codes, and Unix timestamps."
+      - "Every tool in this category runs entirely client-side — nothing you paste or upload is sent anywhere, which matters when you're inspecting a JWT, a config file, or anything else you'd rather not paste into a random server."

@@ -24,6 +24,13 @@
 
   <h1 class="page__title">{{ category.name }}</h1>
   <p class="page__desc">{{ category.description }}</p>
+  {% if category.long_description %}
+  <div class="content-block">
+    {% for para in category.long_description %}
+    <p>{{ para }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   <input
     type="search"
