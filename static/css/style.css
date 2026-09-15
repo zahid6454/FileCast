@@ -639,7 +639,7 @@ img { max-width: 100%; display: block; }
 .category-subhead--converters .category-subhead__icon { background: var(--color-primary-subtle); color: var(--brand-blue); }
 .category-subhead--utilities .category-subhead__icon { background: var(--color-success-subtle); color: var(--color-badge-local); }
 .category-subhead__label { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--color-heading); }
-.category-subhead__count { font-size: var(--text-sm); color: var(--color-text-light); font-weight: var(--weight-semibold); margin-left: 2px; }
+.category-subhead__count { font-size: var(--text-sm); color: var(--color-text-muted); font-weight: var(--weight-semibold); margin-left: 2px; }
 
 /* --- Tool Cards Grid --- */
 .card-grid {
