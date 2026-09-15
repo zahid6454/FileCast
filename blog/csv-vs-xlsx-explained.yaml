@@ -1,0 +1,14 @@
+enabled: true
+id: csv-vs-xlsx-explained
+slug: /blog/why-your-csv-opens-wrong-in-excel
+title: "Why Your CSV Opens Wrong in Excel (and How XLSX Fixes It)"
+dek: "A CSV is just text with commas in it. Excel has to guess what that text means — and the guess is where things go wrong."
+tag: Documents
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "Why Your CSV Opens Wrong in Excel | FileCast Blog"
+  description: "Why leading zeros disappear, dates get rewritten, and columns misalign when you open a CSV in Excel — and why converting to XLSX avoids all of it."
+content:
+  body: "content/blog/csv-vs-xlsx-explained/body.md"
+related_tools: [csv-to-xlsx, csv-to-json]

@@ -1,0 +1,14 @@
+enabled: true
+id: pdf-page-numbers-watermark
+slug: /blog/adding-page-numbers-and-watermarks-to-a-pdf
+title: "Adding Page Numbers and Watermarks to a PDF (and Why Order Matters)"
+dek: "Both are just stamps on every page. Do them in the wrong order and one visually buries the other instead of sitting cleanly alongside it."
+tag: Documents
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "Adding Page Numbers and Watermarks to a PDF | FileCast Blog"
+  description: "How page numbers and watermarks actually get added to a PDF, why doing both requires a specific order, and how to avoid the layering mistakes that ruin the result."
+content:
+  body: "content/blog/pdf-page-numbers-watermark/body.md"
+related_tools: [pdf-page-numbers, pdf-watermark]

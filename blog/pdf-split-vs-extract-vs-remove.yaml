@@ -1,0 +1,14 @@
+enabled: true
+id: pdf-split-vs-extract-vs-remove
+slug: /blog/pdf-split-vs-extract-vs-remove-pages
+title: "PDF Split vs. Extract vs. Remove Pages: What's Actually Different"
+dek: "Three tools that all sound like \"do something with some pages\" — but each one hands you back a different shape of result."
+tag: Documents
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "PDF Split vs Extract vs Remove Pages | FileCast Blog"
+  description: "The exact difference between splitting a PDF, extracting pages from it, and removing pages from it, and how to tell which one fits what you're trying to do."
+content:
+  body: "content/blog/pdf-split-vs-extract-vs-remove/body.md"
+related_tools: [pdf-split, pdf-extract-pages, pdf-remove-pages]

@@ -1,0 +1,14 @@
+enabled: true
+id: hashing-vs-encoding-vs-encryption
+slug: /blog/hashing-vs-encoding-vs-encryption-explained
+title: "Hashing vs. Encoding vs. Encryption: Why They're Not the Same Thing"
+dek: "\"Just hash it\" and \"just base64 it\" get used almost interchangeably in casual conversation. They do nothing alike."
+tag: Developer Tools
+date: 2026-09-15
+read_minutes: 5
+meta:
+  title: "Hashing vs Encoding vs Encryption | FileCast Blog"
+  description: "The real difference between hashing, encoding, and encryption, why Base64 provides no security at all, and which one actually applies to a given problem."
+content:
+  body: "content/blog/hashing-vs-encoding-vs-encryption/body.md"
+related_tools: [hash-generator, base64-encode-decode]

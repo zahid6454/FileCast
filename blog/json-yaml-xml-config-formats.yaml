@@ -1,0 +1,14 @@
+enabled: true
+id: json-yaml-xml-config-formats
+slug: /blog/json-vs-yaml-vs-xml-which-config-format
+title: "JSON vs. YAML vs. XML: Picking a Config Format (and Converting Between Them)"
+dek: "All three can represent the same data. The differences that matter are about who's reading the file — a program, or a person."
+tag: Developer Tools
+date: 2026-09-15
+read_minutes: 5
+meta:
+  title: "JSON vs YAML vs XML: Which Config Format | FileCast Blog"
+  description: "The real tradeoffs between JSON, YAML, and XML for config files and data interchange, and how to convert between them when a tool forces your hand."
+content:
+  body: "content/blog/json-yaml-xml-config-formats/body.md"
+related_tools: [json-to-yaml, yaml-to-json, json-to-xml]

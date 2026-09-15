@@ -1,0 +1,14 @@
+enabled: true
+id: qr-code-static-vs-dynamic
+slug: /blog/static-vs-dynamic-qr-codes
+title: "Static vs. Dynamic QR Codes: Which One Do You Actually Need"
+dek: "One type of QR code you generate once and it's done forever. The other is a subscription you might not realize you signed up for."
+tag: Developer Tools
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "Static vs. Dynamic QR Codes | FileCast Blog"
+  description: "The real difference between a static and a dynamic QR code, why dynamic codes can stop working if you stop paying, and how to tell which one you need."
+content:
+  body: "content/blog/qr-code-static-vs-dynamic/body.md"
+related_tools: [qr-code-generator, barcode-generator]

@@ -1,0 +1,14 @@
+enabled: true
+id: pdf-merge-free
+slug: /blog/merge-pdf-files-free-no-watermark
+title: "How to Merge PDF Files Free, Without a Watermark"
+dek: "A lot of \"free\" PDF mergers aren't free once you see the result — they just move the cost to a logo stamped across your document."
+tag: Documents
+date: 2026-09-15
+read_minutes: 4
+meta:
+  title: "Merge PDF Files Free, No Watermark | FileCast Blog"
+  description: "Why many \"free\" PDF merge tools add a watermark or page limit, what to check before using one, and how to combine PDFs with neither."
+content:
+  body: "content/blog/pdf-merge-free/body.md"
+related_tools: [pdf-merge, pdf-organize]
