@@ -56,6 +56,16 @@ describe('pdf-lib-worker.js — pageNumbers() Font/Size/Custom Text', () => {
     expect(embedFontSpy).toHaveBeenCalledWith(dom.window.PDFLib.StandardFonts.TimesRomanBold);
   });
 
+  it('applies fontSize to a plain page number label too, not just custom text', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const bytes = await makeOnePagePdf(dom, 612, 792);
+    const drawTextSpy = vi.spyOn(dom.window.PDFLib.PDFPage.prototype, 'drawText');
+
+    await dom.window.pageNumbers(bytes, 'bottom-center', 1, 'page-n', 'Helvetica', 20);
+
+    expect(drawTextSpy).toHaveBeenCalledWith('Page 1', expect.objectContaining({ size: 20 }));
+  });
+
   it('draws the custom text unchanged, at the requested size, on every page when it fits', async () => {
     const dom = loadPdfLibWorkerGlobals();
     const doc = await dom.window.PDFLib.PDFDocument.create();
