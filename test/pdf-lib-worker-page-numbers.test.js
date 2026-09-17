@@ -128,4 +128,27 @@ describe('pdf-lib-worker.js — pageNumbers() Font/Size/Custom Text', () => {
     expect(text.endsWith('…')).toBe(true);
     expect(drawOpts.font.widthOfTextAtSize(text, drawOpts.size)).toBeLessThanOrEqual(150 - 24 * 2);
   });
+
+  it('rejects with a friendly message instead of a raw pdf-lib error for characters the font cannot encode', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    const bytes = await makeOnePagePdf(dom, 612, 792);
+
+    // The standard 14 fonts only support WinAnsi (~Latin-1 + Windows
+    // punctuation) — CJK text throws deep inside pdf-lib
+    // ('WinAnsi cannot encode "中" (0x4e2d)') if not translated here.
+    await expect(
+      dom.window.pageNumbers(bytes, 'bottom-center', 1, 'custom', 'Helvetica', 12, '中文DOI')
+    ).rejects.toThrow(/can't display/i);
+  });
+
+  it('skips drawing on a page too narrow to fit any margin, instead of drawing garbled output', async () => {
+    const dom = loadPdfLibWorkerGlobals();
+    // 24pt margin each side leaves 0pt of usable width on a 48pt-wide page.
+    const bytes = await makeOnePagePdf(dom, 48, 100);
+    const drawTextSpy = vi.spyOn(dom.window.PDFLib.PDFPage.prototype, 'drawText');
+
+    await dom.window.pageNumbers(bytes, 'bottom-center', 1, 'n');
+
+    expect(drawTextSpy).not.toHaveBeenCalled();
+  });
 });

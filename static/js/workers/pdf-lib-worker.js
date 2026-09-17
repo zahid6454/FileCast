@@ -210,6 +210,23 @@ function pageNumbers(bytes, position, startNumber, format, fontFamily, fontSize,
   return PDFLib.PDFDocument.load(bytes)
     .then(function (pdfDoc) {
       return pdfDoc.embedFont(family).then(function (font) {
+        // Custom text is free-typed, unlike every other format's always-ASCII
+        // "Page N" labels — the standard 14 fonts only support WinAnsi
+        // (roughly Latin-1 + common Windows punctuation), so e.g. CJK text,
+        // Greek letters, or emoji throw a raw "WinAnsi cannot encode ..."
+        // error deep inside pdf-lib. Checked once up front (the label is the
+        // same on every page) so the failure surfaces as one clear message
+        // instead of a cryptic internal one from whichever page hits it first.
+        if (format === 'custom' && customText) {
+          try {
+            font.widthOfTextAtSize(customText, requestedSize);
+          } catch (e) {
+            throw new Error(
+              "The chosen font can't display one or more characters in the custom text — remove accents, symbols, or non-Latin characters, or try a different font."
+            );
+          }
+        }
+
         var pages = pdfDoc.getPages();
         var lastNumber = startNumber + pages.length - 1;
         var margin = 24;
@@ -226,6 +243,7 @@ function pageNumbers(bytes, position, startNumber, format, fontFamily, fontSize,
           if (!label) return; // e.g. blank custom text — nothing to stamp on this page
           var size = page.getSize();
           var maxWidth = size.width - margin * 2;
+          if (maxWidth <= 0) return; // page too narrow to fit any margin — nothing sane to draw
           var fit = fitLabelToWidth(font, label, requestedSize, maxWidth);
           var textWidth = font.widthOfTextAtSize(fit.text, fit.size);
           var x =

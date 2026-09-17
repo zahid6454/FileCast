@@ -453,6 +453,7 @@
     var cssFamily = FONT_CSS_BY_FAMILY[fontFamily] || FONT_CSS_BY_FAMILY.Helvetica;
     var bold = isBoldFontFamily(fontFamily);
     var maxWidthPx = canvasEl.width - marginPx * 2;
+    if (maxWidthPx <= 0) return; // page too narrow to fit any margin — mirrors pageNumbers()
 
     ctx.save();
     var fit = fitLabelToWidthPx(

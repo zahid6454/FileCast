@@ -74,17 +74,20 @@ options:
       - { value: "18", label: "18pt" }
       - { value: "20", label: "20pt" }
       - { value: "24", label: "24pt" }
-  # Shown only when format is "custom" (toggled by pdf-page-numbers.js).
-  # No length limit is enforced beyond maxlength — pageNumbers() in
-  # pdf-lib-worker.js shrinks the font and, failing that, truncates with an
-  # ellipsis so the stamp can never overflow the page margin regardless of
-  # what's typed here.
+  # Shown only when format is "custom" — hidden_by_default (templates/tool.html)
+  # renders the row already hidden so it doesn't flash visible before
+  # pdf-page-numbers.js's updateCustomTextVisibility() hides it on load; that
+  # same function shows/hides it thereafter as Format changes. No length
+  # limit is enforced beyond maxlength — pageNumbers() in pdf-lib-worker.js
+  # shrinks the font and, failing that, truncates with an ellipsis so the
+  # stamp can never overflow the page margin regardless of what's typed here.
   - id: customText
     label: "Custom text"
     type: text
     default: ""
     placeholder: "Max 60 characters"
     maxlength: 60
+    hidden_by_default: true
 tagline: "Add page numbers — or your own text — to every page"
 tagline_long: "Stamp page numbers, or your own custom text, onto every page of a PDF, in the position, font, and format you choose — entirely in your browser, no upload required."
 meta:
