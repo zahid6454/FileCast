@@ -130,7 +130,8 @@
       </select>
       {% elif opt.type == 'text' %}
       <input class="tool-options__input" type="text" id="opt-{{ opt.id }}"
-             value="{{ opt.default or '' }}" placeholder="{{ opt.placeholder or '' }}">
+             value="{{ opt.default or '' }}" placeholder="{{ opt.placeholder or '' }}"
+             {% if opt.get('maxlength') %}maxlength="{{ opt.maxlength }}"{% endif %}>
       {% elif opt.type == 'password' %}
       <input class="tool-options__input" type="password" id="opt-{{ opt.id }}" autocomplete="off"
              value="{{ opt.default or '' }}" placeholder="{{ opt.placeholder or '' }}">

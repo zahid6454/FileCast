@@ -377,36 +377,95 @@
     ctx.restore();
   }
 
-  // Mirrors pageNumbers(bytes, position, startNumber, format) in
-  // pdf-lib-worker.js: fixed fontSize (10pt) and margin (24pt) — neither is
-  // an exposed option — with x/y computed from exactly the same 6-way
-  // position logic and the same 3-way label format.
+  // pdf-lib-worker.js's pageNumbers() StandardFonts keys -> a canvas font
+  // stack that reads the same way (Arial/Times New Roman/Courier New are
+  // the closest system fonts to Helvetica/Times/Courier).
+  var FONT_CSS_BY_FAMILY = {
+    Helvetica: 'Arial, Helvetica, sans-serif',
+    HelveticaBold: 'Arial, Helvetica, sans-serif',
+    TimesRoman: '"Times New Roman", Times, serif',
+    TimesRomanBold: '"Times New Roman", Times, serif',
+    Courier: '"Courier New", Courier, monospace',
+    CourierBold: '"Courier New", Courier, monospace'
+  };
+  function isBoldFontFamily(fontFamily) {
+    return (
+      fontFamily === 'HelveticaBold' ||
+      fontFamily === 'TimesRomanBold' ||
+      fontFamily === 'CourierBold'
+    );
+  }
+
+  // Mirrors fitLabelToWidth() in pdf-lib-worker.js's pageNumbers(): shrinks
+  // the font until `text` fits maxWidthPx, then truncates with an ellipsis if
+  // it still doesn't fit at the floor size, so the preview shows the same
+  // "can never overflow the margin" behavior the worker actually produces.
+  function fitLabelToWidthPx(ctx, text, cssFamily, bold, startPx, maxWidthPx, floorPx) {
+    var size = startPx;
+    while (size > floorPx) {
+      ctx.font = (bold ? 'bold ' : '') + size + 'px ' + cssFamily;
+      if (ctx.measureText(text).width <= maxWidthPx) return { text: text, size: size };
+      size -= 1;
+    }
+    ctx.font = (bold ? 'bold ' : '') + floorPx + 'px ' + cssFamily;
+    var truncated = text;
+    while (truncated.length > 1 && ctx.measureText(truncated + '…').width > maxWidthPx) {
+      truncated = truncated.slice(0, -1);
+    }
+    return { text: truncated.length < text.length ? truncated + '…' : truncated, size: floorPx };
+  }
+
+  // Mirrors pageNumbers(bytes, position, startNumber, format, fontFamily,
+  // fontSize, customText) in pdf-lib-worker.js: margin (24pt) is the only
+  // thing that isn't an exposed option, with x/y computed from exactly the
+  // same 6-way position logic and the same 4-way label format.
   function drawPageNumberOverlay(ctx) {
     var positionEl = q('opt-position');
     var startEl = q('opt-startNumber');
     var formatEl = q('opt-format');
+    var fontFamilyEl = q('opt-fontFamily');
+    var fontSizeEl = q('opt-fontSize');
+    var customTextEl = q('opt-customText');
+
     var position = positionEl ? positionEl.value : 'bottom-center';
     var startNumber = startEl ? parseInt(startEl.value, 10) : 1;
     var format = formatEl ? formatEl.value : 'n';
+    var fontFamily = fontFamilyEl ? fontFamilyEl.value : 'Helvetica';
+    var requestedSizePt = fontSizeEl ? parseInt(fontSizeEl.value, 10) : 10;
+    var customText = customTextEl ? customTextEl.value : '';
     if (isNaN(startNumber) || startNumber < 1) startNumber = 1;
+    if (isNaN(requestedSizePt) || requestedSizePt < 1) requestedSizePt = 10;
 
-    var fontSizePt = 10;
     var marginPt = 24;
     var lastNumber = startNumber + Math.max(1, session.pageCount) - 1;
     var label =
-      format === 'page-of-total'
-        ? 'Page ' + startNumber + ' of ' + lastNumber
-        : format === 'page-n'
-          ? 'Page ' + startNumber
-          : String(startNumber);
+      format === 'custom'
+        ? customText
+        : format === 'page-of-total'
+          ? 'Page ' + startNumber + ' of ' + lastNumber
+          : format === 'page-n'
+            ? 'Page ' + startNumber
+            : String(startNumber);
+    if (!label) return; // e.g. blank custom text — nothing to preview
 
     var scale = session.scale;
-    var fontPx = fontSizePt * scale;
     var marginPx = marginPt * scale;
+    var cssFamily = FONT_CSS_BY_FAMILY[fontFamily] || FONT_CSS_BY_FAMILY.Helvetica;
+    var bold = isBoldFontFamily(fontFamily);
+    var maxWidthPx = canvasEl.width - marginPx * 2;
 
     ctx.save();
-    ctx.font = fontPx + 'px Helvetica, Arial, sans-serif';
-    var textWidthPx = ctx.measureText(label).width;
+    var fit = fitLabelToWidthPx(
+      ctx,
+      label,
+      cssFamily,
+      bold,
+      requestedSizePt * scale,
+      maxWidthPx,
+      5 * scale
+    );
+    var fitSizePt = fit.size / scale;
+    var textWidthPx = ctx.measureText(fit.text).width;
     var xPx =
       position.indexOf('left') !== -1
         ? marginPx
@@ -414,14 +473,14 @@
           ? canvasEl.width - marginPx - textWidthPx
           : canvasEl.width / 2 - textWidthPx / 2;
     var yPtFromBottom =
-      position.indexOf('top') !== -1 ? session.pageHeightPt - marginPt : marginPt - fontSizePt / 3;
+      position.indexOf('top') !== -1 ? session.pageHeightPt - marginPt : marginPt - fitSizePt / 3;
     var yPx = (session.pageHeightPt - yPtFromBottom) * scale;
 
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#000';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(label, xPx, yPx);
+    ctx.fillText(fit.text, xPx, yPx);
     ctx.restore();
   }
 
@@ -755,7 +814,14 @@
           ? ['opt-text', 'opt-opacity', 'opt-fontSize', 'opt-angle']
           : opts.mode === 'crop'
             ? []
-            : ['opt-position', 'opt-startNumber', 'opt-format'];
+            : [
+                'opt-position',
+                'opt-startNumber',
+                'opt-format',
+                'opt-fontFamily',
+                'opt-fontSize',
+                'opt-customText'
+              ];
       optionIds.forEach(function (id) {
         var el = q(id);
         if (!el) return;

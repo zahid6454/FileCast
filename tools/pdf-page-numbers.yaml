@@ -47,8 +47,46 @@ options:
       - { value: "n", label: "1, 2, 3…" }
       - { value: "page-n", label: "Page 1, Page 2…" }
       - { value: "page-of-total", label: "Page 1 of N…" }
-tagline: "Add page numbers to every page"
-tagline_long: "Stamp page numbers onto every page of a PDF, in the position and format you choose — entirely in your browser, no upload required."
+      - { value: "custom", label: "Custom Text" }
+  - id: fontFamily
+    label: "Font"
+    type: select
+    default: "Helvetica"
+    choices:
+      - { value: "Helvetica", label: "Helvetica" }
+      - { value: "HelveticaBold", label: "Helvetica Bold" }
+      - { value: "TimesRoman", label: "Times" }
+      - { value: "TimesRomanBold", label: "Times Bold" }
+      - { value: "Courier", label: "Courier" }
+      - { value: "CourierBold", label: "Courier Bold" }
+  - id: fontSize
+    label: "Size"
+    type: select
+    default: "10"
+    choices:
+      - { value: "8", label: "8pt" }
+      - { value: "9", label: "9pt" }
+      - { value: "10", label: "10pt" }
+      - { value: "11", label: "11pt" }
+      - { value: "12", label: "12pt" }
+      - { value: "14", label: "14pt" }
+      - { value: "16", label: "16pt" }
+      - { value: "18", label: "18pt" }
+      - { value: "20", label: "20pt" }
+      - { value: "24", label: "24pt" }
+  # Shown only when format is "custom" (toggled by pdf-page-numbers.js).
+  # No length limit is enforced beyond maxlength — pageNumbers() in
+  # pdf-lib-worker.js shrinks the font and, failing that, truncates with an
+  # ellipsis so the stamp can never overflow the page margin regardless of
+  # what's typed here.
+  - id: customText
+    label: "Custom text"
+    type: text
+    default: ""
+    placeholder: "Max 60 characters"
+    maxlength: 60
+tagline: "Add page numbers — or your own text — to every page"
+tagline_long: "Stamp page numbers, or your own custom text, onto every page of a PDF, in the position, font, and format you choose — entirely in your browser, no upload required."
 meta:
   title: "PDF Page Numbers — Free, No Upload | FileCast"
   description: "Add page numbers to a PDF free online — runs entirely in your browser, nothing uploaded. No sign-up, no limits, no watermarks. Choose position, start number, and format."

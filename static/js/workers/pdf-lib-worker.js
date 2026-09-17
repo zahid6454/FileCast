@@ -177,38 +177,68 @@ function watermark(bytes, text, opacity, fontSize, xPercent, yPercent, angleDegr
     });
 }
 
+// Shrinks fontSize until `text` fits maxWidth at the given font, then — if it
+// still doesn't fit at the floor size — truncates with an ellipsis. This is
+// the actual guarantee that a stamped label (especially free-typed custom
+// text) can never overflow the page margin, whatever font/size/length was
+// chosen; it isn't enforced by capping input length.
+function fitLabelToWidth(font, text, startSize, maxWidth) {
+  var floor = 5;
+  var size = startSize;
+  while (size > floor && font.widthOfTextAtSize(text, size) > maxWidth) {
+    size -= 1;
+  }
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) {
+    return { text: text, size: size };
+  }
+  var truncated = text;
+  while (truncated.length > 1 && font.widthOfTextAtSize(truncated + '…', size) > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  return { text: truncated.length < text.length ? truncated + '…' : truncated, size: size };
+}
+
 // position: one of bottom-center (default), bottom-left, bottom-right,
 // top-center, top-left, top-right. format: "n" (default), "page-n" ("Page N"),
-// or "page-of-total" ("Page N of TOTAL").
-function pageNumbers(bytes, position, startNumber, format) {
+// "page-of-total" ("Page N of TOTAL"), or "custom" (customText, unchanged on
+// every page). fontFamily is a PDFLib.StandardFonts key (default Helvetica);
+// fontSize is the requested point size (default 10) — both apply to whatever
+// label ends up drawn, not just custom text.
+function pageNumbers(bytes, position, startNumber, format, fontFamily, fontSize, customText) {
+  var family = (fontFamily && PDFLib.StandardFonts[fontFamily]) || PDFLib.StandardFonts.Helvetica;
+  var requestedSize = typeof fontSize === 'number' && fontSize > 0 ? fontSize : 10;
   return PDFLib.PDFDocument.load(bytes)
     .then(function (pdfDoc) {
-      return pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica).then(function (font) {
+      return pdfDoc.embedFont(family).then(function (font) {
         var pages = pdfDoc.getPages();
         var lastNumber = startNumber + pages.length - 1;
-        var fontSize = 10;
         var margin = 24;
         pages.forEach(function (page, i) {
           var num = startNumber + i;
           var label =
-            format === 'page-of-total'
-              ? 'Page ' + num + ' of ' + lastNumber
-              : format === 'page-n'
-                ? 'Page ' + num
-                : String(num);
+            format === 'custom'
+              ? customText || ''
+              : format === 'page-of-total'
+                ? 'Page ' + num + ' of ' + lastNumber
+                : format === 'page-n'
+                  ? 'Page ' + num
+                  : String(num);
+          if (!label) return; // e.g. blank custom text — nothing to stamp on this page
           var size = page.getSize();
-          var textWidth = font.widthOfTextAtSize(label, fontSize);
+          var maxWidth = size.width - margin * 2;
+          var fit = fitLabelToWidth(font, label, requestedSize, maxWidth);
+          var textWidth = font.widthOfTextAtSize(fit.text, fit.size);
           var x =
             position.indexOf('left') !== -1
               ? margin
               : position.indexOf('right') !== -1
                 ? size.width - margin - textWidth
                 : size.width / 2 - textWidth / 2;
-          var y = position.indexOf('top') !== -1 ? size.height - margin : margin - fontSize / 3;
-          page.drawText(label, {
+          var y = position.indexOf('top') !== -1 ? size.height - margin : margin - fit.size / 3;
+          page.drawText(fit.text, {
             x: x,
             y: y,
-            size: fontSize,
+            size: fit.size,
             font: font,
             color: PDFLib.rgb(0, 0, 0)
           });
@@ -1886,7 +1916,15 @@ self.onmessage = function (e) {
         msg.angle
       );
     } else if (msg.op === 'pageNumbers') {
-      result = pageNumbers(msg.file, msg.position, msg.startNumber, msg.format);
+      result = pageNumbers(
+        msg.file,
+        msg.position,
+        msg.startNumber,
+        msg.format,
+        msg.fontFamily,
+        msg.fontSize,
+        msg.customText
+      );
     } else if (msg.op === 'crop') {
       result = crop(msg.file, msg.xPercent, msg.yPercent, msg.widthPercent, msg.heightPercent);
     } else if (msg.op === 'flatten') {
