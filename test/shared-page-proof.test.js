@@ -27,7 +27,15 @@ function pageProofHtml(mode) {
         <select id="opt-format">
           <option value="n" selected>N</option>
           <option value="page-of-total">Page N of total</option>
+          <option value="custom">Custom Text</option>
         </select>
+        <select id="opt-fontFamily">
+          <option value="Helvetica" selected>Helvetica</option>
+        </select>
+        <select id="opt-fontSize">
+          <option value="10" selected>10pt</option>
+        </select>
+        <input id="opt-customText" value="" />
       `;
   return `
     <div id="file-info"></div>
@@ -210,9 +218,25 @@ describe('shared-page-proof.js — watermark drag-to-position', () => {
 });
 
 describe('shared-page-proof.js — page-number overlay math', () => {
+  // setupProof's shared measureText mock (text.length * 10, independent of
+  // font size) is fine for the other describe blocks here, but
+  // drawPageNumberOverlay() now shrinks the font to fit — a mock that never
+  // varies by size would make it truncate labels that would actually fit at
+  // a smaller size. This mirrors the real relationship (width scales with
+  // size) while keeping the same "10 units per char at 20px" baseline the
+  // pre-existing assertions below were written against.
+  function useSizeAwareMeasureText(ctx) {
+    ctx.measureText = vi.fn((text) => {
+      var match = /(\d+(?:\.\d+)?)px/.exec(ctx.font || '');
+      var sizePx = match ? parseFloat(match[1]) : 20;
+      return { width: text.length * (sizePx / 2) };
+    });
+  }
+
   it('places the label using the same 6-way position logic pageNumbers() uses', async () => {
     const dom = createDom(pageProofHtml('pageNumbers'));
     const ctx = await setupProof(dom, 'pageNumbers');
+    useSizeAwareMeasureText(ctx);
 
     // top-left, format "n", startNumber 1 -> label "1". scale=2, marginPt=24.
     // xPx = marginPx = 48. yPtFromBottom = pageHeightPt - marginPt = 116 ->
@@ -223,13 +247,59 @@ describe('shared-page-proof.js — page-number overlay math', () => {
   it('formats "Page N of total" using the loaded page count as the total', async () => {
     const dom = createDom(pageProofHtml('pageNumbers'));
     const ctx = await setupProof(dom, 'pageNumbers');
+    useSizeAwareMeasureText(ctx);
 
     const formatEl = dom.window.document.getElementById('opt-format');
     formatEl.value = 'page-of-total';
     formatEl.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
 
-    // 3-page doc, startNumber 1 -> lastNumber = 1 + 3 - 1 = 3.
+    // 3-page doc, startNumber 1 -> lastNumber = 1 + 3 - 1 = 3. Fits at a
+    // slightly shrunk size (18px) well within the floor, so it draws whole.
     expect(ctx.fillText.mock.calls[ctx.fillText.mock.calls.length - 1][0]).toBe('Page 1 of 3');
+  });
+
+  it('draws the Custom Text value, unchanged, when format is "custom"', async () => {
+    const dom = createDom(pageProofHtml('pageNumbers'));
+    const ctx = await setupProof(dom, 'pageNumbers');
+    useSizeAwareMeasureText(ctx);
+
+    dom.window.document.getElementById('opt-format').value = 'custom';
+    const customTextEl = dom.window.document.getElementById('opt-customText');
+    customTextEl.value = '10.1234/chap.01';
+    customTextEl.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+    expect(ctx.fillText.mock.calls[ctx.fillText.mock.calls.length - 1][0]).toBe('10.1234/chap.01');
+  });
+
+  it('shrinks then truncates Custom Text that is too wide for the page margin', async () => {
+    const dom = createDom(pageProofHtml('pageNumbers'));
+    const ctx = await setupProof(dom, 'pageNumbers');
+    useSizeAwareMeasureText(ctx);
+
+    dom.window.document.getElementById('opt-format').value = 'custom';
+    dom.window.document.getElementById('opt-fontSize').value = '24';
+    const customTextEl = dom.window.document.getElementById('opt-customText');
+    // pageWidthPt=100 leaves only 100-48=52pt (104px at scale 2) of margin —
+    // this is far wider than that at any readable size, so it must truncate.
+    customTextEl.value = 'a much longer custom label than the narrow test page can hold';
+    customTextEl.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+    const drawn = ctx.fillText.mock.calls[ctx.fillText.mock.calls.length - 1][0];
+    expect(drawn).not.toBe(customTextEl.value);
+    expect(drawn.endsWith('…')).toBe(true);
+  });
+
+  it('draws nothing for blank Custom Text', async () => {
+    const dom = createDom(pageProofHtml('pageNumbers'));
+    const ctx = await setupProof(dom, 'pageNumbers');
+    useSizeAwareMeasureText(ctx);
+
+    dom.window.document.getElementById('opt-format').value = 'custom';
+    ctx.fillText.mockClear();
+    const customTextEl = dom.window.document.getElementById('opt-customText');
+    customTextEl.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+    expect(ctx.fillText).not.toHaveBeenCalled();
   });
 });
 

@@ -111,7 +111,12 @@
   {% if tool.get('options') %}
   <div class="tool-options" id="tool-options">
     {% for opt in tool.options %}
-    <div class="tool-options__row tool-options__row--{{ opt.type }}">
+    {# hidden_by_default: an option whose relevance depends on another option's
+       value (e.g. Custom Text, only shown once Format is "Custom Text")
+       starts hidden server-side rather than flashing visible until the
+       tool's own JS (deferred, runs after parsing) hides it on load. That JS
+       still owns showing/hiding it thereafter as the controlling option changes. #}
+    <div class="tool-options__row tool-options__row--{{ opt.type }}{% if opt.get('hidden_by_default') %} hidden{% endif %}">
       <label class="tool-options__label" for="opt-{{ opt.id }}">{{ opt.label }}</label>
       {% if opt.type == 'range' %}
       <input class="tool-options__slider" type="range" id="opt-{{ opt.id }}"
@@ -130,7 +135,8 @@
       </select>
       {% elif opt.type == 'text' %}
       <input class="tool-options__input" type="text" id="opt-{{ opt.id }}"
-             value="{{ opt.default or '' }}" placeholder="{{ opt.placeholder or '' }}">
+             value="{{ opt.default or '' }}" placeholder="{{ opt.placeholder or '' }}"
+             {% if opt.get('maxlength') %}maxlength="{{ opt.maxlength }}"{% endif %}>
       {% elif opt.type == 'password' %}
       <input class="tool-options__input" type="password" id="opt-{{ opt.id }}" autocomplete="off"
              value="{{ opt.default or '' }}" placeholder="{{ opt.placeholder or '' }}">
