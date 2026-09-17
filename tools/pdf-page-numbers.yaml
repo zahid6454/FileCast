@@ -31,14 +31,6 @@ options:
       - { value: "top-center", label: "Top Center" }
       - { value: "top-left", label: "Top Left" }
       - { value: "top-right", label: "Top Right" }
-  - id: startNumber
-    label: "Start at"
-    type: number
-    min: 1
-    max: 9999
-    default: 1
-    placeholder: "1"
-    suffix: ""
   - id: format
     label: "Format"
     type: select
@@ -48,6 +40,14 @@ options:
       - { value: "page-n", label: "Page 1, Page 2…" }
       - { value: "page-of-total", label: "Page 1 of N…" }
       - { value: "custom", label: "Custom Text" }
+  - id: startNumber
+    label: "Start at"
+    type: number
+    min: 1
+    max: 9999
+    default: 1
+    placeholder: "1"
+    suffix: ""
   - id: fontFamily
     label: "Font"
     type: select
@@ -88,6 +88,7 @@ options:
     placeholder: "Max 60 characters"
     maxlength: 60
     hidden_by_default: true
+options_note: "Font and Size apply to whatever's stamped on the page — numbers, \"Page N\", or Custom Text below."
 tagline: "Add page numbers — or your own text — to every page"
 tagline_long: "Stamp page numbers, or your own custom text, onto every page of a PDF, in the position, font, and format you choose — entirely in your browser, no upload required."
 meta:

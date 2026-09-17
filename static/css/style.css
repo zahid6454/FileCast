@@ -2833,6 +2833,12 @@ table.kv-table tr.group-title th .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
+/* Dims the label too, not just its input, when a row is disabled (e.g. Page
+   Numbers' Start at once Format is "Custom Text") — otherwise the caption
+   stays full-strength while the field beneath it visibly goes inert. */
+.tool-options__row:has(.tool-options__input:disabled) .tool-options__label {
+  color: var(--color-text-light);
+}
 .tool-options__input {
   flex: 1;
   /* Same reasoning as .tool-options__slider and the --select fix below: a
@@ -2857,10 +2863,14 @@ table.kv-table tr.group-title th .eyebrow {
 .tool-options__input:focus { border-color: var(--color-border-focus); }
 /* Remove/Extract/Organize's page-list input, once the page grid takes over
    (shared-page-grid.js's setOptionsInputReadOnly) — reads as non-interactive
-   at a glance, not just via cursor behavior. */
-.tool-options__input[readonly] {
+   at a glance, not just via cursor behavior. Page Numbers' Start at gets the
+   same treatment once Format is "Custom Text" (a real HTML disabled, not
+   readonly, but the same "irrelevant right now" look applies). */
+.tool-options__input[readonly],
+.tool-options__input:disabled {
   background: var(--color-bg-sunken);
   color: var(--color-text-muted);
+  cursor: not-allowed;
 }
 /* max-width:fit-content above exists so a lone text input (e.g. Organize's
    #opt-order before the page grid takes over) doesn't stretch across an
@@ -2918,6 +2928,14 @@ select.tool-options__input {
    just shouldn't jump in width relative to its --text sibling. */
 .tool-options__row--text,
 .tool-options__row--password { flex: 1 1 100%; min-width: 0; }
+
+/* A short note below the option rows clarifying how two or more options
+   interact (e.g. Page Numbers' "Font and Size apply to whatever's stamped
+   on the page...") — optional (tool.options_note), rare enough not to need
+   its own component. flex-basis:100% is the same forced-own-line trick
+   .tool-options__label uses, since this is a sibling flex item in the same
+   wrapping .tool-options row. */
+.tool-options__note { flex: 1 0 100%; font-size: var(--text-xs); color: var(--color-text-muted); margin-top: var(--space-1); }
 
 /* --- Responsive grid ladder (§5b): 1 → 2 (480) → 3 (768) → 4 (1024) --- */
 @media (min-width: 480px) {
