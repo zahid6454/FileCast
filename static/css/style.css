@@ -2828,12 +2828,21 @@ table.kv-table tr.group-title th .eyebrow {
    visually needed to. Grid's row-based intrinsic sizing doesn't have that
    failure mode: a track's size comes only from what's actually placed in
    it, so the label (row 1) never inflates the control's (row 2) width. */
-.tool-options__row { display: grid; grid-template-columns: max-content max-content; column-gap: var(--space-3); row-gap: var(--space-2); align-items: center; min-width: 0; }
+/* minmax(0, max-content), not bare max-content: a bare max-content track is
+   a hard floor an item can never shrink below, so a select with a genuinely
+   long option list (pdf-compress's "Balanced (150 dpi) — good for sharing")
+   would rather overflow a 320px viewport than give up an inch of its
+   natural width. The `0` lower bound lets the row's own min-width:0 (and,
+   above it, the outer flex-wrap's shrink) actually reach the control — the
+   select still renders at its natural width whenever there's room, and
+   only gives up legibility (native in-box text truncation, not page
+   overflow) once there truly isn't. */
+.tool-options__row { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, max-content); column-gap: var(--space-3); row-gap: var(--space-2); align-items: center; min-width: 0; }
 .tool-options__row--range,
 .tool-options__row--text,
-.tool-options__row--password { grid-template-columns: 1fr max-content; flex: 1 1 100%; min-width: 0; column-gap: var(--space-4); }
+.tool-options__row--password { grid-template-columns: minmax(0, 1fr) minmax(0, max-content); flex: 1 1 100%; min-width: 0; column-gap: var(--space-4); }
 .tool-options__row--text,
-.tool-options__row--password { grid-template-columns: 1fr; }
+.tool-options__row--password { grid-template-columns: minmax(0, 1fr); }
 .tool-options__label {
   grid-column: 1 / -1;
   font-size: var(--text-xs);
