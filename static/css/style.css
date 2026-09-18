@@ -2904,9 +2904,11 @@ select.tool-options__input {
 .tool-options__row--number .tool-options__value { min-width: 0; text-align: left; }
 /* A page number only ever needs 3-4 digits, so it gets a fixed width rather
    than stretching to match a select next to it — that grid column then
-   sizes to exactly 96px too (a max-content track fits its content), instead
-   of the wasted, mostly-empty box a shared equal-width column would leave. */
-.tool-options__row--number .tool-options__input { width: 96px; max-width: 100%; }
+   sizes to exactly this width too (a max-content track fits its content),
+   instead of the wasted, mostly-empty box a shared equal-width column would
+   leave. Matched to Size's own rendered width (~67px) so the two fields in
+   this row read as the same size instead of Start At looming larger. */
+.tool-options__row--number .tool-options__input { width: 72px; max-width: 100%; }
 
 /* A short note below the option rows clarifying how two or more options
    interact (e.g. Page Numbers' "Font and Size apply to whatever's stamped
