@@ -2835,9 +2835,11 @@ table.kv-table tr.group-title th .eyebrow {
    size no longer seeds each item's share, so leftover space splits evenly
    instead of being handed out proportionally to whichever field started
    biggest. Rows still floor at their own min-content (flex's default
-   min-width:auto), so a genuinely long select still gets first claim before
-   the rest divide what's left. */
-.tool-options__row { display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, max-content); column-gap: var(--space-3); row-gap: var(--space-2); align-items: center; min-width: 0; flex: 1 1 0; }
+   min-width:auto) — no explicit min-width:0 here, since that would let a
+   row get allocated narrower than its own select actually needs and the
+   select would then overflow the row into the next field's gap instead of
+   the row itself claiming the space. */
+.tool-options__row { display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, max-content); column-gap: var(--space-3); row-gap: var(--space-2); align-items: center; flex: 1 1 0; }
 .tool-options__row--range,
 .tool-options__row--text,
 .tool-options__row--password { grid-template-columns: minmax(0, 1fr) minmax(0, max-content); flex: 1 1 100%; min-width: 0; column-gap: var(--space-4); }
