@@ -1,6 +1,6 @@
 ## What Is PDF Page Numbers?
 
-This tool stamps a page number onto every page of a PDF, in the position, starting number, and format you choose. It's useful for PDFs that were exported without page numbers, or assembled from multiple sources that each had their own numbering — or none at all.
+This tool stamps a page number — or your own custom text — onto every page of a PDF, in the position, starting number, format, font, and size you choose. It's useful for PDFs that were exported without page numbers, or assembled from multiple sources that each had their own numbering — or none at all.
 
 Page numbers make a document easier to navigate, reference, and keep in order once it's printed. "See page 14" only means something if page 14 is actually labeled.
 
@@ -9,7 +9,7 @@ Page numbers make a document easier to navigate, reference, and keep in order on
   <div class="stat-tile">
     <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-sliders"></use></svg></span>
     <span class="stat-tile__label">Fully customizable</span>
-    <span class="stat-tile__sub">Position, start number, format</span>
+    <span class="stat-tile__sub">Position, format, font, custom text</span>
   </div>
   <div class="stat-tile">
     <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>

@@ -14,7 +14,11 @@ Yes. Set any starting number, which is useful for documents where a cover page o
 
 ### What formats are available?
 
-Three: a plain number ("1," "2," "3"), "Page 1," "Page 2," and so on, or "Page 1 of 12" style numbering that also shows the total page count.
+Four: a plain number ("1," "2," "3"), "Page 1," "Page 2," and so on, "Page 1 of 12" style numbering that also shows the total page count, or your own Custom Text (up to 60 characters) instead of a number at all.
+
+### Can I change the font and size of the page numbers?
+
+Yes. Six fonts (Helvetica, Helvetica Bold, Times, Times Bold, Courier, Courier Bold) and sizes from 8pt to 24pt — applied to whatever's stamped on the page, whether that's a number or your Custom Text.
 
 ### Will this overwrite page numbers that are already in my PDF?
 
