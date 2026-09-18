@@ -290,7 +290,11 @@ def test_rate_limit_path_matching():
     from middleware import RateLimitMiddleware
 
     match = RateLimitMiddleware._match_limit
-    assert match("/api/v1/announcements/active")[0] == "/api/v1/announcements"
+    # /active is public and hit on every page load — its own bucket, so it
+    # can't burn the shared budget and 429 the admin list/CRUD routes below
+    # it, which fall back to the general /api/v1/announcements bucket.
+    assert match("/api/v1/announcements/active")[0] == "/api/v1/announcements/active"
+    assert match("/api/v1/announcements")[0] == "/api/v1/announcements"
     assert match("/api/v1/preferences")[0] == "/api/v1/preferences"
     assert match("/api/v1/convert/docx-to-pdf")[0] == "/api/v1/convert"
     # Phase 3: /convert/jobs is a genuinely nested prefix under /convert —
