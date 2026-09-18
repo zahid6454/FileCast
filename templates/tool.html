@@ -143,6 +143,9 @@
       {% endif %}
     </div>
     {% endfor %}
+    {% if tool.get('options_note') %}
+    <div class="tool-options__note">{{ tool.options_note }}</div>
+    {% endif %}
   </div>
   {% endif %}
 

@@ -31,14 +31,6 @@ options:
       - { value: "top-center", label: "Top Center" }
       - { value: "top-left", label: "Top Left" }
       - { value: "top-right", label: "Top Right" }
-  - id: startNumber
-    label: "Start at"
-    type: number
-    min: 1
-    max: 9999
-    default: 1
-    placeholder: "1"
-    suffix: ""
   - id: format
     label: "Format"
     type: select
@@ -74,6 +66,14 @@ options:
       - { value: "18", label: "18pt" }
       - { value: "20", label: "20pt" }
       - { value: "24", label: "24pt" }
+  - id: startNumber
+    label: "Start at"
+    type: number
+    min: 1
+    max: 9999
+    default: 1
+    placeholder: "1"
+    suffix: ""
   # Shown only when format is "custom" — hidden_by_default (templates/tool.html)
   # renders the row already hidden so it doesn't flash visible before
   # pdf-page-numbers.js's updateCustomTextVisibility() hides it on load; that
@@ -88,6 +88,7 @@ options:
     placeholder: "Max 60 characters"
     maxlength: 60
     hidden_by_default: true
+options_note: "Font and Size apply to whatever's stamped on the page — numbers, \"Page N\", or Custom Text below."
 tagline: "Add page numbers — or your own text — to every page"
 tagline_long: "Stamp page numbers, or your own custom text, onto every page of a PDF, in the position, font, and format you choose — entirely in your browser, no upload required."
 meta:
