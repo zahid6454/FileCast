@@ -2806,15 +2806,13 @@ table.kv-table tr.group-title th .eyebrow {
   padding: var(--space-4) var(--space-5);
   margin: var(--space-4) 0;
 }
-/* Compact fields (select/number) size to their own content and sit side by
-   side — a select next to a short number input each keep their natural
-   width instead of being stretched into equal columns, so a wide option
-   ("Bottom Center") never clips. flex-wrap breaks to a new line only once a
-   row genuinely runs out of width, so the field order below (grouped so the
-   five compact Page Numbers fields sit together) lands on one line at the
-   panel's real width without any breakpoint needed. A slider or a
-   text/password field claims the full row on its own (--range/--text/
-   --password below) since those need room to be usable, not just legible. */
+/* Compact fields (select/number) that share a line grow to fill it (equal
+   flex-basis:0/flex-grow:1 on .tool-options__row below), so the panel's full
+   width is used instead of the fields hugging their own content and leaving
+   a gap on the right. flex-wrap breaks to a new line only once a row
+   genuinely runs out of width. A slider or a text/password field claims the
+   full row on its own (--range/--text/--password below) since those need
+   room to be usable, not just legible. */
 .tool-options { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-4) var(--space-3); }
 /* Each row is its own tiny grid, not a flex-wrap column: label on row 1
    (spanning both tracks), control(+suffix) on row 2. A flex-wrap version of
@@ -2828,16 +2826,18 @@ table.kv-table tr.group-title th .eyebrow {
    visually needed to. Grid's row-based intrinsic sizing doesn't have that
    failure mode: a track's size comes only from what's actually placed in
    it, so the label (row 1) never inflates the control's (row 2) width. */
-/* minmax(0, max-content), not bare max-content: a bare max-content track is
-   a hard floor an item can never shrink below, so a select with a genuinely
-   long option list (pdf-compress's "Balanced (150 dpi) — good for sharing")
-   would rather overflow a 320px viewport than give up an inch of its
-   natural width. The `0` lower bound lets the row's own min-width:0 (and,
-   above it, the outer flex-wrap's shrink) actually reach the control — the
-   select still renders at its natural width whenever there's room, and
-   only gives up legibility (native in-box text truncation, not page
-   overflow) once there truly isn't. */
-.tool-options__row { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, max-content); column-gap: var(--space-3); row-gap: var(--space-2); align-items: center; min-width: 0; }
+/* minmax(max-content, 1fr): the control column never shrinks below its own
+   natural width (a select with a genuinely long option list — pdf-compress's
+   "Balanced (150 dpi) — good for sharing" — would rather overflow a 320px
+   viewport than give up an inch of it) but grows to fill whatever width the
+   row ends up with. flex: 1 1 0 on the row itself (basis 0, not auto) is
+   what makes that width equal across a line of compact fields — content
+   size no longer seeds each item's share, so leftover space splits evenly
+   instead of being handed out proportionally to whichever field started
+   biggest. Rows still floor at their own min-content (flex's default
+   min-width:auto), so a genuinely long select still gets first claim before
+   the rest divide what's left. */
+.tool-options__row { display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, max-content); column-gap: var(--space-3); row-gap: var(--space-2); align-items: center; min-width: 0; flex: 1 1 0; }
 .tool-options__row--range,
 .tool-options__row--text,
 .tool-options__row--password { grid-template-columns: minmax(0, 1fr) minmax(0, max-content); flex: 1 1 100%; min-width: 0; column-gap: var(--space-4); }
@@ -2859,6 +2859,7 @@ table.kv-table tr.group-title th .eyebrow {
 }
 .tool-options__input {
   min-width: 0;
+  width: 100%;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -2902,13 +2903,6 @@ select.tool-options__input {
 /* In an inline row the suffix ("px") is a unit sitting against its field, not a
    right-aligned read-out, so it drops the reserved 40px column. */
 .tool-options__row--number .tool-options__value { min-width: 0; text-align: left; }
-/* A page number only ever needs 3-4 digits, so it gets a fixed width rather
-   than stretching to match a select next to it — that grid column then
-   sizes to exactly this width too (a max-content track fits its content),
-   instead of the wasted, mostly-empty box a shared equal-width column would
-   leave. Matched to Size's own rendered width (~67px) so the two fields in
-   this row read as the same size instead of Start At looming larger. */
-.tool-options__row--number .tool-options__input { width: 72px; max-width: 100%; }
 
 /* A short note below the option rows clarifying how two or more options
    interact (e.g. Page Numbers' "Font and Size apply to whatever's stamped
