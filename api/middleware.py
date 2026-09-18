@@ -71,7 +71,12 @@ PATH_LIMITS: list[tuple[str, int]] = [
     # which fire automatically as a byproduct of normal tool use. A real
     # visitor sends at most a handful of these per hour.
     ("/api/v1/messages", 10),
-    # Public, unauthenticated, DB-touching read (/announcements/active).
+    # /active is public, unauthenticated, and hit on every single page load
+    # (nav.js) — its own bucket, so a busy browsing session (e.g. a headless
+    # crawl through every tool page) can't burn the shared budget and 429 the
+    # admin panel's authenticated list/CRUD calls, which fall through to the
+    # generic /api/v1/announcements bucket below via longest-prefix match.
+    ("/api/v1/announcements/active", 120),
     ("/api/v1/announcements", 120),
     # Authenticated write; also size/key-guarded in the router.
     ("/api/v1/preferences", 60),
