@@ -1043,9 +1043,13 @@ img { max-width: 100%; display: block; }
    different header text and column count, so a plain <col> sequence picks
    this up with no per-tool class names to keep in sync. Only the feature
    column gets an explicit width; table-layout:fixed distributes the
-   remaining 80% evenly across however many columns follow it, so this
-   works unchanged whether a tool compares 2 formats or 4. */
-.content-block table.icon-table col:first-child { width: 20%; }
+   remaining 72% evenly across however many columns follow it, so this
+   works unchanged whether a tool compares 2 formats or 4. 28% (not the
+   old 20%) because the feature column carries a full sentence plus an
+   icon while most value cells are a word or two — 20% forced every
+   feature row onto 3-5 wrapped lines while the value columns sat mostly
+   empty next to them. */
+.content-block table.icon-table col:first-child { width: 28%; }
 .content-block table.icon-table th { background: var(--color-primary-subtle); color: var(--color-primary-hover); }
 .content-block table.icon-table td { background: var(--color-bg-raised); }
 /* Fixed columns at this container width can't keep every phrase on one
@@ -1062,7 +1066,7 @@ img { max-width: 100%; display: block; }
    A plain table-cell with a flex child inside it doesn't have that problem. */
 /* No white-space:nowrap here on purpose: at viewports just above the
    600px stacked-card breakpoint (a tablet or a split-screen window), the
-   20%-wide feature column is narrower than "HTTP requests" needs, and
+   28%-wide feature column is still narrower than some labels need, and
    forcing it onto one line would just overflow into the neighboring cell —
    the exact collision the mobile fix exists to avoid, at a different
    width. Left to wrap normally, the uniform min-height above absorbs it. */
