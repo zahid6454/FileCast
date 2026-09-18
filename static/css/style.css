@@ -2806,27 +2806,36 @@ table.kv-table tr.group-title th .eyebrow {
   padding: var(--space-4) var(--space-5);
   margin: var(--space-4) 0;
 }
-/* Compact controls (number/select) sit side by side instead of stacking — two
-   short fields like the resizer's Width and Height read as one dimension pair,
-   and stacking them left a card that was mostly empty to the right of a 100px
-   input. A slider needs the full width to be usable, so --range claims its own
-   row (flex-basis 100%) and the wrap does the rest. */
-.tool-options { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-5); }
-.tool-options__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
-/* `min-width: 0` for the same reason it is on .tool-options__slider below: the
-   row is now a flex ITEM too, and its auto minimum floors at the slider's UA
-   intrinsic width — which pushed the read-out off-screen at 320px. */
-.tool-options__row--range { flex: 1 1 100%; min-width: 0; gap: var(--space-2) var(--space-4); }
-/* A small uppercase caption above its control (Position/Format/Font/... all
-   stack this way now) rather than sitting inline to its left — reads better
-   once a row has more than two or three fields side by side (Page Numbers'
-   Position/Start at/Format/Font/Size). `flex-basis: 100%` on the label alone
-   is what forces the wrap: everything else in the row (the input, a
-   number's suffix span, a range's slider+value) still lays out exactly as
-   it did before, just on the line below instead of beside the label — no
-   other rule in this block needed to change. */
+/* Compact fields (select/number) size to their own content and sit side by
+   side — a select next to a short number input each keep their natural
+   width instead of being stretched into equal columns, so a wide option
+   ("Bottom Center") never clips. flex-wrap breaks to a new line only once a
+   row genuinely runs out of width, so the field order below (grouped so the
+   five compact Page Numbers fields sit together) lands on one line at the
+   panel's real width without any breakpoint needed. A slider or a
+   text/password field claims the full row on its own (--range/--text/
+   --password below) since those need room to be usable, not just legible. */
+.tool-options { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-4) var(--space-3); }
+/* Each row is its own tiny grid, not a flex-wrap column: label on row 1
+   (spanning both tracks), control(+suffix) on row 2. A flex-wrap version of
+   this (label forced onto its own line via flex-basis:100%) LOOKS the same
+   once laid out, but a flex item's percentage basis can't be resolved
+   during this row's own intrinsic-size pass (the row's width is itself
+   content-based, so there's nothing yet to be 100% of) — browsers fall back
+   to summing the label's and control's natural widths as if unwrapped, so
+   every row silently claimed roughly double its visual footprint in the
+   outer wrap, and fields wrapped to a new line far earlier than they
+   visually needed to. Grid's row-based intrinsic sizing doesn't have that
+   failure mode: a track's size comes only from what's actually placed in
+   it, so the label (row 1) never inflates the control's (row 2) width. */
+.tool-options__row { display: grid; grid-template-columns: max-content max-content; column-gap: var(--space-3); row-gap: var(--space-2); align-items: center; min-width: 0; }
+.tool-options__row--range,
+.tool-options__row--text,
+.tool-options__row--password { grid-template-columns: 1fr max-content; flex: 1 1 100%; min-width: 0; column-gap: var(--space-4); }
+.tool-options__row--text,
+.tool-options__row--password { grid-template-columns: 1fr; }
 .tool-options__label {
-  flex: 0 0 100%;
+  grid-column: 1 / -1;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--color-text-muted);
@@ -2840,15 +2849,6 @@ table.kv-table tr.group-title th .eyebrow {
   color: var(--color-text-light);
 }
 .tool-options__input {
-  flex: 1;
-  /* Same reasoning as .tool-options__slider and the --select fix below: a
-     flex item's default min-width:auto floors a text/password <input> at
-     its UA intrinsic width (~size=20, ~170-200px) regardless of the
-     `flex: 1` shrink factor, which overflowed a 320-375px viewport once
-     the --text/--password row itself was already correctly full-width.
-     select.tool-options__input overrides this back up to 160px on
-     purpose (a real floor so its widest option stays legible); every
-     other input type genuinely has nothing that needs a floor. */
   min-width: 0;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
@@ -2858,7 +2858,6 @@ table.kv-table tr.group-title th .eyebrow {
   color: var(--color-text);
   background: var(--color-bg);
   outline: none;
-  max-width: fit-content;
 }
 .tool-options__input:focus { border-color: var(--color-border-focus); }
 /* Remove/Extract/Organize's page-list input, once the page grid takes over
@@ -2872,62 +2871,33 @@ table.kv-table tr.group-title th .eyebrow {
   color: var(--color-text-muted);
   cursor: not-allowed;
 }
-/* max-width:fit-content above exists so a lone text input (e.g. Organize's
-   #opt-order before the page grid takes over) doesn't stretch across an
-   entire flex row — but a <select> needs room for its widest real option
-   ("Page 1 of Total", not just whatever's currently picked), and fit-content
-   sized the box off the selected option alone, clipping longer ones behind
-   the native browser's own ellipsis. Selects get their own native arrow
-   replaced too (appearance:none) — the UA-drawn one reads low-quality/
-   inconsistent across browsers next to this site's custom iconography. */
+/* A text/password input fills its row's single 1fr column (set above) —
+   a <select> instead sizes to its own grid track, which a max-content
+   column already grows to fit its widest real option ("Page 1 of Total",
+   not just whatever's currently picked); the native arrow is replaced too
+   (appearance:none) — the UA-drawn one reads low-quality/inconsistent
+   across browsers next to this site's custom iconography. */
 select.tool-options__input {
   max-width: 100%;
-  /* flex:1 with the default min-width:auto lets each control's own intrinsic
-     content size decide how the row's space gets split — a select sharing a
-     row with a wider sibling (e.g. Page Numbers' "Bottom Center" Position
-     select next to its Format select) got shortchanged below what its own
-     longest option needs, so the browser clipped/ellipsized the selected
-     option's text even though flex-wrap had room to give it more. */
-  min-width: 160px;
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  padding-right: calc(var(--space-3) + 22px);
+  padding-right: calc(var(--space-2) + 16px);
   background-image: var(--select-chevron);
   background-repeat: no-repeat;
-  background-position: right var(--space-3) center;
+  background-position: right var(--space-2) center;
   background-size: 16px;
 }
-/* `min-width: 0` is load-bearing: a flex item defaults to min-width:auto, so
-   without it the range input cannot shrink below its UA intrinsic width and the
-   value read-out is pushed off-screen, where the root clip hides it. */
-.tool-options__slider { flex: 1; min-width: 0; accent-color: var(--color-primary); }
+.tool-options__slider { min-width: 0; accent-color: var(--color-primary); }
 .tool-options__value { font-size: var(--text-sm); color: var(--color-text-muted); min-width: 40px; text-align: right; }
 /* In an inline row the suffix ("px") is a unit sitting against its field, not a
    right-aligned read-out, so it drops the reserved 40px column. */
 .tool-options__row--number .tool-options__value { min-width: 0; text-align: left; }
-.tool-options__row--number .tool-options__input { flex: 0 0 auto; width: 96px; }
-@media (max-width: 480px) {
-  .tool-options__row--number { flex: 1 1 100%; }
-  /* --select never got a row rule at all (only --range/--number/--text/
-     --password did), so at a narrow viewport it rendered at its own
-     unconstrained intrinsic width — label + the select's 160px floor —
-     which is wider than a 320-375px viewport and got silently clipped by
-     the site's `html { overflow-x: clip }` instead of wrapping. Scoped to
-     this breakpoint (not unconditional like --text/--password) so two
-     selects that fit side by side on a wider screen — e.g. Page Numbers'
-     Position next to its Format select — keep doing that; only below
-     480px does each select claim its own full-width row, matching
-     --number's identical reasoning just above. */
-  .tool-options__row--select { flex: 1 1 100%; min-width: 0; }
-}
-/* Same reasoning as --range above: a text option (watermark text, a page-range
-   string) needs room to actually show what's typed, not the ~half-row a
-   generic flex item would settle for. Password fields get the same width
-   even though there's nothing to visually confirm while typing — the row
-   just shouldn't jump in width relative to its --text sibling. */
-.tool-options__row--text,
-.tool-options__row--password { flex: 1 1 100%; min-width: 0; }
+/* A page number only ever needs 3-4 digits, so it gets a fixed width rather
+   than stretching to match a select next to it — that grid column then
+   sizes to exactly 96px too (a max-content track fits its content), instead
+   of the wasted, mostly-empty box a shared equal-width column would leave. */
+.tool-options__row--number .tool-options__input { width: 96px; max-width: 100%; }
 
 /* A short note below the option rows clarifying how two or more options
    interact (e.g. Page Numbers' "Font and Size apply to whatever's stamped
