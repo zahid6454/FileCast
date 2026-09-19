@@ -1,10 +1,32 @@
-// Dashboard tab (#dashboard, default) — Phase 4 §8.1.
+// Dashboard tab (#dashboard, default) — Phase 4 §8.1, filter bar + analytics
+// per ADMIN-DASHBOARD-ANALYTICS-PLAN.md §7.
 //
-// Loads its widgets in parallel with Promise.allSettled so one slow/failed call
-// degrades to its own error card instead of blanking the tab (R12). Charts are
-// inline SVG built via dom.svg() — no library, every label a text node (R10).
-// The recent-errors feed is the P23 hot spot: error_message comes from the
-// public POST /errors, so it is rendered with textContent only (never markup).
+// Two independent fetch shapes:
+//  - Stat cards, Ratings, Recent errors — unfiltered, loaded once via
+//    Promise.allSettled.
+//  - Conversions, Top tools, New signups, and Errors each own an inline
+//    Range selector and independently fetch/re-render only themselves on
+//    change (scopedFilterCard()), following errors.js's existing
+//    scoped-re-render pattern — a per-instance sequence counter discards a
+//    response superseded by a newer change on that same card, the same
+//    race errors.js's REQUEST_SEQ guards (§9.3). All 4 selectors are fully
+//    independent of each other. A shared global Range+Tool filter bar was
+//    tried first and cut: Range applied to all 4 cards but Tool only to 2
+//    of them, which read as broken once real data was on screen — Tool was
+//    then dropped outright as unused, leaving just Range, independently,
+//    on every card that has a meaningful date dimension.
+//
+// Charts are inline SVG built via dom.svg() — no library, every label a text
+// node (R10). The recent-errors feed is the P23 hot spot: error_message comes
+// from the public POST /errors, so it is rendered with textContent only
+// (never markup). The new Errors-summary card never renders error_type raw
+// (only two hardcoded Validation/Conversion labels) and never renders
+// error_message at all, but its by-tool rows DO run attacker-influenceable
+// tool_id values through labelFor() — safe via h()'s textContent-only rule,
+// but not free of attacker-influenceable data the way an earlier draft of
+// this comment claimed. Both splits are also capped server-side
+// (stats.py's errors_summary()) so a caller sending many distinct
+// error_type/tool_id values can't inflate either array unboundedly.
 (function () {
   'use strict';
   var ADMIN = (window.ADMIN = window.ADMIN || {});
@@ -13,6 +35,26 @@
   var api = ADMIN.api;
   var h = dom.h;
   var svg = dom.svg;
+
+  var RANGES = [
+    { value: '7', label: '7 days', days: 7, groupBy: 'day' },
+    { value: '30', label: '30 days', days: 30, groupBy: 'day' },
+    { value: '90', label: '90 days', days: 90, groupBy: 'day' },
+    { value: '365', label: '12 months', days: 365, groupBy: 'month' }
+  ];
+
+  // Guards the outer (stat cards/Ratings/Recent errors) batch — render() can
+  // be re-entered (tab away and back) before a prior call's fetch has
+  // resolved, and without this a slow first render() landing after a faster
+  // second one would blank the up-to-date dashboard.
+  var RENDER_SEQ = 0;
+
+  function rangeConfigFor(value) {
+    for (var i = 0; i < RANGES.length; i++) {
+      if (RANGES[i].value === value) return RANGES[i];
+    }
+    return RANGES[1];
+  }
 
   function labelFor(toolId) {
     if (ADMIN.catalog && typeof ADMIN.catalog.label === 'function') {
@@ -61,8 +103,13 @@
 
   // --- charts (inline SVG) ------------------------------------------------
 
-  // Conversions-over-time line chart. `series` = [{date,count,failures}].
-  function lineChart(series) {
+  // Generic over-time line chart. `series` = [{date,count,failures?}].
+  // `unit`/`ariaLabel` let New signups (§7.2) reuse this instead of a second
+  // chart implementation — defaults keep the Conversions chart's exact
+  // existing wording.
+  function lineChart(series, unit, ariaLabel) {
+    unit = unit || 'conversion';
+    ariaLabel = ariaLabel || 'Conversions over time';
     var W = 640,
       H = 220,
       padL = 44,
@@ -84,7 +131,7 @@
         viewBox: '0 0 ' + W + ' ' + H,
         preserveAspectRatio: 'xMidYMid meet',
         role: 'img',
-        'aria-label': 'Conversions over time'
+        'aria-label': ariaLabel
       },
       [
         // baseline + left axis
@@ -196,7 +243,8 @@
         p.date +
         ': ' +
         p.count +
-        (p.count === 1 ? ' conversion' : ' conversions') +
+        ' ' +
+        (p.count === 1 ? unit : unit + 's') +
         (p.failures ? ', ' + p.failures + (p.failures === 1 ? ' failure' : ' failures') : '');
       var hit = svg('circle', {
         class: 'admin-chart__hit',
@@ -291,6 +339,154 @@
       );
     });
     return frame;
+  }
+
+  // Errors type/by-tool breakdown (§7.3). error_type is never rendered raw —
+  // only the two hardcoded Validation/Conversion labels below — but by-tool
+  // rows go through labelFor(), same as the recent-errors feed: an attacker
+  // can POST /api/v1/errors with a tool_id that isn't in the catalog, and its
+  // raw string reaches the DOM as that row's label. Still P23-safe (h() is
+  // textContent-only, so no markup injection either way), just not a widget
+  // free of attacker-influenceable data the way the header comment used to
+  // (incorrectly) claim.
+  function errorsSummaryWidget(data, days) {
+    var byType = (data && data.by_type) || [];
+    var byTool = (data && data.by_tool) || [];
+    var body = [];
+    if (byType.length === 0 && byTool.length === 0) {
+      body.push(placeholder('No errors in this range 🎉'));
+    } else {
+      var counts = {};
+      byType.forEach(function (t) {
+        counts[t.error_type] = t.count;
+      });
+      body.push(
+        h('div', { class: 'admin-errsummary__types' }, [
+          h('div', { class: 'admin-errsummary__type' }, [
+            h('span', { class: 'admin-errsummary__type-label' }, 'Validation'),
+            h(
+              'span',
+              { class: 'admin-errsummary__type-value' },
+              String(counts.validation_error || 0)
+            )
+          ]),
+          h('div', { class: 'admin-errsummary__type' }, [
+            h('span', { class: 'admin-errsummary__type-label' }, 'Conversion'),
+            h(
+              'span',
+              { class: 'admin-errsummary__type-value' },
+              String(counts.conversion_error || 0)
+            )
+          ])
+        ])
+      );
+      if (byTool.length > 0) {
+        body.push(
+          h(
+            'ul',
+            { class: 'admin-errsummary__tools' },
+            byTool.map(function (t) {
+              return h('li', [
+                h('span', labelFor(t.tool_id)),
+                h('span', { class: 'admin-errsummary__tool-count' }, String(t.count))
+              ]);
+            })
+          )
+        );
+      }
+    }
+    // Error rows are purged after retention_days (§2.4) — a wider selected
+    // range would otherwise look silently sparse next to a full-width
+    // Conversions trend for the same nominal window with no explanation.
+    if (data && data.retention_days && days > data.retention_days) {
+      body.push(
+        h(
+          'p',
+          { class: 'admin-card__note' },
+          'Errors are retained for ' + data.retention_days + ' days — showing all available data.'
+        )
+      );
+    }
+    return h('div', { class: 'admin-errsummary' }, body);
+  }
+
+  // --- self-contained scoped card (Conversions, Errors) --------------------
+
+  // A card with its own inline Range selector that independently fetches
+  // and re-renders only itself on change — mirrors errors.js's
+  // loadErrors()/REQUEST_SEQ pattern (§9.3), scoped to one card instead of a
+  // whole tab: a per-instance sequence counter discards a response
+  // superseded by a newer change on THIS card.
+  //
+  // The selector is built once and never torn down on reload — only the
+  // title text and body are swapped — so a change never steals focus
+  // mid-interaction (the same reasoning as errors.js's SHELL_BUILT guard
+  // keeping its search input in place across a page fetch).
+  //
+  // A per-tool filter used to sit next to this — dropped as unused (nobody
+  // was scoping the dashboard down to one tool in practice) rather than
+  // kept dormant on the chance it comes back later.
+  //
+  // opts: { title(cfg) -> string, buildUrl(cfg) -> string, renderBody(data, cfg) -> Node }
+  function scopedFilterCard(opts) {
+    var range = '30';
+    var seq = 0;
+
+    var titleEl = h('h2', { class: 'admin-card__title' });
+    var bodyHost = h('div');
+
+    function setBody(node) {
+      dom.clear(bodyHost);
+      bodyHost.appendChild(node);
+    }
+
+    function load() {
+      var mySeq = ++seq;
+      var cfg = rangeConfigFor(range);
+      titleEl.textContent = opts.title(cfg);
+      setBody(h('div', { class: 'admin-loading' }, 'Loading…'));
+      api.get(opts.buildUrl(cfg)).then(
+        function (data) {
+          if (mySeq !== seq) return; // superseded by a newer change on this card
+          setBody(opts.renderBody(data, cfg));
+        },
+        function (err) {
+          if (mySeq !== seq) return;
+          if (err && err.isAuthError) {
+            ADMIN.onAuthError(err);
+            return;
+          }
+          var retry = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, 'Retry');
+          retry.addEventListener('click', load);
+          setBody(
+            h('div', { class: 'admin-error-state' }, [h('p', "Couldn't load this section."), retry])
+          );
+        }
+      );
+    }
+
+    var rangeSelect = h(
+      'select',
+      { class: 'tool-options__input', 'aria-label': 'Date range' },
+      RANGES.map(function (r) {
+        return h('option', { value: r.value }, r.label);
+      })
+    );
+    rangeSelect.value = range;
+    rangeSelect.addEventListener('change', function () {
+      range = rangeSelect.value;
+      load();
+    });
+    var filterRow = h('div', { class: 'admin-inline-filter' }, [
+      h('div', { class: 'tool-options__row tool-options__row--select' }, [
+        h('label', { class: 'tool-options__label' }, 'Range'),
+        rangeSelect
+      ])
+    ]);
+
+    var card = h('section', { class: 'admin-card' }, [titleEl, filterRow, bodyHost]);
+    load();
+    return card;
   }
 
   // --- widgets ------------------------------------------------------------
@@ -396,15 +592,16 @@
   // --- render -------------------------------------------------------------
 
   function render(container) {
+    var seq = ++RENDER_SEQ;
     dom.clear(container);
     container.appendChild(h('div', { class: 'admin-loading' }, 'Loading dashboard…'));
 
     Promise.allSettled([
       api.get('/api/v1/stats/dashboard'),
-      api.get('/api/v1/stats/conversions?days=30'),
       api.get('/api/v1/stats/errors?limit=10'),
       api.get('/api/v1/ratings')
     ]).then(function (results) {
+      if (seq !== RENDER_SEQ) return; // superseded by a newer render() (tab re-entry)
       // Bubble auth failures up to the global gate (R8).
       for (var i = 0; i < results.length; i++) {
         var reason = results[i].reason;
@@ -416,7 +613,7 @@
       dom.clear(container);
       var grid = h('div', { class: 'admin-dashboard' });
 
-      // Stat cards
+      // Stat cards — all-time, unaffected by anything below (§6.3).
       if (results[0].status === 'fulfilled') {
         grid.appendChild(statsWidget(results[0].value));
       } else {
@@ -427,26 +624,55 @@
         );
       }
 
-      // Conversions line chart
-      if (results[1].status === 'fulfilled') {
-        var series = (results[1].value && results[1].value.series) || [];
-        grid.appendChild(sectionCard('Conversions (30 days)', lineChart(series)));
-      } else {
-        grid.appendChild(
-          errorCard('Conversions (30 days)', function () {
-            render(container);
-          })
-        );
-      }
+      // Conversions — owns its own inline Range selector.
+      grid.appendChild(
+        scopedFilterCard({
+          title: function (cfg) {
+            return 'Conversions (' + cfg.label + ')';
+          },
+          buildUrl: function (cfg) {
+            return '/api/v1/stats/conversions?days=' + cfg.days + '&group_by=' + cfg.groupBy;
+          },
+          renderBody: function (data) {
+            return lineChart((data && data.series) || []);
+          }
+        })
+      );
 
-      // Top-tools bar chart (from the dashboard payload)
-      if (results[0].status === 'fulfilled') {
-        grid.appendChild(sectionCard('Top tools', barChart(results[0].value.top_tools || [])));
-      }
+      // Top tools — owns its own inline Range selector (ranking always
+      // stays cross-tool; there's no Tool dimension to scope it by).
+      grid.appendChild(
+        scopedFilterCard({
+          title: function (cfg) {
+            return 'Top tools (' + cfg.label + ')';
+          },
+          buildUrl: function (cfg) {
+            return '/api/v1/stats/top-tools?days=' + cfg.days;
+          },
+          renderBody: function (data) {
+            return barChart((data && data.top_tools) || []);
+          }
+        })
+      );
 
-      // Ratings summary (one bulk call)
-      if (results[3].status === 'fulfilled') {
-        grid.appendChild(sectionCard('Ratings', ratingsWidget(results[3].value)));
+      // New signups — owns its own inline Range selector.
+      grid.appendChild(
+        scopedFilterCard({
+          title: function (cfg) {
+            return 'New signups (' + cfg.label + ')';
+          },
+          buildUrl: function (cfg) {
+            return '/api/v1/stats/signups?days=' + cfg.days;
+          },
+          renderBody: function (data) {
+            return lineChart(data || [], 'signup', 'New signups over time');
+          }
+        })
+      );
+
+      // Ratings summary (one bulk call) — all-time, unchanged (§6.2/§9.5).
+      if (results[2].status === 'fulfilled') {
+        grid.appendChild(sectionCard('Ratings', ratingsWidget(results[2].value)));
       } else {
         grid.appendChild(
           errorCard('Ratings', function () {
@@ -455,9 +681,27 @@
         );
       }
 
-      // Recent errors feed (P23 hot spot)
-      if (results[2].status === 'fulfilled') {
-        var errs = (results[2].value && results[2].value.errors) || [];
+      // Errors — owns its own inline Range selector, grouped next to the
+      // unfiltered Recent errors feed below (§3 item 6 distinguishes them by
+      // purpose: analytical "what's breaking most" vs. operational "what
+      // just broke", but both are error-related, so they sit together).
+      grid.appendChild(
+        scopedFilterCard({
+          title: function (cfg) {
+            return 'Errors (' + cfg.label + ')';
+          },
+          buildUrl: function (cfg) {
+            return '/api/v1/stats/errors/summary?days=' + cfg.days;
+          },
+          renderBody: function (data, cfg) {
+            return errorsSummaryWidget(data, cfg.days);
+          }
+        })
+      );
+
+      // Recent errors feed (P23 hot spot) — unfiltered "what just broke".
+      if (results[1].status === 'fulfilled') {
+        var errs = (results[1].value && results[1].value.errors) || [];
         var viewAllErrors =
           errs.length > 0
             ? h('a', { class: 'admin-card__action', href: '#errors' }, 'View all →')

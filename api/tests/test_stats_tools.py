@@ -44,8 +44,8 @@ async def test_sums_across_days_for_one_tool(admin_client):
 
 
 async def test_covers_every_tool_not_just_top_10(admin_client):
-    # The existing /stats/dashboard top_tools list caps at 10 — this endpoint
-    # exists precisely so a tool outside that cap still reports a real count.
+    # The sibling /stats/top-tools endpoint caps at 10 — this one exists
+    # precisely so a tool outside that cap still reports a real count.
     today = date.today()
     for i in range(12):
         _seed(f"tool-{i}", today, count=1)

@@ -78,7 +78,10 @@ async def test_stats_admin_only(client):
     for path in (
         "/api/v1/stats/dashboard",
         "/api/v1/stats/conversions",
+        "/api/v1/stats/top-tools",
+        "/api/v1/stats/signups",
         "/api/v1/stats/errors",
+        "/api/v1/stats/errors/summary",
     ):
         assert (await client.get(path)).status_code == 401
 
@@ -96,9 +99,8 @@ async def test_stats_dashboard_aggregates(admin_client):
     d = (await admin_client.get("/api/v1/stats/dashboard")).json()
     assert d["total_conversions"] == 1
     assert d["total_users"] >= 1
-    assert isinstance(d["top_tools"], list)
+    assert "top_tools" not in d
     assert d["total_unique_visitors"] == 1
-    assert d["top_tools"][0] == {"tool_id": "jpg-to-png", "count": 1, "visitors": 1}
 
 
 async def test_stats_errors_lists_newest_first_with_total_and_has_more(

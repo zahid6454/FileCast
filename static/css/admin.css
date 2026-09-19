@@ -596,6 +596,66 @@
 .admin-stat--warning .admin-stat__value { color: var(--color-warning); }
 .admin-stat--info .admin-stat__value { color: var(--color-info); }
 
+/* Inline per-card filter row (Conversions/Top tools/New signups/Errors,
+   §7.5 — a global filter bar was tried first and cut once real data showed
+   Range/Tool applying to a confusing, inconsistent subset of cards; Tool
+   was then dropped outright as unused, leaving just Range). Reuses the
+   public site's .tool-options__row/__label/__input classes (style.css,
+   linked by admin.html for tokens/resets) for the same uppercase label +
+   custom chevron as e.g. PDF Page Numbers' Position/Format fields, but
+   WITHOUT the outer .tool-options panel (background/border) — this row
+   already lives inside an .admin-card, so a second boxed panel nested in
+   it would double up the border. */
+.admin-inline-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+/* Errors summary card (§7.3) — type split + by-tool breakdown, counts only. */
+.admin-errsummary__types {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.admin-errsummary__type {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.admin-errsummary__type-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+.admin-errsummary__type-value {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+.admin-errsummary__tools {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.admin-errsummary__tools li {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+.admin-errsummary__tools li:last-child {
+  border-bottom: none;
+}
+.admin-errsummary__tool-count {
+  color: var(--color-text-secondary);
+}
+
 /* charts */
 .admin-chart-wrap {
   position: relative;
