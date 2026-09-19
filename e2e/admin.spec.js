@@ -149,9 +149,9 @@ test.describe('dashboard', () => {
     // The bulk endpoint was hit exactly once (not one-per-tool).
     expect(state.ratingsCalls).toBe(1);
 
-    // Conversions/Errors each own an inline Range+Tool selector (§7); Top
-    // tools/New signups have none (a per-tool filter would be self-defeating
-    // on a cross-tool ranking; signups has no tool dimension at all).
+    // Conversions/Top tools/New signups/Errors each own an independent
+    // inline Range selector (§7) — no Tool selector on any of them (dropped
+    // as unused, §7 follow-up).
     const conversionsCard = page.locator('.admin-card', { hasText: 'Conversions' }).first();
     await expect(conversionsCard.locator('select[aria-label="Date range"]')).toHaveValue('30');
     await expect(page.locator('.admin-errsummary').first()).toBeVisible();
@@ -159,6 +159,12 @@ test.describe('dashboard', () => {
     // Switching Conversions' own range selector refetches only that card.
     await conversionsCard.locator('select[aria-label="Date range"]').selectOption('90');
     await expect(page.getByText('Conversions (90 days)')).toBeVisible();
+
+    // Top tools and New signups each have their own independent selector too.
+    const topToolsCard = page.locator('.admin-card', { hasText: 'Top tools' }).first();
+    await expect(topToolsCard.locator('select[aria-label="Date range"]')).toHaveValue('30');
+    const signupsCard = page.locator('.admin-card', { hasText: 'New signups' }).first();
+    await expect(signupsCard.locator('select[aria-label="Date range"]')).toHaveValue('30');
   });
 
   test('P23: attacker-controlled error_message renders inert (no XSS)', async ({ page }) => {

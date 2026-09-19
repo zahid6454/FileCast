@@ -2,20 +2,19 @@
 // per ADMIN-DASHBOARD-ANALYTICS-PLAN.md §7.
 //
 // Two independent fetch shapes:
-//  - Stat cards, Top tools, New signups, Ratings, Recent errors — unfiltered
-//    (Top tools/New signups use a fixed DEFAULT_DAYS window, no selector: a
-//    global Range+Tool filter bar was tried first, but Range only ever
-//    applied to all 4 cards while Tool only applied to 2 of them, which read
-//    as broken rather than intentional once real data was on screen). All
-//    loaded once via Promise.allSettled.
-//  - Conversions and Errors each own an inline Range selector and
-//    independently fetch/re-render only themselves on change
-//    (scopedFilterCard()), following errors.js's existing scoped-re-render
-//    pattern — a per-instance sequence counter discards a response
-//    superseded by a newer change on that same card, the same race
-//    errors.js's REQUEST_SEQ guards (§9.3). The two selectors are fully
-//    independent of each other and of Top tools/New signups. A per-tool
-//    filter sat alongside Range originally too — dropped as unused.
+//  - Stat cards, Ratings, Recent errors — unfiltered, loaded once via
+//    Promise.allSettled.
+//  - Conversions, Top tools, New signups, and Errors each own an inline
+//    Range selector and independently fetch/re-render only themselves on
+//    change (scopedFilterCard()), following errors.js's existing
+//    scoped-re-render pattern — a per-instance sequence counter discards a
+//    response superseded by a newer change on that same card, the same
+//    race errors.js's REQUEST_SEQ guards (§9.3). All 4 selectors are fully
+//    independent of each other. A shared global Range+Tool filter bar was
+//    tried first and cut: Range applied to all 4 cards but Tool only to 2
+//    of them, which read as broken once real data was on screen — Tool was
+//    then dropped outright as unused, leaving just Range, independently,
+//    on every card that has a meaningful date dimension.
 //
 // Charts are inline SVG built via dom.svg() — no library, every label a text
 // node (R10). The recent-errors feed is the P23 hot spot: error_message comes
@@ -43,15 +42,11 @@
     { value: '90', label: '90 days', days: 90, groupBy: 'day' },
     { value: '365', label: '12 months', days: 365, groupBy: 'month' }
   ];
-  // Fixed window for the widgets that don't get their own selector (Top
-  // tools, New signups) — see the header comment for why they went
-  // unfiltered instead of keeping a shared control.
-  var DEFAULT_DAYS = 30;
 
-  // Guards the outer (stat cards/Top tools/New signups/Ratings/Recent
-  // errors) batch — render() can be re-entered (tab away and back) before a
-  // prior call's fetch has resolved, and without this a slow first render()
-  // landing after a faster second one would blank the up-to-date dashboard.
+  // Guards the outer (stat cards/Ratings/Recent errors) batch — render() can
+  // be re-entered (tab away and back) before a prior call's fetch has
+  // resolved, and without this a slow first render() landing after a faster
+  // second one would blank the up-to-date dashboard.
   var RENDER_SEQ = 0;
 
   function rangeConfigFor(value) {
@@ -604,9 +599,7 @@
     Promise.allSettled([
       api.get('/api/v1/stats/dashboard'),
       api.get('/api/v1/stats/errors?limit=10'),
-      api.get('/api/v1/ratings'),
-      api.get('/api/v1/stats/top-tools?days=' + DEFAULT_DAYS),
-      api.get('/api/v1/stats/signups?days=' + DEFAULT_DAYS)
+      api.get('/api/v1/ratings')
     ]).then(function (results) {
       if (seq !== RENDER_SEQ) return; // superseded by a newer render() (tab re-entry)
       // Bubble auth failures up to the global gate (R8).
@@ -646,39 +639,36 @@
         })
       );
 
-      // Top tools — fixed window, no selector: a per-tool filter would be
-      // self-defeating on a cross-tool ranking.
-      if (results[3].status === 'fulfilled') {
-        grid.appendChild(
-          sectionCard(
-            'Top tools (last ' + DEFAULT_DAYS + ' days)',
-            barChart((results[3].value && results[3].value.top_tools) || [])
-          )
-        );
-      } else {
-        grid.appendChild(
-          errorCard('Top tools', function () {
-            render(container);
-          })
-        );
-      }
+      // Top tools — owns its own inline Range selector (ranking always
+      // stays cross-tool; there's no Tool dimension to scope it by).
+      grid.appendChild(
+        scopedFilterCard({
+          title: function (cfg) {
+            return 'Top tools (' + cfg.label + ')';
+          },
+          buildUrl: function (cfg) {
+            return '/api/v1/stats/top-tools?days=' + cfg.days;
+          },
+          renderBody: function (data) {
+            return barChart((data && data.top_tools) || []);
+          }
+        })
+      );
 
-      // New signups — fixed window, no selector: no tool dimension to
-      // filter by in the first place.
-      if (results[4].status === 'fulfilled') {
-        grid.appendChild(
-          sectionCard(
-            'New signups (last ' + DEFAULT_DAYS + ' days)',
-            lineChart(results[4].value || [], 'signup', 'New signups over time')
-          )
-        );
-      } else {
-        grid.appendChild(
-          errorCard('New signups', function () {
-            render(container);
-          })
-        );
-      }
+      // New signups — owns its own inline Range selector.
+      grid.appendChild(
+        scopedFilterCard({
+          title: function (cfg) {
+            return 'New signups (' + cfg.label + ')';
+          },
+          buildUrl: function (cfg) {
+            return '/api/v1/stats/signups?days=' + cfg.days;
+          },
+          renderBody: function (data) {
+            return lineChart(data || [], 'signup', 'New signups over time');
+          }
+        })
+      );
 
       // Ratings summary (one bulk call) — all-time, unchanged (§6.2/§9.5).
       if (results[2].status === 'fulfilled') {

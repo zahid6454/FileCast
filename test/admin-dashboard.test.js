@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createDom, evalScript, flush } from './helpers.js';
 
-// Dashboard tab (admin/dashboard.js): stat cards/Top tools/New signups/
-// Ratings/Recent errors load once in parallel via Promise.allSettled — one
-// failed call degrades to its own error card instead of blanking the whole
-// tab (R12), and any auth failure among them bubbles up to the global gate.
-// Conversions and Errors are separate, self-contained cards, each with its
-// own inline Range selector that fetches/re-renders independently.
+// Dashboard tab (admin/dashboard.js): stat cards/Ratings/Recent errors load
+// once in parallel via Promise.allSettled — one failed call degrades to its
+// own error card instead of blanking the whole tab (R12), and any auth
+// failure among them bubbles up to the global gate. Conversions, Top tools,
+// New signups, and Errors are each separate, self-contained cards with their
+// own inline Range selector that fetches/re-renders independently of the
+// other three.
 
 function cardByTitle(root, titleSubstring) {
   return Array.from(root.querySelectorAll('.admin-card')).find((el) => {
@@ -245,11 +246,10 @@ describe('admin/dashboard.js', () => {
     expect(
       requestedUrls.some((u) => u.includes('/stats/conversions?days=365&group_by=month'))
     ).toBe(true);
-    // Top tools/New signups have no selector at all and are never refetched
-    // by a change on Conversions' own control.
+    // Top tools/New signups/Errors each own an independent selector and are
+    // never refetched by a change on Conversions' own control.
     expect(requestedUrls.some((u) => u.includes('/stats/top-tools'))).toBe(false);
     expect(requestedUrls.some((u) => u.includes('/stats/signups'))).toBe(false);
-    // Errors owns its own independent selector — untouched by Conversions'.
     expect(requestedUrls.some((u) => u.includes('/stats/errors/summary'))).toBe(false);
     // Title reflects the new range; each select also lists "12 months" as an
     // option regardless of selection, so this checks the heading specifically.
@@ -305,6 +305,36 @@ describe('admin/dashboard.js', () => {
     await flush();
 
     expect(c.querySelector('.admin-errsummary').textContent).toContain('retained for 30 days');
+  });
+
+  it("Top tools' and New signups' own Range selectors are independent of each other and of Conversions", async () => {
+    const requestedUrls = [];
+    const dom = load((url) => {
+      requestedUrls.push(url);
+      return defaultRoutes(url);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.dashboard.render(c);
+    await flush();
+
+    expect(requestedUrls.some((u) => u.includes('/stats/top-tools?days=30'))).toBe(true);
+    expect(requestedUrls.some((u) => u.includes('/stats/signups?days=30'))).toBe(true);
+
+    requestedUrls.length = 0;
+    const topToolsRange = cardByTitle(c, 'Top tools').querySelector(
+      'select[aria-label="Date range"]'
+    );
+    topToolsRange.value = '90';
+    topToolsRange.dispatchEvent(new dom.window.Event('change'));
+    await flush();
+
+    expect(requestedUrls.some((u) => u.includes('/stats/top-tools?days=90'))).toBe(true);
+    // Changing Top tools' range must not touch New signups or Conversions.
+    expect(requestedUrls.some((u) => u.includes('/stats/signups'))).toBe(false);
+    expect(requestedUrls.some((u) => u.includes('/stats/conversions'))).toBe(false);
+    expect(
+      cardByTitle(c, 'New signups').querySelector('select[aria-label="Date range"]').value
+    ).toBe('30');
   });
 
   it('Top tools fetch failure degrades independently without affecting Conversions/New signups', async () => {
