@@ -40,6 +40,12 @@
   var FILTER_TOOL = '';
   var FILTER_SEQ = 0;
   var FILTER_HOSTS = null;
+  // Guards the outer (stat cards/ratings/recent-errors) batch the same way
+  // FILTER_SEQ guards the filtered section — render() can be re-entered
+  // (tab away and back) before a prior call's fetch has resolved, and
+  // without this a slow first render() landing after a faster second one
+  // would blank the up-to-date dashboard and kick off a redundant refetch.
+  var RENDER_SEQ = 0;
 
   function rangeConfig() {
     for (var i = 0; i < RANGES.length; i++) {
@@ -511,11 +517,21 @@
     });
   }
 
+  // A plain host div holding one loading card — avoids a blank flash between
+  // the outer batch rendering the grid and the first loadFilteredSection()
+  // fetch landing. renderFilteredWidget() replaces this card in place with
+  // the real one, the same way it replaces a failed/retried one.
+  function loadingHost() {
+    return h('div', [
+      h('section', { class: 'admin-card' }, h('div', { class: 'admin-loading' }, 'Loading…'))
+    ]);
+  }
+
   function buildFilterSection() {
-    var conversionsHost = h('div');
-    var topToolsHost = h('div');
-    var signupsHost = h('div');
-    var errorsHost = h('div');
+    var conversionsHost = loadingHost();
+    var topToolsHost = loadingHost();
+    var signupsHost = loadingHost();
+    var errorsHost = loadingHost();
     FILTER_HOSTS = {
       conversions: conversionsHost,
       topTools: topToolsHost,
@@ -635,6 +651,7 @@
   // --- render -------------------------------------------------------------
 
   function render(container) {
+    var seq = ++RENDER_SEQ;
     dom.clear(container);
     container.appendChild(h('div', { class: 'admin-loading' }, 'Loading dashboard…'));
     FILTER_RANGE = '30';
@@ -646,6 +663,7 @@
       api.get('/api/v1/stats/errors?limit=10'),
       api.get('/api/v1/ratings')
     ]).then(function (results) {
+      if (seq !== RENDER_SEQ) return; // superseded by a newer render() (tab re-entry)
       // Bubble auth failures up to the global gate (R8).
       for (var i = 0; i < results.length; i++) {
         var reason = results[i].reason;

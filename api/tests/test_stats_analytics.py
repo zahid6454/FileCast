@@ -38,6 +38,14 @@ async def test_conversions_series_filters_by_tool_id(admin_client):
     assert body["series"] == [{"date": today.isoformat(), "count": 5, "failures": 0}]
 
 
+async def test_conversions_series_empty_when_tool_id_matches_nothing(admin_client):
+    _seed_conversion("jpg-to-png", date.today(), count=5)
+    body = (
+        await admin_client.get("/api/v1/stats/conversions?tool_id=no-such-tool")
+    ).json()
+    assert body["series"] == []
+
+
 async def test_conversions_series_group_by_month_buckets_across_days(admin_client):
     today = date.today()
     other_day_in_month = (

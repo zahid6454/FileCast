@@ -178,6 +178,39 @@ describe('admin/dashboard.js', () => {
     expect(c.querySelectorAll('.admin-stat__value')).toHaveLength(0);
   });
 
+  it('a slow first render() cannot clobber a newer render() (tab away and back before it resolves)', async () => {
+    let resolveSlowDashboard;
+    const slow = new Promise((resolve) => {
+      resolveSlowDashboard = resolve;
+    });
+    let dashboardCalls = 0;
+    const dom = load((url) => {
+      if (url.includes('/stats/dashboard')) {
+        dashboardCalls += 1;
+        if (dashboardCalls === 1) {
+          // First render()'s dashboard fetch hangs until resolved manually below.
+          return slow.then(() => makeResponse(200, DASHBOARD_STATS));
+        }
+        return makeResponse(200, { ...DASHBOARD_STATS, total_conversions: 999 });
+      }
+      return defaultRoutes(url);
+    });
+    const c = dom.window.document.getElementById('c');
+
+    dom.window.ADMIN.tabs.dashboard.render(c); // render #1 — hangs
+    await flush();
+    dom.window.ADMIN.tabs.dashboard.render(c); // render #2 — resolves first
+    await flush();
+
+    // render #1's stale fetch finally resolves, after #2 already rendered.
+    resolveSlowDashboard();
+    await flush();
+
+    const values = Array.from(c.querySelectorAll('.admin-stat__value')).map((el) => el.textContent);
+    expect(values).toContain('999'); // render #2's data
+    expect(values).not.toContain('100'); // render #1's stale data must not land
+  });
+
   it('filter bar defaults to 30 days / all tools and refetches on range change', async () => {
     const requestedUrls = [];
     const dom = load((url) => {
