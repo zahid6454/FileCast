@@ -1,10 +1,21 @@
-// Dashboard tab (#dashboard, default) — Phase 4 §8.1.
+// Dashboard tab (#dashboard, default) — Phase 4 §8.1, filter bar + analytics
+// per ADMIN-DASHBOARD-ANALYTICS-PLAN.md §7.
 //
-// Loads its widgets in parallel with Promise.allSettled so one slow/failed call
-// degrades to its own error card instead of blanking the tab (R12). Charts are
-// inline SVG built via dom.svg() — no library, every label a text node (R10).
-// The recent-errors feed is the P23 hot spot: error_message comes from the
-// public POST /errors, so it is rendered with textContent only (never markup).
+// Two independent fetch batches:
+//  - Stat cards, Ratings, Recent errors — unfiltered, all-time, loaded once
+//    via Promise.allSettled (unchanged from before this plan, §6.3).
+//  - The filtered section (Conversions, Top tools, New signups, Errors) —
+//    owns the range/tool filter bar and refetches/rerenders only itself on
+//    change, following errors.js's existing scoped-re-render pattern
+//    (module-level FILTER_SEQ discards a response superseded by a newer
+//    filter change — the same race errors.js's REQUEST_SEQ guards, §9.3).
+//
+// Charts are inline SVG built via dom.svg() — no library, every label a text
+// node (R10). The recent-errors feed is the P23 hot spot: error_message comes
+// from the public POST /errors, so it is rendered with textContent only
+// (never markup). The new Errors-summary card only ever renders counts
+// against a fixed vocabulary (error_type/tool_id) — no free text reaches the
+// DOM there, so P23 doesn't apply to it.
 (function () {
   'use strict';
   var ADMIN = (window.ADMIN = window.ADMIN || {});
@@ -13,6 +24,29 @@
   var api = ADMIN.api;
   var h = dom.h;
   var svg = dom.svg;
+
+  var RANGES = [
+    { value: '7', label: '7 days', days: 7, groupBy: 'day' },
+    { value: '30', label: '30 days', days: 30, groupBy: 'day' },
+    { value: '90', label: '90 days', days: 90, groupBy: 'day' },
+    { value: '365', label: '12 months', days: 365, groupBy: 'month' }
+  ];
+
+  // Filter-bar selection + the scoped re-render state for the filtered
+  // section. Module-level (like errors.js's LIMIT/PAGE/REQUEST_SEQ) — a
+  // fresh render() rebuilds FILTER_HOSTS, and loadFilteredSection() always
+  // reads them live rather than via a captured reference.
+  var FILTER_RANGE = '30';
+  var FILTER_TOOL = '';
+  var FILTER_SEQ = 0;
+  var FILTER_HOSTS = null;
+
+  function rangeConfig() {
+    for (var i = 0; i < RANGES.length; i++) {
+      if (RANGES[i].value === FILTER_RANGE) return RANGES[i];
+    }
+    return RANGES[1];
+  }
 
   function labelFor(toolId) {
     if (ADMIN.catalog && typeof ADMIN.catalog.label === 'function') {
@@ -61,8 +95,13 @@
 
   // --- charts (inline SVG) ------------------------------------------------
 
-  // Conversions-over-time line chart. `series` = [{date,count,failures}].
-  function lineChart(series) {
+  // Generic over-time line chart. `series` = [{date,count,failures?}].
+  // `unit`/`ariaLabel` let New signups (§7.2) reuse this instead of a second
+  // chart implementation — defaults keep the Conversions chart's exact
+  // existing wording.
+  function lineChart(series, unit, ariaLabel) {
+    unit = unit || 'conversion';
+    ariaLabel = ariaLabel || 'Conversions over time';
     var W = 640,
       H = 220,
       padL = 44,
@@ -84,7 +123,7 @@
         viewBox: '0 0 ' + W + ' ' + H,
         preserveAspectRatio: 'xMidYMid meet',
         role: 'img',
-        'aria-label': 'Conversions over time'
+        'aria-label': ariaLabel
       },
       [
         // baseline + left axis
@@ -196,7 +235,8 @@
         p.date +
         ': ' +
         p.count +
-        (p.count === 1 ? ' conversion' : ' conversions') +
+        ' ' +
+        (p.count === 1 ? unit : unit + 's') +
         (p.failures ? ', ' + p.failures + (p.failures === 1 ? ' failure' : ' failures') : '');
       var hit = svg('circle', {
         class: 'admin-chart__hit',
@@ -291,6 +331,205 @@
       );
     });
     return frame;
+  }
+
+  // Errors type/by-tool breakdown (§7.3). Both splits are counts against a
+  // fixed vocabulary (error_type/tool_id) — no free text rendered here, so
+  // this is outside the P23 hot spot the recent-errors feed sits in.
+  function errorsSummaryWidget(data, days) {
+    var byType = (data && data.by_type) || [];
+    var byTool = (data && data.by_tool) || [];
+    var body = [];
+    if (byType.length === 0 && byTool.length === 0) {
+      body.push(placeholder('No errors in this range 🎉'));
+    } else {
+      var counts = {};
+      byType.forEach(function (t) {
+        counts[t.error_type] = t.count;
+      });
+      body.push(
+        h('div', { class: 'admin-errsummary__types' }, [
+          h('div', { class: 'admin-errsummary__type' }, [
+            h('span', { class: 'admin-errsummary__type-label' }, 'Validation'),
+            h(
+              'span',
+              { class: 'admin-errsummary__type-value' },
+              String(counts.validation_error || 0)
+            )
+          ]),
+          h('div', { class: 'admin-errsummary__type' }, [
+            h('span', { class: 'admin-errsummary__type-label' }, 'Conversion'),
+            h(
+              'span',
+              { class: 'admin-errsummary__type-value' },
+              String(counts.conversion_error || 0)
+            )
+          ])
+        ])
+      );
+      if (byTool.length > 0) {
+        body.push(
+          h(
+            'ul',
+            { class: 'admin-errsummary__tools' },
+            byTool.map(function (t) {
+              return h('li', [
+                h('span', labelFor(t.tool_id)),
+                h('span', { class: 'admin-errsummary__tool-count' }, String(t.count))
+              ]);
+            })
+          )
+        );
+      }
+    }
+    // Error rows are purged after retention_days (§2.4) — a wider selected
+    // range would otherwise look silently sparse next to a full-width
+    // Conversions trend for the same nominal window with no explanation.
+    if (data && data.retention_days && days > data.retention_days) {
+      body.push(
+        h(
+          'p',
+          { class: 'admin-card__note' },
+          'Errors are retained for ' + data.retention_days + ' days — showing all available data.'
+        )
+      );
+    }
+    return h('div', { class: 'admin-errsummary' }, body);
+  }
+
+  // --- filter bar + filtered section (§7.1/§7.2/§7.3/§7.5) -----------------
+
+  function buildFilterBar(onChange) {
+    var rangeSelect = h(
+      'select',
+      { class: 'admin-input', 'aria-label': 'Date range' },
+      RANGES.map(function (r) {
+        return h('option', { value: r.value }, r.label);
+      })
+    );
+    rangeSelect.value = FILTER_RANGE;
+
+    var toolSelect = h('select', { class: 'admin-input', 'aria-label': 'Tool' }, [
+      h('option', { value: '' }, 'All tools')
+    ]);
+    var tools = (ADMIN.catalog && ADMIN.catalog.list) || [];
+    tools.forEach(function (t) {
+      toolSelect.appendChild(h('option', { value: t.id }, labelFor(t.id)));
+    });
+    toolSelect.value = FILTER_TOOL;
+
+    rangeSelect.addEventListener('change', function () {
+      FILTER_RANGE = rangeSelect.value;
+      onChange();
+    });
+    toolSelect.addEventListener('change', function () {
+      FILTER_TOOL = toolSelect.value;
+      onChange();
+    });
+
+    return h('div', { class: 'admin-filterbar' }, [
+      h('label', { class: 'admin-field' }, [
+        h('span', { class: 'admin-field__label' }, 'Range'),
+        rangeSelect
+      ]),
+      h('label', { class: 'admin-field' }, [
+        h('span', { class: 'admin-field__label' }, 'Tool'),
+        toolSelect
+      ]),
+      h(
+        'p',
+        { class: 'admin-card__note' },
+        'Applies to Conversions and Errors — Top tools ranks across every tool regardless of the tool selected, and New signups has no tool dimension.'
+      )
+    ]);
+  }
+
+  // Rebuilds one filtered widget's host in place. `fetchResult` is one
+  // Promise.allSettled entry; `bodyFn` turns its resolved value into the
+  // widget body. Mirrors the unfiltered widgets' errorCard() retry pattern.
+  function renderFilteredWidget(host, title, fetchResult, bodyFn) {
+    dom.clear(host);
+    if (fetchResult.status === 'fulfilled') {
+      host.appendChild(sectionCard(title, bodyFn(fetchResult.value)));
+    } else {
+      var retry = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, 'Retry');
+      retry.addEventListener('click', loadFilteredSection);
+      host.appendChild(
+        sectionCard(
+          title,
+          h('div', { class: 'admin-error-state' }, [h('p', "Couldn't load this section."), retry])
+        )
+      );
+    }
+  }
+
+  // Fetches the 4 filter-scoped widgets and rerenders just their hosts —
+  // follows errors.js's loadErrors()/REQUEST_SEQ pattern (§9.3): a fast
+  // second filter change must not let a slower first response land after it
+  // and clobber newer state, so a response is applied only if it's still
+  // current.
+  function loadFilteredSection() {
+    var seq = ++FILTER_SEQ;
+    var hosts = FILTER_HOSTS;
+    if (!hosts) return;
+    var cfg = rangeConfig();
+    var toolQuery = FILTER_TOOL ? '&tool_id=' + encodeURIComponent(FILTER_TOOL) : '';
+
+    Promise.allSettled([
+      api.get(
+        '/api/v1/stats/conversions?days=' + cfg.days + '&group_by=' + cfg.groupBy + toolQuery
+      ),
+      api.get('/api/v1/stats/top-tools?days=' + cfg.days),
+      api.get('/api/v1/stats/signups?days=' + cfg.days),
+      api.get('/api/v1/stats/errors/summary?days=' + cfg.days + toolQuery)
+    ]).then(function (results) {
+      if (seq !== FILTER_SEQ) return; // superseded by a newer filter change
+      for (var i = 0; i < results.length; i++) {
+        var reason = results[i].reason;
+        if (reason && reason.isAuthError) {
+          ADMIN.onAuthError(reason);
+          return;
+        }
+      }
+      renderFilteredWidget(
+        hosts.conversions,
+        'Conversions (' + cfg.label + ')',
+        results[0],
+        function (v) {
+          return lineChart((v && v.series) || []);
+        }
+      );
+      renderFilteredWidget(hosts.topTools, 'Top tools', results[1], function (v) {
+        return barChart((v && v.top_tools) || []);
+      });
+      renderFilteredWidget(hosts.signups, 'New signups', results[2], function (v) {
+        return lineChart(v || [], 'signup', 'New signups over time');
+      });
+      renderFilteredWidget(hosts.errors, 'Errors', results[3], function (v) {
+        return errorsSummaryWidget(v, cfg.days);
+      });
+    });
+  }
+
+  function buildFilterSection() {
+    var conversionsHost = h('div');
+    var topToolsHost = h('div');
+    var signupsHost = h('div');
+    var errorsHost = h('div');
+    FILTER_HOSTS = {
+      conversions: conversionsHost,
+      topTools: topToolsHost,
+      signups: signupsHost,
+      errors: errorsHost
+    };
+    var bar = buildFilterBar(loadFilteredSection);
+    return h('div', { class: 'admin-filtered-section' }, [
+      bar,
+      conversionsHost,
+      topToolsHost,
+      signupsHost,
+      errorsHost
+    ]);
   }
 
   // --- widgets ------------------------------------------------------------
@@ -398,10 +637,12 @@
   function render(container) {
     dom.clear(container);
     container.appendChild(h('div', { class: 'admin-loading' }, 'Loading dashboard…'));
+    FILTER_RANGE = '30';
+    FILTER_TOOL = '';
+    FILTER_HOSTS = null;
 
     Promise.allSettled([
       api.get('/api/v1/stats/dashboard'),
-      api.get('/api/v1/stats/conversions?days=30'),
       api.get('/api/v1/stats/errors?limit=10'),
       api.get('/api/v1/ratings')
     ]).then(function (results) {
@@ -416,7 +657,7 @@
       dom.clear(container);
       var grid = h('div', { class: 'admin-dashboard' });
 
-      // Stat cards
+      // Stat cards — all-time, not scoped by the filter bar below (§6.3).
       if (results[0].status === 'fulfilled') {
         grid.appendChild(statsWidget(results[0].value));
       } else {
@@ -427,26 +668,13 @@
         );
       }
 
-      // Conversions line chart
-      if (results[1].status === 'fulfilled') {
-        var series = (results[1].value && results[1].value.series) || [];
-        grid.appendChild(sectionCard('Conversions (30 days)', lineChart(series)));
-      } else {
-        grid.appendChild(
-          errorCard('Conversions (30 days)', function () {
-            render(container);
-          })
-        );
-      }
+      // Filtered section: Conversions, Top tools, New signups, Errors —
+      // fetched separately below, once its hosts exist in the DOM.
+      grid.appendChild(buildFilterSection());
 
-      // Top-tools bar chart (from the dashboard payload)
-      if (results[0].status === 'fulfilled') {
-        grid.appendChild(sectionCard('Top tools', barChart(results[0].value.top_tools || [])));
-      }
-
-      // Ratings summary (one bulk call)
-      if (results[3].status === 'fulfilled') {
-        grid.appendChild(sectionCard('Ratings', ratingsWidget(results[3].value)));
+      // Ratings summary (one bulk call) — all-time, unchanged (§6.2/§9.5).
+      if (results[2].status === 'fulfilled') {
+        grid.appendChild(sectionCard('Ratings', ratingsWidget(results[2].value)));
       } else {
         grid.appendChild(
           errorCard('Ratings', function () {
@@ -455,9 +683,10 @@
         );
       }
 
-      // Recent errors feed (P23 hot spot)
-      if (results[2].status === 'fulfilled') {
-        var errs = (results[2].value && results[2].value.errors) || [];
+      // Recent errors feed (P23 hot spot) — unfiltered "what just broke",
+      // distinct from the filtered Errors card above (§3 item 6).
+      if (results[1].status === 'fulfilled') {
+        var errs = (results[1].value && results[1].value.errors) || [];
         var viewAllErrors =
           errs.length > 0
             ? h('a', { class: 'admin-card__action', href: '#errors' }, 'View all →')
@@ -472,6 +701,7 @@
       }
 
       container.appendChild(grid);
+      loadFilteredSection();
     });
   }
 

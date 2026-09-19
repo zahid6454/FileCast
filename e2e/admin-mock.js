@@ -109,11 +109,27 @@ export function makeState(overrides = {}) {
       total_users: 2,
       total_ratings: 5,
       yes_ratings: 4,
-      total_unique_visitors: 55,
-      top_tools: [
-        { tool_id: 'img-a', count: 80, visitors: 35 },
-        { tool_id: 'doc-a', count: 40, visitors: 20 }
-      ]
+      total_unique_visitors: 55
+    },
+    topTools: overrides.topTools || [
+      { tool_id: 'img-a', count: 80, visitors: 35 },
+      { tool_id: 'doc-a', count: 40, visitors: 20 }
+    ],
+    signups: overrides.signups || [
+      { date: '2026-07-10', count: 1 },
+      { date: '2026-07-11', count: 0 },
+      { date: '2026-07-12', count: 1 }
+    ],
+    errorsSummary: overrides.errorsSummary || {
+      by_type: [
+        { error_type: 'validation_error', count: 1 },
+        { error_type: 'conversion_error', count: 1 }
+      ],
+      by_tool: [
+        { tool_id: 'img-a', count: 1 },
+        { tool_id: 'doc-a', count: 1 }
+      ],
+      retention_days: 30
     },
     series: overrides.series || [
       { date: '2026-07-10', count: 10, failures: 1 },
@@ -280,6 +296,9 @@ export async function installApi(page, state) {
     // --- stats ---
     if (path.endsWith('/stats/dashboard')) return json(state.dashboard);
     if (path.endsWith('/stats/conversions')) return json({ days: 30, series: state.series });
+    if (path.endsWith('/stats/top-tools')) return json({ days: 30, top_tools: state.topTools });
+    if (path.endsWith('/stats/signups')) return json(state.signups);
+    if (path.endsWith('/stats/errors/summary')) return json(state.errorsSummary);
     if (path.endsWith('/stats/errors')) {
       const params = new URL(req.url()).searchParams;
       const limit = Number(params.get('limit')) || 25;

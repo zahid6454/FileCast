@@ -79,6 +79,8 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    __table_args__ = (Index("ix_users_created_at", "created_at"),)
+
 
 class StaffGrant(Base):
     """Pending-invite + audit record for admin access (Phase 5.5).

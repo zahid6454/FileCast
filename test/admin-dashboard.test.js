@@ -20,8 +20,7 @@ const DASHBOARD_STATS = {
   total_users: 5,
   total_ratings: 20,
   yes_ratings: 15,
-  total_unique_visitors: 55,
-  top_tools: [{ tool_id: 'jpg-to-png', count: 42, visitors: 30 }]
+  total_unique_visitors: 55
 };
 
 function load(routeFor) {
@@ -33,11 +32,21 @@ function load(routeFor) {
   evalScript(dom, 'admin/dashboard.js');
   const ADMIN = dom.window.ADMIN;
   ADMIN.onAuthError = vi.fn();
+  ADMIN.catalog = { list: [{ id: 'jpg-to-png', name: 'JPG to PNG' }], label: (id) => id };
   return dom;
 }
 
+// NOTE: '/stats/errors/summary' must be checked before the bare '/stats/errors'
+// substring match below (the latter is also a substring of the former).
 function defaultRoutes(url) {
   if (url.includes('/stats/dashboard')) return makeResponse(200, DASHBOARD_STATS);
+  if (url.includes('/stats/top-tools')) {
+    return makeResponse(200, { top_tools: [{ tool_id: 'jpg-to-png', count: 42, visitors: 30 }] });
+  }
+  if (url.includes('/stats/signups')) return makeResponse(200, []);
+  if (url.includes('/stats/errors/summary')) {
+    return makeResponse(200, { by_type: [], by_tool: [], retention_days: 30 });
+  }
   if (url.includes('/stats/conversions')) return makeResponse(200, { series: [] });
   if (url.includes('/stats/errors')) return makeResponse(200, { errors: [] });
   if (url.includes('/ratings')) return makeResponse(200, []);
@@ -167,5 +176,114 @@ describe('admin/dashboard.js', () => {
     expect(dom.window.ADMIN.onAuthError).toHaveBeenCalled();
     // Must not also render the degraded dashboard behind the gate.
     expect(c.querySelectorAll('.admin-stat__value')).toHaveLength(0);
+  });
+
+  it('filter bar defaults to 30 days / all tools and refetches on range change', async () => {
+    const requestedUrls = [];
+    const dom = load((url) => {
+      requestedUrls.push(url);
+      return defaultRoutes(url);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.dashboard.render(c);
+    await flush();
+
+    const rangeSelect = c.querySelector('.admin-filterbar select[aria-label="Date range"]');
+    expect(rangeSelect.value).toBe('30');
+    expect(requestedUrls.some((u) => u.includes('/stats/conversions?days=30&group_by=day'))).toBe(
+      true
+    );
+
+    requestedUrls.length = 0;
+    rangeSelect.value = '365';
+    rangeSelect.dispatchEvent(new dom.window.Event('change'));
+    await flush();
+
+    expect(
+      requestedUrls.some((u) => u.includes('/stats/conversions?days=365&group_by=month'))
+    ).toBe(true);
+    expect(requestedUrls.some((u) => u.includes('/stats/top-tools?days=365'))).toBe(true);
+    expect(requestedUrls.some((u) => u.includes('/stats/signups?days=365'))).toBe(true);
+  });
+
+  it('tool filter adds tool_id to Conversions and Errors, but not Top tools/New signups', async () => {
+    const requestedUrls = [];
+    const dom = load((url) => {
+      requestedUrls.push(url);
+      return defaultRoutes(url);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.dashboard.render(c);
+    await flush();
+
+    requestedUrls.length = 0;
+    const toolSelect = c.querySelector('.admin-filterbar select[aria-label="Tool"]');
+    toolSelect.value = 'jpg-to-png';
+    toolSelect.dispatchEvent(new dom.window.Event('change'));
+    await flush();
+
+    expect(
+      requestedUrls.some(
+        (u) => u.includes('/stats/conversions') && u.includes('tool_id=jpg-to-png')
+      )
+    ).toBe(true);
+    expect(
+      requestedUrls.some(
+        (u) => u.includes('/stats/errors/summary') && u.includes('tool_id=jpg-to-png')
+      )
+    ).toBe(true);
+    expect(requestedUrls.some((u) => u.includes('/stats/top-tools') && u.includes('tool_id'))).toBe(
+      false
+    );
+    expect(requestedUrls.some((u) => u.includes('/stats/signups') && u.includes('tool_id'))).toBe(
+      false
+    );
+  });
+
+  it('errors summary shows the validation/conversion split and a retention caption past the window', async () => {
+    const dom = load((url) => {
+      if (url.includes('/stats/errors/summary')) {
+        return makeResponse(200, {
+          by_type: [
+            { error_type: 'validation_error', count: 3 },
+            { error_type: 'conversion_error', count: 7 }
+          ],
+          by_tool: [{ tool_id: 'jpg-to-png', count: 5 }],
+          retention_days: 30
+        });
+      }
+      return defaultRoutes(url);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.dashboard.render(c);
+    await flush();
+
+    const summary = c.querySelector('.admin-errsummary');
+    expect(summary.textContent).toContain('3');
+    expect(summary.textContent).toContain('7');
+    expect(summary.textContent).not.toContain('retained'); // 30-day range == 30-day retention, no caption
+
+    const rangeSelect = c.querySelector('.admin-filterbar select[aria-label="Date range"]');
+    rangeSelect.value = '90';
+    rangeSelect.dispatchEvent(new dom.window.Event('change'));
+    await flush();
+
+    expect(c.querySelector('.admin-errsummary').textContent).toContain('retained for 30 days');
+  });
+
+  it('top-tools/new-signups fetch failures degrade independently without blanking Conversions', async () => {
+    const dom = load((url) => {
+      if (url.includes('/stats/top-tools')) return makeResponse(500, {});
+      return defaultRoutes(url);
+    });
+    const c = dom.window.document.getElementById('c');
+    dom.window.ADMIN.tabs.dashboard.render(c);
+    await flush();
+
+    expect(c.querySelector('.admin-filtered-section').textContent).toContain(
+      "Couldn't load this section."
+    );
+    // Conversions (fed by a different call) still rendered its own chart.
+    expect(c.querySelector('.admin-filtered-section svg.admin-chart')).not.toBeNull();
   });
 });

@@ -148,6 +148,16 @@ test.describe('dashboard', () => {
     await expect(page.locator('.admin-ratings tbody tr')).toHaveCount(2);
     // The bulk endpoint was hit exactly once (not one-per-tool).
     expect(state.ratingsCalls).toBe(1);
+
+    // Filter bar + the 4 new/widened filtered widgets (§7).
+    await expect(page.locator('.admin-filterbar select[aria-label="Date range"]')).toHaveValue(
+      '30'
+    );
+    await expect(page.locator('.admin-errsummary').first()).toBeVisible();
+
+    // Switching the range refetches the filtered section only.
+    await page.locator('.admin-filterbar select[aria-label="Date range"]').selectOption('90');
+    await expect(page.getByText('Conversions (90 days)')).toBeVisible();
   });
 
   test('P23: attacker-controlled error_message renders inert (no XSS)', async ({ page }) => {
@@ -666,9 +676,11 @@ test('fresh/empty DB renders placeholders with no throw (§8.5)', async ({ page 
       total_users: 2,
       total_ratings: 0,
       yes_ratings: 0,
-      total_unique_visitors: 0,
-      top_tools: []
+      total_unique_visitors: 0
     },
+    topTools: [],
+    signups: [],
+    errorsSummary: { by_type: [], by_tool: [], retention_days: 30 },
     series: [],
     errors: [],
     ratings: [],
@@ -681,6 +693,7 @@ test('fresh/empty DB renders placeholders with no throw (§8.5)', async ({ page 
   await expect(page.getByText('No data yet').first()).toBeVisible(); // chart placeholders
   await expect(page.getByText('No ratings yet')).toBeVisible();
   await expect(page.getByText('No errors')).toBeVisible();
+  await expect(page.getByText('No errors in this range')).toBeVisible();
 
   await page.goto('/admin/#announcements');
   await expect(page.getByText('No announcements yet')).toBeVisible();

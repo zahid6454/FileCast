@@ -596,6 +596,69 @@
 .admin-stat--warning .admin-stat__value { color: var(--color-warning); }
 .admin-stat--info .admin-stat__value { color: var(--color-info); }
 
+/* Filter bar (§7.5) — sits above the filtered dashboard section (Conversions,
+   Top tools, New signups, Errors). Reuses .admin-input for the two
+   <select>s and .admin-field/.admin-field__label from the forms section, so
+   this only adds layout. */
+.admin-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.admin-filterbar .admin-field {
+  width: auto;
+  min-width: 160px;
+}
+.admin-filterbar .admin-card__note {
+  margin: 0 0 var(--space-2);
+  flex-basis: 100%;
+}
+
+/* Errors summary card (§7.3) — type split + by-tool breakdown, counts only. */
+.admin-errsummary__types {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.admin-errsummary__type {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.admin-errsummary__type-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+.admin-errsummary__type-value {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+.admin-errsummary__tools {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.admin-errsummary__tools li {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+.admin-errsummary__tools li:last-child {
+  border-bottom: none;
+}
+.admin-errsummary__tool-count {
+  color: var(--color-text-secondary);
+}
+
 /* charts */
 .admin-chart-wrap {
   position: relative;

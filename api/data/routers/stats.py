@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from data.config import settings
 from data.db import get_session
 from data.models import Conversion, Error, Rating, User
 from data.security import require_admin
@@ -35,20 +36,6 @@ async def dashboard(
         await db.execute(select(func.coalesce(func.sum(Conversion.unique_visitors), 0)))
     ).scalar_one()
 
-    # Top tools by all-time count.
-    top_tools = (
-        await db.execute(
-            select(
-                Conversion.tool_id,
-                func.sum(Conversion.count).label("n"),
-                func.sum(Conversion.unique_visitors).label("visitors"),
-            )
-            .group_by(Conversion.tool_id)
-            .order_by(func.sum(Conversion.count).desc())
-            .limit(10)
-        )
-    ).all()
-
     return {
         "total_conversions": int(total_conversions),
         "total_failures": int(total_failures),
@@ -56,9 +43,6 @@ async def dashboard(
         "total_ratings": int(total_ratings),
         "yes_ratings": int(yes_ratings),
         "total_unique_visitors": int(total_unique_visitors),
-        "top_tools": [
-            {"tool_id": t, "count": int(n), "visitors": int(v)} for t, n, v in top_tools
-        ],
     }
 
 
@@ -89,29 +73,140 @@ async def all_tool_conversions(
 @router.get("/conversions")
 async def conversions_series(
     days: int = 30,
+    tool_id: str | None = None,
+    group_by: str = "day",
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
     days = max(1, min(days, 365))
     since = (datetime.now(UTC) - timedelta(days=days)).date()
+    # to_char formats straight to the plain YYYY-MM/YYYY-MM-DD string the
+    # frontend wants, so there's no midnight-timestamp round-trip to re-parse
+    # (a raw date_trunc('month', ...) on a Date column implicit-casts to a
+    # timestamp, which isn't what the chart wants either).
+    bucket = func.to_char(
+        Conversion.date, "YYYY-MM" if group_by == "month" else "YYYY-MM-DD"
+    ).label("bucket")
+    query = (
+        select(
+            bucket,
+            func.sum(Conversion.count).label("count"),
+            func.sum(Conversion.failures).label("failures"),
+        )
+        .where(Conversion.date >= since)
+        .group_by(bucket)
+        .order_by(bucket)
+    )
+    if tool_id:
+        query = query.where(Conversion.tool_id == tool_id)
+    rows = (await db.execute(query)).all()
+    return {
+        "days": days,
+        "series": [
+            {"date": b, "count": int(c), "failures": int(f)} for b, c, f in rows
+        ],
+    }
+
+
+@router.get("/top-tools")
+async def top_tools(
+    days: int = 30,
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Top tools ranked within the selected window — replaces the old
+    all-time top_tools field on GET /dashboard (§9.1). Deliberately not
+    tool-filtered: it's a cross-tool ranking regardless of the filter bar's
+    tool select (§3's caption)."""
+    days = max(1, min(days, 365))
+    since = (datetime.now(UTC) - timedelta(days=days)).date()
     rows = (
         await db.execute(
             select(
-                Conversion.date,
-                func.sum(Conversion.count).label("count"),
-                func.sum(Conversion.failures).label("failures"),
+                Conversion.tool_id,
+                func.sum(Conversion.count).label("n"),
+                func.sum(Conversion.unique_visitors).label("visitors"),
             )
             .where(Conversion.date >= since)
-            .group_by(Conversion.date)
-            .order_by(Conversion.date)
+            .group_by(Conversion.tool_id)
+            .order_by(func.sum(Conversion.count).desc())
+            .limit(10)
         )
     ).all()
     return {
         "days": days,
-        "series": [
-            {"date": d.isoformat(), "count": int(c), "failures": int(f)}
-            for d, c, f in rows
+        "top_tools": [
+            {"tool_id": t, "count": int(n), "visitors": int(v)} for t, n, v in rows
         ],
+    }
+
+
+@router.get("/signups")
+async def signups_series(
+    days: int = 30,
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Daily new-signup counts from User.created_at — never purged, so this
+    (unlike the Errors card) can honestly support the full 7d-12mo range."""
+    days = max(1, min(days, 365))
+    since = datetime.now(UTC) - timedelta(days=days)
+    bucket = func.to_char(User.created_at, "YYYY-MM-DD").label("bucket")
+    rows = (
+        await db.execute(
+            select(bucket, func.count().label("n"))
+            .where(User.created_at >= since)
+            .group_by(bucket)
+            .order_by(bucket)
+        )
+    ).all()
+    return [{"date": d, "count": int(n)} for d, n in rows]
+
+
+@router.get("/errors/summary")
+async def errors_summary(
+    days: int = 30,
+    tool_id: str | None = None,
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Type + by-tool breakdown of client-reported errors (§7.3). Both
+    splits render as counts against a fixed vocabulary only (error_type is
+    one of two literal values; tool_id is the known catalogue) — unlike the
+    raw /errors feed, no attacker-controlled free text reaches this response,
+    so the P23 textContent-only rule doesn't come into play here.
+
+    retention_days is echoed back so the frontend can caption a selected
+    range that exceeds it, rather than the Errors card silently looking
+    sparse next to a full Conversions trend for the same nominal window
+    (§2.4/§7.3) — Error rows are purged after retention_days, unlike
+    Conversion/User rows.
+    """
+    days = max(1, min(days, 365))
+    since = datetime.now(UTC) - timedelta(days=days)
+
+    by_type_query = (
+        select(Error.error_type, func.count().label("n"))
+        .where(Error.created_at >= since)
+        .group_by(Error.error_type)
+    )
+    by_tool_query = (
+        select(Error.tool_id, func.count().label("n"))
+        .where(Error.created_at >= since)
+        .group_by(Error.tool_id)
+        .order_by(func.count().desc())
+        .limit(5)
+    )
+    if tool_id:
+        by_type_query = by_type_query.where(Error.tool_id == tool_id)
+        by_tool_query = by_tool_query.where(Error.tool_id == tool_id)
+
+    by_type = (await db.execute(by_type_query)).all()
+    by_tool = (await db.execute(by_tool_query)).all()
+    return {
+        "by_type": [{"error_type": t, "count": int(n)} for t, n in by_type],
+        "by_tool": [{"tool_id": t, "count": int(n)} for t, n in by_tool],
+        "retention_days": settings.retention_days,
     }
 
 
