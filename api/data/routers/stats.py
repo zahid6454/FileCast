@@ -170,11 +170,16 @@ async def errors_summary(
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
-    """Type + by-tool breakdown of client-reported errors (§7.3). Both
-    splits render as counts against a fixed vocabulary only (error_type is
-    one of two literal values; tool_id is the known catalogue) — unlike the
-    raw /errors feed, no attacker-controlled free text reaches this response,
-    so the P23 textContent-only rule doesn't come into play here.
+    """Type + by-tool breakdown of client-reported errors (§7.3). Neither
+    split renders free text — only counts against error_type/tool_id — so
+    the P23 textContent-only rule doesn't come into play here. But
+    error_type/tool_id are NOT a server-enforced enum: POST /api/v1/errors
+    (errors.py) is public, anonymous, and stores whatever string a caller
+    sends for either field — validation_error/conversion_error is only a
+    frontend convention. Both queries are therefore capped the same way, so
+    an API caller sending many distinct values can't inflate either array
+    unboundedly (bounded by rate limit + retention_days purge, but that's
+    still a lot of rows over a 90-365 day window).
 
     retention_days is echoed back so the frontend can caption a selected
     range that exceeds it, rather than the Errors card silently looking
@@ -189,6 +194,8 @@ async def errors_summary(
         select(Error.error_type, func.count().label("n"))
         .where(Error.created_at >= since)
         .group_by(Error.error_type)
+        .order_by(func.count().desc())
+        .limit(10)
     )
     by_tool_query = (
         select(Error.tool_id, func.count().label("n"))

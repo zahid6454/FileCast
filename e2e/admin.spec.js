@@ -692,7 +692,12 @@ test('fresh/empty DB renders placeholders with no throw (§8.5)', async ({ page 
   await expect(page.locator('.admin-stat')).toHaveCount(5); // zeros, not blank
   await expect(page.getByText('No data yet').first()).toBeVisible(); // chart placeholders
   await expect(page.getByText('No ratings yet')).toBeVisible();
-  await expect(page.getByText('No errors')).toBeVisible();
+  // Scoped: "No errors 🎉" (recent-errors feed) and "No errors in this
+  // range 🎉" (new Errors-summary card) both match a bare 'No errors'
+  // locator, which Playwright's strict mode refuses to resolve.
+  await expect(
+    page.locator('.admin-card', { hasText: 'Recent errors' }).getByText('No errors')
+  ).toBeVisible();
   await expect(page.getByText('No errors in this range')).toBeVisible();
 
   await page.goto('/admin/#announcements');

@@ -141,6 +141,16 @@ async def test_errors_summary_splits_by_type_and_tool(admin_client, db):
     assert by_tool == {"jpg-to-png": 2, "docx-to-pdf": 1}
 
 
+async def test_errors_summary_by_type_is_capped(admin_client, db):
+    # error_type is not a server-enforced enum — POST /api/v1/errors is
+    # public/anonymous and stores whatever string is sent. A caller sending
+    # many distinct values must not inflate by_type unboundedly.
+    db.add_all([Error(tool_id="t", error_type=f"garbage-{i}") for i in range(15)])
+    await db.commit()
+    body = (await admin_client.get("/api/v1/stats/errors/summary")).json()
+    assert len(body["by_type"]) <= 10
+
+
 async def test_errors_summary_filters_by_tool_id(admin_client, db):
     db.add_all(
         [

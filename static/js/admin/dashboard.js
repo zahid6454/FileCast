@@ -13,9 +13,14 @@
 // Charts are inline SVG built via dom.svg() — no library, every label a text
 // node (R10). The recent-errors feed is the P23 hot spot: error_message comes
 // from the public POST /errors, so it is rendered with textContent only
-// (never markup). The new Errors-summary card only ever renders counts
-// against a fixed vocabulary (error_type/tool_id) — no free text reaches the
-// DOM there, so P23 doesn't apply to it.
+// (never markup). The new Errors-summary card never renders error_type raw
+// (only two hardcoded Validation/Conversion labels) and never renders
+// error_message at all, but its by-tool rows DO run attacker-influenceable
+// tool_id values through labelFor() — safe via h()'s textContent-only rule,
+// but not free of attacker-influenceable data the way an earlier draft of
+// this comment claimed. Both splits are also capped server-side
+// (stats.py's errors_summary()) so a caller sending many distinct
+// error_type/tool_id values can't inflate either array unboundedly.
 (function () {
   'use strict';
   var ADMIN = (window.ADMIN = window.ADMIN || {});
@@ -339,9 +344,14 @@
     return frame;
   }
 
-  // Errors type/by-tool breakdown (§7.3). Both splits are counts against a
-  // fixed vocabulary (error_type/tool_id) — no free text rendered here, so
-  // this is outside the P23 hot spot the recent-errors feed sits in.
+  // Errors type/by-tool breakdown (§7.3). error_type is never rendered raw —
+  // only the two hardcoded Validation/Conversion labels below — but by-tool
+  // rows go through labelFor(), same as the recent-errors feed: an attacker
+  // can POST /api/v1/errors with a tool_id that isn't in the catalog, and its
+  // raw string reaches the DOM as that row's label. Still P23-safe (h() is
+  // textContent-only, so no markup injection either way), just not a widget
+  // free of attacker-influenceable data the way the header comment used to
+  // (incorrectly) claim.
   function errorsSummaryWidget(data, days) {
     var byType = (data && data.by_type) || [];
     var byTool = (data && data.by_tool) || [];
