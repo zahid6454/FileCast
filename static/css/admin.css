@@ -596,15 +596,16 @@
 .admin-stat--warning .admin-stat__value { color: var(--color-warning); }
 .admin-stat--info .admin-stat__value { color: var(--color-info); }
 
-/* Inline per-card filter row (Conversions/Errors, §7.5 — a global filter bar
-   was tried first and cut once real data showed Range/Tool applying to a
-   confusing, inconsistent subset of cards). Reuses the public site's
-   .tool-options__row/__label/__input classes (style.css, linked by
-   admin.html for tokens/resets) for the same uppercase label + custom
-   chevron as e.g. PDF Page Numbers' Position/Format fields, but WITHOUT the
-   outer .tool-options panel (background/border) — this row already lives
-   inside an .admin-card, so a second boxed panel nested in it would double
-   up the border. */
+/* Inline per-card filter row (Conversions/Top tools/New signups/Errors,
+   §7.5 — a global filter bar was tried first and cut once real data showed
+   Range/Tool applying to a confusing, inconsistent subset of cards; Tool
+   was then dropped outright as unused, leaving just Range). Reuses the
+   public site's .tool-options__row/__label/__input classes (style.css,
+   linked by admin.html for tokens/resets) for the same uppercase label +
+   custom chevron as e.g. PDF Page Numbers' Position/Format fields, but
+   WITHOUT the outer .tool-options panel (background/border) — this row
+   already lives inside an .admin-card, so a second boxed panel nested in
+   it would double up the border. */
 .admin-inline-filter {
   display: flex;
   flex-wrap: wrap;
