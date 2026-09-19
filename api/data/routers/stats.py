@@ -73,7 +73,6 @@ async def all_tool_conversions(
 @router.get("/conversions")
 async def conversions_series(
     days: int = 30,
-    tool_id: str | None = None,
     group_by: str = "day",
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
@@ -87,19 +86,18 @@ async def conversions_series(
     bucket = func.to_char(
         Conversion.date, "YYYY-MM" if group_by == "month" else "YYYY-MM-DD"
     ).label("bucket")
-    query = (
-        select(
-            bucket,
-            func.sum(Conversion.count).label("count"),
-            func.sum(Conversion.failures).label("failures"),
+    rows = (
+        await db.execute(
+            select(
+                bucket,
+                func.sum(Conversion.count).label("count"),
+                func.sum(Conversion.failures).label("failures"),
+            )
+            .where(Conversion.date >= since)
+            .group_by(bucket)
+            .order_by(bucket)
         )
-        .where(Conversion.date >= since)
-        .group_by(bucket)
-        .order_by(bucket)
-    )
-    if tool_id:
-        query = query.where(Conversion.tool_id == tool_id)
-    rows = (await db.execute(query)).all()
+    ).all()
     return {
         "days": days,
         "series": [
@@ -115,9 +113,9 @@ async def top_tools(
     db: AsyncSession = Depends(get_session),
 ):
     """Top tools ranked within the selected window — replaces the old
-    all-time top_tools field on GET /dashboard (§9.1). Deliberately not
-    tool-filtered: it's a cross-tool ranking regardless of the filter bar's
-    tool select (§3's caption)."""
+    all-time top_tools field on GET /dashboard (§9.1). Not tool-filterable
+    by design: it's a cross-tool ranking, so scoping it to one tool would
+    just show that tool alone with nothing to rank against."""
     days = max(1, min(days, 365))
     since = (datetime.now(UTC) - timedelta(days=days)).date()
     rows = (
@@ -166,7 +164,6 @@ async def signups_series(
 @router.get("/errors/summary")
 async def errors_summary(
     days: int = 30,
-    tool_id: str | None = None,
     _admin=Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
@@ -204,9 +201,6 @@ async def errors_summary(
         .order_by(func.count().desc())
         .limit(5)
     )
-    if tool_id:
-        by_type_query = by_type_query.where(Error.tool_id == tool_id)
-        by_tool_query = by_tool_query.where(Error.tool_id == tool_id)
 
     by_type = (await db.execute(by_type_query)).all()
     by_tool = (await db.execute(by_tool_query)).all()

@@ -4,18 +4,18 @@
 // Two independent fetch shapes:
 //  - Stat cards, Top tools, New signups, Ratings, Recent errors — unfiltered
 //    (Top tools/New signups use a fixed DEFAULT_DAYS window, no selector: a
-//    global filter bar was tried first, but Range only ever applied to all
-//    4 cards while Tool only applied to 2 of them, which read as broken
-//    rather than intentional once real data was on screen). All loaded once
-//    via Promise.allSettled.
-//  - Conversions and Errors each own an inline Range(+Tool) selector and
+//    global Range+Tool filter bar was tried first, but Range only ever
+//    applied to all 4 cards while Tool only applied to 2 of them, which read
+//    as broken rather than intentional once real data was on screen). All
+//    loaded once via Promise.allSettled.
+//  - Conversions and Errors each own an inline Range selector and
 //    independently fetch/re-render only themselves on change
 //    (scopedFilterCard()), following errors.js's existing scoped-re-render
 //    pattern — a per-instance sequence counter discards a response
 //    superseded by a newer change on that same card, the same race
-//    errors.js's REQUEST_SEQ guards (§9.3). The two cards' selectors are
-//    fully independent of each other (picking 90 days on Conversions has no
-//    effect on Errors) and of Top tools/New signups.
+//    errors.js's REQUEST_SEQ guards (§9.3). The two selectors are fully
+//    independent of each other and of Top tools/New signups. A per-tool
+//    filter sat alongside Range originally too — dropped as unused.
 //
 // Charts are inline SVG built via dom.svg() — no library, every label a text
 // node (R10). The recent-errors feed is the P23 hot spot: error_message comes
@@ -417,26 +417,24 @@
 
   // --- self-contained scoped card (Conversions, Errors) --------------------
 
-  // A card with its own inline Range(+Tool) selector that independently
-  // fetches and re-renders only itself on change — mirrors errors.js's
+  // A card with its own inline Range selector that independently fetches
+  // and re-renders only itself on change — mirrors errors.js's
   // loadErrors()/REQUEST_SEQ pattern (§9.3), scoped to one card instead of a
   // whole tab: a per-instance sequence counter discards a response
   // superseded by a newer change on THIS card.
   //
-  // The selector row is built once and never torn down on reload — only
-  // the title text and body are swapped — so a change never steals focus
+  // The selector is built once and never torn down on reload — only the
+  // title text and body are swapped — so a change never steals focus
   // mid-interaction (the same reasoning as errors.js's SHELL_BUILT guard
   // keeping its search input in place across a page fetch).
   //
-  // opts: {
-  //   includeTool: bool,
-  //   title(cfg) -> string,
-  //   buildUrl(cfg, toolId) -> string,
-  //   renderBody(data, cfg) -> Node
-  // }
+  // A per-tool filter used to sit next to this — dropped as unused (nobody
+  // was scoping the dashboard down to one tool in practice) rather than
+  // kept dormant on the chance it comes back later.
+  //
+  // opts: { title(cfg) -> string, buildUrl(cfg) -> string, renderBody(data, cfg) -> Node }
   function scopedFilterCard(opts) {
     var range = '30';
-    var tool = '';
     var seq = 0;
 
     var titleEl = h('h2', { class: 'admin-card__title' });
@@ -452,7 +450,7 @@
       var cfg = rangeConfigFor(range);
       titleEl.textContent = opts.title(cfg);
       setBody(h('div', { class: 'admin-loading' }, 'Loading…'));
-      api.get(opts.buildUrl(cfg, tool)).then(
+      api.get(opts.buildUrl(cfg)).then(
         function (data) {
           if (mySeq !== seq) return; // superseded by a newer change on this card
           setBody(opts.renderBody(data, cfg));
@@ -484,33 +482,12 @@
       range = rangeSelect.value;
       load();
     });
-    var filterChildren = [
+    var filterRow = h('div', { class: 'admin-inline-filter' }, [
       h('div', { class: 'tool-options__row tool-options__row--select' }, [
         h('label', { class: 'tool-options__label' }, 'Range'),
         rangeSelect
       ])
-    ];
-    if (opts.includeTool) {
-      var toolSelect = h('select', { class: 'tool-options__input', 'aria-label': 'Tool' }, [
-        h('option', { value: '' }, 'All tools')
-      ]);
-      var tools = (ADMIN.catalog && ADMIN.catalog.list) || [];
-      tools.forEach(function (t) {
-        toolSelect.appendChild(h('option', { value: t.id }, labelFor(t.id)));
-      });
-      toolSelect.value = tool;
-      toolSelect.addEventListener('change', function () {
-        tool = toolSelect.value;
-        load();
-      });
-      filterChildren.push(
-        h('div', { class: 'tool-options__row tool-options__row--select' }, [
-          h('label', { class: 'tool-options__label' }, 'Tool'),
-          toolSelect
-        ])
-      );
-    }
-    var filterRow = h('div', { class: 'admin-inline-filter' }, filterChildren);
+    ]);
 
     var card = h('section', { class: 'admin-card' }, [titleEl, filterRow, bodyHost]);
     load();
@@ -654,21 +631,14 @@
         );
       }
 
-      // Conversions — owns its own inline Range+Tool selector.
+      // Conversions — owns its own inline Range selector.
       grid.appendChild(
         scopedFilterCard({
-          includeTool: true,
           title: function (cfg) {
             return 'Conversions (' + cfg.label + ')';
           },
-          buildUrl: function (cfg, toolId) {
-            return (
-              '/api/v1/stats/conversions?days=' +
-              cfg.days +
-              '&group_by=' +
-              cfg.groupBy +
-              (toolId ? '&tool_id=' + encodeURIComponent(toolId) : '')
-            );
+          buildUrl: function (cfg) {
+            return '/api/v1/stats/conversions?days=' + cfg.days + '&group_by=' + cfg.groupBy;
           },
           renderBody: function (data) {
             return lineChart((data && data.series) || []);
@@ -721,22 +691,17 @@
         );
       }
 
-      // Errors — owns its own inline Range+Tool selector, grouped next to
-      // the unfiltered Recent errors feed below (§3 item 6 distinguishes
-      // them by purpose: analytical "what's breaking most" vs. operational
-      // "what just broke", but both are error-related, so they sit together).
+      // Errors — owns its own inline Range selector, grouped next to the
+      // unfiltered Recent errors feed below (§3 item 6 distinguishes them by
+      // purpose: analytical "what's breaking most" vs. operational "what
+      // just broke", but both are error-related, so they sit together).
       grid.appendChild(
         scopedFilterCard({
-          includeTool: true,
           title: function (cfg) {
             return 'Errors (' + cfg.label + ')';
           },
-          buildUrl: function (cfg, toolId) {
-            return (
-              '/api/v1/stats/errors/summary?days=' +
-              cfg.days +
-              (toolId ? '&tool_id=' + encodeURIComponent(toolId) : '')
-            );
+          buildUrl: function (cfg) {
+            return '/api/v1/stats/errors/summary?days=' + cfg.days;
           },
           renderBody: function (data, cfg) {
             return errorsSummaryWidget(data, cfg.days);

@@ -6,7 +6,7 @@ import { createDom, evalScript, flush } from './helpers.js';
 // failed call degrades to its own error card instead of blanking the whole
 // tab (R12), and any auth failure among them bubbles up to the global gate.
 // Conversions and Errors are separate, self-contained cards, each with its
-// own inline Range(+Tool) selector that fetches/re-renders independently.
+// own inline Range selector that fetches/re-renders independently.
 
 function cardByTitle(root, titleSubstring) {
   return Array.from(root.querySelectorAll('.admin-card')).find((el) => {
@@ -261,7 +261,7 @@ describe('admin/dashboard.js', () => {
     );
   });
 
-  it("Conversions' and Errors' Tool selects are independent of each other", async () => {
+  it('Conversions and Errors have no Tool select (dropped as unused) and never send tool_id', async () => {
     const requestedUrls = [];
     const dom = load((url) => {
       requestedUrls.push(url);
@@ -271,36 +271,9 @@ describe('admin/dashboard.js', () => {
     dom.window.ADMIN.tabs.dashboard.render(c);
     await flush();
 
-    requestedUrls.length = 0;
-    const conversionsTool = cardByTitle(c, 'Conversions').querySelector(
-      'select[aria-label="Tool"]'
-    );
-    conversionsTool.value = 'jpg-to-png';
-    conversionsTool.dispatchEvent(new dom.window.Event('change'));
-    await flush();
-
-    expect(
-      requestedUrls.some(
-        (u) => u.includes('/stats/conversions') && u.includes('tool_id=jpg-to-png')
-      )
-    ).toBe(true);
-    // Changing Conversions' Tool select must not touch Errors' own request.
-    expect(requestedUrls.some((u) => u.includes('/stats/errors/summary'))).toBe(false);
-    // Errors' own Tool select still defaults to "All tools", unaffected.
-    const errorsTool = cardByTitle(c, 'Errors').querySelector('select[aria-label="Tool"]');
-    expect(errorsTool.value).toBe('');
-
-    requestedUrls.length = 0;
-    errorsTool.value = 'jpg-to-png';
-    errorsTool.dispatchEvent(new dom.window.Event('change'));
-    await flush();
-
-    expect(
-      requestedUrls.some(
-        (u) => u.includes('/stats/errors/summary') && u.includes('tool_id=jpg-to-png')
-      )
-    ).toBe(true);
-    expect(requestedUrls.some((u) => u.includes('/stats/conversions'))).toBe(false);
+    expect(cardByTitle(c, 'Conversions').querySelector('select[aria-label="Tool"]')).toBeNull();
+    expect(cardByTitle(c, 'Errors').querySelector('select[aria-label="Tool"]')).toBeNull();
+    expect(requestedUrls.some((u) => u.includes('tool_id'))).toBe(false);
   });
 
   it('errors summary shows the validation/conversion split and a retention caption past the window', async () => {

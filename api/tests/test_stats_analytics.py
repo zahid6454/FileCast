@@ -1,7 +1,8 @@
-"""Integration — the filter-bar-driven admin dashboard endpoints added by
-ADMIN-DASHBOARD-ANALYTICS-PLAN.md §7: GET /stats/conversions's new
-tool_id/group_by params, GET /stats/top-tools, GET /stats/signups, and
-GET /stats/errors/summary."""
+"""Integration — the admin dashboard analytics endpoints added by
+ADMIN-DASHBOARD-ANALYTICS-PLAN.md §7: GET /stats/conversions's new group_by
+param, GET /stats/top-tools, GET /stats/signups, and GET /stats/errors/summary.
+(tool_id filtering was added then removed on both endpoints — the UI's Tool
+selector went unused, so it and its backend support were dropped together.)"""
 
 from datetime import UTC, date, datetime, timedelta
 
@@ -25,25 +26,7 @@ def _seed_conversion(
         s.commit()
 
 
-# --- GET /stats/conversions: tool_id + group_by ------------------------------
-
-
-async def test_conversions_series_filters_by_tool_id(admin_client):
-    today = date.today()
-    _seed_conversion("jpg-to-png", today, count=5)
-    _seed_conversion("docx-to-pdf", today, count=9)
-    body = (
-        await admin_client.get("/api/v1/stats/conversions?tool_id=jpg-to-png")
-    ).json()
-    assert body["series"] == [{"date": today.isoformat(), "count": 5, "failures": 0}]
-
-
-async def test_conversions_series_empty_when_tool_id_matches_nothing(admin_client):
-    _seed_conversion("jpg-to-png", date.today(), count=5)
-    body = (
-        await admin_client.get("/api/v1/stats/conversions?tool_id=no-such-tool")
-    ).json()
-    assert body["series"] == []
+# --- GET /stats/conversions: group_by -----------------------------------------
 
 
 async def test_conversions_series_group_by_month_buckets_across_days(admin_client):
@@ -149,18 +132,3 @@ async def test_errors_summary_by_type_is_capped(admin_client, db):
     await db.commit()
     body = (await admin_client.get("/api/v1/stats/errors/summary")).json()
     assert len(body["by_type"]) <= 10
-
-
-async def test_errors_summary_filters_by_tool_id(admin_client, db):
-    db.add_all(
-        [
-            Error(tool_id="jpg-to-png", error_type="validation_error"),
-            Error(tool_id="docx-to-pdf", error_type="conversion_error"),
-        ]
-    )
-    await db.commit()
-    body = (
-        await admin_client.get("/api/v1/stats/errors/summary?tool_id=jpg-to-png")
-    ).json()
-    assert body["by_type"] == [{"error_type": "validation_error", "count": 1}]
-    assert body["by_tool"] == [{"tool_id": "jpg-to-png", "count": 1}]
