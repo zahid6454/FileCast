@@ -597,24 +597,11 @@
 .admin-stat--info .admin-stat__value { color: var(--color-info); }
 
 /* Filter bar (§7.5) — sits above the filtered dashboard section (Conversions,
-   Top tools, New signups, Errors). Reuses .admin-input for the two
-   <select>s and .admin-field/.admin-field__label from the forms section, so
-   this only adds layout. */
-.admin-filterbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
-}
-.admin-filterbar .admin-field {
-  width: auto;
-  min-width: 160px;
-}
-.admin-filterbar .admin-card__note {
-  margin: 0 0 var(--space-2);
-  flex-basis: 100%;
-}
+   Top tools, New signups, Errors). Reuses the public site's .tool-options
+   component (style.css, linked by admin.html for tokens/resets) wholesale —
+   same uppercase label + custom-chevron select as e.g. PDF Page Numbers'
+   Position/Format fields, including its own margin/spacing. .admin-filterbar
+   carries no rules of its own; it's a bare selector hook for tests/JS. */
 
 /* Errors summary card (§7.3) — type split + by-tool breakdown, counts only. */
 .admin-errsummary__types {

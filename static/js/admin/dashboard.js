@@ -415,19 +415,27 @@
 
   // --- filter bar + filtered section (§7.1/§7.2/§7.3/§7.5) -----------------
 
+  // Reuses the public site's .tool-options component (style.css) — same
+  // uppercase label, custom chevron, and side-by-side row layout as e.g.
+  // PDF Page Numbers' Position/Format selects — rather than the plainer
+  // .admin-input styling, since admin.html already links style.css for
+  // tokens/resets and this is an existing, already-tested pattern (§7.5's
+  // "reuse existing patterns" guidance extends to this).
   function buildFilterBar(onChange) {
     var rangeSelect = h(
       'select',
-      { class: 'admin-input', 'aria-label': 'Date range' },
+      { class: 'tool-options__input', id: 'admin-filter-range', 'aria-label': 'Date range' },
       RANGES.map(function (r) {
         return h('option', { value: r.value }, r.label);
       })
     );
     rangeSelect.value = FILTER_RANGE;
 
-    var toolSelect = h('select', { class: 'admin-input', 'aria-label': 'Tool' }, [
-      h('option', { value: '' }, 'All tools')
-    ]);
+    var toolSelect = h(
+      'select',
+      { class: 'tool-options__input', id: 'admin-filter-tool', 'aria-label': 'Tool' },
+      [h('option', { value: '' }, 'All tools')]
+    );
     var tools = (ADMIN.catalog && ADMIN.catalog.list) || [];
     tools.forEach(function (t) {
       toolSelect.appendChild(h('option', { value: t.id }, labelFor(t.id)));
@@ -443,18 +451,18 @@
       onChange();
     });
 
-    return h('div', { class: 'admin-filterbar' }, [
-      h('label', { class: 'admin-field' }, [
-        h('span', { class: 'admin-field__label' }, 'Range'),
+    return h('div', { class: 'admin-filterbar tool-options' }, [
+      h('div', { class: 'tool-options__row tool-options__row--select' }, [
+        h('label', { class: 'tool-options__label', for: 'admin-filter-range' }, 'Range'),
         rangeSelect
       ]),
-      h('label', { class: 'admin-field' }, [
-        h('span', { class: 'admin-field__label' }, 'Tool'),
+      h('div', { class: 'tool-options__row tool-options__row--select' }, [
+        h('label', { class: 'tool-options__label', for: 'admin-filter-tool' }, 'Tool'),
         toolSelect
       ]),
       h(
         'p',
-        { class: 'admin-card__note' },
+        { class: 'tool-options__note' },
         'Applies to Conversions and Errors — Top tools ranks across every tool regardless of the tool selected, and New signups has no tool dimension.'
       )
     ]);
