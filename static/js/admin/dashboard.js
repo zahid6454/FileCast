@@ -1,14 +1,21 @@
 // Dashboard tab (#dashboard, default) — Phase 4 §8.1, filter bar + analytics
 // per ADMIN-DASHBOARD-ANALYTICS-PLAN.md §7.
 //
-// Two independent fetch batches:
-//  - Stat cards, Ratings, Recent errors — unfiltered, all-time, loaded once
-//    via Promise.allSettled (unchanged from before this plan, §6.3).
-//  - The filtered section (Conversions, Top tools, New signups, Errors) —
-//    owns the range/tool filter bar and refetches/rerenders only itself on
-//    change, following errors.js's existing scoped-re-render pattern
-//    (module-level FILTER_SEQ discards a response superseded by a newer
-//    filter change — the same race errors.js's REQUEST_SEQ guards, §9.3).
+// Two independent fetch shapes:
+//  - Stat cards, Top tools, New signups, Ratings, Recent errors — unfiltered
+//    (Top tools/New signups use a fixed DEFAULT_DAYS window, no selector: a
+//    global filter bar was tried first, but Range only ever applied to all
+//    4 cards while Tool only applied to 2 of them, which read as broken
+//    rather than intentional once real data was on screen). All loaded once
+//    via Promise.allSettled.
+//  - Conversions and Errors each own an inline Range(+Tool) selector and
+//    independently fetch/re-render only themselves on change
+//    (scopedFilterCard()), following errors.js's existing scoped-re-render
+//    pattern — a per-instance sequence counter discards a response
+//    superseded by a newer change on that same card, the same race
+//    errors.js's REQUEST_SEQ guards (§9.3). The two cards' selectors are
+//    fully independent of each other (picking 90 days on Conversions has no
+//    effect on Errors) and of Top tools/New signups.
 //
 // Charts are inline SVG built via dom.svg() — no library, every label a text
 // node (R10). The recent-errors feed is the P23 hot spot: error_message comes
@@ -36,25 +43,20 @@
     { value: '90', label: '90 days', days: 90, groupBy: 'day' },
     { value: '365', label: '12 months', days: 365, groupBy: 'month' }
   ];
+  // Fixed window for the widgets that don't get their own selector (Top
+  // tools, New signups) — see the header comment for why they went
+  // unfiltered instead of keeping a shared control.
+  var DEFAULT_DAYS = 30;
 
-  // Filter-bar selection + the scoped re-render state for the filtered
-  // section. Module-level (like errors.js's LIMIT/PAGE/REQUEST_SEQ) — a
-  // fresh render() rebuilds FILTER_HOSTS, and loadFilteredSection() always
-  // reads them live rather than via a captured reference.
-  var FILTER_RANGE = '30';
-  var FILTER_TOOL = '';
-  var FILTER_SEQ = 0;
-  var FILTER_HOSTS = null;
-  // Guards the outer (stat cards/ratings/recent-errors) batch the same way
-  // FILTER_SEQ guards the filtered section — render() can be re-entered
-  // (tab away and back) before a prior call's fetch has resolved, and
-  // without this a slow first render() landing after a faster second one
-  // would blank the up-to-date dashboard and kick off a redundant refetch.
+  // Guards the outer (stat cards/Top tools/New signups/Ratings/Recent
+  // errors) batch — render() can be re-entered (tab away and back) before a
+  // prior call's fetch has resolved, and without this a slow first render()
+  // landing after a faster second one would blank the up-to-date dashboard.
   var RENDER_SEQ = 0;
 
-  function rangeConfig() {
+  function rangeConfigFor(value) {
     for (var i = 0; i < RANGES.length; i++) {
-      if (RANGES[i].value === FILTER_RANGE) return RANGES[i];
+      if (RANGES[i].value === value) return RANGES[i];
     }
     return RANGES[1];
   }
@@ -413,157 +415,106 @@
     return h('div', { class: 'admin-errsummary' }, body);
   }
 
-  // --- filter bar + filtered section (§7.1/§7.2/§7.3/§7.5) -----------------
+  // --- self-contained scoped card (Conversions, Errors) --------------------
 
-  // Reuses the public site's .tool-options component (style.css) — same
-  // uppercase label, custom chevron, and side-by-side row layout as e.g.
-  // PDF Page Numbers' Position/Format selects — rather than the plainer
-  // .admin-input styling, since admin.html already links style.css for
-  // tokens/resets and this is an existing, already-tested pattern (§7.5's
-  // "reuse existing patterns" guidance extends to this).
-  function buildFilterBar(onChange) {
+  // A card with its own inline Range(+Tool) selector that independently
+  // fetches and re-renders only itself on change — mirrors errors.js's
+  // loadErrors()/REQUEST_SEQ pattern (§9.3), scoped to one card instead of a
+  // whole tab: a per-instance sequence counter discards a response
+  // superseded by a newer change on THIS card.
+  //
+  // The selector row is built once and never torn down on reload — only
+  // the title text and body are swapped — so a change never steals focus
+  // mid-interaction (the same reasoning as errors.js's SHELL_BUILT guard
+  // keeping its search input in place across a page fetch).
+  //
+  // opts: {
+  //   includeTool: bool,
+  //   title(cfg) -> string,
+  //   buildUrl(cfg, toolId) -> string,
+  //   renderBody(data, cfg) -> Node
+  // }
+  function scopedFilterCard(opts) {
+    var range = '30';
+    var tool = '';
+    var seq = 0;
+
+    var titleEl = h('h2', { class: 'admin-card__title' });
+    var bodyHost = h('div');
+
+    function setBody(node) {
+      dom.clear(bodyHost);
+      bodyHost.appendChild(node);
+    }
+
+    function load() {
+      var mySeq = ++seq;
+      var cfg = rangeConfigFor(range);
+      titleEl.textContent = opts.title(cfg);
+      setBody(h('div', { class: 'admin-loading' }, 'Loading…'));
+      api.get(opts.buildUrl(cfg, tool)).then(
+        function (data) {
+          if (mySeq !== seq) return; // superseded by a newer change on this card
+          setBody(opts.renderBody(data, cfg));
+        },
+        function (err) {
+          if (mySeq !== seq) return;
+          if (err && err.isAuthError) {
+            ADMIN.onAuthError(err);
+            return;
+          }
+          var retry = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, 'Retry');
+          retry.addEventListener('click', load);
+          setBody(
+            h('div', { class: 'admin-error-state' }, [h('p', "Couldn't load this section."), retry])
+          );
+        }
+      );
+    }
+
     var rangeSelect = h(
       'select',
-      { class: 'tool-options__input', id: 'admin-filter-range', 'aria-label': 'Date range' },
+      { class: 'tool-options__input', 'aria-label': 'Date range' },
       RANGES.map(function (r) {
         return h('option', { value: r.value }, r.label);
       })
     );
-    rangeSelect.value = FILTER_RANGE;
-
-    var toolSelect = h(
-      'select',
-      { class: 'tool-options__input', id: 'admin-filter-tool', 'aria-label': 'Tool' },
-      [h('option', { value: '' }, 'All tools')]
-    );
-    var tools = (ADMIN.catalog && ADMIN.catalog.list) || [];
-    tools.forEach(function (t) {
-      toolSelect.appendChild(h('option', { value: t.id }, labelFor(t.id)));
-    });
-    toolSelect.value = FILTER_TOOL;
-
+    rangeSelect.value = range;
     rangeSelect.addEventListener('change', function () {
-      FILTER_RANGE = rangeSelect.value;
-      onChange();
+      range = rangeSelect.value;
+      load();
     });
-    toolSelect.addEventListener('change', function () {
-      FILTER_TOOL = toolSelect.value;
-      onChange();
-    });
-
-    return h('div', { class: 'admin-filterbar tool-options' }, [
+    var filterChildren = [
       h('div', { class: 'tool-options__row tool-options__row--select' }, [
-        h('label', { class: 'tool-options__label', for: 'admin-filter-range' }, 'Range'),
+        h('label', { class: 'tool-options__label' }, 'Range'),
         rangeSelect
-      ]),
-      h('div', { class: 'tool-options__row tool-options__row--select' }, [
-        h('label', { class: 'tool-options__label', for: 'admin-filter-tool' }, 'Tool'),
-        toolSelect
-      ]),
-      h(
-        'p',
-        { class: 'tool-options__note' },
-        'Applies to Conversions and Errors — Top tools ranks across every tool regardless of the tool selected, and New signups has no tool dimension.'
-      )
-    ]);
-  }
-
-  // Rebuilds one filtered widget's host in place. `fetchResult` is one
-  // Promise.allSettled entry; `bodyFn` turns its resolved value into the
-  // widget body. Mirrors the unfiltered widgets' errorCard() retry pattern.
-  function renderFilteredWidget(host, title, fetchResult, bodyFn) {
-    dom.clear(host);
-    if (fetchResult.status === 'fulfilled') {
-      host.appendChild(sectionCard(title, bodyFn(fetchResult.value)));
-    } else {
-      var retry = h('button', { type: 'button', class: 'admin-btn admin-btn--ghost' }, 'Retry');
-      retry.addEventListener('click', loadFilteredSection);
-      host.appendChild(
-        sectionCard(
-          title,
-          h('div', { class: 'admin-error-state' }, [h('p', "Couldn't load this section."), retry])
-        )
+      ])
+    ];
+    if (opts.includeTool) {
+      var toolSelect = h('select', { class: 'tool-options__input', 'aria-label': 'Tool' }, [
+        h('option', { value: '' }, 'All tools')
+      ]);
+      var tools = (ADMIN.catalog && ADMIN.catalog.list) || [];
+      tools.forEach(function (t) {
+        toolSelect.appendChild(h('option', { value: t.id }, labelFor(t.id)));
+      });
+      toolSelect.value = tool;
+      toolSelect.addEventListener('change', function () {
+        tool = toolSelect.value;
+        load();
+      });
+      filterChildren.push(
+        h('div', { class: 'tool-options__row tool-options__row--select' }, [
+          h('label', { class: 'tool-options__label' }, 'Tool'),
+          toolSelect
+        ])
       );
     }
-  }
+    var filterRow = h('div', { class: 'admin-inline-filter' }, filterChildren);
 
-  // Fetches the 4 filter-scoped widgets and rerenders just their hosts —
-  // follows errors.js's loadErrors()/REQUEST_SEQ pattern (§9.3): a fast
-  // second filter change must not let a slower first response land after it
-  // and clobber newer state, so a response is applied only if it's still
-  // current.
-  function loadFilteredSection() {
-    var seq = ++FILTER_SEQ;
-    var hosts = FILTER_HOSTS;
-    if (!hosts) return;
-    var cfg = rangeConfig();
-    var toolQuery = FILTER_TOOL ? '&tool_id=' + encodeURIComponent(FILTER_TOOL) : '';
-
-    Promise.allSettled([
-      api.get(
-        '/api/v1/stats/conversions?days=' + cfg.days + '&group_by=' + cfg.groupBy + toolQuery
-      ),
-      api.get('/api/v1/stats/top-tools?days=' + cfg.days),
-      api.get('/api/v1/stats/signups?days=' + cfg.days),
-      api.get('/api/v1/stats/errors/summary?days=' + cfg.days + toolQuery)
-    ]).then(function (results) {
-      if (seq !== FILTER_SEQ) return; // superseded by a newer filter change
-      for (var i = 0; i < results.length; i++) {
-        var reason = results[i].reason;
-        if (reason && reason.isAuthError) {
-          ADMIN.onAuthError(reason);
-          return;
-        }
-      }
-      renderFilteredWidget(
-        hosts.conversions,
-        'Conversions (' + cfg.label + ')',
-        results[0],
-        function (v) {
-          return lineChart((v && v.series) || []);
-        }
-      );
-      renderFilteredWidget(hosts.topTools, 'Top tools', results[1], function (v) {
-        return barChart((v && v.top_tools) || []);
-      });
-      renderFilteredWidget(hosts.signups, 'New signups', results[2], function (v) {
-        return lineChart(v || [], 'signup', 'New signups over time');
-      });
-      renderFilteredWidget(hosts.errors, 'Errors', results[3], function (v) {
-        return errorsSummaryWidget(v, cfg.days);
-      });
-    });
-  }
-
-  // A plain host div holding one loading card — avoids a blank flash between
-  // the outer batch rendering the grid and the first loadFilteredSection()
-  // fetch landing. renderFilteredWidget() replaces this card in place with
-  // the real one, the same way it replaces a failed/retried one.
-  function loadingHost() {
-    return h('div', [
-      h('section', { class: 'admin-card' }, h('div', { class: 'admin-loading' }, 'Loading…'))
-    ]);
-  }
-
-  function buildFilterSection() {
-    var conversionsHost = loadingHost();
-    var topToolsHost = loadingHost();
-    var signupsHost = loadingHost();
-    var errorsHost = loadingHost();
-    FILTER_HOSTS = {
-      conversions: conversionsHost,
-      topTools: topToolsHost,
-      signups: signupsHost,
-      errors: errorsHost
-    };
-    var bar = buildFilterBar(loadFilteredSection);
-    return h('div', { class: 'admin-filtered-section' }, [
-      bar,
-      conversionsHost,
-      topToolsHost,
-      signupsHost,
-      errorsHost
-    ]);
+    var card = h('section', { class: 'admin-card' }, [titleEl, filterRow, bodyHost]);
+    load();
+    return card;
   }
 
   // --- widgets ------------------------------------------------------------
@@ -672,14 +623,13 @@
     var seq = ++RENDER_SEQ;
     dom.clear(container);
     container.appendChild(h('div', { class: 'admin-loading' }, 'Loading dashboard…'));
-    FILTER_RANGE = '30';
-    FILTER_TOOL = '';
-    FILTER_HOSTS = null;
 
     Promise.allSettled([
       api.get('/api/v1/stats/dashboard'),
       api.get('/api/v1/stats/errors?limit=10'),
-      api.get('/api/v1/ratings')
+      api.get('/api/v1/ratings'),
+      api.get('/api/v1/stats/top-tools?days=' + DEFAULT_DAYS),
+      api.get('/api/v1/stats/signups?days=' + DEFAULT_DAYS)
     ]).then(function (results) {
       if (seq !== RENDER_SEQ) return; // superseded by a newer render() (tab re-entry)
       // Bubble auth failures up to the global gate (R8).
@@ -693,7 +643,7 @@
       dom.clear(container);
       var grid = h('div', { class: 'admin-dashboard' });
 
-      // Stat cards — all-time, not scoped by the filter bar below (§6.3).
+      // Stat cards — all-time, unaffected by anything below (§6.3).
       if (results[0].status === 'fulfilled') {
         grid.appendChild(statsWidget(results[0].value));
       } else {
@@ -704,9 +654,61 @@
         );
       }
 
-      // Filtered section: Conversions, Top tools, New signups, Errors —
-      // fetched separately below, once its hosts exist in the DOM.
-      grid.appendChild(buildFilterSection());
+      // Conversions — owns its own inline Range+Tool selector.
+      grid.appendChild(
+        scopedFilterCard({
+          includeTool: true,
+          title: function (cfg) {
+            return 'Conversions (' + cfg.label + ')';
+          },
+          buildUrl: function (cfg, toolId) {
+            return (
+              '/api/v1/stats/conversions?days=' +
+              cfg.days +
+              '&group_by=' +
+              cfg.groupBy +
+              (toolId ? '&tool_id=' + encodeURIComponent(toolId) : '')
+            );
+          },
+          renderBody: function (data) {
+            return lineChart((data && data.series) || []);
+          }
+        })
+      );
+
+      // Top tools — fixed window, no selector: a per-tool filter would be
+      // self-defeating on a cross-tool ranking.
+      if (results[3].status === 'fulfilled') {
+        grid.appendChild(
+          sectionCard(
+            'Top tools (last ' + DEFAULT_DAYS + ' days)',
+            barChart((results[3].value && results[3].value.top_tools) || [])
+          )
+        );
+      } else {
+        grid.appendChild(
+          errorCard('Top tools', function () {
+            render(container);
+          })
+        );
+      }
+
+      // New signups — fixed window, no selector: no tool dimension to
+      // filter by in the first place.
+      if (results[4].status === 'fulfilled') {
+        grid.appendChild(
+          sectionCard(
+            'New signups (last ' + DEFAULT_DAYS + ' days)',
+            lineChart(results[4].value || [], 'signup', 'New signups over time')
+          )
+        );
+      } else {
+        grid.appendChild(
+          errorCard('New signups', function () {
+            render(container);
+          })
+        );
+      }
 
       // Ratings summary (one bulk call) — all-time, unchanged (§6.2/§9.5).
       if (results[2].status === 'fulfilled') {
@@ -719,8 +721,30 @@
         );
       }
 
-      // Recent errors feed (P23 hot spot) — unfiltered "what just broke",
-      // distinct from the filtered Errors card above (§3 item 6).
+      // Errors — owns its own inline Range+Tool selector, grouped next to
+      // the unfiltered Recent errors feed below (§3 item 6 distinguishes
+      // them by purpose: analytical "what's breaking most" vs. operational
+      // "what just broke", but both are error-related, so they sit together).
+      grid.appendChild(
+        scopedFilterCard({
+          includeTool: true,
+          title: function (cfg) {
+            return 'Errors (' + cfg.label + ')';
+          },
+          buildUrl: function (cfg, toolId) {
+            return (
+              '/api/v1/stats/errors/summary?days=' +
+              cfg.days +
+              (toolId ? '&tool_id=' + encodeURIComponent(toolId) : '')
+            );
+          },
+          renderBody: function (data, cfg) {
+            return errorsSummaryWidget(data, cfg.days);
+          }
+        })
+      );
+
+      // Recent errors feed (P23 hot spot) — unfiltered "what just broke".
       if (results[1].status === 'fulfilled') {
         var errs = (results[1].value && results[1].value.errors) || [];
         var viewAllErrors =
@@ -737,7 +761,6 @@
       }
 
       container.appendChild(grid);
-      loadFilteredSection();
     });
   }
 

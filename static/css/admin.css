@@ -596,12 +596,21 @@
 .admin-stat--warning .admin-stat__value { color: var(--color-warning); }
 .admin-stat--info .admin-stat__value { color: var(--color-info); }
 
-/* Filter bar (§7.5) — sits above the filtered dashboard section (Conversions,
-   Top tools, New signups, Errors). Reuses the public site's .tool-options
-   component (style.css, linked by admin.html for tokens/resets) wholesale —
-   same uppercase label + custom-chevron select as e.g. PDF Page Numbers'
-   Position/Format fields, including its own margin/spacing. .admin-filterbar
-   carries no rules of its own; it's a bare selector hook for tests/JS. */
+/* Inline per-card filter row (Conversions/Errors, §7.5 — a global filter bar
+   was tried first and cut once real data showed Range/Tool applying to a
+   confusing, inconsistent subset of cards). Reuses the public site's
+   .tool-options__row/__label/__input classes (style.css, linked by
+   admin.html for tokens/resets) for the same uppercase label + custom
+   chevron as e.g. PDF Page Numbers' Position/Format fields, but WITHOUT the
+   outer .tool-options panel (background/border) — this row already lives
+   inside an .admin-card, so a second boxed panel nested in it would double
+   up the border. */
+.admin-inline-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: var(--space-3) 0 var(--space-4);
+}
 
 /* Errors summary card (§7.3) — type split + by-tool breakdown, counts only. */
 .admin-errsummary__types {

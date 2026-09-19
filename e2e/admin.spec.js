@@ -149,14 +149,15 @@ test.describe('dashboard', () => {
     // The bulk endpoint was hit exactly once (not one-per-tool).
     expect(state.ratingsCalls).toBe(1);
 
-    // Filter bar + the 4 new/widened filtered widgets (§7).
-    await expect(page.locator('.admin-filterbar select[aria-label="Date range"]')).toHaveValue(
-      '30'
-    );
+    // Conversions/Errors each own an inline Range+Tool selector (§7); Top
+    // tools/New signups have none (a per-tool filter would be self-defeating
+    // on a cross-tool ranking; signups has no tool dimension at all).
+    const conversionsCard = page.locator('.admin-card', { hasText: 'Conversions' }).first();
+    await expect(conversionsCard.locator('select[aria-label="Date range"]')).toHaveValue('30');
     await expect(page.locator('.admin-errsummary').first()).toBeVisible();
 
-    // Switching the range refetches the filtered section only.
-    await page.locator('.admin-filterbar select[aria-label="Date range"]').selectOption('90');
+    // Switching Conversions' own range selector refetches only that card.
+    await conversionsCard.locator('select[aria-label="Date range"]').selectOption('90');
     await expect(page.getByText('Conversions (90 days)')).toBeVisible();
   });
 

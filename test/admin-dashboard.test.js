@@ -1,10 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createDom, evalScript, flush } from './helpers.js';
 
-// Dashboard tab (admin/dashboard.js): 4 widgets loaded in parallel via
-// Promise.allSettled — one failed call degrades to its own error card
-// instead of blanking the whole tab (R12), and any auth failure among the
-// 4 bubbles up to the global gate.
+// Dashboard tab (admin/dashboard.js): stat cards/Top tools/New signups/
+// Ratings/Recent errors load once in parallel via Promise.allSettled — one
+// failed call degrades to its own error card instead of blanking the whole
+// tab (R12), and any auth failure among them bubbles up to the global gate.
+// Conversions and Errors are separate, self-contained cards, each with its
+// own inline Range(+Tool) selector that fetches/re-renders independently.
+
+function cardByTitle(root, titleSubstring) {
+  return Array.from(root.querySelectorAll('.admin-card')).find((el) => {
+    const title = el.querySelector('.admin-card__title');
+    return title && title.textContent.includes(titleSubstring);
+  });
+}
 
 function makeResponse(status, body) {
   return Promise.resolve({
@@ -149,7 +158,7 @@ describe('admin/dashboard.js', () => {
     expect(tip.classList.contains('is-visible')).toBe(false);
   });
 
-  it('degrades only the failed widget when one of the 4 calls fails (R12)', async () => {
+  it('degrades only the failed widget when one of the outer-batch calls fails (R12)', async () => {
     const dom = load((url) => {
       if (url.includes('/ratings')) return makeResponse(500, { detail: 'boom' });
       return defaultRoutes(url);
@@ -164,7 +173,7 @@ describe('admin/dashboard.js', () => {
     expect(c.textContent).toContain("Couldn't load this section.");
   });
 
-  it('bubbles an auth failure from any of the 4 calls to ADMIN.onAuthError', async () => {
+  it('bubbles an auth failure from any outer-batch call to ADMIN.onAuthError', async () => {
     const dom = load((url) => {
       if (url.includes('/ratings')) return makeResponse(401, {});
       return defaultRoutes(url);
@@ -211,7 +220,7 @@ describe('admin/dashboard.js', () => {
     expect(values).not.toContain('100'); // render #1's stale data must not land
   });
 
-  it('filter bar defaults to 30 days / all tools and refetches on range change', async () => {
+  it("Conversions' own Range selector defaults to 30 days and refetches only itself on change", async () => {
     const requestedUrls = [];
     const dom = load((url) => {
       requestedUrls.push(url);
@@ -221,7 +230,8 @@ describe('admin/dashboard.js', () => {
     dom.window.ADMIN.tabs.dashboard.render(c);
     await flush();
 
-    const rangeSelect = c.querySelector('.admin-filterbar select[aria-label="Date range"]');
+    const conversionsCard = cardByTitle(c, 'Conversions');
+    const rangeSelect = conversionsCard.querySelector('select[aria-label="Date range"]');
     expect(rangeSelect.value).toBe('30');
     expect(requestedUrls.some((u) => u.includes('/stats/conversions?days=30&group_by=day'))).toBe(
       true
@@ -235,11 +245,23 @@ describe('admin/dashboard.js', () => {
     expect(
       requestedUrls.some((u) => u.includes('/stats/conversions?days=365&group_by=month'))
     ).toBe(true);
-    expect(requestedUrls.some((u) => u.includes('/stats/top-tools?days=365'))).toBe(true);
-    expect(requestedUrls.some((u) => u.includes('/stats/signups?days=365'))).toBe(true);
+    // Top tools/New signups have no selector at all and are never refetched
+    // by a change on Conversions' own control.
+    expect(requestedUrls.some((u) => u.includes('/stats/top-tools'))).toBe(false);
+    expect(requestedUrls.some((u) => u.includes('/stats/signups'))).toBe(false);
+    // Errors owns its own independent selector — untouched by Conversions'.
+    expect(requestedUrls.some((u) => u.includes('/stats/errors/summary'))).toBe(false);
+    // Title reflects the new range; each select also lists "12 months" as an
+    // option regardless of selection, so this checks the heading specifically.
+    expect(cardByTitle(c, 'Conversions').querySelector('.admin-card__title').textContent).toContain(
+      '12 months'
+    );
+    expect(cardByTitle(c, 'Errors').querySelector('.admin-card__title').textContent).not.toContain(
+      '12 months'
+    );
   });
 
-  it('tool filter adds tool_id to Conversions and Errors, but not Top tools/New signups', async () => {
+  it("Conversions' and Errors' Tool selects are independent of each other", async () => {
     const requestedUrls = [];
     const dom = load((url) => {
       requestedUrls.push(url);
@@ -250,9 +272,11 @@ describe('admin/dashboard.js', () => {
     await flush();
 
     requestedUrls.length = 0;
-    const toolSelect = c.querySelector('.admin-filterbar select[aria-label="Tool"]');
-    toolSelect.value = 'jpg-to-png';
-    toolSelect.dispatchEvent(new dom.window.Event('change'));
+    const conversionsTool = cardByTitle(c, 'Conversions').querySelector(
+      'select[aria-label="Tool"]'
+    );
+    conversionsTool.value = 'jpg-to-png';
+    conversionsTool.dispatchEvent(new dom.window.Event('change'));
     await flush();
 
     expect(
@@ -260,17 +284,23 @@ describe('admin/dashboard.js', () => {
         (u) => u.includes('/stats/conversions') && u.includes('tool_id=jpg-to-png')
       )
     ).toBe(true);
+    // Changing Conversions' Tool select must not touch Errors' own request.
+    expect(requestedUrls.some((u) => u.includes('/stats/errors/summary'))).toBe(false);
+    // Errors' own Tool select still defaults to "All tools", unaffected.
+    const errorsTool = cardByTitle(c, 'Errors').querySelector('select[aria-label="Tool"]');
+    expect(errorsTool.value).toBe('');
+
+    requestedUrls.length = 0;
+    errorsTool.value = 'jpg-to-png';
+    errorsTool.dispatchEvent(new dom.window.Event('change'));
+    await flush();
+
     expect(
       requestedUrls.some(
         (u) => u.includes('/stats/errors/summary') && u.includes('tool_id=jpg-to-png')
       )
     ).toBe(true);
-    expect(requestedUrls.some((u) => u.includes('/stats/top-tools') && u.includes('tool_id'))).toBe(
-      false
-    );
-    expect(requestedUrls.some((u) => u.includes('/stats/signups') && u.includes('tool_id'))).toBe(
-      false
-    );
+    expect(requestedUrls.some((u) => u.includes('/stats/conversions'))).toBe(false);
   });
 
   it('errors summary shows the validation/conversion split and a retention caption past the window', async () => {
@@ -296,7 +326,7 @@ describe('admin/dashboard.js', () => {
     expect(summary.textContent).toContain('7');
     expect(summary.textContent).not.toContain('retained'); // 30-day range == 30-day retention, no caption
 
-    const rangeSelect = c.querySelector('.admin-filterbar select[aria-label="Date range"]');
+    const rangeSelect = cardByTitle(c, 'Errors').querySelector('select[aria-label="Date range"]');
     rangeSelect.value = '90';
     rangeSelect.dispatchEvent(new dom.window.Event('change'));
     await flush();
@@ -304,7 +334,7 @@ describe('admin/dashboard.js', () => {
     expect(c.querySelector('.admin-errsummary').textContent).toContain('retained for 30 days');
   });
 
-  it('top-tools/new-signups fetch failures degrade independently without blanking Conversions', async () => {
+  it('Top tools fetch failure degrades independently without affecting Conversions/New signups', async () => {
     const dom = load((url) => {
       if (url.includes('/stats/top-tools')) return makeResponse(500, {});
       return defaultRoutes(url);
@@ -313,10 +343,9 @@ describe('admin/dashboard.js', () => {
     dom.window.ADMIN.tabs.dashboard.render(c);
     await flush();
 
-    expect(c.querySelector('.admin-filtered-section').textContent).toContain(
-      "Couldn't load this section."
-    );
-    // Conversions (fed by a different call) still rendered its own chart.
-    expect(c.querySelector('.admin-filtered-section svg.admin-chart')).not.toBeNull();
+    expect(cardByTitle(c, 'Top tools').textContent).toContain("Couldn't load this section.");
+    // Conversions and New signups (fed by different calls) still rendered.
+    expect(cardByTitle(c, 'Conversions').querySelector('svg.admin-chart')).not.toBeNull();
+    expect(cardByTitle(c, 'New signups').querySelector('svg.admin-chart')).not.toBeNull();
   });
 });
