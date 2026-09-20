@@ -18,6 +18,14 @@ Yes, and it's listed directly above the upload box on each tool's page — most 
 
 It depends on the tool's processing mode. For the browser-based ("Local") tools — most of them — nothing happens to your file anywhere else, because it was never sent anywhere: it exists only in your browser's memory for the length of the conversion and is gone once you close or navigate away from the tab. For the small number of server-based ("Cloud") tools, the uploaded file is converted and then deleted from our server immediately — there's no multi-day retention window, just an upload, a conversion, and a deletion.
 
+### Do you use my files to train AI models?
+
+No. FileCast doesn't look at, store, or retain file content — for browser-based ("Local") tools, your file never leaves your device in the first place, and for the handful of server-side ("Cloud") tools it's deleted immediately after conversion. There's no file content sitting anywhere that could be used to train a model, sold, or shared with anyone. See our Privacy Policy for exactly what is and isn't collected.
+
+### Does FileCast work on mobile, and which browsers are supported?
+
+Yes — every tool works the same on a phone as it does on desktop, since FileCast is a website, not an app; there's nothing to install. Local (in-browser) tools rely on WebAssembly, which every modern browser released in the last several years supports — Chrome, Firefox, Safari, Edge, and their mobile equivalents. If a tool ever fails to load properly, it's almost always an outdated browser rather than something wrong with your file.
+
 ### What do the green and blue badges mean?
 
 Every tool page carries one of two badges near the top, showing how that tool actually processes your file. Green ("Local") means the conversion runs entirely in your browser — your file is never uploaded anywhere. Blue ("Cloud") means the file is uploaded to our server for processing, then deleted immediately afterward.
