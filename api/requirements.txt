@@ -25,7 +25,7 @@ sqlalchemy[asyncio]==2.0.*
 psycopg[binary]==3.*
 alembic==1.*
 pydantic-settings==2.*
-authlib==1.7.*
+authlib==1.8.*
 sentry-sdk[fastapi]==2.*
 # Phase 3: shared rate-limit store + conversion job worker wake-up signal
 # (data/redis_client.py). redis.asyncio only — no persistence configured.
