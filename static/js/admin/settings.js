@@ -244,12 +244,16 @@
         fields.site_tagline,
         fields.site_description
       ]),
-      group('AdSense', 'Off until Google approval. IDs are validated before they bake into HTML.', [
-        checkLabel(adsenseEnabled, 'Enable AdSense'),
-        fields.adsense_publisher_id,
-        fields.adsense_slot_leaderboard,
-        fields.adsense_slot_in_content
-      ]),
+      group(
+        'AdSense',
+        'Enable with the publisher ID before requesting review — loads the Google ad script and consent message site-wide. Units render only once slot IDs are set. IDs are validated before they bake into HTML.',
+        [
+          checkLabel(adsenseEnabled, 'Enable AdSense'),
+          fields.adsense_publisher_id,
+          fields.adsense_slot_leaderboard,
+          fields.adsense_slot_in_content
+        ]
+      ),
       group('Google Analytics (GA4)', null, [
         checkLabel(ga4Enabled, 'Enable GA4'),
         fields.ga4_measurement_id

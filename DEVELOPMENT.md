@@ -747,7 +747,7 @@ Known integrations and current status:
 | Google Analytics 4 | Client event analytics | Live, DB-driven toggle (see above) |
 | Google Search Console | Sitemap submission, indexing | Live (Domain property, DNS-verified) |
 | Bing Webmaster Tools | Search indexing | **Not configured** |
-| Google AdSense | Ad revenue | Config plumbing exists end-to-end (DB fields, admin UI, CSP widening, two ad slots — leaderboard + in-content); deliberately not enabled — no publisher ID yet, holding off applying until organic traffic/indexing builds up |
+| Google AdSense | Ad revenue | Publisher `ca-pub-9273443375615163`, application pending (rejected twice, generic policy reason). Enabling with just the publisher ID ships Google's loader on every content page (not 404/offline/account) plus the CSP hosts measured 2026-10-03; ad consent is Google's certified CMP (configured in the AdSense dashboard), not our cookie banner. The two manual units (leaderboard + in-content) render only once slot IDs are saved. Steps: `instructions.md` entry 2 |
 | Sentry | Error tracking (frontend + backend) | Live, separate projects for each |
 | UptimeRobot | Uptime monitoring | Live |
 | Google OAuth | Sign-in | Live, `openid email profile` scopes only (no Google verification review required) |

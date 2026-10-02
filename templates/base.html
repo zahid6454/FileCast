@@ -188,8 +188,11 @@
   {% endif %}
 
   {# AdSense (Phase 9 §3.2). The vendor loader is Google's own documented tag,
-     on EVERY page, as soon as the toggle is on with a publisher id — slot ids
-     not required. It must not wait on approval or on our cookie banner:
+     on every CONTENT page, as soon as the toggle is on with a publisher id —
+     slot ids not required. Pages with no publisher content (404, offline,
+     account) override the `adsense_loader` block to empty: if Auto ads is ever
+     switched on, ads there are a "screens without publisher content" policy
+     violation. It must not wait on approval or on our cookie banner:
        - Google's site review looks for it;
        - the certified CMP (Privacy & messaging, configured in the AdSense
          dashboard) is delivered BY this script, so gating the script behind
@@ -200,9 +203,9 @@
      `adsense_live` is build.py's adsense_is_live(). generate_headers() gates
      the CSP's ad origins on the SAME predicate. Do not re-derive that
      condition here; change the predicate. #}
-  {% if adsense_live %}
+  {% block adsense_loader %}{% if adsense_live %}
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ adsense.publisher_id }}" crossorigin="anonymous"></script>
-  {% endif %}
+  {% endif %}{% endblock %}
 
   {# ads.js is the self-hosted module that does the per-unit push Google's
      documented snippet does inline — no inline script, so `script-src 'self'`

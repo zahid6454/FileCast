@@ -447,6 +447,7 @@ TOOL_PAGES = {
     "standard": "convert/pdf-to-jpg",  # tool.html
     "text-input": "convert/csv-to-json",  # tool-text.html
     "multi-file": "convert/pdf-merge",  # tool-multi.html
+    "text-diff": "convert/json-diff",  # tool-diff.html
 }
 
 
@@ -566,6 +567,11 @@ def test_full_build_ads_on_loads_loader_sitewide_but_units_on_tools_only(
         assert LOADER_TAG in html, page
         assert 'class="adsbygoogle"' not in html, page
         assert "/js/ads." not in html, page
+    # No publisher content ⇒ no loader: if Auto ads is ever switched on, ads on
+    # these are a "screens without publisher content" policy violation.
+    for page in ("404.html", "offline.html", "account/index.html"):
+        html = (tmp_path / page).read_text(encoding="utf-8")
+        assert "adsbygoogle" not in html, page
 
 
 def test_adsense_is_live_requires_enabled_and_publisher_not_a_slot():
@@ -2904,3 +2910,24 @@ def test_wrap_faq_cards_splices_extra_html_inside_the_last_card_only():
 def test_wrap_faq_cards_empty_input_does_not_crash_or_apply_extra_html():
     assert build.wrap_faq_cards("") == ""
     assert build.wrap_faq_cards("", extra_last_card_html="<div>legend</div>") == ""
+
+
+def test_full_build_trust_and_policy_copy(tmp_path, monkeypatch):
+    # AdSense-review fixes that are pure copy, pinned so a content edit can't
+    # quietly bring them back.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    # Cloudflare Email Obfuscation rewrites bare addresses to "[email protected]"
+    # in the served HTML — the email_off markers opt these links out.
+    for page in ("contact/index.html", "privacy/index.html"):
+        html = (tmp_path / page).read_text(encoding="utf-8")
+        assert '<!--email_off--><a href="mailto:' in html, page
+    # PDF Unlock must not advertise stripping restrictions without a password
+    # (Google's "enabling dishonest behavior" / DRM-circumvention policy).
+    unlock = _tool_page(tmp_path, "convert/pdf-unlock").lower()
+    assert "no password required" not in unlock
+    assert "no password needed" not in unlock
+    assert "restriction" not in unlock
+    # Reads as an unfinished product to a reviewer.
+    for page in tmp_path.glob("convert/*/index.html"):
+        assert "planned for a future update" not in page.read_text(encoding="utf-8")
