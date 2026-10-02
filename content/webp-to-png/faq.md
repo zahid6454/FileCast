@@ -18,4 +18,4 @@ PNG files are typically larger because the format prioritizes preserving every d
 
 ### Can I convert multiple files at once?
 
-Currently, this tool converts one file at a time. Drop a file, convert it, download, then click "Convert Another" for the next one. Batch conversion is planned for a future update.
+Currently, this tool converts one file at a time. Drop a file, convert it, download, then click "Convert Another" for the next one.

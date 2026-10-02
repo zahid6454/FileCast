@@ -13,8 +13,8 @@ This tool is meant for PDFs you have the right to open — files you password-pr
   </div>
   <div class="stat-tile">
     <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
-    <span class="stat-tile__label">Detects restriction-only files</span>
-    <span class="stat-tile__sub">No password needed if none was required to open</span>
+    <span class="stat-tile__label">Needs your password</span>
+    <span class="stat-tile__sub">Not a password-cracking tool</span>
   </div>
   <div class="stat-tile">
     <span class="stat-tile__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span>
@@ -33,5 +33,5 @@ Unlocking removes that friction while keeping the document's actual content unto
 
 <div class="callout">
   <svg aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>
-  <p>This tool runs <strong>entirely in your browser</strong>. Some PDFs only restrict what a reader can do (like printing) without requiring a password to open at all — this tool detects and removes that automatically. If the PDF does require a password to open, enter it and your device removes the protection locally, in your device's memory. Your file and any password you enter are never uploaded to any server.</p>
+  <p>This tool runs <strong>entirely in your browser</strong>. Enter the password you already use to open the PDF, and your device removes the protection locally, in your device's memory. Your file and any password you enter are never uploaded to any server.</p>
 </div>

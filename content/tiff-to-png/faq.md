@@ -18,4 +18,4 @@ Yes. If your TIFF file has an alpha channel, the PNG output will keep that trans
 
 ### Can I convert multiple files at once?
 
-Currently, this tool converts one file at a time. Drop a file, convert it, download, then click "Convert Another" for the next one. Batch conversion is planned for a future update.
+Currently, this tool converts one file at a time. Drop a file, convert it, download, then click "Convert Another" for the next one.

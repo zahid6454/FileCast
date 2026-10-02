@@ -4,6 +4,9 @@
 {% block title %}Page Not Found — {{ site.name }}{% endblock %}
 {% block meta_description %}The page you're looking for doesn't exist. Try searching for a conversion tool.{% endblock %}
 
+{# No publisher content here — no ad loader (see base.html). #}
+{% block adsense_loader %}{% endblock %}
+
 {% block content %}
 <div class="container">
 

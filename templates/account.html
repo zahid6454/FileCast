@@ -9,6 +9,9 @@
 <meta name="robots" content="noindex, nofollow">
 {% endblock %}
 
+{# No publisher content here — no ad loader (see base.html). #}
+{% block adsense_loader %}{% endblock %}
+
 {% block content %}
 <div class="container page">
   {# The <h1> is present but not painted. Visually it only repeated the menu item

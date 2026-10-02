@@ -447,6 +447,7 @@ TOOL_PAGES = {
     "standard": "convert/pdf-to-jpg",  # tool.html
     "text-input": "convert/csv-to-json",  # tool-text.html
     "multi-file": "convert/pdf-merge",  # tool-multi.html
+    "text-diff": "convert/json-diff",  # tool-diff.html
 }
 
 
@@ -494,6 +495,12 @@ def test_full_build_all_off_row_renders_no_adsense(tmp_path, monkeypatch):
 # (^ca-pub-\d{16}$ and ^\d+$). Anything outside those shapes is rejected by the
 # API, so the templates only ever see values of this form.
 _PUB = "ca-pub-1234567890123456"
+# Google's documented loader tag, verbatim — static and async, never injected
+# by consent.js (its consent is the certified CMP's job).
+LOADER_TAG = (
+    '<script async src="https://pagead2.googlesyndication.com/pagead/js/'
+    'adsbygoogle.js?client=ca-pub-1234567890123456" crossorigin="anonymous">'
+)
 ADS_ON = dict(
     adsense_enabled=True,
     adsense_publisher_id=_PUB,
@@ -538,44 +545,53 @@ def test_full_build_ads_on_renders_units_on_all_three_templates(tmp_path, monkey
 
     csp = _csp_from_build(tmp_path)
     assert "https://pagead2.googlesyndication.com" in csp
-    assert "frame-src https://googleads.g.doubleclick.net" in csp
+    frame_src = csp.split("frame-src")[1].split(";")[0]
+    assert "https://googleads.g.doubleclick.net" in frame_src
+    # The sodar invalid-traffic check — blocked, impressions count as unverified.
+    connect_src = csp.split("connect-src")[1].split(";")[0]
+    assert "https://*.adtrafficquality.google" in connect_src
     # The whole point of ads.js: enabling ads must never buy inline script.
     assert "'unsafe-inline'" not in csp.split("script-src")[1].split(";")[0]
 
 
-def test_full_build_ads_on_leaves_adless_pages_alone(tmp_path, monkeypatch):
-    # All six slots live in the three tool templates. The homepage and static
-    # pages carry no inventory, so they must not contact Google's ad server
-    # either — §7.2 item 1's "confirm no leakage", pinned in CI.
+def test_full_build_ads_on_loads_loader_sitewide_but_units_on_tools_only(
+    tmp_path, monkeypatch
+):
+    # The vendor loader ships on EVERY page (site review, Google's CMP, Auto ads
+    # all need it), but the six manual slots and ads.js stay on tool pages.
     _seed_site_settings(**ADS_ON)
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     for page in ("index.html", "about/index.html", "privacy/index.html"):
         html = (tmp_path / page).read_text(encoding="utf-8")
+        assert LOADER_TAG in html, page
+        assert 'class="adsbygoogle"' not in html, page
+        assert "/js/ads." not in html, page
+    # No publisher content ⇒ no loader: if Auto ads is ever switched on, ads on
+    # these are a "screens without publisher content" policy violation.
+    for page in ("404.html", "offline.html", "account/index.html"):
+        html = (tmp_path / page).read_text(encoding="utf-8")
         assert "adsbygoogle" not in html, page
 
 
-def test_adsense_is_live_requires_enabled_publisher_and_a_slot():
+def test_adsense_is_live_requires_enabled_and_publisher_not_a_slot():
     # The single predicate both the CSP branch and base.html's loader read.
+    # Slot ids are deliberately NOT required — the loader must be live for
+    # site review and the CMP, before any manual unit exists.
     def cfg(**kw):
         base = {"enabled": True, "publisher_id": "ca-pub-1", "slots": {}}
-        slots = kw.pop("slots", {"leaderboard": "1"})
         base.update(kw)
-        base["slots"] = slots
         return {"adsense": base}
 
     assert build.adsense_is_live(cfg()) is True
-    assert build.adsense_is_live(cfg(slots={"in_content": "2"})) is True
+    assert build.adsense_is_live(cfg(slots={"leaderboard": "1"})) is True
+    assert build.adsense_is_live(cfg(slots=None)) is True
     assert build.adsense_is_live(cfg(enabled=False)) is False
     assert build.adsense_is_live(cfg(publisher_id="")) is False
-    assert build.adsense_is_live(cfg(slots={})) is False
-    assert (
-        build.adsense_is_live(cfg(slots={"leaderboard": "", "in_content": ""})) is False
-    )
+    assert build.adsense_is_live(cfg(publisher_id=None)) is False
     # Structurally absent config must not raise.
     assert build.adsense_is_live({}) is False
     assert build.adsense_is_live({"adsense": None}) is False
-    assert build.adsense_is_live({"adsense": {"enabled": True, "slots": None}}) is False
 
 
 @pytest.mark.parametrize(
@@ -592,9 +608,8 @@ def test_adsense_is_live_requires_enabled_publisher_and_a_slot():
 def test_ad_slot_macro_tolerates_what_the_predicate_tolerates(adsense):
     # ad_slot() is called UNCONDITIONALLY from all three tool templates — the
     # guard is inside it — so any shape it cannot render must yield "" rather
-    # than crash the build. adsense_is_live() returns False for all of these, so
-    # the macro disagreeing with it is a build failure on a config the rest of
-    # the system deliberately tolerates, and with ads OFF at that.
+    # than crash the build — including shapes where the loader IS live (enabled
+    # + publisher, no usable slot), which is the normal pre-approval posture.
     #
     # `.get(k, default)` covers an ABSENT key, not a present-but-None value, and
     # `adsense:` / `slots:` with no children is valid YAML that parses to None.
@@ -608,20 +623,15 @@ def test_ad_slot_macro_tolerates_what_the_predicate_tolerates(adsense):
     tpl = env.from_string(
         "{% from '_macros.html' import ad_slot %}{{ ad_slot(ads, 'leaderboard') }}"
     )
-    assert build.adsense_is_live({"adsense": adsense}) is False
     assert tpl.render(ads=adsense).strip() == ""
 
 
-def test_half_configured_adsense_does_not_widen_the_csp(tmp_path, monkeypatch):
-    # 🔴 §8: "enabling AdSense must not widen the CSP without rendering ads."
-    # The template guard needs a publisher id AND a slot id; if the CSP branch
-    # asked only for `enabled`, this overlay would open Google's origins for
-    # inventory that never appears — an attack-surface increase bought for
-    # nothing, with no error anywhere. The two conditions must agree.
-    _seed_site_settings(
-        adsense_enabled=True,
-        adsense_publisher_id="ca-pub-1234567890123456",
-    )
+def test_toggle_without_publisher_does_not_widen_the_csp(tmp_path, monkeypatch):
+    # 🔴 §8: "enabling AdSense must not widen the CSP without loading anything."
+    # The loader needs a publisher id; if the CSP branch asked only for
+    # `enabled`, this overlay would open Google's origins with no loader on any
+    # page — attack surface bought for nothing, with no error anywhere.
+    _seed_site_settings(adsense_enabled=True)
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     csp = _csp_from_build(tmp_path)
@@ -635,32 +645,36 @@ def test_half_configured_adsense_does_not_widen_the_csp(tmp_path, monkeypatch):
     [
         ({}, False),  # all off
         ({"adsense_enabled": True}, False),  # toggle only
-        ({"adsense_enabled": True, "adsense_publisher_id": _PUB}, False),  # no slot
+        ({"adsense_enabled": True, "adsense_publisher_id": _PUB}, True),  # no slot
         ({"adsense_slot_leaderboard": "1111111111"}, False),  # slot, not enabled
         ({"adsense_publisher_id": _PUB, "adsense_slot_leaderboard": "1"}, False),
         (ADS_ON, True),  # fully configured
     ],
 )
-def test_csp_ad_origins_appear_exactly_when_units_do(
+def test_csp_ad_origins_appear_exactly_when_the_loader_does(
     tmp_path, monkeypatch, overlay, expect_ads
 ):
     # The §8 invariant stated as an EQUIVALENCE rather than a one-way check:
-    # across every overlay shape, ad origins are in the CSP if and only if a
-    # built tool page actually carries units. Either direction is a bug — a CSP
-    # opened for nothing (§1.1), or units whose origins are blocked.
+    # across every overlay shape, ad origins are in the CSP if and only if the
+    # built pages carry the vendor loader. Either direction is a bug — a CSP
+    # opened for nothing (§1.1), or a loader whose origins are blocked.
     _seed_site_settings(**overlay)
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     has_origins = "googlesyndication" in _csp_from_build(tmp_path)
-    has_units = "adsbygoogle" in _tool_page(tmp_path, TOOL_PAGES["standard"])
-    assert has_origins == has_units, overlay
-    assert has_units is expect_ads, overlay
+    home = (tmp_path / "index.html").read_text(encoding="utf-8")
+    has_loader = "adsbygoogle.js" in home
+    assert has_origins == has_loader, overlay
+    assert has_loader is expect_ads, overlay
 
 
-def test_full_build_half_configured_adsense_renders_nothing(tmp_path, monkeypatch):
+def test_full_build_half_configured_adsense_renders_loader_but_no_units(
+    tmp_path, monkeypatch
+):
     # §8: enabled with a publisher id but no slot ids must render ZERO units —
     # an <ins data-ad-slot=""> fails opaquely at Google's end, with nothing in
-    # the build or the page to say so.
+    # the build or the page to say so. The loader itself DOES ship (the
+    # pre-approval posture: site review + CMP).
     _seed_site_settings(
         adsense_enabled=True,
         adsense_publisher_id="ca-pub-1234567890123456",
@@ -669,7 +683,8 @@ def test_full_build_half_configured_adsense_renders_nothing(tmp_path, monkeypatc
     build.build()
     for ui_type, slug in TOOL_PAGES.items():
         html = _tool_page(tmp_path, slug)
-        assert "adsbygoogle" not in html, f"{ui_type} ({slug})"
+        assert LOADER_TAG in html, f"{ui_type} ({slug})"
+        assert 'class="adsbygoogle"' not in html, f"{ui_type} ({slug})"
         assert 'class="ad-slot' not in html, f"{ui_type} ({slug})"
 
 
@@ -1700,8 +1715,9 @@ def test_fetch_previous_sitemap_caches_per_base(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# Cookie consent gate — GA4/AdSense vendor loaders are consent-gated rather
-# than eagerly loaded (technical report §13, P0 item 2)
+# Cookie consent gate — GA4's vendor loader is consent-gated rather than
+# eagerly loaded (technical report §13, P0 item 2). AdSense consent is Google's
+# certified CMP's job, delivered by the (ungated) AdSense loader itself.
 # --------------------------------------------------------------------------- #
 
 
@@ -1741,7 +1757,6 @@ def test_full_build_ga4_on_renders_consent_gate_sitewide(tmp_path, monkeypatch):
         data = _consent_config(html)
         assert data == {
             "ga4_src": "https://www.googletagmanager.com/gtag/js?id=G-CONSENT",
-            "adsense_src": None,
         }, page
         loader = re.search(r'<script src="/js/consent\.[0-9a-f]+\.js"[^>]*>', html)
         assert loader, page
@@ -1749,30 +1764,27 @@ def test_full_build_ga4_on_renders_consent_gate_sitewide(tmp_path, monkeypatch):
         assert "integrity=" in loader.group(0), loader.group(0)
 
 
-def test_full_build_ads_on_gates_adsbygoogle_behind_consent(tmp_path, monkeypatch):
-    # AdSense is scoped in too (not just GA4): the vendor URL rides in the
-    # config island for consent.js to fetch later, never as a live <script src>.
+def test_full_build_ads_on_loads_adsbygoogle_outside_the_consent_gate(
+    tmp_path, monkeypatch
+):
+    # Gating the loader behind our own banner meant Google's CMP — which the
+    # loader delivers — could never show its EEA/UK consent message. The
+    # loader is Google's static async tag; with GA4 off there is nothing left
+    # for consent.js to gate.
     _seed_site_settings(**ADS_ON)
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
     for slug in TOOL_PAGES.values():
         html = _tool_page(tmp_path, slug)
-        data = _consent_config(html)
-        assert data["ga4_src"] is None, slug
-        assert data["adsense_src"] == (
-            "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"
-            "?client=ca-pub-1234567890123456"
-        ), slug
-        assert (
-            '<script async src="https://pagead2.googlesyndication.com' not in html
-        ), slug
+        assert LOADER_TAG in html, slug
+        assert _consent_config(html) is None, slug
 
 
 def test_full_build_ads_on_leaves_adless_pages_without_a_consent_gate(
     tmp_path, monkeypatch
 ):
-    # AdSense inventory lives only on tool pages, and GA4 is off in this test,
-    # so the homepage/static pages have nothing to gate consent for either.
+    # AdSense isn't consent.js's to gate (Google's CMP is), and GA4 is off in
+    # this test, so no page has anything for our own banner to gate.
     _seed_site_settings(**ADS_ON)
     monkeypatch.setattr(build, "DIST", tmp_path)
     build.build()
@@ -2898,3 +2910,40 @@ def test_wrap_faq_cards_splices_extra_html_inside_the_last_card_only():
 def test_wrap_faq_cards_empty_input_does_not_crash_or_apply_extra_html():
     assert build.wrap_faq_cards("") == ""
     assert build.wrap_faq_cards("", extra_last_card_html="<div>legend</div>") == ""
+
+
+def test_full_build_trust_and_policy_copy(tmp_path, monkeypatch):
+    # AdSense-review fixes that are pure copy, pinned so a content edit can't
+    # quietly bring them back.
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    # Cloudflare Email Obfuscation rewrites bare addresses to "[email protected]"
+    # in the served HTML — the email_off markers opt these links out.
+    for page in ("contact/index.html", "privacy/index.html"):
+        html = (tmp_path / page).read_text(encoding="utf-8")
+        assert '<!--email_off--><a href="mailto:' in html, page
+    # PDF Unlock must not advertise stripping restrictions without a password
+    # (Google's "enabling dishonest behavior" / DRM-circumvention policy).
+    unlock = _tool_page(tmp_path, "convert/pdf-unlock").lower()
+    assert "no password required" not in unlock
+    assert "no password needed" not in unlock
+    assert "restriction" not in unlock
+    # Reads as an unfinished product to a reviewer.
+    for page in tmp_path.glob("convert/*/index.html"):
+        assert "planned for a future update" not in page.read_text(encoding="utf-8")
+
+
+def test_full_build_ads_and_ga4_on_together(tmp_path, monkeypatch):
+    # Production's real combination. The banner gates GA4 only; the AdSense
+    # loader sits outside it. A leftover reference to the removed adsense_src
+    # variable crashed exactly this combination (StrictUndefined) while the
+    # ads-only and GA4-only builds both passed.
+    _seed_site_settings(**ADS_ON, ga4_enabled=True, ga4_measurement_id="G-BOTH")
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    html = _tool_page(tmp_path, TOOL_PAGES["standard"])
+    assert LOADER_TAG in html
+    assert _consent_config(html) == {
+        "ga4_src": "https://www.googletagmanager.com/gtag/js?id=G-BOTH"
+    }
+    assert "FileCast uses cookies for analytics." in html

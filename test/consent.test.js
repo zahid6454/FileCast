@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createDom, evalScript } from './helpers.js';
 
-// consent.js is what actually requests gtag.js / adsbygoogle.js — the two
-// vendor loaders that set tracking cookies — gated on a stored decision. It
+// consent.js is what actually requests gtag.js — the GA4 loader that sets
+// tracking cookies — gated on a stored decision. (AdSense consent is Google's
+// CMP's job, not this file's.) It
 // reads its config from a JSON data island (not document.currentScript), so
 // a plain eval() harness can drive it with no real <script> element involved.
 
@@ -25,8 +26,6 @@ function injectedSrcs(dom) {
 }
 
 const GA4_SRC = 'https://www.googletagmanager.com/gtag/js?id=G-TEST';
-const ADSENSE_SRC =
-  'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1';
 
 describe('consent.js', () => {
   it('does nothing when the config island is absent', () => {
@@ -40,7 +39,7 @@ describe('consent.js', () => {
 
   it('undecided: shows the banner and injects nothing yet', () => {
     const dom = createDom(BANNER);
-    withConfig(dom, { ga4_src: GA4_SRC, adsense_src: null });
+    withConfig(dom, { ga4_src: GA4_SRC });
     evalScript(dom, 'consent.js');
     expect(dom.window.document.getElementById('cookie-consent').classList.contains('hidden')).toBe(
       false
@@ -48,12 +47,12 @@ describe('consent.js', () => {
     expect(injectedSrcs(dom)).toEqual([]);
   });
 
-  it('prior "granted" decision: injects the configured vendor scripts immediately, banner stays hidden', () => {
+  it('prior "granted" decision: injects gtag.js immediately, banner stays hidden', () => {
     const dom = createDom(BANNER);
     dom.window.localStorage.setItem('fc_cookie_consent', 'granted');
-    withConfig(dom, { ga4_src: GA4_SRC, adsense_src: ADSENSE_SRC });
+    withConfig(dom, { ga4_src: GA4_SRC });
     evalScript(dom, 'consent.js');
-    expect(injectedSrcs(dom).sort()).toEqual([ADSENSE_SRC, GA4_SRC].sort());
+    expect(injectedSrcs(dom)).toEqual([GA4_SRC]);
     expect(dom.window.document.getElementById('cookie-consent').classList.contains('hidden')).toBe(
       true
     );
@@ -62,7 +61,7 @@ describe('consent.js', () => {
   it('prior "denied" decision: injects nothing, banner stays hidden', () => {
     const dom = createDom(BANNER);
     dom.window.localStorage.setItem('fc_cookie_consent', 'denied');
-    withConfig(dom, { ga4_src: GA4_SRC, adsense_src: ADSENSE_SRC });
+    withConfig(dom, { ga4_src: GA4_SRC });
     evalScript(dom, 'consent.js');
     expect(injectedSrcs(dom)).toEqual([]);
     expect(dom.window.document.getElementById('cookie-consent').classList.contains('hidden')).toBe(
@@ -70,9 +69,9 @@ describe('consent.js', () => {
     );
   });
 
-  it('clicking Accept persists the decision, hides the banner, and injects only the configured scripts', () => {
+  it('clicking Accept persists the decision, hides the banner, and injects gtag.js', () => {
     const dom = createDom(BANNER);
-    withConfig(dom, { ga4_src: GA4_SRC, adsense_src: null });
+    withConfig(dom, { ga4_src: GA4_SRC });
     evalScript(dom, 'consent.js');
 
     dom.window.document.getElementById('cookie-consent__accept').click();
@@ -86,7 +85,7 @@ describe('consent.js', () => {
 
   it('clicking Reject persists the decision, hides the banner, and injects nothing', () => {
     const dom = createDom(BANNER);
-    withConfig(dom, { ga4_src: GA4_SRC, adsense_src: ADSENSE_SRC });
+    withConfig(dom, { ga4_src: GA4_SRC });
     evalScript(dom, 'consent.js');
 
     dom.window.document.getElementById('cookie-consent__reject').click();

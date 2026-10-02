@@ -6,10 +6,8 @@
   <title>{% block title %}{{ site.name }} — {{ site.tagline }}{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}{{ site.description }}{% endblock %}">
   {# AdSense site-ownership verification. Gated on the publisher id alone (NOT
-     adsense_live / adsense.enabled) — Google's verification crawler checks the
-     homepage, which never carries the ad-serving script (that's scoped to tool
-     pages only, see the adsense_live block further down). This has to render
-     site-wide as soon as a publisher id is saved, even before ads go live. #}
+     adsense_live / adsense.enabled) — this has to render site-wide as soon as
+     a publisher id is saved, even with the AdSense toggle still off. #}
   {% if adsense.publisher_id %}
   <meta name="google-adsense-account" content="{{ adsense.publisher_id }}">
   {% endif %}
@@ -88,17 +86,17 @@
      emits ZERO extra bytes — every existing page stays byte-identical (§7.1). #}
   {% block structured_data %}{% endblock %}{% block head_extra %}{% endblock %}
 
-  {# Consent-gated vendor URLs. Neither GA4's gtag.js nor AdSense's
-     adsbygoogle.js is loaded by a static <script src> anywhere below — those
-     are the two requests that actually set tracking cookies (_ga/_gid,
-     DoubleClick), so consent.js (further down) is the only thing allowed to
-     load them, and only once a "granted" decision is stored. analytics.js's
-     GA4 branch and ads.js still run unconditionally: both only push to a
-     local queue array, which is inert until the gated vendor script drains
-     it, so neither one needs to wait on consent itself. #}
+  {# Consent-gated vendor URL. GA4's gtag.js is not loaded by a static
+     <script src> anywhere below — it's the request that sets _ga/_gid, so
+     consent.js (further down) is the only thing allowed to load it, and only
+     once a "granted" decision is stored. analytics.js's GA4 branch still runs
+     unconditionally: it only pushes to a local queue array, inert until
+     gtag.js drains it.
+
+     AdSense is NOT gated here (see the loader block below): its consent is
+     collected by Google's certified CMP, which adsbygoogle.js itself delivers. #}
   {% set ga4_src = "https://www.googletagmanager.com/gtag/js?id=" ~ ga4.measurement_id if (ga4.enabled and ga4.measurement_id) else none %}
-  {% set adsense_src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=" ~ adsense.publisher_id if (adsense_live and tool is defined) else none %}
-  {% set consent_needed = ga4_src or adsense_src %}
+  {% set consent_needed = ga4_src %}
 
   {# Cloudflare Web Analytics. Gated on a build-time token (env var, folded
      into site_config by create_jinja_env() the same way API_URL is — see
@@ -189,23 +187,30 @@
   {% endif %}
   {% endif %}
 
-  {# AdSense (Phase 9 §3.2). ads.js is the self-hosted module that does the
-     per-unit push Google's documented snippet does inline — no inline script,
-     so `script-src 'self'` survives (P6/P7). The vendor loader itself
-     (adsbygoogle.js — see the consent-gating comment above) is injected by
-     consent.js instead of a static tag here.
+  {# AdSense (Phase 9 §3.2). The vendor loader is Google's own documented tag,
+     on every CONTENT page, as soon as the toggle is on with a publisher id —
+     slot ids not required. Pages with no publisher content (404, offline,
+     account) override the `adsense_loader` block to empty: if Auto ads is ever
+     switched on, ads there are a "screens without publisher content" policy
+     violation. It must not wait on approval or on our cookie banner:
+       - Google's site review looks for it;
+       - the certified CMP (Privacy & messaging, configured in the AdSense
+         dashboard) is delivered BY this script, so gating the script behind
+         our own banner meant the EEA/UK consent message could never appear;
+       - Auto ads, if ever switched on in the dashboard, run through it.
+     Consent for ads is the CMP's job (EEA/UK/CH), not consent.js's.
 
-     `adsense_live` is build.py's adsense_is_live() — enabled AND a publisher id
-     AND at least one slot id, i.e. "at least one unit will actually render".
-     generate_headers() gates the CSP's ad origins on the SAME predicate, which
-     is what stops the toggle from widening the CSP for inventory that never
-     appears (§1.1). Do not re-derive that condition here; change the predicate.
+     `adsense_live` is build.py's adsense_is_live(). generate_headers() gates
+     the CSP's ad origins on the SAME predicate. Do not re-derive that
+     condition here; change the predicate. #}
+  {% block adsense_loader %}{% if adsense_live %}
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ adsense.publisher_id }}" crossorigin="anonymous"></script>
+  {% endif %}{% endblock %}
 
-     `tool is defined` is the second half: all six slots live in the three tool
-     templates, so the homepage, category and static pages carry no inventory
-     and have no reason to contact Google's ad server. (Adding slots elsewhere
-     is a density decision, not a follow-up — §6.) It is deliberately NOT part
-     of adsense_is_live(), since the CSP is one document for the whole site.
+  {# ads.js is the self-hosted module that does the per-unit push Google's
+     documented snippet does inline — no inline script, so `script-src 'self'`
+     survives (P6/P7). Tool pages only: all six manual slots live in the three
+     tool templates (and ad_slot() renders none until a slot id is saved).
 
      ⚠ `defer` is load-bearing — ads.js must run AFTER the <ins> elements exist
      or it finds zero units and silently pushes nothing. Do not copy
@@ -223,7 +228,7 @@
      when there is something on THIS page to gate consent for. #}
   {% if consent_needed %}
   <script type="application/json" id="cookie-consent-config">
-  {"ga4_src": {{ ga4_src|tojson }}, "adsense_src": {{ adsense_src|tojson }}}
+  {"ga4_src": {{ ga4_src|tojson }}}
   </script>
   {% set consent_js = assets.get('js/consent.js') %}
   {% if consent_js %}
@@ -396,7 +401,7 @@
   {% if consent_needed %}
   <div class="cookie-consent hidden" id="cookie-consent" role="region" aria-label="Cookie consent" aria-live="polite">
     <p class="cookie-consent__text">
-      FileCast uses cookies for analytics{% if adsense_src %} and ads{% endif %}. See our
+      FileCast uses cookies for analytics. See our
       <a href="/privacy/">Privacy Policy</a> for details.
     </p>
     <div class="cookie-consent__actions">

@@ -18,4 +18,4 @@ Yes. This tool handles detailed SVGs including those with gradients, shadows, pa
 
 ### Can I convert multiple files?
 
-Currently, this tool converts one file at a time. Drop a file, convert it, download, then click "Convert Another" for the next one. Batch conversion is planned for a future update.
+Currently, this tool converts one file at a time. Drop a file, convert it, download, then click "Convert Another" for the next one.

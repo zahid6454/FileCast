@@ -6,7 +6,7 @@ Yes. This tool processes your file entirely in your browser. Your PDF and any pa
 
 ### Do I need to know the password to use this tool?
 
-Only if the PDF actually requires one to open. Some PDFs are protected against printing or editing without needing a password just to view them — this tool detects and removes that automatically, no password required. If the PDF does require a password to open, you'll need to enter it correctly.
+This tool removes a password you already know — you enter the password you use to open the file, and the tool saves a copy that no longer asks for it. It can't find, guess, or bypass a password for you.
 
 ### What happens if I enter the wrong password?
 

@@ -18,4 +18,4 @@ Usually, yes. HEIC achieves roughly 50% smaller file sizes than JPG at the same 
 
 ### Can I convert multiple HEIC files at once?
 
-Currently, this tool converts one file at a time. Drop a file, convert it, download, then click "Convert Another" for the next one. Batch conversion is planned for a future update.
+Currently, this tool converts one file at a time. Drop a file, convert it, download, then click "Convert Another" for the next one.
