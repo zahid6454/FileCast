@@ -258,7 +258,17 @@
           if (body.status === 'done') {
             downloadResult(jobId);
           } else if (body.status === 'failed') {
-            reject(new Error(body.error || 'Conversion failed. Please try again.'));
+            // The worker already wrote an admin "Recent errors" row for this
+            // failure, with the technical cause — flag it so shared.js
+            // doesn't log a second, detail-less duplicate. errorFromType
+            // keeps the server's own classification (conversion_error etc.)
+            // instead of every failure reading as validation_error.
+            var failure = window.FC.errorFromType(
+              body.error || 'Conversion failed. Please try again.',
+              body.error_type
+            );
+            failure.serverReported = true;
+            reject(failure);
           } else {
             maybeShowLongWaitMessage();
             scheduleNextPoll(jobId, retryAfter);

@@ -386,12 +386,14 @@
           },
           false
         );
-        reportError({
-          tool_id: config.id,
-          error_type: errorType,
-          error_message: classified.report,
-          browser: navigator.userAgent
-        });
+        if (!(err && err.serverReported)) {
+          reportError({
+            tool_id: config.id,
+            error_type: errorType,
+            error_message: classified.report,
+            browser: navigator.userAgent
+          });
+        }
       });
   }
 

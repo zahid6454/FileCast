@@ -691,6 +691,38 @@ together, and can drift (that's what the `api-drift` CI job watches for):
 | Retention integrity | `python -m data.tasks canary` | Not currently wired into any external scheduler/alert — exists, meant to be invoked periodically |
 | Host resources | `scripts/monitor-resources.sh` | RAM/disk/CPU check with optional Slack-webhook alerting; **not currently installed as a cron job on the VM** |
 
+### Conversion error reporting (admin "Errors" tab)
+
+Every failed conversion should show the **user** a plain-language message and
+give the **admin** the technical cause too. Where each side comes from:
+
+- **Client-side tools** — `FC.classifyError` (`static/js/fc-util.js`) is the one
+  place that turns a thrown value into `{ message, report, errorType }`.
+  `message` is what the user sees; known raw browser errors (an expired Android
+  file-picker grant `NotReadableError`, out-of-memory, network/script-load
+  failures) are rewritten there into "what happened + what to try". `report` is
+  `message` plus `[Technical: <name>: <raw message>]`, and is what
+  `shared.js` / `shared-multi.js` POST to `/api/v1/errors`. Text and diff tools
+  run in workers with their own copy of this logic (`errorPayload` in
+  `text-converter-worker.js` / `text-diff-worker.js`): an unexpected crash posts
+  a plain `error` plus the raw cause as `detail`, which `shared-text.js` /
+  `shared-diff.js` append to the report. Converter authors: throw a plain
+  `new Error('<clear sentence>')` for bad input (classified `validation_error`);
+  anything else is treated as a crash.
+- **Server-side tools** — the job-status poll returns only the friendly message,
+  by design (raw exception text such as Ghostscript stderr must not go back to
+  the browser). So `api/data/job_worker.py` writes the admin `errors` row itself,
+  with the raw cause appended, at the three places a job can fail (conversion
+  exception, dead-letter after repeated worker restarts, stuck-job GC sweep).
+  `server-upload.js` flags those failures `serverReported` so `shared.js` skips
+  its own report — one row per failure, not two. Failures the server never saw
+  (rejected upload, network error) are still reported by the browser.
+- **Multi-file tools** list each failed file and its reason (grouped by reason)
+  on the result screen, not just a "Failed" badge.
+- `shared-multi.js` reads each picked file into memory the moment it's selected
+  (`FC.materializeFile`, one at a time) because Android Photo Picker access can
+  expire before Convert is clicked.
+
 ## Third-Party Services
 
 FileCast's site copy and integration toggles (AdSense, GA4, Sentry DSN) live in two
