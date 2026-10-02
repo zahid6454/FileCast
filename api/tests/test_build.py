@@ -2931,3 +2931,19 @@ def test_full_build_trust_and_policy_copy(tmp_path, monkeypatch):
     # Reads as an unfinished product to a reviewer.
     for page in tmp_path.glob("convert/*/index.html"):
         assert "planned for a future update" not in page.read_text(encoding="utf-8")
+
+
+def test_full_build_ads_and_ga4_on_together(tmp_path, monkeypatch):
+    # Production's real combination. The banner gates GA4 only; the AdSense
+    # loader sits outside it. A leftover reference to the removed adsense_src
+    # variable crashed exactly this combination (StrictUndefined) while the
+    # ads-only and GA4-only builds both passed.
+    _seed_site_settings(**ADS_ON, ga4_enabled=True, ga4_measurement_id="G-BOTH")
+    monkeypatch.setattr(build, "DIST", tmp_path)
+    build.build()
+    html = _tool_page(tmp_path, TOOL_PAGES["standard"])
+    assert LOADER_TAG in html
+    assert _consent_config(html) == {
+        "ga4_src": "https://www.googletagmanager.com/gtag/js?id=G-BOTH"
+    }
+    assert "FileCast uses cookies for analytics." in html
