@@ -46,6 +46,7 @@ describe('fc-util.js — FC.classifyError', () => {
     evalScript(dom, 'fc-util.js');
     expect(dom.window.FC.classifyError(new Error('bad CSV'), 'fallback')).toEqual({
       message: 'bad CSV',
+      report: 'bad CSV',
       errorType: 'validation_error'
     });
   });
@@ -57,7 +58,8 @@ describe('fc-util.js — FC.classifyError', () => {
     const r = dom.window.FC.classifyError(err, 'fallback');
     expect(r.errorType).toBe('conversion_error');
     expect(r.message).toContain('re-select the file');
-    expect(r.message).toContain('[NotReadableError]');
+    expect(r.message).not.toContain('NotReadableError'); // users never see jargon
+    expect(r.report).toContain('[Technical: NotReadableError: permission problems ...]'); // admin does
   });
 
   it('replaces raw memory and network errors with plain-language messages', () => {
@@ -80,6 +82,7 @@ describe('fc-util.js — FC.classifyError', () => {
     evalScript(dom, 'fc-util.js');
     expect(dom.window.FC.classifyError('The input is not a PNG file!', 'fallback')).toEqual({
       message: 'The input is not a PNG file!',
+      report: 'The input is not a PNG file!',
       errorType: 'validation_error'
     });
   });
@@ -92,10 +95,12 @@ describe('fc-util.js — FC.classifyError', () => {
     );
     expect(dom.window.FC.classifyError({ name: 'NotSupportedError' }, 'fallback')).toEqual({
       message: 'fallback',
+      report: 'fallback',
       errorType: 'conversion_error'
     });
     expect(dom.window.FC.classifyError(undefined, 'fallback')).toEqual({
       message: 'fallback',
+      report: 'fallback',
       errorType: 'conversion_error'
     });
   });

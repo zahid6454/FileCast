@@ -389,7 +389,7 @@
         reportError({
           tool_id: config.id,
           error_type: errorType,
-          error_message: msg,
+          error_message: classified.report,
           browser: navigator.userAgent
         });
       });
