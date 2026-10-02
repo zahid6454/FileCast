@@ -148,7 +148,7 @@
     els.progress.classList.add('progress--indeterminate');
     els.progressFill.style.width = '';
 
-    function onFailure(message, errorType) {
+    function onFailure(message, errorType, detail) {
       var msg = message || 'Conversion failed. Please check your input and try again.';
       errorType = errorType || 'conversion_error';
       showError(msg);
@@ -165,7 +165,7 @@
       reportError({
         tool_id: config.id,
         error_type: errorType,
-        error_message: msg,
+        error_message: detail ? msg + ' [Technical: ' + detail + ']' : msg,
         browser: navigator.userAgent
       });
     }
@@ -185,7 +185,7 @@
       worker.terminate();
       var data = e.data || {};
       if (!data.ok) {
-        onFailure(data.error, data.errorType);
+        onFailure(data.error, data.errorType, data.detail);
         return;
       }
       var durationMs = Date.now() - startTime;
@@ -193,7 +193,11 @@
     };
     worker.onerror = function (err) {
       worker.terminate();
-      onFailure(err && err.message);
+      onFailure(
+        'Something went wrong while processing your input. Please refresh the page and try again.',
+        'conversion_error',
+        err && err.message
+      );
     };
     worker.postMessage({ text: text });
   }

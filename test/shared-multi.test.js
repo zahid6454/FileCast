@@ -170,6 +170,33 @@ describe('shared-multi.js — error visibility (tool UI audit §1)', () => {
     expect(reported[0].error_message).toContain('[Technical: NotReadableError: stale grant]');
   });
 
+  it('groups files that failed for the same reason into one line', async () => {
+    const dom = await setupToolPage();
+    dom.window.convertFile = () => Promise.reject(new Error('Bad pixels.'));
+    selectFiles(dom, [makeFile(dom, 'a.jpg', 1024), makeFile(dom, 'b.jpg', 1024)]);
+    await flush();
+    dom.window.document.getElementById('convert-btn').click();
+    for (let i = 0; i < 6; i++) await flush();
+
+    const lines = dom.window.document.querySelectorAll('#result-summary .error-msg');
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toBe('a.jpg, b.jpg: Bad pixels.');
+  });
+
+  it('reads picked files one at a time, not all at once', async () => {
+    const resolvers = [];
+    const spy = vi.fn(() => new Promise((resolve) => resolvers.push(resolve)));
+    const dom = await setupToolPage({}, (d) => {
+      d.window.FC.materializeFile = spy;
+    });
+    selectFiles(dom, [makeFile(dom, 'a.jpg', 1024), makeFile(dom, 'b.jpg', 1024)]);
+    await flush();
+    expect(spy).toHaveBeenCalledTimes(1);
+    resolvers[0]();
+    await flush();
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
   it('reads picked files into memory at selection time, not at Convert time', async () => {
     const spy = vi.fn(() => Promise.resolve());
     // shared-multi.js captures FC at load, so the spy must be in place before boot.

@@ -77,6 +77,17 @@ describe('fc-util.js — FC.classifyError', () => {
     );
   });
 
+  it('does not call an unrelated RangeError a size problem', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    const r = dom.window.FC.classifyError(new RangeError('Invalid time value'), 'fallback');
+    expect(r.message).toBe('Invalid time value');
+    expect(r.report).toBe('Invalid time value');
+    expect(
+      dom.window.FC.classifyError(new RangeError('Array buffer allocation failed'), 'x').message
+    ).toContain('too large for your device');
+  });
+
   it('classifies a bare string throw as validation_error and returns it as-is', () => {
     const dom = createDom();
     evalScript(dom, 'fc-util.js');

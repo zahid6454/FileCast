@@ -4,6 +4,7 @@
   var state = 'empty';
   var selectedFiles = [];
   var results = [];
+  var warmChain = Promise.resolve(); // serializes the at-selection file reads
   var els = {};
   // Mirrors shared.js's cancelledThisRun (P4 §35) — set right before a
   // user-initiated cancel so a batch convertFiles promise already in flight
@@ -103,7 +104,15 @@
       // while the grant is fresh, instead of at Convert time. The result is
       // cached per File (FC.materializeFile), so later converter reads reuse
       // it; a failure here is ignored and retried at Convert time.
-      if (FC.materializeFile) FC.materializeFile(file).catch(function () {});
+      // Sequential (not all at once) so a 10-photo pick doesn't spike memory
+      // or trip the per-file read timeout on a phone.
+      if (FC.materializeFile) {
+        warmChain = warmChain
+          .then(function () {
+            return FC.materializeFile(file);
+          })
+          .catch(function () {});
+      }
     }
 
     renderFileList();
@@ -402,10 +411,15 @@
 
     els.resultSummary.textContent = summary;
     // Say WHICH files failed and why — the row badge alone just reads "Failed".
+    // Grouped by reason so ten files failing the same way read as one line.
+    var byReason = Object.create(null);
     failures.forEach(function (r) {
+      (byReason[r.error] = byReason[r.error] || []).push(r.originalName);
+    });
+    Object.keys(byReason).forEach(function (reason) {
       var line = document.createElement('div');
       line.className = 'error-msg';
-      line.textContent = r.originalName + ': ' + r.error;
+      line.textContent = byReason[reason].join(', ') + ': ' + reason;
       els.resultSummary.appendChild(line);
     });
 

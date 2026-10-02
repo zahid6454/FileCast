@@ -27,10 +27,16 @@ if (converterUrl) {
 function errorPayload(err, fallback) {
   var isValidation = typeof err === 'string' || (err && err.name === 'Error');
   var message = typeof err === 'string' && err ? err : (err && err.message) || fallback;
+  if (isValidation) return { ok: false, error: message, errorType: 'validation_error' };
+  // An unexpected crash: its raw message ("Cannot read properties of
+  // undefined...") is useless to a user, so show a plain one and ship the
+  // raw cause separately as `detail` for the admin Errors feed.
   return {
     ok: false,
-    error: message,
-    errorType: isValidation ? 'validation_error' : 'conversion_error'
+    error:
+      'Something went wrong while processing your input. Please refresh the page and try again.',
+    errorType: 'conversion_error',
+    detail: (err && err.name ? err.name + ': ' : '') + message
   };
 }
 

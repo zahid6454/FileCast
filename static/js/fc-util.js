@@ -92,9 +92,11 @@
         'Could not read this file — your device revoked access to it (common with photos picked from cloud storage). ' +
         'Please re-select the file, or save it to your device first.';
     } else if (
-      name === 'RangeError' ||
       name === 'QuotaExceededError' ||
-      /out of memory|allocation failed|memory access out of bounds/i.test(String(message))
+      // Not every RangeError is about size (e.g. "Invalid time value"), so match the memory ones by text.
+      /out of memory|allocation failed|memory access out of bounds|invalid (typed )?array length|invalid string length/i.test(
+        String(message)
+      )
     ) {
       message =
         'This file is too large for your device to process. Try a smaller file, or close other tabs and try again.';
