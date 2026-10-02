@@ -61,7 +61,10 @@ describe.each(['text-converter-worker.js', 'text-diff-worker.js'])(
       err.name = 'ConverterLoadError';
       const payload = dom.window.errorPayload(err, 'fallback');
       expect(payload.errorType).toBe('conversion_error');
-      expect(payload.error).toBe('Converter not loaded.');
+      expect(payload.error).toBe(
+        'Something went wrong while processing your input. Please refresh the page and try again.'
+      ); // plain text for the user
+      expect(payload.detail).toBe('ConverterLoadError: Converter not loaded.'); // raw cause for admin
     });
 
     it('classifies TypeError and a missing error as conversion_error, using the fallback message when there is none', () => {
@@ -71,8 +74,10 @@ describe.each(['text-converter-worker.js', 'text-diff-worker.js'])(
       );
       expect(dom.window.errorPayload(undefined, 'fallback')).toEqual({
         ok: false,
-        error: 'fallback',
-        errorType: 'conversion_error'
+        error:
+          'Something went wrong while processing your input. Please refresh the page and try again.',
+        errorType: 'conversion_error',
+        detail: 'fallback'
       });
     });
   }
@@ -91,8 +96,10 @@ describe('text-converter-worker.js — missing-converter guard', () => {
     expect(posted).toHaveLength(1);
     expect(posted[0]).toEqual({
       ok: false,
-      error: 'Converter not loaded.',
-      errorType: 'conversion_error'
+      error:
+        'Something went wrong while processing your input. Please refresh the page and try again.',
+      errorType: 'conversion_error',
+      detail: 'ConverterLoadError: Converter not loaded.'
     });
   });
 });
@@ -106,8 +113,10 @@ describe('text-diff-worker.js — missing-converter guard', () => {
     expect(posted).toHaveLength(1);
     expect(posted[0]).toEqual({
       ok: false,
-      error: 'Converter not loaded.',
-      errorType: 'conversion_error'
+      error:
+        'Something went wrong while processing your input. Please refresh the page and try again.',
+      errorType: 'conversion_error',
+      detail: 'ConverterLoadError: Converter not loaded.'
     });
   });
 });

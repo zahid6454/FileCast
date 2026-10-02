@@ -25,6 +25,6 @@ describe('webp-to-jpg.js — window.convertFile', () => {
     evalScript(dom, 'converters/webp-to-jpg.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.webp', { type: 'image/webp' });
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/failed to load image/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not be opened/i);
   });
 });

@@ -4,6 +4,7 @@
   var state = 'empty';
   var selectedFiles = [];
   var results = [];
+  var warmChain = Promise.resolve(); // serializes the at-selection file reads
   var els = {};
   // Mirrors shared.js's cancelledThisRun (P4 §35) — set right before a
   // user-initiated cancel so a batch convertFiles promise already in flight
@@ -99,6 +100,19 @@
         continue;
       }
       selectedFiles.push(file);
+      // Android Photo Picker grants are short-lived: read the bytes now,
+      // while the grant is fresh, instead of at Convert time. The result is
+      // cached per File (FC.materializeFile), so later converter reads reuse
+      // it; a failure here is ignored and retried at Convert time.
+      // Sequential (not all at once) so a 10-photo pick doesn't spike memory
+      // or trip the per-file read timeout on a phone.
+      if (FC.materializeFile) {
+        warmChain = warmChain
+          .then(function () {
+            return FC.materializeFile(file);
+          })
+          .catch(function () {});
+      }
     }
 
     renderFileList();
@@ -292,7 +306,7 @@
           reportError({
             tool_id: config.id,
             error_type: errorType,
-            error_message: msg,
+            error_message: classified.report,
             browser: navigator.userAgent
           });
         });
@@ -337,14 +351,17 @@
           processNext();
         })
         .catch(function (err) {
-          var classified = FC.classifyError(err, 'Failed');
+          var classified = FC.classifyError(
+            err,
+            'This file could not be converted. Please try again.'
+          );
           var msg = classified.message;
           results.push({ success: false, error: msg, originalName: file.name });
           updateFileItem(idx, 'file-list__item--error', 'Failed');
           reportError({
             tool_id: config.id,
             error_type: classified.errorType,
-            error_message: msg,
+            error_message: classified.report,
             browser: navigator.userAgent
           });
           current++;
@@ -393,6 +410,18 @@
     }
 
     els.resultSummary.textContent = summary;
+    // Say WHICH files failed and why — the row badge alone just reads "Failed".
+    // Grouped by reason so ten files failing the same way read as one line.
+    var byReason = Object.create(null);
+    failures.forEach(function (r) {
+      (byReason[r.error] = byReason[r.error] || []).push(r.originalName);
+    });
+    Object.keys(byReason).forEach(function (reason) {
+      var line = document.createElement('div');
+      line.className = 'error-msg';
+      line.textContent = byReason[reason].join(', ') + ': ' + reason;
+      els.resultSummary.appendChild(line);
+    });
 
     els.resultActions.innerHTML = '';
     successes.forEach(function (r, i) {

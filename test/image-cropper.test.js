@@ -48,7 +48,7 @@ describe('image-cropper.js — window.convertFile', () => {
     evalScript(dom, 'converters/image-cropper.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.jpg', { type: 'image/jpeg' });
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/failed to load image/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not be opened/i);
   });
 
   it('builds an interactive crop overlay when a file is picked, and hides the plain preview', async () => {

@@ -66,10 +66,11 @@ from converter import (
 )
 from log import get_logger
 from sqlalchemy import func, select, update
+from validation import ValidationError
 
 from data import neon_api, node_ops
 from data.db import get_active_session_factory
-from data.models import ConversionJob
+from data.models import ConversionJob, Error
 from data.node_registry import (
     DEFAULT_NODE_SETTINGS,
     NoActiveNodeError,
@@ -332,6 +333,7 @@ async def _execute_job(job_id: str) -> None:
 
     spec = TOOL_REGISTRY.get(tool_id)
     input_path = JOB_RESULTS_DIR / f"{job_id}.input"
+    failure: Error | None = None
     try:
         if spec is None:
             raise RuntimeError(f"Unknown tool_id: {tool_id}")
@@ -363,6 +365,16 @@ async def _execute_job(job_id: str) -> None:
         )
     except Exception as exc:
         message, error_type = _classify_conversion_error(exc)
+        # ValidationError's message already IS the whole story; anything else
+        # is an unexpected crash whose class + text only the admin should see.
+        failure = _failure_row(
+            tool_id,
+            error_type,
+            message,
+            None
+            if isinstance(exc, ValidationError)
+            else f"{type(exc).__name__}: {exc}",
+        )
         values = {
             "status": "failed",
             "finished_at": datetime.now(UTC),
@@ -402,6 +414,15 @@ async def _execute_job(job_id: str) -> None:
             .values(**values)
         )
         await db.commit()
+        if failure is not None and outcome.rowcount:
+            # Best-effort and AFTER the job row is committed: a failure to log
+            # for the admin must never un-resolve the job for the user.
+            try:
+                db.add(failure)
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.warning("Could not record job failure for admin", exc_info=True)
         if outcome.rowcount == 0:
             logger.warning(
                 "Conversion job resolved after its row left 'converting' "
@@ -415,6 +436,26 @@ async def _execute_job(job_id: str) -> None:
                     }
                 },
             )
+
+
+_ERROR_DETAIL_MAX = 500
+
+
+def _failure_row(
+    tool_id: str, error_type: str, message: str, detail: str | None = None
+) -> Error:
+    """An admin 'Recent errors' row for a failed job, carrying the technical
+    cause the user-facing message deliberately hides. Written server-side
+    because only the server knows the real exception; the job-status poll
+    exposes just the friendly message, and handing raw exception text (e.g.
+    Ghostscript stderr) back to the browser to relay would leak internals."""
+    text = f"{message} [Technical: {detail[:_ERROR_DETAIL_MAX]}]" if detail else message
+    return Error(
+        tool_id=tool_id,
+        error_type=error_type,
+        error_message=text,
+        browser="server (conversion worker)",
+    )
 
 
 async def run_job(job_id: str) -> None:
@@ -797,6 +838,14 @@ async def recover_orphaned_jobs() -> dict[str, int]:
                 job.finished_at = datetime.now(UTC)
                 job.error_message = "Conversion failed after repeated worker restarts."
                 job.error_type = "conversion_error"
+                db.add(
+                    _failure_row(
+                        job.tool_id,
+                        "conversion_error",
+                        job.error_message,
+                        f"dead-lettered after {job.attempts} attempts (worker restarted mid-conversion each time)",
+                    )
+                )
                 dead_lettered += 1
             else:
                 job.status = "queued"
@@ -833,6 +882,14 @@ async def gc_sweep() -> dict[str, int]:
             .all()
         )
         for job in stuck:
+            db.add(
+                _failure_row(
+                    job.tool_id,
+                    "queue_timeout",
+                    "The conversion service is busy right now. Please try again in a moment.",
+                    f"job stuck in '{job.status}' for over {STUCK_JOB_MAX_AGE_SECONDS}s (swept by GC)",
+                )
+            )
             job.status = "failed"
             job.finished_at = now
             job.error_message = (

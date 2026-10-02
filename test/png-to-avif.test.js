@@ -108,7 +108,7 @@ describe('png-to-avif.js — window.convertFile', () => {
     evalScript(dom, 'converters/png-to-avif.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'bad.png', { type: 'image/png' });
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/failed to load image/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not be opened/i);
   });
 
   it('cancelConversion terminates the active worker', async () => {

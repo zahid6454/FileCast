@@ -95,7 +95,11 @@
             imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           } catch (err) {
             URL.revokeObjectURL(img.src);
-            reject(new Error('Failed to read image data'));
+            reject(
+              new Error(
+                'This image could not be opened. The file may be damaged or not a valid image.'
+              )
+            );
             return;
           }
           URL.revokeObjectURL(img.src);
@@ -103,7 +107,11 @@
         };
         img.onerror = function () {
           URL.revokeObjectURL(img.src);
-          reject(new Error('Failed to load image'));
+          reject(
+            new Error(
+              'This image could not be opened. The file may be damaged or not a valid image.'
+            )
+          );
         };
         img.src = URL.createObjectURL(safeFile);
       });

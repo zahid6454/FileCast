@@ -190,7 +190,8 @@
   function showLoadError() {
     var errorEl = document.getElementById('error-msg');
     if (errorEl) {
-      errorEl.textContent = 'Failed to load image.';
+      errorEl.textContent =
+        'This image could not be opened. The file may be damaged or not a valid image.';
       errorEl.classList.remove('hidden');
     }
   }
@@ -253,13 +254,19 @@
           };
           img.onerror = function () {
             URL.revokeObjectURL(url);
-            reject(new Error('Failed to load image.'));
+            reject(
+              new Error(
+                'This image could not be opened. The file may be damaged or not a valid image.'
+              )
+            );
           };
           img.src = url;
         });
       },
       function () {
-        return Promise.reject(new Error('Failed to load image.'));
+        return Promise.reject(
+          new Error('This image could not be opened. The file may be damaged or not a valid image.')
+        );
       }
     );
   };
@@ -295,7 +302,11 @@
             }
             resolve(blob);
           } else {
-            reject(new Error('Failed to rotate/flip image.'));
+            reject(
+              new Error(
+                'Could not rotate or flip this image. Try a different file or a smaller one.'
+              )
+            );
           }
         },
         mimeType,

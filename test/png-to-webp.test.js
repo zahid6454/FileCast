@@ -26,7 +26,7 @@ describe('png-to-webp.js — window.convertFile', () => {
     evalScript(dom, 'converters/png-to-webp.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'graphic.png', { type: 'image/png' });
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/may not support webp export/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/may not support saving webp/i);
   });
 
   it('rejects when the image fails to load', async () => {
@@ -36,6 +36,6 @@ describe('png-to-webp.js — window.convertFile', () => {
     evalScript(dom, 'converters/png-to-webp.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'graphic.png', { type: 'image/png' });
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/failed to load image/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not be opened/i);
   });
 });

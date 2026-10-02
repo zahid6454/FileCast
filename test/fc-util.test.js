@@ -46,8 +46,46 @@ describe('fc-util.js — FC.classifyError', () => {
     evalScript(dom, 'fc-util.js');
     expect(dom.window.FC.classifyError(new Error('bad CSV'), 'fallback')).toEqual({
       message: 'bad CSV',
+      report: 'bad CSV',
       errorType: 'validation_error'
     });
+  });
+
+  it('replaces the raw NotReadableError text with an actionable message', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    const err = new dom.window.DOMException('permission problems ...', 'NotReadableError');
+    const r = dom.window.FC.classifyError(err, 'fallback');
+    expect(r.errorType).toBe('conversion_error');
+    expect(r.message).toContain('re-select the file');
+    expect(r.message).not.toContain('NotReadableError'); // users never see jargon
+    expect(r.report).toContain('[Technical: NotReadableError: permission problems ...]'); // admin does
+  });
+
+  it('replaces raw memory and network errors with plain-language messages', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    const { classifyError } = dom.window.FC;
+    expect(classifyError(new RangeError('Array buffer allocation failed'), 'x').message).toContain(
+      'too large for your device'
+    );
+    expect(classifyError(new Error('RuntimeError: out of memory'), 'x').message).toContain(
+      'too large for your device'
+    );
+    expect(classifyError(new TypeError('Failed to fetch'), 'x').message).toContain(
+      'internet connection'
+    );
+  });
+
+  it('does not call an unrelated RangeError a size problem', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    const r = dom.window.FC.classifyError(new RangeError('Invalid time value'), 'fallback');
+    expect(r.message).toBe('Invalid time value');
+    expect(r.report).toBe('Invalid time value');
+    expect(
+      dom.window.FC.classifyError(new RangeError('Array buffer allocation failed'), 'x').message
+    ).toContain('too large for your device');
   });
 
   it('classifies a bare string throw as validation_error and returns it as-is', () => {
@@ -55,6 +93,7 @@ describe('fc-util.js — FC.classifyError', () => {
     evalScript(dom, 'fc-util.js');
     expect(dom.window.FC.classifyError('The input is not a PNG file!', 'fallback')).toEqual({
       message: 'The input is not a PNG file!',
+      report: 'The input is not a PNG file!',
       errorType: 'validation_error'
     });
   });
@@ -67,10 +106,12 @@ describe('fc-util.js — FC.classifyError', () => {
     );
     expect(dom.window.FC.classifyError({ name: 'NotSupportedError' }, 'fallback')).toEqual({
       message: 'fallback',
+      report: 'fallback',
       errorType: 'conversion_error'
     });
     expect(dom.window.FC.classifyError(undefined, 'fallback')).toEqual({
       message: 'fallback',
+      report: 'fallback',
       errorType: 'conversion_error'
     });
   });

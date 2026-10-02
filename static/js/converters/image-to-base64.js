@@ -6,7 +6,9 @@ window.convertFile = function (file) {
         resolve(new Blob([reader.result], { type: 'text/plain' }));
       };
       reader.onerror = function () {
-        reject(new Error('Failed to read the image file.'));
+        reject(
+          new Error('This image could not be opened. The file may be damaged or not a valid image.')
+        );
       };
       reader.readAsDataURL(safeFile);
     });

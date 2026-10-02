@@ -12,7 +12,7 @@
           var height = img.naturalHeight;
           if (!width || !height) {
             URL.revokeObjectURL(img.src);
-            reject(new Error('Failed to read PNG dimensions.'));
+            reject(new Error('This PNG could not be read. The file may be damaged.'));
             return;
           }
 
@@ -32,7 +32,11 @@
         };
         img.onerror = function () {
           URL.revokeObjectURL(img.src);
-          reject(new Error('Failed to load image'));
+          reject(
+            new Error(
+              'This image could not be opened. The file may be damaged or not a valid image.'
+            )
+          );
         };
         img.src = URL.createObjectURL(safeFile);
       });
@@ -48,7 +52,9 @@
       ctx.drawImage(img, 0, 0, size, size);
       canvas.toBlob(function (blob) {
         if (!blob) {
-          reject(new Error('Failed to render a ' + size + 'x' + size + ' icon image.'));
+          reject(
+            new Error('Could not create the ' + size + 'x' + size + ' icon. Try a different image.')
+          );
           return;
         }
         blob.arrayBuffer().then(resolve, reject);

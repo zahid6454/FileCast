@@ -35,7 +35,11 @@
   function validateFile(file) {
     var config = window.TOOL_CONFIG;
     if (!config)
-      return { valid: false, error: 'Tool configuration not found.', error_type: 'missing_config' };
+      return {
+        valid: false,
+        error: 'This tool did not load correctly. Please refresh the page.',
+        error_type: 'missing_config'
+      };
 
     var ext = getExtension(file.name);
     if (!config.accept_extensions.includes(ext)) {
@@ -382,12 +386,14 @@
           },
           false
         );
-        reportError({
-          tool_id: config.id,
-          error_type: errorType,
-          error_message: msg,
-          browser: navigator.userAgent
-        });
+        if (!(err && err.serverReported)) {
+          reportError({
+            tool_id: config.id,
+            error_type: errorType,
+            error_message: classified.report,
+            browser: navigator.userAgent
+          });
+        }
       });
   }
 

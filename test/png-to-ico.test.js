@@ -58,7 +58,7 @@ describe('png-to-ico.js — window.convertFile', () => {
     evalScript(dom, 'converters/png-to-ico.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'logo.png', { type: 'image/png' });
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/failed to load image/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not be opened/i);
   });
 
   it('rejects when the browser fails to render one of the icon sizes', async () => {
@@ -75,6 +75,6 @@ describe('png-to-ico.js — window.convertFile', () => {
     evalScript(dom, 'converters/png-to-ico.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'logo.png', { type: 'image/png' });
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/failed to render/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not create the/i);
   });
 });

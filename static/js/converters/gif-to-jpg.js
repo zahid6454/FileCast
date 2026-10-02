@@ -15,7 +15,9 @@ window.convertFile = function (file) {
             if (blob) {
               resolve(blob);
             } else {
-              reject(new Error('Failed to convert image'));
+              reject(
+                new Error('Could not convert this image. Try a different file or a smaller one.')
+              );
             }
           },
           'image/jpeg',
@@ -25,7 +27,9 @@ window.convertFile = function (file) {
       };
       img.onerror = function () {
         URL.revokeObjectURL(img.src);
-        reject(new Error('Failed to load image'));
+        reject(
+          new Error('This image could not be opened. The file may be damaged or not a valid image.')
+        );
       };
       img.src = URL.createObjectURL(safeFile);
     });

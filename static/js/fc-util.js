@@ -78,7 +78,42 @@
   FC.classifyError = function (err, fallback) {
     var isValidation = typeof err === 'string' || (err && err.name === 'Error');
     var message = typeof err === 'string' && err ? err : (err && err.message) || fallback;
-    return { message: message, errorType: isValidation ? 'validation_error' : 'conversion_error' };
+    // Raw browser/engine errors are meaningless to users, so each is replaced
+    // with what happened + what to try. `report` is what the admin Errors feed
+    // stores: the same message PLUS the raw cause, so a rewritten message
+    // never hides the real diagnosis from the person triaging it.
+    var raw = (err && err.name ? err.name + ': ' : '') + (err && err.message ? err.message : '');
+    var name = (err && err.name) || '';
+    var rewritten = true;
+    if (name === 'NotReadableError' || name === 'NotFoundError') {
+      // The picked file's reference went stale — typically an Android
+      // Photo Picker / cloud (Google Photos) grant that expired.
+      message =
+        'Could not read this file — your device revoked access to it (common with photos picked from cloud storage). ' +
+        'Please re-select the file, or save it to your device first.';
+    } else if (
+      name === 'QuotaExceededError' ||
+      // Not every RangeError is about size (e.g. "Invalid time value"), so match the memory ones by text.
+      /out of memory|allocation failed|memory access out of bounds|invalid (typed )?array length|invalid string length/i.test(
+        String(message)
+      )
+    ) {
+      message =
+        'This file is too large for your device to process. Try a smaller file, or close other tabs and try again.';
+    } else if (
+      /^(failed to fetch|load failed|networkerror|importscripts)/i.test(String(message)) ||
+      name === 'NetworkError'
+    ) {
+      message =
+        'Part of this tool could not be loaded. Check your internet connection and try again.';
+    } else {
+      rewritten = false;
+    }
+    return {
+      message: message,
+      report: rewritten && raw ? message + ' [Technical: ' + raw + ']' : message,
+      errorType: isValidation ? 'validation_error' : 'conversion_error'
+    };
   };
 
   // The reverse direction: a worker posts `{error, errorType}` across the
@@ -173,7 +208,7 @@
       var timer = setTimeout(function () {
         if (settled) return;
         settled = true;
-        reject(new Error('Timed out reading file.'));
+        reject(new Error('Reading this file took too long. Please re-select it and try again.'));
       }, MATERIALIZE_TIMEOUT_MS);
 
       file.arrayBuffer().then(

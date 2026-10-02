@@ -76,7 +76,7 @@
           function (blob) {
             URL.revokeObjectURL(img.src);
             if (!blob) {
-              reject(new Error('Failed to convert image for PDF embedding.'));
+              reject(new Error('Could not add this image to the PDF. The file may be damaged.'));
               return;
             }
             blob.arrayBuffer().then(function (bytes) {
@@ -89,7 +89,11 @@
       };
       img.onerror = function () {
         URL.revokeObjectURL(img.src);
-        reject(new Error('Failed to load image: ' + originalName));
+        reject(
+          new Error(
+            'Could not open ' + originalName + '. The file may be damaged or not a valid image.'
+          )
+        );
       };
       img.src = URL.createObjectURL(safeFile);
     });

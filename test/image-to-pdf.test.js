@@ -90,8 +90,6 @@ describe('image-to-pdf.js — window.convertFiles', () => {
     evalScript(dom, 'converters/image-to-pdf.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'broken.webp', { type: 'image/webp' });
-    await expect(dom.window.convertFiles([file])).rejects.toThrow(
-      /failed to load image: broken\.webp/i
-    );
+    await expect(dom.window.convertFiles([file])).rejects.toThrow(/could not open broken.webp/i);
   });
 });

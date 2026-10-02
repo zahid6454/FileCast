@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 import converter
 import pytest
 from data import job_worker, neon_api, node_ops
-from data.models import ConversionJob
+from data.models import ConversionJob, Error
 from data.node_registry import (
     Node,
     get_usage_cache,
@@ -21,6 +21,7 @@ from data.node_registry import (
     set_usage_cache,
 )
 from data.redis_client import redis_client
+from sqlalchemy import select
 from validation import ALLOWED_EXTENSIONS
 
 
@@ -159,6 +160,86 @@ async def test_run_job_marks_failed_on_conversion_exception(db, monkeypatch):
     assert job.status == "failed"
     assert job.error_type == "conversion_error"
     assert job.finished_at is not None
+    (converter.JOB_RESULTS_DIR / f"{job_id}.input").unlink()
+
+
+async def _error_rows(db):
+    return (await db.execute(select(Error))).scalars().all()
+
+
+async def test_failed_job_records_an_admin_error_row_with_the_technical_cause(
+    db, monkeypatch
+):
+    """The user only ever sees the friendly message; the admin 'Recent errors'
+    feed must additionally get the real exception, which only the server has."""
+
+    async def boom(content, filename, extra_form=None):
+        raise RuntimeError("Ghostscript exit 1: bad xref")
+
+    monkeypatch.setattr(converter, "_convert_libreoffice", boom)
+    job = _make_job()
+    db.add(job)
+    await db.flush()
+    job_id = job.id
+    await db.commit()
+    (converter.JOB_RESULTS_DIR / f"{job_id}.input").write_bytes(b"PKfake docx")
+
+    await job_worker.run_job(job_id)
+
+    rows = await _error_rows(db)
+    assert len(rows) == 1
+    assert rows[0].tool_id == "docx-to-pdf"
+    assert rows[0].error_type == "conversion_error"
+    assert "may be corrupted or password-protected" in rows[0].error_message
+    assert (
+        "[Technical: RuntimeError: Ghostscript exit 1: bad xref]"
+        in rows[0].error_message
+    )
+    (converter.JOB_RESULTS_DIR / f"{job_id}.input").unlink()
+
+
+async def test_validation_failure_records_its_message_without_a_technical_suffix(
+    db, monkeypatch
+):
+    from validation import ValidationError
+
+    async def reject(content, filename, extra_form=None):
+        raise ValidationError(
+            "Image dimensions too large to process.", "too_large_dimensions"
+        )
+
+    monkeypatch.setattr(converter, "_convert_libreoffice", reject)
+    job = _make_job()
+    db.add(job)
+    await db.flush()
+    job_id = job.id
+    await db.commit()
+    (converter.JOB_RESULTS_DIR / f"{job_id}.input").write_bytes(b"PKfake docx")
+
+    await job_worker.run_job(job_id)
+
+    rows = await _error_rows(db)
+    assert len(rows) == 1
+    assert rows[0].error_type == "too_large_dimensions"
+    assert rows[0].error_message == "Image dimensions too large to process."
+    (converter.JOB_RESULTS_DIR / f"{job_id}.input").unlink()
+
+
+async def test_successful_job_records_no_error_row(db, monkeypatch):
+    async def ok(content, filename, extra_form=None):
+        return b"%PDF-1.4 ok"
+
+    monkeypatch.setattr(converter, "_convert_libreoffice", ok)
+    job = _make_job()
+    db.add(job)
+    await db.flush()
+    job_id = job.id
+    await db.commit()
+    (converter.JOB_RESULTS_DIR / f"{job_id}.input").write_bytes(b"PKfake docx")
+
+    await job_worker.run_job(job_id)
+
+    assert await _error_rows(db) == []
     (converter.JOB_RESULTS_DIR / f"{job_id}.input").unlink()
 
 
@@ -402,6 +483,9 @@ async def test_recover_orphaned_jobs_dead_letters_past_the_attempts_cap(db):
 
     result = await job_worker.recover_orphaned_jobs()
     assert result == {"requeued": 0, "dead_lettered": 1}
+    rows = await _error_rows(db)
+    assert len(rows) == 1
+    assert "dead-lettered after" in rows[0].error_message
 
     job = await db.get(ConversionJob, job_id)
     await db.refresh(job)
@@ -429,6 +513,10 @@ async def test_gc_sweep_force_fails_pathologically_old_queued_and_converting_row
 
     result = await job_worker.gc_sweep()
     assert result["stuck_failed"] == 2
+    rows = await _error_rows(db)
+    assert len(rows) == 2  # one per swept job; the fresh one is untouched
+    assert all(r.error_type == "queue_timeout" for r in rows)
+    assert all("swept by GC" in r.error_message for r in rows)
 
     for key in ("stuck_queued", "stuck_converting"):
         job = await db.get(ConversionJob, ids[key])

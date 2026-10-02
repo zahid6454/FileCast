@@ -48,6 +48,6 @@ describe('svg-to-png.js — window.convertFile', () => {
         type: 'image/svg+xml'
       }
     );
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/unsupported features/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not draw this svg/i);
   });
 });
