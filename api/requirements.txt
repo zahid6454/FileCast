@@ -1,5 +1,5 @@
 fastapi==0.141.1
-uvicorn[standard]==0.52.4
+uvicorn[standard]==0.54.0
 # Transitive via Authlib/pdfminer.six — pinned explicitly (CVE fix, PYSEC-2026-3552).
 cryptography==50.0.1
 httpx==0.28.1
@@ -14,7 +14,7 @@ openpyxl==3.1.5
 PyMuPDF==1.28.2
 python-pptx==1.0.2
 opencv-python-headless==5.0.0.93
-numpy==2.5.2
+numpy==2.5.3
 # Pinned to match the root requirements.txt's Pillow==12.* (build.py's OG-image
 # dependency) — CI installs both files in one pip command, so a different pin
 # here is a hard resolution conflict, not just a version mismatch. This file's
@@ -25,7 +25,7 @@ sqlalchemy[asyncio]==2.0.*
 psycopg[binary]==3.*
 alembic==1.*
 pydantic-settings==2.*
-authlib==1.7.*
+authlib==1.8.*
 sentry-sdk[fastapi]==2.*
 # Phase 3: shared rate-limit store + conversion job worker wake-up signal
 # (data/redis_client.py). redis.asyncio only — no persistence configured.
