@@ -50,6 +50,31 @@ describe('fc-util.js — FC.classifyError', () => {
     });
   });
 
+  it('replaces the raw NotReadableError text with an actionable message', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    const err = new dom.window.DOMException('permission problems ...', 'NotReadableError');
+    const r = dom.window.FC.classifyError(err, 'fallback');
+    expect(r.errorType).toBe('conversion_error');
+    expect(r.message).toContain('re-select the file');
+    expect(r.message).toContain('[NotReadableError]');
+  });
+
+  it('replaces raw memory and network errors with plain-language messages', () => {
+    const dom = createDom();
+    evalScript(dom, 'fc-util.js');
+    const { classifyError } = dom.window.FC;
+    expect(classifyError(new RangeError('Array buffer allocation failed'), 'x').message).toContain(
+      'too large for your device'
+    );
+    expect(classifyError(new Error('RuntimeError: out of memory'), 'x').message).toContain(
+      'too large for your device'
+    );
+    expect(classifyError(new TypeError('Failed to fetch'), 'x').message).toContain(
+      'internet connection'
+    );
+  });
+
   it('classifies a bare string throw as validation_error and returns it as-is', () => {
     const dom = createDom();
     evalScript(dom, 'fc-util.js');

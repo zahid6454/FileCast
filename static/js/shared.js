@@ -35,7 +35,11 @@
   function validateFile(file) {
     var config = window.TOOL_CONFIG;
     if (!config)
-      return { valid: false, error: 'Tool configuration not found.', error_type: 'missing_config' };
+      return {
+        valid: false,
+        error: 'This tool did not load correctly. Please refresh the page.',
+        error_type: 'missing_config'
+      };
 
     var ext = getExtension(file.name);
     if (!config.accept_extensions.includes(ext)) {

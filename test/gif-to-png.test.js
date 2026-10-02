@@ -25,6 +25,6 @@ describe('gif-to-png.js — window.convertFile', () => {
     evalScript(dom, 'converters/gif-to-png.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'anim.gif', { type: 'image/gif' });
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/failed to load image/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not be opened/i);
   });
 });

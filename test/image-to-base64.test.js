@@ -32,6 +32,6 @@ describe('image-to-base64.js — window.convertFile', () => {
     const file = new dom.window.File([new Uint8Array([1, 2, 3])], 'broken.png', {
       type: 'image/png'
     });
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/failed to read/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not be opened/i);
   });
 });

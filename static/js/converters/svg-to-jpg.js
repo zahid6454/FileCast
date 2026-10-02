@@ -19,7 +19,9 @@ window.convertFile = function (file) {
             if (blob) {
               resolve(blob);
             } else {
-              reject(new Error('Failed to convert image'));
+              reject(
+                new Error('Could not convert this image. Try a different file or a smaller one.')
+              );
             }
           },
           'image/jpeg',
@@ -29,13 +31,13 @@ window.convertFile = function (file) {
       };
       img.onerror = function () {
         URL.revokeObjectURL(img.src);
-        reject(new Error('Failed to render SVG. The file may contain unsupported features.'));
+        reject(new Error('Could not draw this SVG. It may use features browsers cannot display.'));
       };
       var blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
       img.src = URL.createObjectURL(blob);
     };
     reader.onerror = function () {
-      reject(new Error('Failed to read SVG file'));
+      reject(new Error('This SVG could not be read. The file may be damaged.'));
     };
     reader.readAsText(file);
   });

@@ -99,6 +99,11 @@
         continue;
       }
       selectedFiles.push(file);
+      // Android Photo Picker grants are short-lived: read the bytes now,
+      // while the grant is fresh, instead of at Convert time. The result is
+      // cached per File (FC.materializeFile), so later converter reads reuse
+      // it; a failure here is ignored and retried at Convert time.
+      if (FC.materializeFile) FC.materializeFile(file).catch(function () {});
     }
 
     renderFileList();

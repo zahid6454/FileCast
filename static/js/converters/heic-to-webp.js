@@ -88,7 +88,11 @@
         function (blob) {
           if (blob) resolve(blob);
           else
-            reject(new Error('Failed to convert image. Your browser may not support WebP export.'));
+            reject(
+              new Error(
+                'Could not convert this image. Your browser may not support saving WebP files — try Chrome, Firefox or Edge.'
+              )
+            );
         },
         'image/webp',
         0.9

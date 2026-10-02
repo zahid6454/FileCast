@@ -26,6 +26,6 @@ describe('bmp-to-jpg.js — window.convertFile', () => {
     evalScript(dom, 'converters/bmp-to-jpg.js');
 
     const file = new dom.window.File([new Uint8Array(10)], 'photo.bmp', { type: 'image/bmp' });
-    await expect(dom.window.convertFile(file)).rejects.toThrow(/failed to load image/i);
+    await expect(dom.window.convertFile(file)).rejects.toThrow(/could not be opened/i);
   });
 });

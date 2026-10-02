@@ -78,6 +78,34 @@
   FC.classifyError = function (err, fallback) {
     var isValidation = typeof err === 'string' || (err && err.name === 'Error');
     var message = typeof err === 'string' && err ? err : (err && err.message) || fallback;
+    // The browser's raw NotReadableError/NotFoundError text ("...permission
+    // problems that have occurred after a reference to a file was acquired")
+    // means the picked file's reference went stale — typically an Android
+    // cloud/Google Photos pick. Say what happened and what to do, and keep
+    // the error name so the admin feed still shows the underlying cause.
+    var name = (err && err.name) || '';
+    if (name === 'NotReadableError' || name === 'NotFoundError') {
+      message =
+        'Could not read this file — your device revoked access to it (common with photos picked from cloud storage). ' +
+        'Please re-select the file, or save it to your device first. [' +
+        name +
+        ']';
+    } else if (
+      name === 'RangeError' ||
+      name === 'QuotaExceededError' ||
+      /out of memory|allocation failed|memory access out of bounds/i.test(String(message))
+    ) {
+      // Raw engine/WASM memory errors are meaningless to users — and, being
+      // non-'Error' names, already count as conversion_error above.
+      message =
+        'This file is too large for your device to process. Try a smaller file, or close other tabs and try again.';
+    } else if (
+      /^(failed to fetch|load failed|networkerror|importscripts)/i.test(String(message)) ||
+      name === 'NetworkError'
+    ) {
+      message =
+        'Part of this tool could not be loaded. Check your internet connection and try again.';
+    }
     return { message: message, errorType: isValidation ? 'validation_error' : 'conversion_error' };
   };
 
@@ -173,7 +201,7 @@
       var timer = setTimeout(function () {
         if (settled) return;
         settled = true;
-        reject(new Error('Timed out reading file.'));
+        reject(new Error('Reading this file took too long. Please re-select it and try again.'));
       }, MATERIALIZE_TIMEOUT_MS);
 
       file.arrayBuffer().then(

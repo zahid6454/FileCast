@@ -57,7 +57,7 @@
             if (blob) {
               resolve(blob);
             } else {
-              reject(new Error('Failed to render page ' + pageNum));
+              reject(new Error('Could not read page ' + pageNum + '. The PDF may be damaged.'));
             }
           }, 'image/png');
         });

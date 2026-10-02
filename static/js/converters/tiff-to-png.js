@@ -79,7 +79,8 @@
 
       canvas.toBlob(function (blob) {
         if (blob) resolve(blob);
-        else reject(new Error('Failed to convert image'));
+        else
+          reject(new Error('Could not convert this image. Try a different file or a smaller one.'));
       }, 'image/png');
     });
   }

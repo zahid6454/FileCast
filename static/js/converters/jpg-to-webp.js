@@ -14,7 +14,9 @@ window.convertFile = function (file) {
               resolve(blob);
             } else {
               reject(
-                new Error('Failed to convert image. Your browser may not support WebP export.')
+                new Error(
+                  'Could not convert this image. Your browser may not support saving WebP files — try Chrome, Firefox or Edge.'
+                )
               );
             }
           },
@@ -25,7 +27,9 @@ window.convertFile = function (file) {
       };
       img.onerror = function () {
         URL.revokeObjectURL(img.src);
-        reject(new Error('Failed to load image'));
+        reject(
+          new Error('This image could not be opened. The file may be damaged or not a valid image.')
+        );
       };
       img.src = URL.createObjectURL(safeFile);
     });
