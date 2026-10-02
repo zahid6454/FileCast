@@ -2324,30 +2324,27 @@ def generate_ads_txt(site_config: dict):
 
 
 def adsense_is_live(site_config: dict) -> bool:
-    """True when AdSense is enabled AND configured well enough for at least one
-    unit to actually render.
+    """True when AdSense is enabled AND has a publisher id — i.e. the vendor
+    loader (adsbygoogle.js) ships on every page.
 
     🔴 This is the SINGLE source of truth for that question, deliberately. The
-    CSP branch below and the loader block in ``base.html`` (via the
-    ``adsense_live`` Jinja global) must agree on it, or enabling AdSense widens
-    the CSP for Google's origins while nothing renders — a real, if small,
-    attack-surface increase bought for zero inventory, with nothing erroring or
-    warning anywhere. That is the §1.1 failure this phase exists to close, and a
-    half-configured overlay (enabled, no publisher or no slot id) is exactly how
-    it happens.
+    CSP branch below and the loader in ``base.html`` (via the ``adsense_live``
+    Jinja global) must agree on it: a loader whose origins are blocked serves
+    nothing, and origins opened with no loader are attack surface bought for
+    nothing.
 
-    ``ad_slot()`` narrows this further per slot: a slot whose own id is blank
-    renders nothing even when the other one does. That is a refinement, not a
-    disagreement — it can only ever render fewer units than this predicate
-    allows, never more.
+    Slot ids are deliberately NOT required. The loader has jobs of its own
+    before any manual unit exists: Google's site review looks for it, the
+    certified CMP (Privacy & messaging, configured in the AdSense dashboard)
+    is delivered by it, and Auto ads run through it. Requiring a slot id kept
+    all of that dark until after approval — which approval itself depends on.
+
+    ``ad_slot()`` narrows this per slot: a slot whose own id is blank renders
+    no unit even while the loader is live. That is a refinement, not a
+    disagreement.
     """
     ads = site_config.get("adsense", {}) or {}
-    slots = ads.get("slots", {}) or {}
-    return bool(
-        ads.get("enabled")
-        and ads.get("publisher_id")
-        and (slots.get("leaderboard") or slots.get("in_content"))
-    )
+    return bool(ads.get("enabled") and ads.get("publisher_id"))
 
 
 def generate_headers(site_config: dict):
@@ -2358,8 +2355,8 @@ def generate_headers(site_config: dict):
     # into site_config["api"], so the override reaches the CSP too.
     api_url = site_config.get("api", {}).get("base_url", "").rstrip("/")
     # NOT `adsense.enabled` alone — see adsense_is_live()'s docstring. The
-    # templates render units only when a publisher id and a slot id are present,
-    # so gating the origins on anything weaker opens them with nothing to fill.
+    # loader needs a publisher id, so gating the origins on anything weaker
+    # opens them with nothing loading.
     adsense_enabled = adsense_is_live(site_config)
     ga4_enabled = site_config.get("ga4", {}).get("enabled", False)
     sentry_enabled = site_config.get("sentry", {}).get("enabled", False)
@@ -2426,33 +2423,38 @@ def generate_headers(site_config: dict):
     img_src = "'self' data: blob: https://lh3.googleusercontent.com"
     frame_src = "'none'"
 
-    # ⚠ UNVERIFIED — SPECULATIVE, NOT MEASURED (Phase 9 §3.3, still open).
+    # AdSense origins — MEASURED 2026-10-03, not guessed: the real loader
+    # (live publisher id) injected into the live filecast.org tool page under
+    # this exact CSP, enforced, in Chrome, plus Google's CMP tag. Zero AdSense
+    # violations; every host below was either requested in that run or is one
+    # of Google's documented ad-frame/CMP hosts:
+    #   - pagead2 / tpc.googlesyndication.com, googleads.g.doubleclick.net:
+    #     loader, creatives, ad frames, gen_204 pixels (img-src).
+    #   - *.adtrafficquality.google: the sodar invalid-traffic check (ep1/ep2,
+    #     script + xhr + frame + pixel). Blocking it gets impressions discounted
+    #     as unverified. Wildcard on purpose — Google adds epN hosts unannounced.
+    #   - fundingchoicesmessages.google.com: the certified CMP's script/config.
+    #   - www.google.com: a frame the loader opened in the same run.
     #
-    # This branch was written in Phase 2 against Google's documentation and has
-    # never been exercised against a live ad serve. AdSense is not approved yet,
-    # so there is no real publisher id to measure with, and no CI job can do it:
-    # it needs a real ad response in a real browser with the CSP ENFORCED.
+    # ⚠ Still unmeasured, by necessity: a FILLED ad (impossible pre-approval)
+    # and the CMP dialog actually rendering (EEA/UK-only; the run was from
+    # outside the EEA). After approval, re-run scratch-pad/measure_adsense_csp.js
+    # from an EEA vantage point and add any missing host ONE at a time.
     #
-    # It is very likely INSUFFICIENT. Ads render through frames and images from
-    # hosts not listed here (tpc.googlesyndication.com and www.google.com are the
-    # usual first two), and img-src/connect-src are untouched entirely. Do NOT
-    # add origins on the strength of what the docs imply — an origin allowlisted
-    # on a guess is a permanent widening bought with no evidence.
-    #
-    # Method when approval lands: deploy preview, real publisher id, toggle on,
-    # tool page, CSP enforced, drive the console to zero violations adding ONE
-    # origin at a time — then replace this comment with one saying it was
-    # measured, and on what date. See §7.2 item 1.
-    #
-    # Hard constraint regardless of what the measurement shows: script-src never
-    # gains 'unsafe-inline' and no inline <script> enters a built page. If ads
-    # cannot render without inline script, stop and escalate — ads.js and the
-    # external loader exist precisely to avoid that trade (P6/P7).
+    # Hard constraint regardless: script-src never gains 'unsafe-inline' and no
+    # inline <script> enters a built page (P6/P7). ads.js exists for that.
     if adsense_enabled:
-        script_src += (
-            " https://pagead2.googlesyndication.com https://www.googletagmanager.com"
+        ad_hosts = (
+            " https://pagead2.googlesyndication.com"
+            " https://tpc.googlesyndication.com"
+            " https://googleads.g.doubleclick.net"
+            " https://fundingchoicesmessages.google.com"
+            " https://*.adtrafficquality.google"
         )
-        frame_src = "https://googleads.g.doubleclick.net"
+        script_src += ad_hosts
+        img_src += ad_hosts
+        connect_src += ad_hosts
+        frame_src = ad_hosts.strip() + " https://www.google.com"
     if ga4_enabled:
         if "googletagmanager" not in script_src:
             script_src += " https://www.googletagmanager.com"

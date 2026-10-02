@@ -1,13 +1,14 @@
-// Cookie consent gate for GA4 + AdSense.
+// Cookie consent gate for GA4.
 //
-// Neither vendor's network-contacting loader is referenced by a static
-// <script src> in base.html. analytics.js's GA4 branch and ads.js both only
-// push to a local queue array (window.dataLayer / window.adsbygoogle) —
-// that's not a network request and sets no cookie. The queued entries sit
-// inert until the real vendor script (gtag.js / adsbygoogle.js) loads and
-// drains the queue, which is the moment _ga/_gid or DoubleClick cookies
-// actually get set. This file decides whether that loading ever happens,
-// gated on a stored consent decision.
+// GA4's network-contacting loader (gtag.js) is not referenced by a static
+// <script src> in base.html. analytics.js's GA4 branch only pushes to a local
+// queue array (window.dataLayer) — not a network request, no cookie. The
+// queued entries sit inert until gtag.js loads and drains the queue, which is
+// the moment _ga/_gid actually get set. This file decides whether that loading
+// ever happens, gated on a stored consent decision.
+//
+// AdSense is deliberately NOT gated here: its consent is collected by Google's
+// certified CMP, which adsbygoogle.js itself delivers (see base.html).
 //
 // Config arrives as a JSON data island (#cookie-consent-config), the same
 // pattern as filecast-config.js/tool-config.js — not document.currentScript,
@@ -37,7 +38,6 @@
 
   function loadConsentedScripts() {
     if (config.ga4_src) injectVendorScript(config.ga4_src);
-    if (config.adsense_src) injectVendorScript(config.adsense_src);
   }
 
   var decision = null;

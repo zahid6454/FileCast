@@ -41,14 +41,4 @@ A vendor or client might send a password-protected PDF because that's their defa
 
 </div>
 </div>
-<div class="scenario" markdown="1">
-<div class="scenario__icon"><svg aria-hidden="true" focusable="false"><use href="#icon-printer"></use></svg></div>
-<div class="scenario__body" markdown="1">
-
-### Removing Print or Edit Restrictions
-
-Some PDFs restrict printing or editing without requiring a password to open at all. If you have a legitimate need to print or edit a file you already have full access to, this tool removes those restrictions in the same step.
-
-</div>
-</div>
 </div>

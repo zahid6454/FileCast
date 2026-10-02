@@ -60,9 +60,12 @@
      extension targeting it, an SRI hash mismatch failing closed, a network
      blip — while the rest of the page works and nothing else would tell the
      visitor the form is dead. No email server involved: this is a plain
-     mailto: link the visitor's own mail client handles. #}
+     mailto: link the visitor's own mail client handles.
+
+     email_off: stops Cloudflare's Email Obfuscation rewriting the address to
+     "[email protected]" in the served HTML, which is all a crawler sees. #}
   <p class="contact-form__fallback" id="contact-fallback">
-    Form not working, or prefer email? Write to <a href="mailto:support@filecast.org">support@filecast.org</a> directly.
+    Form not working, or prefer email? Write to <!--email_off--><a href="mailto:support@filecast.org">support@filecast.org</a><!--/email_off--> directly.
   </p>
 
   <div class="privacy-section">

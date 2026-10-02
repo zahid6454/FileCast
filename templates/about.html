@@ -75,7 +75,9 @@
   <div class="privacy-section">
     <h2>Why it's free</h2>
     <p>
-      {% if adsense_live -%}
+      {#- Units, not just the loader: adsense_live is true before any slot id
+          exists (site review / CMP), when no ad is actually on the page yet. -#}
+      {% if adsense_live and ((adsense.get('slots') or {}).get('leaderboard') or (adsense.get('slots') or {}).get('in_content')) -%}
       This service is supported by advertising. Ads are displayed on the page but are completely separate from the conversion tools &mdash; ad scripts cannot access your files.
       {%- else -%}
       This service is supported by advertising. Ads are separate from the conversion tools and cannot access your files.
