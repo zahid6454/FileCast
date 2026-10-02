@@ -21,7 +21,7 @@ numpy==2.5.2
 # own copy is what actually matters in production: the API's Docker image only
 # installs api/requirements.txt, not the repo root's.
 Pillow==12.*
-sqlalchemy[asyncio]==2.0.*
+sqlalchemy[asyncio]==2.1.*
 psycopg[binary]==3.*
 alembic==1.*
 pydantic-settings==2.*
