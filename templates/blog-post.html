@@ -45,12 +45,12 @@
      PNG, which would put the title in pixels (invisible to search/screen
      readers) and duplicate the H1. The PNG stays in og:image + schema only. #}
   <header class="post-banner {{ blog_tint(post) }}">
-    <span class="blog-card__brand">{{ blog_mark() }} FileCast</span>
+    <span class="blog-card__brand" aria-hidden="true">{{ blog_mark() }} FileCast</span>
     <h1 class="page__title post-banner__title">{{ post.title }}</h1>
     <p class="post__byline">
       By <a href="/about/" rel="author">Md. Zahid Hossain Khan</a>
       {%- if post.date_display %} &middot; <time datetime="{{ post.date }}">{{ post.date_display }}</time>{% endif %}
-      {%- if post.updated != post.date %} &middot; Updated <time datetime="{{ post.updated }}">{{ post.updated }}</time>{% endif %}
+      {%- if post.updated != post.date %} &middot; Updated <time datetime="{{ post.updated }}">{{ post.updated_display }}</time>{% endif %}
       {%- if post.tag %} &middot; {{ post.tag }}{% endif %}
       {%- if post.read_minutes %} &middot; {{ post.read_minutes }} min read{% endif %}
     </p>

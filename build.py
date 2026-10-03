@@ -610,6 +610,20 @@ def load_tools() -> list[dict]:
     return tools
 
 
+def _display_date(iso: str, source: str) -> str:
+    """ "2026-09-15" -> "Sep 15, 2026" (built by hand: Windows' C runtime has
+    no strftime("%-d")). A malformed date warns and renders blank rather than
+    failing the whole site build over one post's typo."""
+    if not iso:
+        return ""
+    try:
+        d = date.fromisoformat(iso)
+    except ValueError:
+        print(f"  [warn] {source}: unparseable date {iso!r}, not displayed")
+        return ""
+    return f"{d:%b} {d.day}, {d.year}"
+
+
 def load_blog_posts() -> list[dict]:
     """Load blog/*.yaml the same way load_tools() loads tools/*.yaml, then
     render each post's body markdown (content.body) via render_markdown() —
@@ -646,10 +660,8 @@ def load_blog_posts() -> list[dict]:
         # `updated` is optional (set it when a post is materially revised);
         # falls back to `date` so Article schema's dateModified is never empty.
         post["updated"] = str(post.get("updated") or post["date"])
-        # "Sep 15, 2026" — built by hand rather than strftime("%-d"), which
-        # Windows' C runtime doesn't support.
-        d = date.fromisoformat(post["date"]) if post["date"] else None
-        post["date_display"] = f"{d:%b} {d.day}, {d.year}" if d else ""
+        post["date_display"] = _display_date(post["date"], yaml_path.name)
+        post["updated_display"] = _display_date(post["updated"], yaml_path.name)
         # Gradient shape for the banner/card header (.blog-shape--1..6 in
         # style.css). Hashed from the id, never random(): a per-build random
         # pick would change every post's HTML each deploy and bump its
@@ -1361,21 +1373,23 @@ OG_MARGIN = 80
 # on-page post banner/card headers (CSS gradient divs — .blog-tint--<tag>'s
 # --c1/--c2/--c3 in style.css mirror these values; change both together).
 # On-page, each post also gets one of 6 gradient shapes (post["shape"]);
-# these PNGs, seen only off-site, always use the plain diagonal. (top-left, middle,
-# bottom-right) stops. Every tag is blue -> green (both brand colors, always);
-# the tag only shifts the balance via the middle stop. All Tailwind 600-800
-# shades: white headline text stays >= 3:1 (WCAG large text) at every point
-# of every gradient. An unlisted tag gets the default.
+# these PNGs, seen only off-site, always use the plain diagonal.
+#
+# (top-left, middle, bottom-right) stops. Every tag is blue -> green (both
+# brand colors, always); the tag only shifts the balance. Every stop is
+# >= 5.17:1 against white, so even the SMALL white text on the on-page
+# banner (brand label, byline) meets WCAG AA 4.5:1 anywhere on the gradient
+# — which is why the greens are emerald-700, not the lighter brand green.
 OG_BLOG_GRADIENTS = {
-    # blue-800 -> sky-700 -> emerald-600: leans blue
-    "Documents": ((30, 64, 175), (3, 105, 161), (5, 150, 105)),
-    # blue-600 -> emerald-600 -> emerald-800: mostly green
-    "Images": ((37, 99, 235), (5, 150, 105), (6, 95, 70)),
+    # blue-800 -> sky-700 -> emerald-700: leans blue
+    "Documents": ((30, 64, 175), (3, 105, 161), (4, 120, 87)),
+    # blue-600 -> emerald-700 -> emerald-800: leans green
+    "Images": ((37, 99, 235), (4, 120, 87), (6, 95, 70)),
     # blue-700 -> cyan-700 -> emerald-700: even blend
     "Developer Tools": ((29, 78, 216), (14, 116, 144), (4, 120, 87)),
 }
-# blue-600 -> teal-600 -> emerald-600: the brand pair
-OG_BLOG_GRADIENT_DEFAULT = ((37, 99, 235), (13, 148, 136), (5, 150, 105))
+# blue-600 -> teal-700 -> emerald-700: the brand pair
+OG_BLOG_GRADIENT_DEFAULT = ((37, 99, 235), (15, 118, 110), (4, 120, 87))
 OG_SUBTITLE_ON_GRADIENT = (219, 234, 254)  # blue-100
 
 

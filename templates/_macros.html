@@ -254,7 +254,10 @@ blog-tint blog-shape--{{ post.shape }}{% if post.tag %} blog-tint--{{ post.tag|l
    (the PNG is only for social previews + Article schema, off-page). #}
 {% macro blog_card(post) -%}
 <a class="card card--lg blog-card" href="{{ post.slug }}/" data-name="{{ post.title|lower }}">
-  <div class="blog-card__header {{ blog_tint(post) }}">
+  {# aria-hidden: purely decorative, and the tag is repeated as text in the
+     meta line below — otherwise every card link's accessible name would
+     start with "FileCast Documents ...". #}
+  <div class="blog-card__header {{ blog_tint(post) }}" aria-hidden="true">
     <span class="blog-card__brand">{{ blog_mark() }} FileCast</span>
     <span class="blog-card__tag">{{ post.tag or 'Blog' }}</span>
     {% if post.tag in BLOG_TAG_ICONS %}<svg class="blog-card__icon" aria-hidden="true" focusable="false"><use href="#{{ BLOG_TAG_ICONS[post.tag] }}"></use></svg>{% endif %}
