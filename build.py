@@ -1353,16 +1353,21 @@ OG_MARGIN = 80
 
 # Blog share images use a brand gradient instead of OG_BG, matching the
 # on-page post banner/card headers (CSS gradient divs — .blog-tint--<tag> in
-# style.css mirrors these values; change both together). (top-left,
-# bottom-right) corner colors, tinted per post tag. All
-# Tailwind 600-800 shades: white headline text stays >= 3:1 (WCAG large text)
-# at every point of every gradient. An unlisted tag gets the brand mix.
+# style.css mirrors these values; change both together). (top-left, middle,
+# bottom-right) stops. Every tag is blue -> green (both brand colors, always);
+# the tag only shifts the balance via the middle stop. All Tailwind 600-800
+# shades: white headline text stays >= 3:1 (WCAG large text) at every point
+# of every gradient. An unlisted tag gets the default.
 OG_BLOG_GRADIENTS = {
-    "Documents": ((37, 99, 235), (30, 58, 138)),  # blue-600 -> blue-900
-    "Images": ((5, 150, 105), (6, 78, 59)),  # emerald-600 -> emerald-900
-    "Developer Tools": ((29, 78, 216), (4, 120, 87)),  # blue-700 -> emerald-700
+    # blue-800 -> sky-700 -> emerald-600: leans blue
+    "Documents": ((30, 64, 175), (3, 105, 161), (5, 150, 105)),
+    # blue-600 -> emerald-600 -> emerald-800: mostly green
+    "Images": ((37, 99, 235), (5, 150, 105), (6, 95, 70)),
+    # blue-700 -> cyan-700 -> emerald-700: even blend
+    "Developer Tools": ((29, 78, 216), (14, 116, 144), (4, 120, 87)),
 }
-OG_BLOG_GRADIENT_DEFAULT = ((37, 99, 235), (5, 150, 105))  # brand blue -> green
+# blue-600 -> teal-600 -> emerald-600: the brand pair
+OG_BLOG_GRADIENT_DEFAULT = ((37, 99, 235), (13, 148, 136), (5, 150, 105))
 OG_SUBTITLE_ON_GRADIENT = (219, 234, 254)  # blue-100
 
 
@@ -1402,18 +1407,18 @@ def _render_og_image(
     headline: str,
     subtitle: str,
     headline_lines: int = 2,
-    gradient: tuple[tuple[int, int, int], tuple[int, int, int]] | None = None,
+    gradient: tuple[tuple[int, int, int], ...] | None = None,
 ) -> bytes:
     """Render one 1200x630 branded PNG for `headline`/`subtitle`.
 
-    `gradient` = (top-left, bottom-right) colors for a diagonal background
+    `gradient` = (top-left, middle, bottom-right) colors for a diagonal background
     instead of the flat dark OG_BG; the logo bars then go white, since the
     brand blue/green bars would vanish into a blue/green background.
     """
     if gradient:
-        start, end = gradient
-        mid = tuple((a + b) // 2 for a, b in zip(start, end, strict=True))
-        # A 2x2 corner image bilinearly upscaled = a smooth diagonal gradient.
+        start, mid, end = gradient
+        # A 2x2 corner image bilinearly upscaled = a smooth diagonal gradient
+        # (the 135deg, 0/50/100% stops the CSS .blog-tint rules use).
         img = Image.new("RGB", (2, 2))
         img.putdata([start, mid, mid, end])
         img = img.resize(OG_SIZE, Image.BILINEAR)

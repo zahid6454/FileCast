@@ -2979,10 +2979,10 @@ select.tool-options__input {
    OG_BLOG_GRADIENTS in build.py (the share-image PNGs) — change both
    together. Base rule = the default for any unlisted tag. White text stays
    >= 3.77:1 across every gradient (large/bold text only, by design). */
-.blog-tint { background: linear-gradient(135deg, #2563eb, #059669); color: #fff; }
-.blog-tint--documents { background: linear-gradient(135deg, #2563eb, #1e3a8a); }
-.blog-tint--images { background: linear-gradient(135deg, #059669, #064e3b); }
-.blog-tint--developer-tools { background: linear-gradient(135deg, #1d4ed8, #047857); }
+.blog-tint { background: linear-gradient(135deg, #2563eb, #0d9488, #059669); color: #fff; }
+.blog-tint--documents { background: linear-gradient(135deg, #1e40af, #0369a1, #059669); }
+.blog-tint--images { background: linear-gradient(135deg, #2563eb, #059669, #065f46); }
+.blog-tint--developer-tools { background: linear-gradient(135deg, #1d4ed8, #0e7490, #047857); }
 .blog-mark { width: 1.15em; height: 1em; fill: currentColor; flex-shrink: 0; }
 .blog-card__brand { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); font-weight: var(--weight-bold); }
 
