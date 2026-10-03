@@ -14,7 +14,7 @@
   <link rel="canonical" href="{% block canonical %}{{ site.base_url }}/{% endblock %}">
 
   {# Open Graph #}
-  <meta property="og:type" content="website">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
   <meta property="og:site_name" content="{{ site.name }}">
   <meta property="og:title" content="{% block og_title %}{{ site.name }} — {{ site.tagline }}{% endblock %}">
   <meta property="og:description" content="{% block og_description %}{{ site.description }}{% endblock %}">

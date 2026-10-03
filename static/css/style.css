@@ -2966,6 +2966,45 @@ select.tool-options__input {
   .card-grid--has-more { grid-template-columns: repeat(5, 1fr); }
 }
 
+/* --- Blog cards (blog index, homepage "From the Blog", tool pages' Related
+   Guides). Image cards need more width than text tiles, so this grid tops
+   out at 3 columns and sits after the ladder above to win on source order. */
+@media (min-width: 480px) { .card-grid--blog { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .card-grid--blog { grid-template-columns: repeat(3, 1fr); } }
+.card-grid--blog { gap: var(--space-4); }
+.blog-card { padding: var(--space-4); text-align: left; }
+.section__more { text-align: center; margin-top: var(--space-5); font-weight: var(--weight-bold); }
+
+/* Post banner + card header gradients. Two independent class axes:
+   - .blog-tint--<tag> sets the colors (--c1 blue -> --c2 -> --c3 green).
+     Mirror OG_BLOG_GRADIENTS in build.py (share-image PNGs) — change both
+     together. .blog-tint's own values = default for any unlisted tag.
+   - .blog-shape--N (N = post["shape"], hashed from the post id) sets the
+     shape. 1 = .blog-tint's diagonal, so it needs no rule.
+   Every shape only blends these stops, all >= 5.17:1 against white, so the
+   small white text (brand label, byline) passes WCAG AA 4.5:1 anywhere. */
+.blog-tint { --c1: #2563eb; --c2: #0f766e; --c3: #047857; color: #fff; background: linear-gradient(135deg, var(--c1), var(--c2), var(--c3)); }
+.blog-tint--documents { --c1: #1e40af; --c2: #0369a1; --c3: #047857; }
+.blog-tint--images { --c1: #2563eb; --c2: #047857; --c3: #065f46; }
+.blog-tint--developer-tools { --c1: #1d4ed8; --c2: #0e7490; --c3: #047857; }
+.blog-shape--2 { background: linear-gradient(45deg, var(--c1), var(--c2), var(--c3)); }
+.blog-shape--3 { background: linear-gradient(90deg, var(--c1), var(--c2), var(--c3)); }
+.blog-shape--4 { background: radial-gradient(ellipse at 100% 0, var(--c3), var(--c2) 45%, var(--c1)); }
+.blog-shape--5 { background: radial-gradient(ellipse at 50% 130%, var(--c3), var(--c2) 45%, var(--c1)); }
+.blog-shape--6 { background: radial-gradient(circle at 15% 20%, var(--c1), transparent 60%), radial-gradient(circle at 85% 90%, var(--c3), transparent 60%), var(--c2); }
+.blog-mark { width: 1.15em; height: 1em; fill: currentColor; flex-shrink: 0; }
+.blog-card__brand { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); font-weight: var(--weight-bold); }
+
+.blog-card__header { position: relative; overflow: hidden; aspect-ratio: 16 / 7; display: flex; flex-direction: column; justify-content: space-between; padding: var(--space-4); border-radius: var(--radius-md); margin-bottom: var(--space-3); }
+.blog-card__tag { position: relative; font-size: var(--text-xl); font-weight: var(--weight-bold); }
+.blog-card__icon { position: absolute; right: -12px; bottom: -18px; width: 112px; height: 112px; fill: none; stroke: currentColor; opacity: 0.2; }
+
+.post-banner { padding: var(--space-6); border-radius: var(--radius-lg); margin-bottom: var(--space-4); }
+.post-banner .post-banner__title { color: #fff; margin: var(--space-5) 0 var(--space-3); }
+.post__byline { color: #fff; font-size: var(--text-sm); margin: 0; }
+.post__byline a { color: #fff; text-decoration: underline; }
+.post__dek { color: var(--color-text-muted); font-size: var(--text-base); margin-bottom: var(--space-5); }
+
 /* ============================================================
    Phase 3 — Visual overhaul components (all token-driven, so dark
    mode comes for free via the two token selectors above).

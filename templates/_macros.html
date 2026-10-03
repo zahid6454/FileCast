@@ -228,3 +228,57 @@
   {{ processing_pill(tool) }}
 </a>
 {%- endmacro %}
+
+{# blog_tint(post) — classes for a post's banner/card header gradient: the
+   tag picks the colors (.blog-tint--<tag>, mirroring OG_BLOG_GRADIENTS in
+   build.py; unlisted tags keep .blog-tint's brand default) and the post's
+   id-hashed `shape` picks the gradient shape (.blog-shape--1..6). Classes,
+   not an inline style — the CSP blocks style="" attributes. #}
+{% macro blog_tint(post) -%}
+blog-tint blog-shape--{{ post.shape }}{% if post.tag %} blog-tint--{{ post.tag|lower|replace(' ', '-') }}{% endif %}
+{%- endmacro %}
+
+{# blog_mark() — white FileCast logo mark (the header logo's three shapes,
+   minus the wordmark) for blog banners/card headers. Decorative. #}
+{% macro blog_mark() -%}
+<svg class="blog-mark" viewBox="0 0 33 28" aria-hidden="true" focusable="false"><rect x="1" y="1" width="10" height="26" rx="3"/><polygon points="14,9 19,14 14,19"/><rect x="22" y="1" width="10" height="26" rx="3"/></svg>
+{%- endmacro %}
+
+{# Sprite icon per post tag for the card header; unlisted tags get none. #}
+{% set BLOG_TAG_ICONS = {'Documents': 'icon-page', 'Images': 'icon-photo', 'Developer Tools': 'icon-code', 'Privacy': 'icon-shield'} %}
+
+{# blog_card(post) — one post card, shared by blog-index.html, home.html's
+   "From the Blog" and every tool page's Related Guides. The header is a CSS
+   gradient div, not the post's OG PNG: it shows the tag instead of
+   repeating the title printed right below it, and costs no image request
+   (the PNG is only for social previews + Article schema, off-page). #}
+{% macro blog_card(post) -%}
+<a class="card card--lg blog-card" href="{{ post.slug }}/" data-name="{{ post.title|lower }}">
+  {# aria-hidden: purely decorative, and the tag is repeated as text in the
+     meta line below — otherwise every card link's accessible name would
+     start with "FileCast Documents ...". #}
+  <div class="blog-card__header {{ blog_tint(post) }}" aria-hidden="true">
+    <span class="blog-card__brand">{{ blog_mark() }} FileCast</span>
+    <span class="blog-card__tag">{{ post.tag or 'Blog' }}</span>
+    {% if post.tag in BLOG_TAG_ICONS %}<svg class="blog-card__icon" aria-hidden="true" focusable="false"><use href="#{{ BLOG_TAG_ICONS[post.tag] }}"></use></svg>{% endif %}
+  </div>
+  <strong>{{ post.title }}</strong>
+  <div class="card__desc">{{ post.dek }}</div>
+  <div class="card__desc">{{ post.tag }}{% if post.tag and post.date_display %} &middot; {% endif %}{% if post.date_display %}<time datetime="{{ post.date }}">{{ post.date_display }}</time>{% endif %}{% if (post.tag or post.date_display) and post.read_minutes %} &middot; {% endif %}{% if post.read_minutes %}{{ post.read_minutes }} min read{% endif %}</div>
+</a>
+{%- endmacro %}
+
+{# related_guides(posts) — tool pages' "Related Guides" (posts whose
+   related_tools list this tool; see resolve_blog_related_tools()). Callers
+   pass tool.get('related_posts', []) so a tool dict that never went through
+   that resolver doesn't trip StrictUndefined. #}
+{% macro related_guides(posts) -%}
+{% if posts %}
+<div class="related-tools">
+  <h2 class="related-tools__title">Related Guides</h2>
+  <div class="card-grid card-grid--blog">
+    {% for post in posts %}{{ blog_card(post) }}{% endfor %}
+  </div>
+</div>
+{% endif %}
+{%- endmacro %}

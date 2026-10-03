@@ -610,6 +610,20 @@ def load_tools() -> list[dict]:
     return tools
 
 
+def _display_date(iso: str, source: str) -> str:
+    """ "2026-09-15" -> "Sep 15, 2026" (built by hand: Windows' C runtime has
+    no strftime("%-d")). A malformed date warns and renders blank rather than
+    failing the whole site build over one post's typo."""
+    if not iso:
+        return ""
+    try:
+        d = date.fromisoformat(iso)
+    except ValueError:
+        print(f"  [warn] {source}: unparseable date {iso!r}, not displayed")
+        return ""
+    return f"{d:%b} {d.day}, {d.year}"
+
+
 def load_blog_posts() -> list[dict]:
     """Load blog/*.yaml the same way load_tools() loads tools/*.yaml, then
     render each post's body markdown (content.body) via render_markdown() —
@@ -643,6 +657,16 @@ def load_blog_posts() -> list[dict]:
         # here (str(date) round-trips to the same "YYYY-MM-DD") keeps every
         # post's sort key the same type regardless of what the YAML produced.
         post["date"] = str(post.get("date", ""))
+        # `updated` is optional (set it when a post is materially revised);
+        # falls back to `date` so Article schema's dateModified is never empty.
+        post["updated"] = str(post.get("updated") or post["date"])
+        post["date_display"] = _display_date(post["date"], yaml_path.name)
+        post["updated_display"] = _display_date(post["updated"], yaml_path.name)
+        # Gradient shape for the banner/card header (.blog-shape--1..6 in
+        # style.css). Hashed from the id, never random(): a per-build random
+        # pick would change every post's HTML each deploy and bump its
+        # content-hash sitemap lastmod for nothing.
+        post["shape"] = int(hashlib.md5(post["id"].encode()).hexdigest(), 16) % 6 + 1
         # StrictUndefined (create_jinja_env()) makes a missing key fail the
         # whole build the moment a template references it — even inside an
         # `{% if %}` — not just render this one post blank. These three are
@@ -1203,6 +1227,20 @@ RELATED_FIELDS = (
 )
 
 
+# Fields a blog card (_macros.html's blog_card) reads.
+POST_CARD_FIELDS = (
+    "id",
+    "slug",
+    "title",
+    "dek",
+    "tag",
+    "read_minutes",
+    "date",
+    "date_display",
+    "shape",
+)
+
+
 def _resolve_ids(ids, tool_map: dict) -> list[dict]:
     """Filter `ids` down to the ones present in `tool_map`, as RELATED_FIELDS-only copies."""
     return [
@@ -1252,6 +1290,19 @@ def resolve_blog_related_tools(posts: list[dict], tools: list[dict]):
         post["related_tools_resolved"] = _resolve_ids(
             post.get("related_tools", []) or [], tool_map
         )
+
+    # Reverse direction: each tool page links back to every post that lists
+    # it in related_tools ("Related Guides"), so posts get crawlable internal
+    # links from ~40 tool pages instead of only from /blog/. `posts` is
+    # already newest-first, so each tool's list is too. Lightweight copies
+    # for the same circular-reference reason as RELATED_FIELDS.
+    for tool in tools:
+        tool["related_posts"] = []
+    for post in posts:
+        card = {k: post[k] for k in POST_CARD_FIELDS if k in post}
+        for tid in post.get("related_tools", []) or []:
+            if tid in tool_map:
+                tool_map[tid]["related_posts"].append(card)
 
 
 # ---------------------------------------------------------------------------
@@ -1318,6 +1369,29 @@ OG_WHITE = (255, 255, 255)
 OG_MUTED = (161, 161, 170)  # --color-text-muted (dark-mode value)
 OG_MARGIN = 80
 
+# Blog share images use a brand gradient instead of OG_BG, matching the
+# on-page post banner/card headers (CSS gradient divs — .blog-tint--<tag>'s
+# --c1/--c2/--c3 in style.css mirror these values; change both together).
+# On-page, each post also gets one of 6 gradient shapes (post["shape"]);
+# these PNGs, seen only off-site, always use the plain diagonal.
+#
+# (top-left, middle, bottom-right) stops. Every tag is blue -> green (both
+# brand colors, always); the tag only shifts the balance. Every stop is
+# >= 5.17:1 against white, so even the SMALL white text on the on-page
+# banner (brand label, byline) meets WCAG AA 4.5:1 anywhere on the gradient
+# — which is why the greens are emerald-700, not the lighter brand green.
+OG_BLOG_GRADIENTS = {
+    # blue-800 -> sky-700 -> emerald-700: leans blue
+    "Documents": ((30, 64, 175), (3, 105, 161), (4, 120, 87)),
+    # blue-600 -> emerald-700 -> emerald-800: leans green
+    "Images": ((37, 99, 235), (4, 120, 87), (6, 95, 70)),
+    # blue-700 -> cyan-700 -> emerald-700: even blend
+    "Developer Tools": ((29, 78, 216), (14, 116, 144), (4, 120, 87)),
+}
+# blue-600 -> teal-700 -> emerald-700: the brand pair
+OG_BLOG_GRADIENT_DEFAULT = ((37, 99, 235), (15, 118, 110), (4, 120, 87))
+OG_SUBTITLE_ON_GRADIENT = (219, 234, 254)  # blue-100
+
 
 def _og_font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default(size=size)
@@ -1351,21 +1425,43 @@ def _og_wrap(
     return lines
 
 
-def _render_og_image(headline: str, subtitle: str) -> bytes:
-    """Render one 1200x630 branded PNG for `headline`/`subtitle`."""
-    img = Image.new("RGB", OG_SIZE, OG_BG)
+def _render_og_image(
+    headline: str,
+    subtitle: str,
+    headline_lines: int = 2,
+    gradient: tuple[tuple[int, int, int], ...] | None = None,
+) -> bytes:
+    """Render one 1200x630 branded PNG for `headline`/`subtitle`.
+
+    `gradient` = (top-left, middle, bottom-right) colors for a diagonal background
+    instead of the flat dark OG_BG; the logo bars then go white, since the
+    brand blue/green bars would vanish into a blue/green background.
+    """
+    if gradient:
+        start, mid, end = gradient
+        # A 2x2 corner image bilinearly upscaled = a smooth diagonal gradient
+        # (the 135deg, 0/50/100% stops the CSS .blog-tint rules use).
+        img = Image.new("RGB", (2, 2))
+        img.putdata([start, mid, mid, end])
+        img = img.resize(OG_SIZE, Image.BILINEAR)
+        bar_left = bar_right = OG_WHITE
+        subtitle_fill = OG_SUBTITLE_ON_GRADIENT
+    else:
+        img = Image.new("RGB", OG_SIZE, OG_BG)
+        bar_left, bar_right = OG_BLUE, OG_GREEN
+        subtitle_fill = OG_MUTED
     draw = ImageDraw.Draw(img)
 
     # Logo mark — mirrors the inline SVG in base.html's header.
     draw.rounded_rectangle(
-        (OG_MARGIN, 72, OG_MARGIN + 40, 192), radius=10, fill=OG_BLUE
+        (OG_MARGIN, 72, OG_MARGIN + 40, 192), radius=10, fill=bar_left
     )
     draw.polygon(
         [(OG_MARGIN + 70, 102), (OG_MARGIN + 110, 132), (OG_MARGIN + 70, 162)],
         fill=OG_WHITE,
     )
     draw.rounded_rectangle(
-        (OG_MARGIN + 120, 72, OG_MARGIN + 160, 192), radius=10, fill=OG_GREEN
+        (OG_MARGIN + 120, 72, OG_MARGIN + 160, 192), radius=10, fill=bar_right
     )
     draw.text((OG_MARGIN + 178, 105), "FileCast", font=_og_font(46), fill=OG_WHITE)
 
@@ -1374,13 +1470,15 @@ def _render_og_image(headline: str, subtitle: str) -> bytes:
     max_width = OG_SIZE[0] - 2 * OG_MARGIN
 
     y = 300
-    for line in _og_wrap(draw, headline, headline_font, max_width, max_lines=2):
+    for line in _og_wrap(
+        draw, headline, headline_font, max_width, max_lines=headline_lines
+    ):
         draw.text((OG_MARGIN, y), line, font=headline_font, fill=OG_WHITE)
         y += 78
 
     y += 20
     for line in _og_wrap(draw, subtitle, subtitle_font, max_width, max_lines=1):
-        draw.text((OG_MARGIN, y), line, font=subtitle_font, fill=OG_MUTED)
+        draw.text((OG_MARGIN, y), line, font=subtitle_font, fill=subtitle_fill)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
@@ -1388,9 +1486,12 @@ def _render_og_image(headline: str, subtitle: str) -> bytes:
 
 
 def generate_og_images(
-    tools: list[dict], categories_with_tools: dict, site_config: dict
+    tools: list[dict],
+    categories_with_tools: dict,
+    site_config: dict,
+    blog_posts: list[dict] | None = None,
 ):
-    """Write ``dist/images/og/{home,default,<tool id>,<category id>}.png``.
+    """Write ``dist/images/og/{home,default,<tool id>,<category id>,blog-<post id>}.png``.
 
     Templates reference these by a predictable path built from context they
     already have (tool id / category id) — see base.html's ``og_image`` block
@@ -1437,7 +1538,29 @@ def generate_og_images(
             "Free, Private File Conversion - No Sign-up Needed",
         )
     )
-    print(f"  [ok] {2 + len(tools) + len(categories_with_tools)} og images")
+    # Blog posts: used as og:image/twitter:image and Article schema's
+    # `image` only — never shown on-page (the banner there is a CSS div with
+    # the real H1). 3 headline lines since post titles
+    # run up to ~90 chars, vs ~15 for a tool's "X to Y". Titles must stay
+    # ASCII-only for the same missing-glyph reason as above.
+    blog_posts = blog_posts or []
+    for post in blog_posts:
+        subtitle = (
+            f"FileCast Blog - {post['tag']}" if post.get("tag") else "FileCast Blog"
+        )
+        (out_dir / f"blog-{post['id']}.png").write_bytes(
+            _render_og_image(
+                post["title"],
+                subtitle,
+                headline_lines=3,
+                gradient=OG_BLOG_GRADIENTS.get(
+                    post.get("tag"), OG_BLOG_GRADIENT_DEFAULT
+                ),
+            )
+        )
+
+    count = 2 + len(tools) + len(categories_with_tools) + len(blog_posts)
+    print(f"  [ok] {count} og images")
 
 
 # ---------------------------------------------------------------------------
@@ -1724,6 +1847,7 @@ def render_all_pages(
         demo_tools=demo_tools,
         faq_html=faq_html,
         faq_structured_data=faq_structured_data,
+        latest_posts=blog_posts[:6],
     ):
         print("  [ok] index.html")
 
@@ -2848,7 +2972,7 @@ def build():
     # Open Graph / Twitter share images (P1 §7) — one per tool/category id,
     # one for the homepage, one shared default for every other page.
     print("[9/12] Generating Open Graph images")
-    generate_og_images(tools, categories_with_tools, site_config)
+    generate_og_images(tools, categories_with_tools, site_config, blog_posts)
 
     # 13. Jinja2 environment
     print("[10/12] Setting up Jinja2")

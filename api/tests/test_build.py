@@ -2237,8 +2237,8 @@ def test_homepage_view_all_tile_count_matches_hidden_tool_count(built):
 
 
 def test_og_images_written_for_every_page_kind(built):
-    """One PNG per tool id and category id, plus home.png and one shared
-    default.png. Coverage regression guard: a page kind that stops getting
+    """One PNG per tool id, category id and blog post id (blog-<id>.png),
+    plus home.png and one shared default.png. Coverage regression guard: a page kind that stops getting
     its own image would still build a green site with a broken/missing
     social card, since og:image itself never errors on a missing file."""
     og_dir = built / "images" / "og"
@@ -2257,9 +2257,13 @@ def test_og_images_written_for_every_page_kind(built):
     for cat_id in ("document-conversion", "image-conversion", "developer-tools"):
         assert f"{cat_id}.png" in files, cat_id
 
+    posts = build.load_blog_posts()
+    for post in posts:
+        assert f"blog-{post['id']}.png" in files, post["id"]
+
     # No stray/orphaned images beyond what's expected: one per tool + 3 categories
-    # + home + default.
-    assert len(files) == len(tool_data) + 3 + 2
+    # + one per blog post + home + default.
+    assert len(files) == len(tool_data) + 3 + len(posts) + 2
 
 
 def test_og_images_are_1200x630(built):
@@ -2839,6 +2843,138 @@ def test_resolve_blog_related_tools_drops_unknown_ids():
     posts = [{"id": "p", "related_tools": ["does-not-exist"]}]
     build.resolve_blog_related_tools(posts, tools=[])
     assert posts[0]["related_tools_resolved"] == []
+
+
+def test_resolve_blog_related_tools_builds_reverse_map_newest_first():
+    posts = [
+        {"id": "new", "title": "New", "related_tools": ["png-to-jpg"]},
+        {"id": "old", "title": "Old", "related_tools": ["png-to-jpg", "gone"]},
+    ]
+    tools = [{"id": "png-to-jpg"}, {"id": "jpg-to-png"}]
+    build.resolve_blog_related_tools(posts, tools)
+    assert [p["id"] for p in tools[0]["related_posts"]] == ["new", "old"]
+    assert tools[1]["related_posts"] == []  # every tool gets the key
+    assert "related_tools" not in tools[0]["related_posts"][0]  # lightweight copy
+
+
+def test_load_blog_posts_date_display_and_updated_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "BLOG_DIR", tmp_path)
+    _write_post(tmp_path, "a.yaml", id="a", slug="/blog/a", date="2026-09-05")
+    _write_post(
+        tmp_path,
+        "b.yaml",
+        id="b",
+        slug="/blog/b",
+        date="2026-09-01",
+        updated="2026-10-01",
+    )
+    a, b = build.load_blog_posts()
+    assert a["date_display"] == "Sep 5, 2026"
+    # Shape is a stable function of the id (not random per build).
+    assert 1 <= a["shape"] <= 6
+    assert a["shape"] == build.load_blog_posts()[0]["shape"]
+    assert a["updated"] == "2026-09-05"  # falls back to date
+    assert b["updated"] == "2026-10-01"
+    assert b["updated_display"] == "Oct 1, 2026"
+
+
+def test_load_blog_posts_malformed_date_warns_instead_of_crashing(
+    tmp_path, monkeypatch, capsys
+):
+    # One post's date typo must not take the whole site build down.
+    monkeypatch.setattr(build, "BLOG_DIR", tmp_path)
+    _write_post(tmp_path, "bad.yaml", date="Sept 2026")
+    (post,) = build.load_blog_posts()
+    assert post["date_display"] == ""
+    assert "unparseable date" in capsys.readouterr().out
+
+
+def test_blog_gradient_stops_meet_aa_for_small_white_text():
+    # The banner's brand label and byline are small (14px) white text over
+    # these stops, so every stop needs WCAG AA 4.5:1 — not just the 3:1
+    # large-text bar the headline needs. style.css's .blog-tint* mirror these.
+    def luminance(rgb):
+        def channel(v):
+            v /= 255
+            return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+        r, g, b = map(channel, rgb)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    gradients = [*build.OG_BLOG_GRADIENTS.values(), build.OG_BLOG_GRADIENT_DEFAULT]
+    for stops in gradients:
+        for stop in stops:
+            assert 1.05 / (luminance(stop) + 0.05) >= 4.5, stop
+
+
+def test_blog_titles_fit_og_image_without_ellipsis():
+    # _og_wrap() silently ellipsises a headline that overflows, and post
+    # titles double as the on-page hero image — a cut-off title would ship
+    # with no build error. Keep titles short enough (or ASCII) to fit 3 lines.
+    from PIL import Image, ImageDraw
+
+    draw = ImageDraw.Draw(Image.new("RGB", build.OG_SIZE))
+    width = build.OG_SIZE[0] - 2 * build.OG_MARGIN
+    for post in build.load_blog_posts():
+        assert post["title"].isascii(), post["id"]
+        lines = build._og_wrap(draw, post["title"], build._og_font(64), width, 3)
+        assert not lines[-1].endswith("…"), post["id"]
+
+
+def test_blog_tint_css_mirrors_og_blog_gradients():
+    # The on-page CSS tints and the share-image PNG gradients are defined in
+    # two places (CSP rules out passing colors inline); pin them together so
+    # the AA contrast test above also covers what users actually see.
+    css = (build.ROOT / "static" / "css" / "style.css").read_text(encoding="utf-8")
+
+    def css_stops(selector):
+        m = re.search(
+            re.escape(selector)
+            + r" \{ --c1: (#\w{6}); --c2: (#\w{6}); --c3: (#\w{6});",
+            css,
+        )
+        assert m, selector
+        return tuple(
+            tuple(int(h[i : i + 2], 16) for i in (1, 3, 5)) for h in m.groups()
+        )
+
+    assert css_stops(".blog-tint") == build.OG_BLOG_GRADIENT_DEFAULT
+    for tag, stops in build.OG_BLOG_GRADIENTS.items():
+        selector = ".blog-tint--" + tag.lower().replace(" ", "-")
+        assert css_stops(selector) == stops, tag
+
+
+def test_full_build_links_tools_and_home_to_posts(built):
+    posts = build.load_blog_posts()
+    home = (built / "index.html").read_text(encoding="utf-8")
+    for post in posts[:6]:
+        assert f'href="{post["slug"]}/"' in home
+    tool_page = (built / "convert" / "heic-to-jpg" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "Related Guides" in tool_page
+    for post in posts:
+        if "heic-to-jpg" in post.get("related_tools", []):
+            assert f'href="{post["slug"]}/"' in tool_page
+    post = posts[0]
+    page = (built / post["slug"].strip("/") / "index.html").read_text(encoding="utf-8")
+    assert '"@type": "BlogPosting"' in page
+    assert f"/images/og/blog-{post['id']}.png" in page
+    assert '<meta property="og:type" content="article">' in page
+    # Title lives in a real H1 inside the CSS banner, not baked into an <img>.
+    assert '<header class="post-banner' in page
+    # Decorative card header stays out of each card link's accessible name.
+    assert "blog-card__header blog-tint" in home
+    assert re.search(r'class="blog-card__header [^"]*" aria-hidden="true"', home)
+    # og:type is a block now: only posts override it.
+    assert '<meta property="og:type" content="website">' in home
+    assert '<img class="post__hero"' not in page
+    # Blog images use the per-tag gradient, never the tool cards' flat dark
+    # background (they match the on-page banner tints).
+    from PIL import Image
+
+    with Image.open(built / "images" / "og" / f"blog-{post['id']}.png") as img:
+        assert img.getpixel((0, 0)) != build.OG_BG
 
 
 def test_generate_sitemap_and_llms_txt_tolerate_missing_blog_posts_arg(

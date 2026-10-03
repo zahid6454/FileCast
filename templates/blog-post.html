@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import breadcrumb_jsonld %}
+{% from "_macros.html" import breadcrumb_jsonld, blog_tint, blog_mark %}
 
 {% block title %}{{ post.meta.title }}{% endblock %}
 {% block meta_description %}{{ post.meta.description }}{% endblock %}
@@ -7,10 +7,29 @@
 {% block og_title %}{{ post.meta.title }}{% endblock %}
 {% block og_description %}{{ post.meta.description }}{% endblock %}
 {% block og_url %}{{ site.base_url }}{{ post.slug }}/{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_image %}/images/og/blog-{{ post.id }}.png{% endblock %}
 {% block og_image_alt %}{{ post.title }} — {{ site.name }}{% endblock %}
 
 {% block structured_data %}
 {{ breadcrumb_jsonld({'name': 'Blog', 'slug': 'blog'}, post.title) }}
+{# BlogPosting — author/date/image are what Google's Article guidelines ask
+   for; the author mirrors the visible byline and about.html's credit. #}
+{%- set article = {
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": post.title,
+  "description": post.meta.description,
+  "image": site.base_url ~ "/images/og/blog-" ~ post.id ~ ".png",
+  "datePublished": post.date,
+  "dateModified": post.updated,
+  "author": {"@type": "Person", "name": "Md. Zahid Hossain Khan", "url": site.base_url ~ "/about/"},
+  "publisher": {"@type": "Organization", "name": site.name, "url": site.base_url ~ "/", "logo": {"@type": "ImageObject", "url": site.base_url ~ "/favicon.svg"}},
+  "mainEntityOfPage": site.base_url ~ post.slug ~ "/"
+} %}
+<script type="application/ld+json">
+{{ article|tojson }}
+</script>
 {% endblock %}
 
 {% block content %}
@@ -22,11 +41,23 @@
     <span class="breadcrumb__current">{{ post.title }}</span>
   </nav>
 
-  <h1 class="page__title">{{ post.title }}</h1>
+  {# Banner is a CSS gradient div with the real H1 inside — not the post's OG
+     PNG, which would put the title in pixels (invisible to search/screen
+     readers) and duplicate the H1. The PNG stays in og:image + schema only. #}
+  <header class="post-banner {{ blog_tint(post) }}">
+    <span class="blog-card__brand" aria-hidden="true">{{ blog_mark() }} FileCast</span>
+    <h1 class="page__title post-banner__title">{{ post.title }}</h1>
+    <p class="post__byline">
+      By <a href="/about/" rel="author">Md. Zahid Hossain Khan</a>
+      {%- if post.date_display %} &middot; <time datetime="{{ post.date }}">{{ post.date_display }}</time>{% endif %}
+      {%- if post.updated != post.date %} &middot; Updated <time datetime="{{ post.updated }}">{{ post.updated_display }}</time>{% endif %}
+      {%- if post.tag %} &middot; {{ post.tag }}{% endif %}
+      {%- if post.read_minutes %} &middot; {{ post.read_minutes }} min read{% endif %}
+    </p>
+  </header>
   {% if post.dek %}
-  <p class="page__tagline">{{ post.dek }}</p>
+  <p class="post__dek">{{ post.dek }}</p>
   {% endif %}
-  <p class="page__tagline">{{ post.tag }}{% if post.tag and post.read_minutes %} &middot; {% endif %}{% if post.read_minutes %}{{ post.read_minutes }} min read{% endif %}</p>
 
   <div class="content-block">
     {{ post.body_html|safe }}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tool_card, view_all_card, processing_pill %}
+{% from "_macros.html" import tool_card, view_all_card, processing_pill, blog_card %}
 
 {% block title %}{{ site.name }} — {{ site.tagline }}{% endblock %}
 {% block meta_description %}{{ site.description }}{% endblock %}
@@ -406,6 +406,22 @@
     {% endfor -%}
   ]</script>
 </section>
+
+{# ===== From the Blog — the newest posts (render_all_pages() passes
+   blog_posts[:6], already newest-first), so every post gets a homepage link
+   while it's fresh and /blog/ gets one from the strongest page on the site. #}
+{% if latest_posts %}
+<section class="section" id="blog">
+  <div class="container">
+    <h2 class="section__title"><span class="text-brand-blue">From the</span> <span class="text-brand-green">Blog</span></h2>
+    <div class="section__divider"></div>
+    <div class="card-grid card-grid--blog">
+      {% for post in latest_posts %}{{ blog_card(post) }}{% endfor %}
+    </div>
+    <p class="section__more"><a href="/blog/">All guides &rarr;</a></p>
+  </div>
+</section>
+{% endif %}
 
 {# ===== FAQ (AdSense content-gap plan, Step 1) — content-block--faq is the
    same class tool.html's FAQ uses, but faq_html here is pre-wrapped into one
