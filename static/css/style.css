@@ -2973,10 +2973,28 @@ select.tool-options__input {
 @media (min-width: 1024px) { .card-grid--blog { grid-template-columns: repeat(3, 1fr); } }
 .card-grid--blog { gap: var(--space-4); }
 .blog-card { padding: var(--space-4); text-align: left; }
-.blog-card__img { width: 100%; height: auto; border-radius: var(--radius-md); margin-bottom: var(--space-3); }
 .section__more { text-align: center; margin-top: var(--space-5); font-weight: var(--weight-bold); }
-.post__byline { color: var(--color-text-muted); font-size: var(--text-sm); margin-top: var(--space-2); }
-.post__hero { width: 100%; height: auto; border-radius: var(--radius-lg); margin: var(--space-5) 0; }
+
+/* Per-tag brand gradients for the post banner + card headers. Mirror
+   OG_BLOG_GRADIENTS in build.py (the share-image PNGs) — change both
+   together. Base rule = the default for any unlisted tag. White text stays
+   >= 3.77:1 across every gradient (large/bold text only, by design). */
+.blog-tint { background: linear-gradient(135deg, #2563eb, #059669); color: #fff; }
+.blog-tint--documents { background: linear-gradient(135deg, #2563eb, #1e3a8a); }
+.blog-tint--images { background: linear-gradient(135deg, #059669, #064e3b); }
+.blog-tint--developer-tools { background: linear-gradient(135deg, #1d4ed8, #047857); }
+.blog-mark { width: 1.15em; height: 1em; fill: currentColor; flex-shrink: 0; }
+.blog-card__brand { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); font-weight: var(--weight-bold); }
+
+.blog-card__header { position: relative; overflow: hidden; aspect-ratio: 16 / 7; display: flex; flex-direction: column; justify-content: space-between; padding: var(--space-4); border-radius: var(--radius-md); margin-bottom: var(--space-3); }
+.blog-card__tag { position: relative; font-size: var(--text-xl); font-weight: var(--weight-bold); }
+.blog-card__icon { position: absolute; right: -12px; bottom: -18px; width: 112px; height: 112px; fill: none; stroke: currentColor; opacity: 0.2; }
+
+.post-banner { padding: var(--space-6); border-radius: var(--radius-lg); margin-bottom: var(--space-4); }
+.post-banner .post-banner__title { color: #fff; margin: var(--space-5) 0 var(--space-3); }
+.post__byline { color: #dbeafe; font-size: var(--text-sm); margin: 0; }
+.post__byline a { color: #fff; text-decoration: underline; }
+.post__dek { color: var(--color-text-muted); font-size: var(--text-base); margin-bottom: var(--space-5); }
 
 /* ============================================================
    Phase 3 — Visual overhaul components (all token-driven, so dark

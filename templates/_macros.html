@@ -229,13 +229,35 @@
 </a>
 {%- endmacro %}
 
+{# blog_tint(post) — the class pair that gives a post's banner/card header
+   its per-tag brand gradient (.blog-tint--<tag> in style.css, mirroring
+   OG_BLOG_GRADIENTS in build.py). An unlisted tag falls back to .blog-tint's
+   own brand blue -> green. #}
+{% macro blog_tint(post) -%}
+blog-tint{% if post.tag %} blog-tint--{{ post.tag|lower|replace(' ', '-') }}{% endif %}
+{%- endmacro %}
+
+{# blog_mark() — white FileCast logo mark (the header logo's three shapes,
+   minus the wordmark) for blog banners/card headers. Decorative. #}
+{% macro blog_mark() -%}
+<svg class="blog-mark" viewBox="0 0 33 28" aria-hidden="true" focusable="false"><rect x="1" y="1" width="10" height="26" rx="3"/><polygon points="14,9 19,14 14,19"/><rect x="22" y="1" width="10" height="26" rx="3"/></svg>
+{%- endmacro %}
+
+{# Sprite icon per post tag for the card header; unlisted tags get none. #}
+{% set BLOG_TAG_ICONS = {'Documents': 'icon-page', 'Images': 'icon-photo', 'Developer Tools': 'icon-code', 'Privacy': 'icon-shield'} %}
+
 {# blog_card(post) — one post card, shared by blog-index.html, home.html's
-   "From the Blog" and every tool page's Related Guides. The thumbnail is the
-   post's build-time OG image (generate_og_images()); alt="" because the
-   card's own title text already names the link. #}
+   "From the Blog" and every tool page's Related Guides. The header is a CSS
+   gradient div, not the post's OG PNG: it shows the tag instead of
+   repeating the title printed right below it, and costs no image request
+   (the PNG is only for social previews + Article schema, off-page). #}
 {% macro blog_card(post) -%}
 <a class="card card--lg blog-card" href="{{ post.slug }}/" data-name="{{ post.title|lower }}">
-  <img class="blog-card__img" src="/images/og/blog-{{ post.id }}.png" alt="" width="1200" height="630" loading="lazy" decoding="async">
+  <div class="blog-card__header {{ blog_tint(post) }}">
+    <span class="blog-card__brand">{{ blog_mark() }} FileCast</span>
+    <span class="blog-card__tag">{{ post.tag or 'Blog' }}</span>
+    {% if post.tag in BLOG_TAG_ICONS %}<svg class="blog-card__icon" aria-hidden="true" focusable="false"><use href="#{{ BLOG_TAG_ICONS[post.tag] }}"></use></svg>{% endif %}
+  </div>
   <strong>{{ post.title }}</strong>
   <div class="card__desc">{{ post.dek }}</div>
   <div class="card__desc">{{ post.tag }}{% if post.tag and post.date_display %} &middot; {% endif %}{% if post.date_display %}<time datetime="{{ post.date }}">{{ post.date_display }}</time>{% endif %}{% if (post.tag or post.date_display) and post.read_minutes %} &middot; {% endif %}{% if post.read_minutes %}{{ post.read_minutes }} min read{% endif %}</div>

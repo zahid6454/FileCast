@@ -1351,10 +1351,10 @@ OG_WHITE = (255, 255, 255)
 OG_MUTED = (161, 161, 170)  # --color-text-muted (dark-mode value)
 OG_MARGIN = 80
 
-# Blog cards use a brand gradient instead of OG_BG: they're shown on-page
-# (post hero, card thumbnails), where a black block clashes with the light
-# theme and a white one would clash with dark mode. (top-left, bottom-right)
-# corner colors, tinted per post tag so a grid of cards is scannable. All
+# Blog share images use a brand gradient instead of OG_BG, matching the
+# on-page post banner/card headers (CSS gradient divs — .blog-tint--<tag> in
+# style.css mirrors these values; change both together). (top-left,
+# bottom-right) corner colors, tinted per post tag. All
 # Tailwind 600-800 shades: white headline text stays >= 3:1 (WCAG large text)
 # at every point of every gradient. An unlisted tag gets the brand mix.
 OG_BLOG_GRADIENTS = {
@@ -1511,8 +1511,9 @@ def generate_og_images(
             "Free, Private File Conversion - No Sign-up Needed",
         )
     )
-    # Blog posts: also shown on-page (post hero + blog card thumbnails) and
-    # used as Article schema's `image`. 3 headline lines since post titles
+    # Blog posts: used as og:image/twitter:image and Article schema's
+    # `image` only — never shown on-page (the banner there is a CSS div with
+    # the real H1). 3 headline lines since post titles
     # run up to ~90 chars, vs ~15 for a tool's "X to Y". Titles must stay
     # ASCII-only for the same missing-glyph reason as above.
     blog_posts = blog_posts or []

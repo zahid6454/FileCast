@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import breadcrumb_jsonld %}
+{% from "_macros.html" import breadcrumb_jsonld, blog_tint, blog_mark %}
 
 {% block title %}{{ post.meta.title }}{% endblock %}
 {% block meta_description %}{{ post.meta.description }}{% endblock %}
@@ -41,19 +41,23 @@
     <span class="breadcrumb__current">{{ post.title }}</span>
   </nav>
 
-  <h1 class="page__title">{{ post.title }}</h1>
+  {# Banner is a CSS gradient div with the real H1 inside — not the post's OG
+     PNG, which would put the title in pixels (invisible to search/screen
+     readers) and duplicate the H1. The PNG stays in og:image + schema only. #}
+  <header class="post-banner {{ blog_tint(post) }}">
+    <span class="blog-card__brand">{{ blog_mark() }} FileCast</span>
+    <h1 class="page__title post-banner__title">{{ post.title }}</h1>
+    <p class="post__byline">
+      By <a href="/about/" rel="author">Md. Zahid Hossain Khan</a>
+      {%- if post.date_display %} &middot; <time datetime="{{ post.date }}">{{ post.date_display }}</time>{% endif %}
+      {%- if post.updated != post.date %} &middot; Updated <time datetime="{{ post.updated }}">{{ post.updated }}</time>{% endif %}
+      {%- if post.tag %} &middot; {{ post.tag }}{% endif %}
+      {%- if post.read_minutes %} &middot; {{ post.read_minutes }} min read{% endif %}
+    </p>
+  </header>
   {% if post.dek %}
-  <p class="page__tagline">{{ post.dek }}</p>
+  <p class="post__dek">{{ post.dek }}</p>
   {% endif %}
-  <p class="post__byline">
-    By <a href="/about/" rel="author">Md. Zahid Hossain Khan</a>
-    {%- if post.date_display %} &middot; <time datetime="{{ post.date }}">{{ post.date_display }}</time>{% endif %}
-    {%- if post.updated != post.date %} &middot; Updated <time datetime="{{ post.updated }}">{{ post.updated }}</time>{% endif %}
-    {%- if post.tag %} &middot; {{ post.tag }}{% endif %}
-    {%- if post.read_minutes %} &middot; {{ post.read_minutes }} min read{% endif %}
-  </p>
-
-  <img class="post__hero" src="/images/og/blog-{{ post.id }}.png" alt="{{ post.title }}" width="1200" height="630" fetchpriority="high">
 
   <div class="content-block">
     {{ post.body_html|safe }}

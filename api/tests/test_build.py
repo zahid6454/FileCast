@@ -2901,8 +2901,11 @@ def test_full_build_links_tools_and_home_to_posts(built):
     assert '"@type": "BlogPosting"' in page
     assert f"/images/og/blog-{post['id']}.png" in page
     assert '<meta property="og:type" content="article">' in page
+    # Title lives in a real H1 inside the CSS banner, not baked into an <img>.
+    assert '<header class="post-banner' in page
+    assert '<img class="post__hero"' not in page
     # Blog images use the per-tag gradient, never the tool cards' flat dark
-    # background (it clashed with the light theme on-page).
+    # background (they match the on-page banner tints).
     from PIL import Image
 
     with Image.open(built / "images" / "og" / f"blog-{post['id']}.png") as img:
