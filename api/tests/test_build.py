@@ -2237,8 +2237,8 @@ def test_homepage_view_all_tile_count_matches_hidden_tool_count(built):
 
 
 def test_og_images_written_for_every_page_kind(built):
-    """One PNG per tool id and category id, plus home.png and one shared
-    default.png. Coverage regression guard: a page kind that stops getting
+    """One PNG per tool id, category id and blog post id (blog-<id>.png),
+    plus home.png and one shared default.png. Coverage regression guard: a page kind that stops getting
     its own image would still build a green site with a broken/missing
     social card, since og:image itself never errors on a missing file."""
     og_dir = built / "images" / "og"
@@ -2257,9 +2257,13 @@ def test_og_images_written_for_every_page_kind(built):
     for cat_id in ("document-conversion", "image-conversion", "developer-tools"):
         assert f"{cat_id}.png" in files, cat_id
 
+    posts = build.load_blog_posts()
+    for post in posts:
+        assert f"blog-{post['id']}.png" in files, post["id"]
+
     # No stray/orphaned images beyond what's expected: one per tool + 3 categories
-    # + home + default.
-    assert len(files) == len(tool_data) + 3 + 2
+    # + one per blog post + home + default.
+    assert len(files) == len(tool_data) + 3 + len(posts) + 2
 
 
 def test_og_images_are_1200x630(built):
