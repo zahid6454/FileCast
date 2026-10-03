@@ -650,6 +650,11 @@ def load_blog_posts() -> list[dict]:
         # Windows' C runtime doesn't support.
         d = date.fromisoformat(post["date"]) if post["date"] else None
         post["date_display"] = f"{d:%b} {d.day}, {d.year}" if d else ""
+        # Gradient shape for the banner/card header (.blog-shape--1..6 in
+        # style.css). Hashed from the id, never random(): a per-build random
+        # pick would change every post's HTML each deploy and bump its
+        # content-hash sitemap lastmod for nothing.
+        post["shape"] = int(hashlib.md5(post["id"].encode()).hexdigest(), 16) % 6 + 1
         # StrictUndefined (create_jinja_env()) makes a missing key fail the
         # whole build the moment a template references it — even inside an
         # `{% if %}` — not just render this one post blank. These three are
@@ -1220,6 +1225,7 @@ POST_CARD_FIELDS = (
     "read_minutes",
     "date",
     "date_display",
+    "shape",
 )
 
 
@@ -1352,8 +1358,10 @@ OG_MUTED = (161, 161, 170)  # --color-text-muted (dark-mode value)
 OG_MARGIN = 80
 
 # Blog share images use a brand gradient instead of OG_BG, matching the
-# on-page post banner/card headers (CSS gradient divs — .blog-tint--<tag> in
-# style.css mirrors these values; change both together). (top-left, middle,
+# on-page post banner/card headers (CSS gradient divs — .blog-tint--<tag>'s
+# --c1/--c2/--c3 in style.css mirror these values; change both together).
+# On-page, each post also gets one of 6 gradient shapes (post["shape"]);
+# these PNGs, seen only off-site, always use the plain diagonal. (top-left, middle,
 # bottom-right) stops. Every tag is blue -> green (both brand colors, always);
 # the tag only shifts the balance via the middle stop. All Tailwind 600-800
 # shades: white headline text stays >= 3:1 (WCAG large text) at every point

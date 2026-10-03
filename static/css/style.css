@@ -2975,14 +2975,22 @@ select.tool-options__input {
 .blog-card { padding: var(--space-4); text-align: left; }
 .section__more { text-align: center; margin-top: var(--space-5); font-weight: var(--weight-bold); }
 
-/* Per-tag brand gradients for the post banner + card headers. Mirror
-   OG_BLOG_GRADIENTS in build.py (the share-image PNGs) — change both
-   together. Base rule = the default for any unlisted tag. White text stays
-   >= 3.77:1 across every gradient (large/bold text only, by design). */
-.blog-tint { background: linear-gradient(135deg, #2563eb, #0d9488, #059669); color: #fff; }
-.blog-tint--documents { background: linear-gradient(135deg, #1e40af, #0369a1, #059669); }
-.blog-tint--images { background: linear-gradient(135deg, #2563eb, #059669, #065f46); }
-.blog-tint--developer-tools { background: linear-gradient(135deg, #1d4ed8, #0e7490, #047857); }
+/* Post banner + card header gradients. Two independent class axes:
+   - .blog-tint--<tag> sets the colors (--c1 blue -> --c2 -> --c3 green).
+     Mirror OG_BLOG_GRADIENTS in build.py (share-image PNGs) — change both
+     together. .blog-tint's own values = default for any unlisted tag.
+   - .blog-shape--N (N = post["shape"], hashed from the post id) sets the
+     shape. 1 = .blog-tint's diagonal, so it needs no rule.
+   Every shape only blends these stops, so white text stays >= 3.74:1. */
+.blog-tint { --c1: #2563eb; --c2: #0d9488; --c3: #059669; color: #fff; background: linear-gradient(135deg, var(--c1), var(--c2), var(--c3)); }
+.blog-tint--documents { --c1: #1e40af; --c2: #0369a1; --c3: #059669; }
+.blog-tint--images { --c1: #2563eb; --c2: #059669; --c3: #065f46; }
+.blog-tint--developer-tools { --c1: #1d4ed8; --c2: #0e7490; --c3: #047857; }
+.blog-shape--2 { background: linear-gradient(45deg, var(--c1), var(--c2), var(--c3)); }
+.blog-shape--3 { background: linear-gradient(90deg, var(--c1), var(--c2), var(--c3)); }
+.blog-shape--4 { background: radial-gradient(ellipse at 100% 0, var(--c3), var(--c2) 45%, var(--c1)); }
+.blog-shape--5 { background: radial-gradient(ellipse at 50% 130%, var(--c3), var(--c2) 45%, var(--c1)); }
+.blog-shape--6 { background: radial-gradient(circle at 15% 20%, var(--c1), transparent 60%), radial-gradient(circle at 85% 90%, var(--c3), transparent 60%), var(--c2); }
 .blog-mark { width: 1.15em; height: 1em; fill: currentColor; flex-shrink: 0; }
 .blog-card__brand { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); font-weight: var(--weight-bold); }
 

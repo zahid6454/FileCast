@@ -2866,6 +2866,9 @@ def test_load_blog_posts_date_display_and_updated_fallback(tmp_path, monkeypatch
     )
     a, b = build.load_blog_posts()
     assert a["date_display"] == "Sep 5, 2026"
+    # Shape is a stable function of the id (not random per build).
+    assert 1 <= a["shape"] <= 6
+    assert a["shape"] == build.load_blog_posts()[0]["shape"]
     assert a["updated"] == "2026-09-05"  # falls back to date
     assert b["updated"] == "2026-10-01"
 
