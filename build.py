@@ -1351,6 +1351,20 @@ OG_WHITE = (255, 255, 255)
 OG_MUTED = (161, 161, 170)  # --color-text-muted (dark-mode value)
 OG_MARGIN = 80
 
+# Blog cards use a brand gradient instead of OG_BG: they're shown on-page
+# (post hero, card thumbnails), where a black block clashes with the light
+# theme and a white one would clash with dark mode. (top-left, bottom-right)
+# corner colors, tinted per post tag so a grid of cards is scannable. All
+# Tailwind 600-800 shades: white headline text stays >= 3:1 (WCAG large text)
+# at every point of every gradient. An unlisted tag gets the brand mix.
+OG_BLOG_GRADIENTS = {
+    "Documents": ((37, 99, 235), (30, 58, 138)),  # blue-600 -> blue-900
+    "Images": ((5, 150, 105), (6, 78, 59)),  # emerald-600 -> emerald-900
+    "Developer Tools": ((29, 78, 216), (4, 120, 87)),  # blue-700 -> emerald-700
+}
+OG_BLOG_GRADIENT_DEFAULT = ((37, 99, 235), (5, 150, 105))  # brand blue -> green
+OG_SUBTITLE_ON_GRADIENT = (219, 234, 254)  # blue-100
+
 
 def _og_font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default(size=size)
@@ -1384,21 +1398,43 @@ def _og_wrap(
     return lines
 
 
-def _render_og_image(headline: str, subtitle: str, headline_lines: int = 2) -> bytes:
-    """Render one 1200x630 branded PNG for `headline`/`subtitle`."""
-    img = Image.new("RGB", OG_SIZE, OG_BG)
+def _render_og_image(
+    headline: str,
+    subtitle: str,
+    headline_lines: int = 2,
+    gradient: tuple[tuple[int, int, int], tuple[int, int, int]] | None = None,
+) -> bytes:
+    """Render one 1200x630 branded PNG for `headline`/`subtitle`.
+
+    `gradient` = (top-left, bottom-right) colors for a diagonal background
+    instead of the flat dark OG_BG; the logo bars then go white, since the
+    brand blue/green bars would vanish into a blue/green background.
+    """
+    if gradient:
+        start, end = gradient
+        mid = tuple((a + b) // 2 for a, b in zip(start, end, strict=True))
+        # A 2x2 corner image bilinearly upscaled = a smooth diagonal gradient.
+        img = Image.new("RGB", (2, 2))
+        img.putdata([start, mid, mid, end])
+        img = img.resize(OG_SIZE, Image.BILINEAR)
+        bar_left = bar_right = OG_WHITE
+        subtitle_fill = OG_SUBTITLE_ON_GRADIENT
+    else:
+        img = Image.new("RGB", OG_SIZE, OG_BG)
+        bar_left, bar_right = OG_BLUE, OG_GREEN
+        subtitle_fill = OG_MUTED
     draw = ImageDraw.Draw(img)
 
     # Logo mark — mirrors the inline SVG in base.html's header.
     draw.rounded_rectangle(
-        (OG_MARGIN, 72, OG_MARGIN + 40, 192), radius=10, fill=OG_BLUE
+        (OG_MARGIN, 72, OG_MARGIN + 40, 192), radius=10, fill=bar_left
     )
     draw.polygon(
         [(OG_MARGIN + 70, 102), (OG_MARGIN + 110, 132), (OG_MARGIN + 70, 162)],
         fill=OG_WHITE,
     )
     draw.rounded_rectangle(
-        (OG_MARGIN + 120, 72, OG_MARGIN + 160, 192), radius=10, fill=OG_GREEN
+        (OG_MARGIN + 120, 72, OG_MARGIN + 160, 192), radius=10, fill=bar_right
     )
     draw.text((OG_MARGIN + 178, 105), "FileCast", font=_og_font(46), fill=OG_WHITE)
 
@@ -1415,7 +1451,7 @@ def _render_og_image(headline: str, subtitle: str, headline_lines: int = 2) -> b
 
     y += 20
     for line in _og_wrap(draw, subtitle, subtitle_font, max_width, max_lines=1):
-        draw.text((OG_MARGIN, y), line, font=subtitle_font, fill=OG_MUTED)
+        draw.text((OG_MARGIN, y), line, font=subtitle_font, fill=subtitle_fill)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
@@ -1485,7 +1521,14 @@ def generate_og_images(
             f"FileCast Blog - {post['tag']}" if post.get("tag") else "FileCast Blog"
         )
         (out_dir / f"blog-{post['id']}.png").write_bytes(
-            _render_og_image(post["title"], subtitle, headline_lines=3)
+            _render_og_image(
+                post["title"],
+                subtitle,
+                headline_lines=3,
+                gradient=OG_BLOG_GRADIENTS.get(
+                    post.get("tag"), OG_BLOG_GRADIENT_DEFAULT
+                ),
+            )
         )
 
     count = 2 + len(tools) + len(categories_with_tools) + len(blog_posts)

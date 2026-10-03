@@ -2901,7 +2901,12 @@ def test_full_build_links_tools_and_home_to_posts(built):
     assert '"@type": "BlogPosting"' in page
     assert f"/images/og/blog-{post['id']}.png" in page
     assert '<meta property="og:type" content="article">' in page
-    assert (built / "images" / "og" / f"blog-{post['id']}.png").exists()
+    # Blog images use the per-tag gradient, never the tool cards' flat dark
+    # background (it clashed with the light theme on-page).
+    from PIL import Image
+
+    with Image.open(built / "images" / "og" / f"blog-{post['id']}.png") as img:
+        assert img.getpixel((0, 0)) != build.OG_BG
 
 
 def test_generate_sitemap_and_llms_txt_tolerate_missing_blog_posts_arg(
