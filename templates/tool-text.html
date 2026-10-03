@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import ad_slot, processing_pill, feedback_widget, breadcrumb_jsonld, webapp_jsonld %}
+{% from "_macros.html" import ad_slot, processing_pill, feedback_widget, breadcrumb_jsonld, webapp_jsonld, related_guides %}
 
 {% block title %}{{ tool.meta.title }}{% endblock %}
 {% block meta_description %}{{ tool.meta.description }}{% endblock %}
@@ -256,6 +256,8 @@
     </div>
   </div>
   {% endif %}
+
+  {{ related_guides(tool.get('related_posts', [])) }}
 
   {# Content Blocks #}
   {% if tool.content_html.get('what_is') %}

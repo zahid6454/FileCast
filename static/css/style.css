@@ -2966,6 +2966,18 @@ select.tool-options__input {
   .card-grid--has-more { grid-template-columns: repeat(5, 1fr); }
 }
 
+/* --- Blog cards (blog index, homepage "From the Blog", tool pages' Related
+   Guides). Image cards need more width than text tiles, so this grid tops
+   out at 3 columns and sits after the ladder above to win on source order. */
+@media (min-width: 480px) { .card-grid--blog { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .card-grid--blog { grid-template-columns: repeat(3, 1fr); } }
+.card-grid--blog { gap: var(--space-4); }
+.blog-card { padding: var(--space-4); text-align: left; }
+.blog-card__img { width: 100%; height: auto; border-radius: var(--radius-md); margin-bottom: var(--space-3); }
+.section__more { text-align: center; margin-top: var(--space-5); font-weight: var(--weight-bold); }
+.post__byline { color: var(--color-text-muted); font-size: var(--text-sm); margin-top: var(--space-2); }
+.post__hero { width: 100%; height: auto; border-radius: var(--radius-lg); margin: var(--space-5) 0; }
+
 /* ============================================================
    Phase 3 — Visual overhaul components (all token-driven, so dark
    mode comes for free via the two token selectors above).

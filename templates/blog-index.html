@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import breadcrumb_jsonld %}
+{% from "_macros.html" import breadcrumb_jsonld, blog_card %}
 
 {% block title %}Blog — {{ site.name }}{% endblock %}
 {% block meta_description %}Guides on file formats, browser-based conversion, and the practical questions behind them.{% endblock %}
@@ -24,14 +24,8 @@
   <h1 class="page__title">Blog</h1>
   <p class="page__desc">Guides on file formats, browser-based conversion, and the practical questions behind them.</p>
 
-  <div class="card-grid card-grid--lg card-grid--cols4">
-    {% for post in posts %}
-    <a class="card card--lg" href="{{ post.slug }}/" data-name="{{ post.title|lower }}">
-      <strong>{{ post.title }}</strong>
-      <div class="card__desc">{{ post.dek }}</div>
-      <div class="card__desc">{{ post.tag }}{% if post.tag and post.read_minutes %} &middot; {% endif %}{% if post.read_minutes %}{{ post.read_minutes }} min read{% endif %}</div>
-    </a>
-    {% endfor %}
+  <div class="card-grid card-grid--blog">
+    {% for post in posts %}{{ blog_card(post) }}{% endfor %}
   </div>
 
 </div>

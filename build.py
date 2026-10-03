@@ -643,6 +643,13 @@ def load_blog_posts() -> list[dict]:
         # here (str(date) round-trips to the same "YYYY-MM-DD") keeps every
         # post's sort key the same type regardless of what the YAML produced.
         post["date"] = str(post.get("date", ""))
+        # `updated` is optional (set it when a post is materially revised);
+        # falls back to `date` so Article schema's dateModified is never empty.
+        post["updated"] = str(post.get("updated") or post["date"])
+        # "Sep 15, 2026" — built by hand rather than strftime("%-d"), which
+        # Windows' C runtime doesn't support.
+        d = date.fromisoformat(post["date"]) if post["date"] else None
+        post["date_display"] = f"{d:%b} {d.day}, {d.year}" if d else ""
         # StrictUndefined (create_jinja_env()) makes a missing key fail the
         # whole build the moment a template references it — even inside an
         # `{% if %}` — not just render this one post blank. These three are
@@ -1203,6 +1210,19 @@ RELATED_FIELDS = (
 )
 
 
+# Fields a blog card (_macros.html's blog_card) reads.
+POST_CARD_FIELDS = (
+    "id",
+    "slug",
+    "title",
+    "dek",
+    "tag",
+    "read_minutes",
+    "date",
+    "date_display",
+)
+
+
 def _resolve_ids(ids, tool_map: dict) -> list[dict]:
     """Filter `ids` down to the ones present in `tool_map`, as RELATED_FIELDS-only copies."""
     return [
@@ -1252,6 +1272,19 @@ def resolve_blog_related_tools(posts: list[dict], tools: list[dict]):
         post["related_tools_resolved"] = _resolve_ids(
             post.get("related_tools", []) or [], tool_map
         )
+
+    # Reverse direction: each tool page links back to every post that lists
+    # it in related_tools ("Related Guides"), so posts get crawlable internal
+    # links from ~40 tool pages instead of only from /blog/. `posts` is
+    # already newest-first, so each tool's list is too. Lightweight copies
+    # for the same circular-reference reason as RELATED_FIELDS.
+    for tool in tools:
+        tool["related_posts"] = []
+    for post in posts:
+        card = {k: post[k] for k in POST_CARD_FIELDS if k in post}
+        for tid in post.get("related_tools", []) or []:
+            if tid in tool_map:
+                tool_map[tid]["related_posts"].append(card)
 
 
 # ---------------------------------------------------------------------------
@@ -1351,7 +1384,7 @@ def _og_wrap(
     return lines
 
 
-def _render_og_image(headline: str, subtitle: str) -> bytes:
+def _render_og_image(headline: str, subtitle: str, headline_lines: int = 2) -> bytes:
     """Render one 1200x630 branded PNG for `headline`/`subtitle`."""
     img = Image.new("RGB", OG_SIZE, OG_BG)
     draw = ImageDraw.Draw(img)
@@ -1374,7 +1407,9 @@ def _render_og_image(headline: str, subtitle: str) -> bytes:
     max_width = OG_SIZE[0] - 2 * OG_MARGIN
 
     y = 300
-    for line in _og_wrap(draw, headline, headline_font, max_width, max_lines=2):
+    for line in _og_wrap(
+        draw, headline, headline_font, max_width, max_lines=headline_lines
+    ):
         draw.text((OG_MARGIN, y), line, font=headline_font, fill=OG_WHITE)
         y += 78
 
@@ -1388,9 +1423,12 @@ def _render_og_image(headline: str, subtitle: str) -> bytes:
 
 
 def generate_og_images(
-    tools: list[dict], categories_with_tools: dict, site_config: dict
+    tools: list[dict],
+    categories_with_tools: dict,
+    site_config: dict,
+    blog_posts: list[dict] | None = None,
 ):
-    """Write ``dist/images/og/{home,default,<tool id>,<category id>}.png``.
+    """Write ``dist/images/og/{home,default,<tool id>,<category id>,blog-<post id>}.png``.
 
     Templates reference these by a predictable path built from context they
     already have (tool id / category id) — see base.html's ``og_image`` block
@@ -1437,7 +1475,21 @@ def generate_og_images(
             "Free, Private File Conversion - No Sign-up Needed",
         )
     )
-    print(f"  [ok] {2 + len(tools) + len(categories_with_tools)} og images")
+    # Blog posts: also shown on-page (post hero + blog card thumbnails) and
+    # used as Article schema's `image`. 3 headline lines since post titles
+    # run up to ~90 chars, vs ~15 for a tool's "X to Y". Titles must stay
+    # ASCII-only for the same missing-glyph reason as above.
+    blog_posts = blog_posts or []
+    for post in blog_posts:
+        subtitle = (
+            f"FileCast Blog - {post['tag']}" if post.get("tag") else "FileCast Blog"
+        )
+        (out_dir / f"blog-{post['id']}.png").write_bytes(
+            _render_og_image(post["title"], subtitle, headline_lines=3)
+        )
+
+    count = 2 + len(tools) + len(categories_with_tools) + len(blog_posts)
+    print(f"  [ok] {count} og images")
 
 
 # ---------------------------------------------------------------------------
@@ -1724,6 +1776,7 @@ def render_all_pages(
         demo_tools=demo_tools,
         faq_html=faq_html,
         faq_structured_data=faq_structured_data,
+        latest_posts=blog_posts[:6],
     ):
         print("  [ok] index.html")
 
@@ -2848,7 +2901,7 @@ def build():
     # Open Graph / Twitter share images (P1 §7) — one per tool/category id,
     # one for the homepage, one shared default for every other page.
     print("[9/12] Generating Open Graph images")
-    generate_og_images(tools, categories_with_tools, site_config)
+    generate_og_images(tools, categories_with_tools, site_config, blog_posts)
 
     # 13. Jinja2 environment
     print("[10/12] Setting up Jinja2")

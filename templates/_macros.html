@@ -228,3 +228,31 @@
   {{ processing_pill(tool) }}
 </a>
 {%- endmacro %}
+
+{# blog_card(post) — one post card, shared by blog-index.html, home.html's
+   "From the Blog" and every tool page's Related Guides. The thumbnail is the
+   post's build-time OG image (generate_og_images()); alt="" because the
+   card's own title text already names the link. #}
+{% macro blog_card(post) -%}
+<a class="card card--lg blog-card" href="{{ post.slug }}/" data-name="{{ post.title|lower }}">
+  <img class="blog-card__img" src="/images/og/blog-{{ post.id }}.png" alt="" width="1200" height="630" loading="lazy" decoding="async">
+  <strong>{{ post.title }}</strong>
+  <div class="card__desc">{{ post.dek }}</div>
+  <div class="card__desc">{{ post.tag }}{% if post.tag and post.date_display %} &middot; {% endif %}{% if post.date_display %}<time datetime="{{ post.date }}">{{ post.date_display }}</time>{% endif %}{% if (post.tag or post.date_display) and post.read_minutes %} &middot; {% endif %}{% if post.read_minutes %}{{ post.read_minutes }} min read{% endif %}</div>
+</a>
+{%- endmacro %}
+
+{# related_guides(posts) — tool pages' "Related Guides" (posts whose
+   related_tools list this tool; see resolve_blog_related_tools()). Callers
+   pass tool.get('related_posts', []) so a tool dict that never went through
+   that resolver doesn't trip StrictUndefined. #}
+{% macro related_guides(posts) -%}
+{% if posts %}
+<div class="related-tools">
+  <h2 class="related-tools__title">Related Guides</h2>
+  <div class="card-grid card-grid--blog">
+    {% for post in posts %}{{ blog_card(post) }}{% endfor %}
+  </div>
+</div>
+{% endif %}
+{%- endmacro %}

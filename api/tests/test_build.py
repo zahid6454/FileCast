@@ -2841,6 +2841,69 @@ def test_resolve_blog_related_tools_drops_unknown_ids():
     assert posts[0]["related_tools_resolved"] == []
 
 
+def test_resolve_blog_related_tools_builds_reverse_map_newest_first():
+    posts = [
+        {"id": "new", "title": "New", "related_tools": ["png-to-jpg"]},
+        {"id": "old", "title": "Old", "related_tools": ["png-to-jpg", "gone"]},
+    ]
+    tools = [{"id": "png-to-jpg"}, {"id": "jpg-to-png"}]
+    build.resolve_blog_related_tools(posts, tools)
+    assert [p["id"] for p in tools[0]["related_posts"]] == ["new", "old"]
+    assert tools[1]["related_posts"] == []  # every tool gets the key
+    assert "related_tools" not in tools[0]["related_posts"][0]  # lightweight copy
+
+
+def test_load_blog_posts_date_display_and_updated_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "BLOG_DIR", tmp_path)
+    _write_post(tmp_path, "a.yaml", id="a", slug="/blog/a", date="2026-09-05")
+    _write_post(
+        tmp_path,
+        "b.yaml",
+        id="b",
+        slug="/blog/b",
+        date="2026-09-01",
+        updated="2026-10-01",
+    )
+    a, b = build.load_blog_posts()
+    assert a["date_display"] == "Sep 5, 2026"
+    assert a["updated"] == "2026-09-05"  # falls back to date
+    assert b["updated"] == "2026-10-01"
+
+
+def test_blog_titles_fit_og_image_without_ellipsis():
+    # _og_wrap() silently ellipsises a headline that overflows, and post
+    # titles double as the on-page hero image — a cut-off title would ship
+    # with no build error. Keep titles short enough (or ASCII) to fit 3 lines.
+    from PIL import Image, ImageDraw
+
+    draw = ImageDraw.Draw(Image.new("RGB", build.OG_SIZE))
+    width = build.OG_SIZE[0] - 2 * build.OG_MARGIN
+    for post in build.load_blog_posts():
+        assert post["title"].isascii(), post["id"]
+        lines = build._og_wrap(draw, post["title"], build._og_font(64), width, 3)
+        assert not lines[-1].endswith("…"), post["id"]
+
+
+def test_full_build_links_tools_and_home_to_posts(built):
+    posts = build.load_blog_posts()
+    home = (built / "index.html").read_text(encoding="utf-8")
+    for post in posts[:6]:
+        assert f'href="{post["slug"]}/"' in home
+    tool_page = (built / "convert" / "heic-to-jpg" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "Related Guides" in tool_page
+    for post in posts:
+        if "heic-to-jpg" in post.get("related_tools", []):
+            assert f'href="{post["slug"]}/"' in tool_page
+    post = posts[0]
+    page = (built / post["slug"].strip("/") / "index.html").read_text(encoding="utf-8")
+    assert '"@type": "BlogPosting"' in page
+    assert f"/images/og/blog-{post['id']}.png" in page
+    assert '<meta property="og:type" content="article">' in page
+    assert (built / "images" / "og" / f"blog-{post['id']}.png").exists()
+
+
 def test_generate_sitemap_and_llms_txt_tolerate_missing_blog_posts_arg(
     tmp_path, monkeypatch
 ):
