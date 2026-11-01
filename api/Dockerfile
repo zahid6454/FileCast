@@ -1,7 +1,7 @@
 # Digest-pinned (python:3.12-slim, 3.12.14-slim-trixie) so a rebuild can't
 # silently pull a different, unaudited base image — Dependabot's docker
 # ecosystem (.github/dependabot.yml) keeps this digest current.
-FROM python:3.12-slim@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a
+FROM python:3.15-slim@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913
 
 # NEON_FAILOVER_PLAN.md §7.5: scripts/node_sync.py's pg_dump/pg_restore
 # must be v18, matching Neon's actual project Postgres version — this base
