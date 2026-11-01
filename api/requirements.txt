@@ -15,12 +15,12 @@ PyMuPDF==1.28.2
 python-pptx==1.0.2
 opencv-python-headless==5.0.0.93
 numpy==2.5.3
-# Pinned to match the root requirements.txt's Pillow==12.* (build.py's OG-image
+# Pinned to match the root requirements.txt's Pillow==13.* (build.py's OG-image
 # dependency) — CI installs both files in one pip command, so a different pin
 # here is a hard resolution conflict, not just a version mismatch. This file's
 # own copy is what actually matters in production: the API's Docker image only
 # installs api/requirements.txt, not the repo root's.
-Pillow==12.*
+Pillow==13.*
 sqlalchemy[asyncio]==2.0.*
 psycopg[binary]==3.*
 alembic==1.*
